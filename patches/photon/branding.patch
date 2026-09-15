@@ -1,0 +1,20 @@
+--- a/chrome/app/theme/chromium/BRANDING
++++ b/chrome/app/theme/chromium/BRANDING
+@@ -1,10 +1,10 @@
+-COMPANY_FULLNAME=The Helium Authors
+-COMPANY_SHORTNAME=The Helium Authors
+-PRODUCT_FULLNAME=Helium
+-PRODUCT_SHORTNAME=Helium
+-PRODUCT_INSTALLER_FULLNAME=Helium Installer
+-PRODUCT_INSTALLER_SHORTNAME=Helium Installer
+-COPYRIGHT=Copyright @LASTCHANGE_YEAR@ The Helium Authors. All rights reserved.
++COMPANY_FULLNAME=The Photon Authors
++COMPANY_SHORTNAME=The Photon Authors
++PRODUCT_FULLNAME=Photon
++PRODUCT_SHORTNAME=Photon
++PRODUCT_INSTALLER_FULLNAME=Photon Installer
++PRODUCT_INSTALLER_SHORTNAME=Photon Installer
++COPYRIGHT=Copyright @LASTCHANGE_YEAR@ The Photon Authors. All rights reserved.
+ MAC_BUNDLE_ID=net.imput.helium
+ MAC_CREATOR_CODE=Cr24
+ MAC_TEAM_ID=S4Q33XPHB4
