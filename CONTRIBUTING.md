@@ -1,12 +1,13 @@
-# Contributing to Helium
+# Contributing to Photon
 
-This repository contains Helium's shared Chromium patches, resources, and
-development tooling. Platform-specific packaging and build environments live in
-the platform repositories:
+This repository contains Photon’s shared Chromium patches, resources, and
+development tooling. Photon is built on top of the Helium implementation and
+Chromium. Platform-specific packaging and build environments live in the
+platform repositories:
 
-- [Helium for macOS](https://github.com/imputnet/helium-macos)
-- [Helium for Linux](https://github.com/imputnet/helium-linux)
-- [Helium for Windows](https://github.com/imputnet/helium-windows)
+- [Photon for Linux](https://github.com/PhotonBrowser/photon-linux)
+- Helium upstream for [macOS](https://github.com/imputnet/helium-macos)
+- Helium upstream for [Windows](https://github.com/imputnet/helium-windows)
 
 The same contribution guidelines apply to all platform repos.
 
@@ -58,13 +59,38 @@ applied on top of Chromium.
 - Follow the existing vendor grouping under `patches/` unless maintainers
   ask for something different.
 
-When working in a platform repository, the usual workflow is:
+When working in the Photon Linux repository, the usual workflow is:
 
-1. Load the development environment.
-1. Merge the patch series and push all patches.
-1. Use `quilt` in `build/src` to create or edit a patch.
-1. Refresh patches after your changes.
-1. Unmerge the series, verify, commit.
+1. Run `ph setup` once for a new checkout.
+1. Use `ph push` to apply the complete patch series.
+1. Use `quilt` in `build/src` to create or edit a `photon/` patch.
+1. Refresh the patch and add it to `patches/series` after its dependency.
+1. Run `ph pop`, verify the patch and source state, then commit.
+
+For normal development, use `ph build` and `ph run`. The latter asks before
+building when source files are newer than the existing binary.
+
+## Photon overlay patches
+
+Photon-specific changes belong in `patches/photon/`. Do not edit
+`patches/helium/` for a Photon-only branding or behavior change. A Photon
+overlay should be small, reviewable, and placed after the Helium patch or
+Chromium source change it overrides.
+
+Example:
+
+```bash
+ph push
+cd build/src
+quilt new photon/about-branding.patch
+quilt add chrome/app/chromium_strings.grd
+# edit the source
+quilt refresh
+```
+
+Then review the patch and update `patches/series`. Preserve internal Helium
+identifiers, executable and profile IDs, service identifiers, and upstream
+copyright or license attribution.
 
 ## Code style
 
@@ -72,8 +98,9 @@ When working in a platform repository, the usual workflow is:
 - Prefer existing Chromium or Helium patterns over introducing new abstractions.
 - Keep changes focused and minimal.
 - Proofread surrounding code before submitting.
-- When adding new Helium-authored files to the Chromium tree, include the Helium
-  copyright header used in other patches.
+- When adding Photon-authored files to the Chromium tree, preserve any existing
+  Helium or Chromium copyright headers and add Photon attribution where
+  appropriate.
 - Refer to existing Helium patches for guidance if necessary.
 
 ## Git style
@@ -154,7 +181,7 @@ changes into several follow-up PRs if necessary.
 
 ## Licensing
 
-By contributing to Helium, you agree that your changes will be licensed under
+By contributing to Photon, you agree that your changes will be licensed under
 the repository's existing licensing terms.
 
 <!-- Long referenced links -->

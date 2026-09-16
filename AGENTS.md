@@ -42,7 +42,7 @@ Examples to preserve:
 - `GetHeliumVersionNumber()`
 - `helium.browser.*`
 - internal Helium namespaces/classes/functions
-- `helium://` internal routes unless there is a specific reason to rename them
+- `helium://` internal routes unless they are intentionally exposed as visible Photon URLs
 - executable/profile/data-dir identifiers
 - update/signing/service internals
 
@@ -91,4 +91,4 @@ Preferred safe build:
 
 ```bash
 source scripts/dev.sh
-he build
+ph build

@@ -1,86 +1,80 @@
 <div align="center">
     <img src="resources/branding/app_icon/raw.png"
-        title="Helium" alt="Helium logo" width="120" />
-    <h1>Helium</h1>
+        title="Photon" alt="Photon logo" width="120" />
+    <h1>Photon Chromium Layer</h1>
     <p>
-        The Chromium-based web browser made for people, with love.
+        Photon is a user-facing browser fork built on top of Helium and Chromium.
         <br>
-        Privacy-first with unbiased ad-blocking. No bloat and no noise.
+        This repository contains the shared Chromium patches and resources.
     </p>
-    <a href="https://helium.computer/">
-        helium.computer
-    </a>
 </div>
 
-## Downloads
-> [!NOTE]
-> Helium is currently in beta, so unexpected issues may occur.
-> Please report them if they haven't already been reported.
+## Project relationship
 
-The easiest way to download Helium is [helium.computer](https://helium.computer/).
-It'll pick a compatible binary for your platform automatically.
-
-The same releases can also be downloaded from source on GitHub:
-
-- [Latest macOS release](https://github.com/imputnet/helium-macos/releases/latest)
-- [Latest Linux release](https://github.com/imputnet/helium-linux/releases/latest)
-- [Latest Windows release](https://github.com/imputnet/helium-windows/releases/latest)
-
-## Helium repos
-All Helium packaging, tooling, services, and components are open source
-and published on GitHub.
-
-### Platform packaging and tooling
-- [Helium for macOS](https://github.com/imputnet/helium-macos)
-- [Helium for Linux](https://github.com/imputnet/helium-linux)
-- [Helium for Windows](https://github.com/imputnet/helium-windows)
-
-### Web services and Helium components
-- [Helium services](https://github.com/imputnet/helium-services)
-- [Helium onboarding](https://github.com/imputnet/helium-onboarding)
-- [Helium fork of uBlock Origin](https://github.com/imputnet/uBlock)
+Photon keeps the upstream Helium implementation and Chromium base, then adds
+focused Photon overlays for the visible product experience. Helium internals,
+including compatibility identifiers and upstream patch structure, are retained
+where changing them would break the build or integrations.
 
 ## Development
-macOS is our primary development platform, so it's the recommended
-development environment for community contributions.
 
-Linux packaging includes a similar development script, so the same guide
-can be applied there too.
+The Linux development checkout is the sibling repository at
+`photon-linux/`. From that repository’s root:
 
-[> See development docs in macOS repo](https://github.com/imputnet/helium-macos/blob/main/docs/building.md#development-build-and-environment)
+```bash
+ph setup
+ph build
+ph run
+```
 
-## Contributing
-Before contributing to Helium, please read the guidelines in
-[CONTRIBUTING.md](CONTRIBUTING.md).
+`ph run` checks for source changes and asks whether to build before launching.
+The existing `he` function remains available for compatibility, but `ph` is the
+recommended command.
 
-## Credits
+## Patch layers
 
-### The Chromium project
-[The Chromium Project](https://www.chromium.org/) is at the core of Helium,
-making it possible in the first place.
+Patch ownership is explicit:
 
-### ungoogled-chromium
-This repo is based on [ungoogled-chromium](https://github.com/ungoogled-software/ungoogled-chromium),
-but heavily modified for Helium. Special thanks to everyone behind ungoogled-chromium,
-they made working with Chromium way easier.
+- `patches/helium/` contains imported Helium patches and should remain untouched
+  for Photon-only work.
+- `patches/photon/` contains Photon overlays and is the normal place for
+  Photon-specific changes.
+- `patches/series` controls application order. Put a Photon overlay after the
+  Helium or Chromium patch whose behavior it changes.
 
-### Other Chromium browsers
+To create a Photon patch, load the Linux development environment, enter the
+applied source tree, create a `photon/` patch with quilt, edit the source, and
+refresh it:
 
-Helium includes some patches from other open source Chromium browsers:
+```bash
+cd ../
+source scripts/dev.sh
+cd build/src
+quilt new photon/my-change.patch
+quilt add path/to/file
+# edit the file
+quilt refresh
+```
 
-- [Inox patchset](https://github.com/gcarq/inox-patchset)
-- [Debian](https://tracker.debian.org/pkg/chromium-browser)
-- [Bromite](https://github.com/bromite/bromite)
-- [Iridium Browser](https://iridiumbrowser.de/)
-- [Brave](https://github.com/brave/brave-core)
+Review the patch, add it to `patches/series`, and verify that it does not rename
+internal Helium symbols or remove upstream attribution.
 
-All patches are sorted by vendor in the [patches](patches/) directory of this repo.
+## Upstream projects
 
-## License
-All code, patches, modified portions of imported code or patches, and
-any other content that is unique to Helium and not imported from other
-repositories is licensed under GPL-3.0. See [LICENSE](LICENSE).
+Photon is based on these upstream projects:
 
-Any content imported from other projects retains its original license (for
-example, any original unmodified code imported from ungoogled-chromium remains
-licensed under their [BSD 3-Clause license](LICENSE.ungoogled_chromium)).
+- [Helium](https://github.com/imputnet/helium)
+- [Helium for Linux](https://github.com/imputnet/helium-linux)
+- [Chromium](https://www.chromium.org/)
+- [ungoogled-chromium](https://github.com/ungoogled-software/ungoogled-chromium)
+
+The upstream Helium repositories also document the shared patch conventions
+that Photon builds upon.
+
+## Attribution and license
+
+Photon is made possible by Chromium, Helium, and other open source software.
+Do not remove Helium or Chromium copyright headers, license files, credits,
+third-party notices, or upstream patch attribution. Photon-specific content is
+licensed as described in [LICENSE](LICENSE); imported content retains its
+original license.
