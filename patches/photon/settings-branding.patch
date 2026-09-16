@@ -1,0 +1,1171 @@
+--- a/chrome/app/settings_chromium_strings.grdp
++++ b/chrome/app/settings_chromium_strings.grdp
+@@ -3,40 +3,40 @@
+   <!-- Shared across multiple page -->
+   <if expr="not is_chromeos">
+     <message name="IDS_RELAUNCH_CONFIRMATION_DIALOG_TITLE" desc="The title of the modal dialog that we show when users click on relaunch and they have open Incognito windows. The dialog serves to warn the users about losing their Incognito windows if they proceed with the relaunch.">
+-      Relaunch Helium?
++      Relaunch Photon?
+     </message>
+   </if>
+   <!-- About Page -->
+   <if expr="_is_chrome_for_testing_branded">
+     <then>
+       <message name="IDS_SETTINGS_ABOUT_PROGRAM" desc="Menu title for the About Chrome for Testing page.">
+-        About Helium for Testing
++        About Photon for Testing
+       </message>
+       <message name="IDS_SETTINGS_GET_HELP_USING_CHROME" desc="Text of the button which takes the user to the Chrome for Testing help page.">
+-        Get help with Helium for Testing
++        Get help with Photon for Testing
+       </message>
+     </then>
+     <else>
+       <message name="IDS_SETTINGS_ABOUT_PROGRAM" desc="Menu title for the About Chromium page.">
+-        About Helium
++        About Photon
+       </message>
+       <message name="IDS_SETTINGS_GET_HELP_USING_CHROME" desc="Text of the button which takes the user to the Chrome help page.">
+-        Get help with Helium
++        Get help with Photon
+       </message>
+     </else>
+   </if>
+   <if expr="not is_chromeos">
+     <message name="IDS_SETTINGS_UPGRADE_UPDATING" desc="Status label: Updating Chromium">
+-      Updating Helium
++      Updating Photon
+     </message>
+     <message name="IDS_SETTINGS_UPGRADE_UPDATING_PERCENT" desc="Status label: Updating Chromium (90%)">
+-      Updating Helium (<ph name="PROGRESS_PERCENT">$1<ex>90%</ex></ph>)
++      Updating Photon (<ph name="PROGRESS_PERCENT">$1<ex>90%</ex></ph>)
+     </message>
+     <message name="IDS_SETTINGS_UPGRADE_SUCCESSFUL_RELAUNCH" desc="Status label: Successfully updated Chromium">
+-      Nearly up to date! Relaunch Helium to finish updating.
++      Nearly up to date! Relaunch Photon to finish updating.
+     </message>
+     <message name="IDS_SETTINGS_UPGRADE_UP_TO_DATE" desc="Status label: Already up to date (Chromium)">
+-      Helium is up to date
++      Photon is up to date
+     </message>
+   </if>
+   <if expr="is_chromeos">
+@@ -50,52 +50,52 @@
+ 
+   <!-- Autofill Page -->
+   <message name="IDS_SETTINGS_SIGNED_OUT_USER_LABEL" desc="Label which is shown at the top of the compromised password section if user is signed out.">
+-    To check if your passwords are safe from data breaches and other security issues, <ph name="BEGIN_LINK">&lt;a target='_blank' href='$1'&gt;</ph>sign in to Helium<ph name="END_LINK">&lt;/a&gt;</ph>.
++    To check if your passwords are safe from data breaches and other security issues, <ph name="BEGIN_LINK">&lt;a target='_blank' href='$1'&gt;</ph>sign in to Photon<ph name="END_LINK">&lt;/a&gt;</ph>.
+   </message>
+ 
+   <!-- Autofill AI Page-->
+   <message name="IDS_SETTINGS_AUTOFILL_AI_WHEN_ON_USE_TO_FILL" desc="Bullet 2 of 2 that appears beneath the “When on” title. “Later”: this is a two-step feature. 1) data is saved, 2) it becomes valuable to the user later when they want to fill in a form with similar data. “Chromium can ask”: the user has a choice, every time, whether their data is saved and also whether they want to autofill their saved info into forms.">
+-    Later, Helium can ask if you want to use saved info to autofill forms for you
++    Later, Photon can ask if you want to use saved info to autofill forms for you
+   </message>
+   <!-- Default Browser Page -->
+   <if expr="not is_chromeos">
+     <message name="IDS_SETTINGS_DEFAULT_BROWSER_DEFAULT" desc="The text displayed when Chrome is the default browser">
+-      Helium is your default browser
++      Photon is your default browser
+     </message>
+     <message name="IDS_SETTINGS_DEFAULT_BROWSER_DEFAULT_THANK_YOU" desc="The text displayed when Chromium is the default browser">
+-      Thanks for choosing Helium as your default browser!
++      Thanks for choosing Photon as your default browser!
+     </message>
+     <message name="IDS_SETTINGS_DEFAULT_BROWSER_MAKE_DEFAULT" desc="Default browser checkbox label">
+-      Make Helium the default browser
++      Make Photon the default browser
+     </message>
+     <message name="IDS_SETTINGS_DEFAULT_BROWSER_MAKE_DEFAULT_USER_VALUE" desc="The text displayed when Chromium is not the default browser. This string describes the effect (user benefit) of setting a browser as the default.">
+-      You can use Helium anytime you click links in messages, documents, and other apps
++      You can use Photon anytime you click links in messages, documents, and other apps
+     </message>
+     <message name="IDS_SETTINGS_DEFAULT_BROWSER_MAKE_DEFAULT_AND_PIN" desc="The text of the button to make Chromium the default browser and pin it to the taskbar.">
+-      Make Helium the default browser and pin to the taskbar
++      Make Photon the default browser and pin to the taskbar
+     </message>
+     <message name="IDS_SETTINGS_DEFAULT_BROWSER_MAKE_DEFAULT_AND_PIN_USER_VALUE" desc="The text of the button to make Chromium the default browser and pin it to the taskbar.">
+-      You can use Helium anytime you click links in messages, documents, and other apps. It will also be pinned to your taskbar.
++      You can use Photon anytime you click links in messages, documents, and other apps. It will also be pinned to your taskbar.
+     </message>
+     <message name="IDS_SETTINGS_DEFAULT_BROWSER_ERROR" desc="The text displayed when Chrome cannot determine or set the default browser">
+-      Helium cannot determine or set the default browser
++      Photon cannot determine or set the default browser
+     </message>
+     <if expr="_is_chrome_for_testing_branded">
+       <then>
+         <message name="IDS_SETTINGS_DEFAULT_BROWSER_SECONDARY" desc="The text displayed when Chrome for Testing is installed in side-by-side mode, which does not support setting as the default browser.">
+-          Helium for Testing cannot be made your default browser.
++          Photon for Testing cannot be made your default browser.
+         </message>
+       </then>
+       <else>
+       <if expr="is_linux">
+         <then>
+-        <message name="IDS_SETTINGS_DEFAULT_BROWSER_SECONDARY" desc="The text displayed when Helium is launched on Linux, but has no existing .desktop file.">
+-          Helium cannot be set as default, because no <ph name="DESKTOP_FILENAME">$1<ex>helium.desktop</ex></ph> file was found in any of: ~/.local/share/applications, /usr/share/applications, /usr/local/share/applications.
++        <message name="IDS_SETTINGS_DEFAULT_BROWSER_SECONDARY" desc="The text displayed when Photon is launched on Linux, but has no existing .desktop file.">
++          Photon cannot be set as default, because no <ph name="DESKTOP_FILENAME">$1<ex>helium.desktop</ex></ph> file was found in any of: ~/.local/share/applications, /usr/share/applications, /usr/local/share/applications.
+         </message>
+         </then>
+         <else>
+         <message name="IDS_SETTINGS_DEFAULT_BROWSER_SECONDARY" desc="The text displayed when Chromium is installed in side-by-side mode, which does not support setting as the default browser.">
+-          This is a secondary installation of Helium, and cannot be made your default browser.
++          This is a secondary installation of Photon, and cannot be made your default browser.
+         </message>
+         </else>
+       </if>
+@@ -105,355 +105,355 @@
+ 
+   <!-- Preloading Page-->
+   <message name="IDS_SETTINGS_PRELOAD_PAGES_STANDARD_PRELOADING_WHEN_ON_BULLET_TWO" desc="Bullet point in the standard preloading and when on column. Informs the user about what the standard preloading setting does.">
+-    Helium preloads pages you're likely to visit, so that they load more quickly when you visit them
++    Photon preloads pages you're likely to visit, so that they load more quickly when you visit them
+   </message>
+   <message name="IDS_SETTINGS_PRELOAD_PAGES_EXTENDED_PRELOADING_WHEN_ON_BULLET_TWO" desc="Bullet point in the extended preloading and when on column. Informs the user about what the extended preloading setting does.">
+-    Helium preloads even more pages that you're likely to visit, so that they load more quickly when you visit them
++    Photon preloads even more pages that you're likely to visit, so that they load more quickly when you visit them
+   </message>
+   <message name="IDS_SETTINGS_PRELOAD_PAGES_EXTENDED_PRELOADING_THINGS_TO_CONSIDER_BULLET_TWO" desc="Bullet point in the extended preloading and things to consider column. Informs the user about what the extended preloading setting does.">
+-    When a site asks to privately preload links on their page, Helium uses Google servers. This hides your identity from the preloaded site, but Google learns what sites get preloaded.
++    When a site asks to privately preload links on their page, Photon uses Google servers. This hides your identity from the preloaded site, but Google learns what sites get preloaded.
+   </message>
+   <message name="IDS_SETTINGS_PRELOAD_PAGES_THINGS_TO_CONSIDER_BULLET_ONE" desc="Bullet point in the things to consider column. Informs the user about what the preloading setting does.">
+-    If you allow cookies, Helium may use them when preloading
++    If you allow cookies, Photon may use them when preloading
+   </message>
+ 
+   <!-- Privacy Page -->
+   <message name="IDS_SETTINGS_SPELLING_PREF_DESC" desc="Description of using a web serviced to help resolve spelling errors. It is important to convey that what the user types will be sent to Google.">
+-    To fix spelling errors, Helium sends the text you type in text fields to Google
++    To fix spelling errors, Photon sends the text you type in text fields to Google
+   </message>
+   <message name="IDS_SETTINGS_RESTART_TO_APPLY_CHANGES" desc="Description in the snackbar to restart Chrome and apply changes.">
+-    To apply your changes, relaunch Helium
++    To apply your changes, relaunch Photon
+   </message>
+ 
+   <if expr="not is_chromeos">
+     <message name="IDS_SETTINGS_SIGNIN_ALLOWED" desc="The title of the preference to allow to sign-in to Chrome">
+-    Allow Helium sign-in
++    Allow Photon sign-in
+     </message>
+     <message name="IDS_SETTINGS_SIGNIN_ALLOWED_DESC" desc="The description of the preference to allow to sign-in to Chrome">
+-    By turning this off, you can sign in to Google sites like Gmail without signing in to Helium
++    By turning this off, you can sign in to Google sites like Gmail without signing in to Photon
+     </message>
+     <message name="IDS_SETTINGS_SIGNIN_ALLOWED_DESC_2" desc="The description of the preference to allow to sign-in to Chrome">
+-    Shows prompts to sign in to Helium
++    Shows prompts to sign in to Photon
+     </message>
+   </if>
+ 
+   <!-- Site Settings -->
+   <message name="IDS_SETTINGS_SITE_SETTINGS_PDFS_BLOCKED" desc="Label for the disabled option of the pdfs content setting.">
+-    Open PDFs in Helium
++    Open PDFs in Photon
+   </message>
+   <message name="IDS_SETTINGS_SITE_SITE_DETAILS_CAMERA_BLOCKED_BY_OS" desc="The description for the camera permission with a link to system settings.">
+-      To use your camera, give Helium access in <ph name="BEGIN_LINK">&lt;a href="#" id="openSystemSettingsLink" &gt;</ph>system settings<ph name="END_LINK">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph>
++      To use your camera, give Photon access in <ph name="BEGIN_LINK">&lt;a href="#" id="openSystemSettingsLink" &gt;</ph>system settings<ph name="END_LINK">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph>
+   </message>
+   <message name="IDS_SETTINGS_SITE_SITE_DETAILS_MICROPHONE_BLOCKED_BY_OS" desc="The description for the microphone permission with a link to system settings.">
+-      To use your microphone, give Helium access in <ph name="BEGIN_LINK">&lt;a href="#" id="openSystemSettingsLink" &gt;</ph>system settings<ph name="END_LINK">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph>
++      To use your microphone, give Photon access in <ph name="BEGIN_LINK">&lt;a href="#" id="openSystemSettingsLink" &gt;</ph>system settings<ph name="END_LINK">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph>
+   </message>
+   <message name="IDS_SETTINGS_SITE_SITE_DETAILS_LOCATION_BLOCKED_BY_OS" desc="The description for the location permission with a link to system settings.">
+-      To use your location, give Helium access in <ph name="BEGIN_LINK">&lt;a href="#" id="openSystemSettingsLink" &gt;</ph>system settings<ph name="END_LINK">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph>
++      To use your location, give Photon access in <ph name="BEGIN_LINK">&lt;a href="#" id="openSystemSettingsLink" &gt;</ph>system settings<ph name="END_LINK">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph>
+   </message>
+   <message name="IDS_SETTINGS_SITE_SETTINGS_CAMERA_BLOCKED_BY_OS" desc="Warning for camera content setting when the camera is disabled on OS level." translateable="false">
+-    To use your camera on these sites, give Helium access in <ph name="BEGIN_LINK">&lt;a href="#" id="openSystemSettingsLink" &gt;</ph>system settings<ph name="END_LINK">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph>
++    To use your camera on these sites, give Photon access in <ph name="BEGIN_LINK">&lt;a href="#" id="openSystemSettingsLink" &gt;</ph>system settings<ph name="END_LINK">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph>
+   </message>
+   <message name="IDS_SETTINGS_SITE_SETTINGS_LOCATION_BLOCKED_BY_OS" desc="Warning for location content setting when the camera is disabled on OS level." translateable="false">
+-    To use your location on these sites, give Helium access in <ph name="BEGIN_LINK">&lt;a href="#" id="openSystemSettingsLink" &gt;</ph>system settings<ph name="END_LINK">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph>
++    To use your location on these sites, give Photon access in <ph name="BEGIN_LINK">&lt;a href="#" id="openSystemSettingsLink" &gt;</ph>system settings<ph name="END_LINK">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph>
+   </message>
+   <message name="IDS_SETTINGS_SITE_SETTINGS_MIC_BLOCKED_BY_OS" desc="Warning for microphone content setting when the camera is disabled on OS level." translateable="false">
+-    To use your microphone on these sites, give Helium access in <ph name="BEGIN_LINK">&lt;a href="#" id="openSystemSettingsLink" &gt;</ph>system settings<ph name="END_LINK">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph>
++    To use your microphone on these sites, give Photon access in <ph name="BEGIN_LINK">&lt;a href="#" id="openSystemSettingsLink" &gt;</ph>system settings<ph name="END_LINK">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph>
+   </message>
+ 
+     <!-- Site Settings - Site Data Page-->
+   <message name="IDS_SETTINGS_SITE_DATA_PAGE_CLEAR_ON_EXIT_WITH_EXCEPTION_RADIO_SUBLABEL" desc="A description of the benefit/cost of choosing 'Sites can save content on your device. In short, a site will remember your preferences, shopping cart content, etc. during this browser session. But once you close all open windows, and then visit the site again, it's as if you're coming to the site for the first time.">
+-    Sites will probably work as expected. You'll be signed out of most sites when you close all Helium windows, except your Google Account if you're signed in to Helium.
++    Sites will probably work as expected. You'll be signed out of most sites when you close all Photon windows, except your Google Account if you're signed in to Photon.
+   </message>
+   <message name="IDS_SETTINGS_SITE_DATA_PAGE_DELETE_ON_EXIT_EXCEPTIONS_SUB_HEADING" desc="2 of 3. A label within 'Customized behaviors' that allows for exceptions to the 'On-device site data' setting. This label and the list of sites that can appear beneath it is only relevant if the user has chosen to allow 'on-device site data' as the default value above.">
+-    Always delete site data from your device when you close Helium
++    Always delete site data from your device when you close Photon
+   </message>
+ 
+   <!-- Privacy Guide -->
+   <message name="IDS_SETTINGS_PRIVACY_GUIDE_PROMO_BODY" desc="Body text of a card in the settings page that explains what the 'Privacy Guide' feature is.">
+-    Review key privacy and security controls in Helium
++    Review key privacy and security controls in Photon
+   </message>
+   <message name="IDS_SETTINGS_PRIVACY_GUIDE_SAFE_BROWSING_CARD_STANDARD_PROTECTION_FEATURE_DESCRIPTION2" desc="A part of the feature description of the standard protection section of the safe browsing card in the 'Privacy Guide'.">
+-    Checks URLs with a list of unsafe sites stored in Helium
++    Checks URLs with a list of unsafe sites stored in Photon
+   </message>
+   <message name="IDS_SETTINGS_PRIVACY_GUIDE_SAFE_BROWSING_CARD_STANDARD_PROTECTION_PRIVACY_DESCRIPTION1" desc="A part of the privacy description of the standard protection section of the safe browsing card in the 'Privacy Guide'.">
+-    If a site tries to steal your password, or when you download a harmful file, Helium may also send URLs, including bits of page content, to Safe Browsing
++    If a site tries to steal your password, or when you download a harmful file, Photon may also send URLs, including bits of page content, to Safe Browsing
+   </message>
+   <message name="IDS_SETTINGS_PRIVACY_GUIDE_COMPLETION_CARD_WAA_SUB_LABEL" desc="Text of the Web and App Activity sublabel in the completion card of the 'Privacy Guide'.">
+-    Choose whether to include Helium history for more personalized experiences in Google services
++    Choose whether to include Photon history for more personalized experiences in Google services
+   </message>
+   <message name="IDS_SETTINGS_PRIVACY_GUIDE_MSBB_FEATURE_DESCRIPTION3" desc="A part of the feature description of 'make searches and browsing better' in the 'Privacy Guide'.">
+-    If you also save your bookmarks in your Google Account, you can track product prices in Helium and get notified when the price drops
++    If you also save your bookmarks in your Google Account, you can track product prices in Photon and get notified when the price drops
+   </message>
+   <message name="IDS_SETTINGS_PRIVACY_GUIDE_MSBB_PRIVACY_DESCRIPTION2" desc="A part of the privacy description of 'make searches and browsing better' in the 'Privacy Guide'.">
+-    If you also share Helium usage reports, those reports include the URLs you visit
++    If you also share Photon usage reports, those reports include the URLs you visit
+   </message>
+ 
+ 
+   <!-- Safety check -->
+   <message name="IDS_SETTINGS_SAFETY_CHECK_UNUSED_SITE_PERMISSIONS_SETTING_SUBLABEL" desc="By default Chrome auto-revokes (disables) permissions (e.g. Camera, Location, etc.) for websites that were not visited for a while. This sublabel is for the toggle that allows users to switch off/on this functionality.">
+-    To protect your data, let Helium remove permissions from sites you haven't visited recently. Doesn't stop notifications.
++    To protect your data, let Photon remove permissions from sites you haven't visited recently. Doesn't stop notifications.
+   </message>
+     <message name="IDS_SETTINGS_SAFETY_CHECK_UNUSED_SITE_PERMISSIONS_AND_NOTIFICATIONS_SETTING_SUBLABEL" desc="By default Chrome auto-revokes (disables) permissions (e.g. Camera, Location, etc.) for websites that were not visited for a while. This sublabel is for the toggle that allows users to switch off/on this functionality.">
+-    To protect your data, let Helium remove permissions from sites you haven't visited recently.
++    To protect your data, let Photon remove permissions from sites you haven't visited recently.
+   </message>
+ 
+   <!-- Safe Browsing -->
+   <message name="IDS_SETTINGS_SAFEBROWSING_ENHANCED_BULLET_TWO" desc="Bullet point under the safe browsing enhanced protection mode">
+-    Keeps you safe on Helium and may be used to improve your security in other Google apps when you are signed in
++    Keeps you safe on Photon and may be used to improve your security in other Google apps when you are signed in
+   </message>
+   <message name="IDS_SETTINGS_SAFEBROWSING_STANDARD_BULLET_TWO" desc="Bullet point under the safe browsing standard protection mode">
+-    Checks URLs with a list of unsafe sites stored in Helium. If a site tries to steal your password, or when you download a harmful file, Helium may also send URLs, including bits of page content, to Safe Browsing.
++    Checks URLs with a list of unsafe sites stored in Photon. If a site tries to steal your password, or when you download a harmful file, Photon may also send URLs, including bits of page content, to Safe Browsing.
+   </message>
+   <message name="IDS_SETTINGS_SAFEBROWSING_ENHANCED_WHEN_ON_BULLET_ONE" desc="Bullet point under the Safe Browsing enhanced protection mode section titled 'When on'">
+-    Warns you about dangerous sites, even ones Google didn't know about before, by analyzing more data from sites than standard protection. You can choose to skip Helium warnings.
++    Warns you about dangerous sites, even ones Google didn't know about before, by analyzing more data from sites than standard protection. You can choose to skip Photon warnings.
+   </message>
+   <message name="IDS_SETTINGS_SAFEBROWSING_ENHANCED_LEARN_MORE_LABEL" desc="The text for a link to a help center article that gives more information about Safe Browsing.">
+-    Learn more about <ph name="BEGIN_LINK">&lt;a href="#" id="enhancedProtectionLearnMoreLink" on-click="onEnhancedProtectionLearnMoreClick_"&gt;</ph>how Helium keeps your data private<ph name="END_LINK">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph>
++    Learn more about <ph name="BEGIN_LINK">&lt;a href="#" id="enhancedProtectionLearnMoreLink" on-click="onEnhancedProtectionLearnMoreClick_"&gt;</ph>how Photon keeps your data private<ph name="END_LINK">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph>
+   </message>
+   <message name="IDS_SETTINGS_SECURE_DNS_DESCRIPTION" desc="Secondary, continued explanation of secure DNS in Privacy options">
+-    Make it harder for people with access to your internet traffic to see which sites you visit. Helium uses a secure connection to look up a site's IP address in the DNS (Domain Name System).
++    Make it harder for people with access to your internet traffic to see which sites you visit. Photon uses a secure connection to look up a site's IP address in the DNS (Domain Name System).
+   </message>
+ 
+   <!-- People Page -->
+   <message name="IDS_SETTINGS_SYNC_DISCONNECT_DELETE_PROFILE_WARNING_WITH_COUNTS_SINGULAR" desc="Warning message displayed in the Sign out of Chrome dialog that indicates profile browsing data will be removed from the device.">
+-    This will delete 1 item from this device. To retrieve your data later, sign in to Helium as <ph name="USER_EMAIL">$1<ex>foo@example.com</ex></ph>.
++    This will delete 1 item from this device. To retrieve your data later, sign in to Photon as <ph name="USER_EMAIL">$1<ex>foo@example.com</ex></ph>.
+   </message>
+   <message name="IDS_SETTINGS_SYNC_DISCONNECT_DELETE_PROFILE_WARNING_WITH_COUNTS_PLURAL" desc="Warning message displayed in the Sign out of Chrome dialog that indicates profile browsing data will be removed from the device.">
+-    This will delete <ph name="ITEMS_COUNT">$1<ex>66</ex></ph> items from this device. To retrieve your data later, sign in to Helium as <ph name="USER_EMAIL">$2<ex>foo@example.com</ex></ph>.
++    This will delete <ph name="ITEMS_COUNT">$1<ex>66</ex></ph> items from this device. To retrieve your data later, sign in to Photon as <ph name="USER_EMAIL">$2<ex>foo@example.com</ex></ph>.
+   </message>
+   <message name="IDS_SETTINGS_SYNC_DISCONNECT_DELETE_PROFILE_WARNING_WITHOUT_COUNTS" desc="Warning message displayed in the Sign out of Chrome dialog that indicates profile browsing data will be removed from the device.">
+-    This will delete your browsing data from this device. To retrieve your data later, sign in to Helium as <ph name="USER_EMAIL">$1<ex>foo@example.com</ex></ph>.
++    This will delete your browsing data from this device. To retrieve your data later, sign in to Photon as <ph name="USER_EMAIL">$1<ex>foo@example.com</ex></ph>.
+   </message>
+ <if expr="not is_chromeos">
+   <message name="IDS_SETTINGS_CUSTOMIZE_YOUR_CHROME_PROFILE" desc="Label of the link that takes you to the page to customize your chrome profile.">
+-    Customize your Helium profile
++    Customize your Photon profile
+   </message>
+   <message name="IDS_SETTING_NAME_YOUR_PROFILE" desc="Title of the edit local profile name section on the manage profile page.">
+-    Name your Helium profile
++    Name your Photon profile
+   </message>
+ </if>
+   <message name="IDS_SETTINGS_PEOPLE_SIGN_IN_PROMPT_SECONDARY_WITH_ACCOUNT" desc="The secondary text displayed to prompt users to enable sync for an account that is alredy present in Chromium.">
+-    Sync and personalize Helium across your devices
++    Sync and personalize Photon across your devices
+   </message>
+   <message name="IDS_SETTINGS_PEOPLE_EXPLICIT_SIGN_IN_PROMPT_SECONDARY_WITH_NO_ACCOUNT" desc="The secondary text displayed to prompt users to enable sync for an account that is already present in Chromium.">
+-    To get your passwords and more on all your devices, sign in to Helium
++    To get your passwords and more on all your devices, sign in to Photon
+   </message>
+   <message name="IDS_SETTINGS_PEOPLE_EXPLICIT_SIGN_IN_PROMPT_SECONDARY_WITH_NO_ACCOUNT_WITH_BOOKMARKS" desc="The secondary text displayed to prompt users to enable sync for an account that is already present in Chromium.">
+-    To get your passwords, bookmarks, and more on all your devices, sign in to Helium
++    To get your passwords, bookmarks, and more on all your devices, sign in to Photon
+   </message>
+   <message name="IDS_SETTINGS_PEOPLE_ACCOUNT_AWARE_SIGNIN_ACCOUNT_ROW_TITLE" desc="The title of the avatar row shown to users who are signed in only to the web">
+-    Your Helium
++    Your Photon
+   </message>
+ <if expr="is_chromeos">
+   <message name="IDS_SETTINGS_ACCOUNT_MANAGER_DESCRIPTION_V2" desc="Description of the Account Manager Settings page. Shown just below the title of the page.">
+-    You can manage your signed-in Google Accounts. Your Google Accounts are used for Helium browser, Play Store, Gmail, and more. If you want to add an account for someone else, like a family member, add a new person to your <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph> instead. <ph name="LINK_BEGIN">&lt;a&gt;</ph>Learn more<ph name="LINK_END">&lt;/a&gt;</ph>
++    You can manage your signed-in Google Accounts. Your Google Accounts are used for Photon browser, Play Store, Gmail, and more. If you want to add an account for someone else, like a family member, add a new person to your <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph> instead. <ph name="LINK_BEGIN">&lt;a&gt;</ph>Learn more<ph name="LINK_END">&lt;/a&gt;</ph>
+   </message>
+ </if>
+   <message name="IDS_SETTINGS_SIGNIN_CHROME_SIGNIN_OPTIONS_TITLE" desc="Title of the settings that controls whether a user gets signed in to Chromium when signing in to Google Services.">
+-    Sign in to Helium when you sign in to other Google services
++    Sign in to Photon when you sign in to other Google services
+   </message>
+   <message name="IDS_SETTINGS_SIGNIN_CHROME_SIGNIN_OPTIONS_DESC" desc="Description of the settings that controls whether a user gets signed in to Chromium when signing in to Google Services.">
+-    When signing into Google services like Gmail or Youtube with <ph name="USER_EMAIL">$1<ex>foo@example.com</ex></ph>, you can automatically sign in to Helium with the same account
++    When signing into Google services like Gmail or Youtube with <ph name="USER_EMAIL">$1<ex>foo@example.com</ex></ph>, you can automatically sign in to Photon with the same account
+   </message>
+   <message name="IDS_SETTINGS_PEOPLE_SIGNIN_SECTION_SIGNED_OUT_TITLE" desc="The text displayed to prompt users to sign in to Chromium. Shown on top of the account card in the people settings page when the user is signed out.">
+-    Make Helium your own
++    Make Photon your own
+   </message>
+ 
+   <!-- Sync Page / Account Settings Page -->
+   <message name="IDS_SETTINGS_SYNC_DATA_ENCRYPTED_TEXT" desc="Text alerting the user that synced data is encrypted.">
+-    For added security, Helium will encrypt your data.
++    For added security, Photon will encrypt your data.
+   </message>
+   <message name="IDS_SETTINGS_SYNC_DISCONNECT_TITLE" desc="The title of the dialog to stop syncing and sign out.">
+-    Sign out of Helium?
++    Sign out of Photon?
+   </message>
+   <message name="IDS_SETTINGS_SUGGEST_PREF_DESC" desc="The description of the checkbox to enable/disable sending omnibox input to the user's default search engine to get additional suggestions.">
+-    When you type in the address bar or search box, Helium sends what you type to your default search engine to get better suggestions. This is off in Incognito.
++    When you type in the address bar or search box, Photon sends what you type to your default search engine to get better suggestions. This is off in Incognito.
+   </message>
+   <message name="IDS_SETTINGS_SUGGEST_PREF_DESC_HELIUM" desc="The description of the checkbox to enable/disable sending omnibox input to the user's default search engine to get additional suggestions.">
+-    When you type in the address bar, Helium sends what you type to your default search engine to get suggestions. This is off in Incognito.
++    When you type in the address bar, Photon sends what you type to your default search engine to get suggestions. This is off in Incognito.
+   </message>
+   <message name="IDS_SETTINGS_SEARCH_AGGREGATOR_PREF_DESC" desc="The description of the 'Show suggestions and results from your organization' checkbox, which enables/disables sending omnibox input to the user's organization's search aggregator to get additional suggestions. Note that this setting is controlled by enterprise policy and, while a checkbox is shown, it is always enabled and cannot be disabled.">
+-    When you type in the address bar or search box, Helium sends what you type to your organization's search, AI, and agent tools to get suggestions.
++    When you type in the address bar or search box, Photon sends what you type to your organization's search, AI, and agent tools to get suggestions.
+   </message>
+   <message name="IDS_SETTINGS_PERSONALIZE_GOOGLE_SERVICES_DESC" desc="This is the subtitle of a setting that directs users to other settings where they can control how Chrome history can be used to personalize other Google services. This subtitle appears in Chrome's Advanced Sync settings, after the 'Control how browsing history is used with your other data across Google services' string. The 'Web &amp; App Activity' text should match the branded term in Glossary Manager: https://localization.9oo91e.qjz9zk/glossary/termset?gid=27517723&amp;tsid=77d3b75.">
+-    To get personalization, include Helium in Web &amp; App Activity
++    To get personalization, include Photon in Web &amp; App Activity
+   </message>
+   <message name="IDS_SETTINGS_PERSONALIZE_GOOGLE_SERVICES_DESC_WITH_LINKED_SERVICES" desc="This is the subtitle of a setting that directs users to other settings where they can control how Chrome history can be used to personalize other Google services. This subtitle appears in Chrome's Advanced Sync settings, after the 'Control how browsing history is used with your other data across Google services' string. The 'Web &amp; App Activity' text should match the branded term in Glossary Manager: https://localization.9oo91e.qjz9zk/glossary/termset?gid=27517723&amp;tsid=77d3b75. The 'linked Google services' text should match the branded term in Glossary Manager: https://localization.9oo91e.qjz9zk/glossary/termset?gid=27517723&amp;tsid=517bace2.">
+-    To get personalization and other features, include Helium in Web &amp; App Activity and linked Google services
++    To get personalization and other features, include Photon in Web &amp; App Activity and linked Google services
+   </message>
+   <message name="IDS_SETTINGS_PERSONALIZE_GOOGLE_SERVICES_LINKED_SERVICES_DESC" desc="This is the subtitle of a setting that links to 'Linked Google services' in the Google Account's Data &amp; privacy settings. This subtitle appears in Chrome's Advanced Sync settings and is after the 'Linked Google services' string.">
+-    Link Helium and other Google services for personalization and other purposes
++    Link Photon and other Google services for personalization and other purposes
+   </message>
+     <message name="IDS_SETTINGS_ERROR_PASSPHRASE_USER_ERROR_DESCRIPTION" desc="Subtitle of settings page that indicates user must re-enter their sync password.">
+-    To use and save Helium data in your Google Account, enter your passphrase
++    To use and save Photon data in your Google Account, enter your passphrase
+   </message>
+   <message name="IDS_SETTINGS_ERROR_TRUSTED_VAULT_USER_ERROR_DESCRIPTION" desc="Error description of the sync/signin error header of the settings page.">
+-    To use and save Helium data in your Google Account, verify it's you
++    To use and save Photon data in your Google Account, verify it's you
+   </message>
+     <message name="IDS_SETTINGS_ERROR_UPGRADE_CLIENT_USER_ERROR_DESCRIPTION" desc="Error message to resolve sync protocol error for out-of-date client.">
+-    To use and save Helium data in your Google Account, update Helium
++    To use and save Photon data in your Google Account, update Photon
+   </message>
+   <message name="IDS_SETTINGS_PENDING_STATE_DESCRIPTION" desc="Subtitle of settings page that indicates user is in pending state and should sign in.">
+-    Verify it's you to use and save Helium data in your account, <ph name="ACCOUNT_EMAIL">$1<ex>elisa.beckett@9ma1l.qjz9zk</ex></ph>
++    Verify it's you to use and save Photon data in your account, <ph name="ACCOUNT_EMAIL">$1<ex>elisa.beckett@9ma1l.qjz9zk</ex></ph>
+   </message>
+   <message name="IDS_SETTINGS_ERROR_PASSPHRASE_USER_ERROR_DESCRIPTION_WITH_EMAIL" desc="Subtitle of settings page that indicates user must re-enter their sync password.">
+-    Enter your passphrase to use and save Helium data in your account, <ph name="USER_EMAIL">$1<ex>foo@example.com</ex></ph>
++    Enter your passphrase to use and save Photon data in your account, <ph name="USER_EMAIL">$1<ex>foo@example.com</ex></ph>
+   </message>
+   <message name="IDS_SETTINGS_SIGN_OUT" desc="The text label of the Sign out of Chrome button in the settings page.">
+-    Sign out of Helium
++    Sign out of Photon
+   </message>
+   <message name="IDS_SETTINGS_ACCOUNT_DATA_DASHBOARD" desc="This string is found in the Account settings page in Chromium settings to let a user manage the Chromium data that they've saved in their Google Account. It is important that it is consistent with the destination's title 'Chrome data in your account' (except using 'Chromium' instead of 'Chrome') (TC ID 2983573066282140756).">
+-    Helium data in your account
++    Photon data in your account
+   </message>
+   <message name="IDS_SETTINGS_ENCRYPT_ACCOUNT_DATA_WITH_PASSPHRASE_LABEL" desc="Label for the radio button which, when selected, causes synced settings to be encrypted with a user-provided password.">
+-    Use your <ph name="BEGIN_LINK">&lt;a href="$1" target="_blank"&gt;<ex>&lt;a href="$1" target="_blank"&gt;</ex></ph>own passphrase<ph name="END_LINK">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph> to encrypt all the Helium data in your Google Account. Payment methods and addresses from Google Pay won’t be encrypted. Browsing history from Helium won’t sync.
++    Use your <ph name="BEGIN_LINK">&lt;a href="$1" target="_blank"&gt;<ex>&lt;a href="$1" target="_blank"&gt;</ex></ph>own passphrase<ph name="END_LINK">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph> to encrypt all the Photon data in your Google Account. Payment methods and addresses from Google Pay won’t be encrypted. Browsing history from Photon won’t sync.
+   </message>
+   <message name="IDS_SETTINGS_ENCRYPT_ACCOUNT_DATA_WITH_PASSPHRASE_EXPLANATION_TEXT" desc="Message shown when explicit passphrase is selected.">
+-    Only someone with your passphrase can read your encrypted data. The passphrase is not sent to or stored by Google. If you forget your passphrase or want to change this setting, you’ll need to <ph name="BEGIN_LINK">&lt;a href="$1" target="_blank"&gt;<ex>&lt;a href="$1" target="_blank"&gt;</ex></ph>delete the Helium data in your account<ph name="END_LINK">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph>.
++    Only someone with your passphrase can read your encrypted data. The passphrase is not sent to or stored by Google. If you forget your passphrase or want to change this setting, you’ll need to <ph name="BEGIN_LINK">&lt;a href="$1" target="_blank"&gt;<ex>&lt;a href="$1" target="_blank"&gt;</ex></ph>delete the Photon data in your account<ph name="END_LINK">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph>.
+   </message>
+   <message name="IDS_SETTINGS_PASSPHRASE_RESET_HINT_ACCOUNT_DATA_ENCRYPTION" desc="Informs user how to change their encryption setting.">
+-    If you forgot your passphrase or want to change this setting, <ph name="BEGIN_LINK">&lt;a href="$1" target="_blank"&gt;<ex>&lt;a href="$1" target="_blank"&gt;</ex></ph>delete the Helium data in your account<ph name="END_LINK">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph>
++    If you forgot your passphrase or want to change this setting, <ph name="BEGIN_LINK">&lt;a href="$1" target="_blank"&gt;<ex>&lt;a href="$1" target="_blank"&gt;</ex></ph>delete the Photon data in your account<ph name="END_LINK">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph>
+   </message>
+ 
+   <!-- Performance Page -->
+   <message name="IDS_SETTINGS_PERFORMANCE_MEMORY_SAVER_MODE_SETTING_DESCRIPTION" desc="Description for the memory saver mode setting">
+-    Helium frees up memory from inactive tabs. This gives active tabs and other apps more computer resources and keeps Helium fast. Your inactive tabs automatically become active again when you go back to them.
++    Photon frees up memory from inactive tabs. This gives active tabs and other apps more computer resources and keeps Photon fast. Your inactive tabs automatically become active again when you go back to them.
+   </message>
+   <message name="IDS_SETTINGS_PERFORMANCE_BATTERY_SAVER_MODE_SETTING_DESCRIPTION" desc="Description for the energy saver mode setting">
+-    Helium conserves battery power by limiting background activity and visual effects, such as smooth scrolling and video frame rates.
++    Photon conserves battery power by limiting background activity and visual effects, such as smooth scrolling and video frame rates.
+   </message>
+   <message name="IDS_SETTINGS_PERFORMANCE_PRELOAD_TOGGLE_SUMMARY" desc="Summary for the preload pages setting">
+-    Helium preloads pages which makes browsing and searching faster.
++    Photon preloads pages which makes browsing and searching faster.
+   </message>
+ 
+   <!-- Languages Page -->
+   <if expr="is_win">
+     <message name="IDS_SETTINGS_LANGUAGES_IS_DISPLAYED_IN_THIS_LANGUAGE" desc="The label for a language that is currently used as the UI display language.">
+-      This language is used to display menus, settings, alerts, and other text in Helium
++      This language is used to display menus, settings, alerts, and other text in Photon
+     </message>
+     <message name="IDS_SETTINGS_LANGUAGES_DISPLAY_IN_THIS_LANGUAGE" desc="The label used for a button that changes the UI language.">
+-      Display Helium in this language
++      Display Photon in this language
+     </message>
+   </if>
+ 
+   <!-- System Page -->
+   <if expr="not is_chromeos">
+     <message name="IDS_SETTINGS_SYSTEM_BACKGROUND_APPS_LABEL" desc="Label for the checkbox to allow apps to run in the background, when Chrome is closed.">
+-      Continue running background apps when Helium is closed
++      Continue running background apps when Photon is closed
+     </message>
+   </if>
+ 
+   <!-- Reset Page -->
+   <message name="IDS_SETTINGS_RESET_PROFILE_FEEDBACK" desc="Feedback label in the Reset Profile Settings dialog">
+-    Help make Helium better by reporting the <ph name="BEGIN_LINK">&lt;a is="action-link" target="_blank"&gt;</ph>current settings<ph name="END_LINK">&lt;/a&gt;</ph>
++    Help make Photon better by reporting the <ph name="BEGIN_LINK">&lt;a is="action-link" target="_blank"&gt;</ph>current settings<ph name="END_LINK">&lt;/a&gt;</ph>
+   </message>
+ 
+   <!-- Safety Hub -->
+   <message name="IDS_SETTINGS_SAFETY_HUB_ENTRY_POINT_NOTHING_TO_DO" desc="This text describes what Safety Hub does (regularly checking whether Chromium settings are safe) and indicates whether the user should take action. This text is shown when Safety Hub has not identified any issues at this time. There is nothing to do for the user. As future checks of Safety Hub may identify issues, this state may change. This text is shown on a card in privacy settings next to a button that leads to Safety Hub.">
+-    Helium regularly checks to make sure your browser has the safest settings. We'll let you know if anything needs your review.
++    Photon regularly checks to make sure your browser has the safest settings. We'll let you know if anything needs your review.
+   </message>
+   <message name="IDS_SETTINGS_SAFETY_HUB_ENTRY_POINT_HEADER" desc="Title of a row in Chrome's privacy settings (chrome://settings/privacy) explaining that Chrome recommends for the user to take action to improve their safety. Next to this text there is a button labeled 'Go to SafetyHub' that will take users to a dedicated page where users can take action.">
+-    Helium found some safety recommendations for your review
++    Photon found some safety recommendations for your review
+   </message>
+   <message name="IDS_SETTINGS_SAFETY_HUB_EMPTY_STATE_MODULE_SUBHEADER" desc="The header of the 'Empty State Module' in the Safety Hub page. The 'Empty State Module' is visible if there is no safety recommendation.">
+-    Helium will let you know if anything needs your review
++    Photon will let you know if anything needs your review
+   </message>
+   <message name="IDS_SETTINGS_SAFETY_HUB_VERSION_MODULE_UPPERCASE_NAME" desc="The entry point shown on the screenshot leads to Safety Check settings page (chrome://settings/safetyCheck) when at least on of the SC modules have recommendations. The subheader of the entry point lists the modules with recommendations. This string is the upper case version (i.e. version that comes first in the sentence) for the name of Chromium update module.">
+-    Helium update
++    Photon update
+   </message>
+   <message name="IDS_SETTINGS_SAFETY_HUB_VERSION_MODULE_LOWERCASE_NAME" desc="The entry point shown on the screenshot leads to Safety Check settings page (chrome://settings/safetyCheck) when at least on of the SC modules have recommendations. The subheader of the entry point lists the modules with recommendations. This string is the lower case version (i.e. version that comes in the middle of the sentence) for the name of Chromium update module.">
+-    Helium update
++    Photon update
+   </message>
+   <message name="IDS_SETTINGS_SAFETY_HUB_PASSWORD_CHECK_SUBHEADER_NO_PASSWORDS" desc="This text explains that passwords saved in Chrome are automatically checked for issues (e.g. password is leaked or weak) by SafetyHub. However the user does not have any passwords stored in Chrome, therefore the feature does not operate. This text is shown as a subtitle of the passwords card of SafetyHub. It sits below the title 'No saved passwords'.">
+-    Helium can check your passwords when you save them
++    Photon can check your passwords when you save them
+   </message>
+   <message name="IDS_SETTINGS_SAFETY_HUB_USER_EDU_MODULE_HEADER" desc="The header of the 'User Education Module' in the Safety Hub page. The 'User Education Module' is visible if there is no safety recommendation and gives information about some Chrome features.">
+-    Learn how Helium keeps you safe
++    Learn how Photon keeps you safe
+   </message>
+   <message name="IDS_SETTINGS_SAFETY_HUB_USER_EDU_DATA_HEADER" desc="The header of the first item in the 'User Education Module' in the Safety Hub page. This item explains how Chrome's tools help user to keep their data safe.">
+-    Helium's safety tools
++    Photon's safety tools
+   </message>
+   <message name="IDS_SETTINGS_SAFETY_HUB_USER_EDU_DATA_SUBHEADER" desc="The subheader of the first item in the 'User Education Module' in the Safety Hub page. This item explains how Chrome's tools help user to keep their data safe.">
+-    With <ph name="BEGIN_LINK">&lt;a href="$1" target="_blank"&gt;</ph>tools from Helium<ph name="END_LINK">&lt;/a&gt;</ph>, you can browse safely and stay in control
++    With <ph name="BEGIN_LINK">&lt;a href="$1" target="_blank"&gt;</ph>tools from Photon<ph name="END_LINK">&lt;/a&gt;</ph>, you can browse safely and stay in control
+   </message>
+   <message name="IDS_SETTINGS_SAFETY_HUB_USER_EDU_INCOGNITO_HEADER" desc="The header of the second item in the 'User Education Module' in the Safety Hub page. This item explains Incognito mode.">
+-    Helium Incognito
++    Photon Incognito
+   </message>
+   <message name="IDS_SETTINGS_SAFETY_HUB_USER_EDU_SAFE_BROWSING_SUBHEADER" desc="The header of the second item in the 'User Education Module' in the Safety Hub page. This item explains Safe Browsing.">
+-    <ph name="BEGIN_LINK">&lt;a href="$1" target="_blank"&gt;</ph>Helium warns you<ph name="END_LINK">&lt;/a&gt;</ph> about unsafe sites and downloads
++    <ph name="BEGIN_LINK">&lt;a href="$1" target="_blank"&gt;</ph>Photon warns you<ph name="END_LINK">&lt;/a&gt;</ph> about unsafe sites and downloads
+   </message>
+   <if expr="not is_chromeos">
+     <message name="IDS_SETTINGS_SAFETY_HUB_VERSION_CARD_HEADER_RESTART" desc="Safety Hub settings page (chrome://settings/safetyHub) gives users an overview over their safety status. The version card, which this text is a part of, informs the user whether their Chrome is up to date. This title of the card is shown when Chrome is not up to date but there is an update available and the user needs to restart their browser to finish the update. Shown above the subtitle 'Relaunch to finish update. Your tabs will reopen'.">
+-      Helium is out of date
++      Photon is out of date
+     </message>
+     <message name="IDS_SETTINGS_SAFETY_HUB_VERSION_CARD_HEADER_UPDATED" desc="Safety Hub settings page (chrome://settings/safetyHub) gives users an overview over their safety status. The version card, which this text is a part of, informs the user whether their Chrome is up to date. This title of the card is shown when Chrome is up to date and the user does not need to take any action. Shown above the subtitle that is the Chrome version.">
+-      Helium is up to date
++      Photon is up to date
+     </message>
+   </if>
+   <message name="IDS_SETTINGS_SAFETY_HUB_VERSION_NAVIGATION_ARIA_LABEL" desc="Safety Check settings page (chrome://settings/safetyCheck) gives users an overview over their safety status. The version card, which this text is a part of, informs the user whether their Chrome is up to date. This string is for the accesibility label for the card to call out where to navigation will happen (chrome://settings/help) if the card is clicked.">
+-    Go to About Helium page
++    Go to About Photon page
+   </message>
+   <message name="IDS_SETTINGS_SAFETY_HUB_VERSION_RELAUNCH_ARIA_LABEL" desc="Safety Check settings page (chrome://settings/safetyCheck) gives users an overview over their safety status. The version card, which this text is a part of, informs the user whether their Chrome is up to date. This string is for the accesibility label for the card to call out the click on card will result restarting the browser.">
+-    Relaunch Helium
++    Relaunch Photon
+   </message>
+   <message name="IDS_SETTINGS_SAFETY_HUB_UNUSED_SITE_PERMISSIONS_REMOVED_ONE_PERMISSION_LABEL" desc="'Revoked Permissions' shows the revoked permissions of unused websites. This text describes which permission was removed from an unused site and is shown if there is exactly one permission.">
+-    You haven't visited recently. Helium removed <ph name="PERMISSION">$1<ex>location</ex></ph>.
++    You haven't visited recently. Photon removed <ph name="PERMISSION">$1<ex>location</ex></ph>.
+   </message>
+   <message name="IDS_SETTINGS_SAFETY_HUB_UNUSED_SITE_PERMISSIONS_REMOVED_TWO_PERMISSIONS_LABEL" desc="'Revoked Permissions' shows the revoked permissions of unused websites. This text describes which permissions were removed from an unused site and is shown if there are exactly two permissions.">
+-    You haven't visited recently. Helium removed <ph name="PERMISSION_1">$1<ex>location</ex></ph>, <ph name="PERMISSION_2">$2<ex>notifications</ex></ph>.
++    You haven't visited recently. Photon removed <ph name="PERMISSION_1">$1<ex>location</ex></ph>, <ph name="PERMISSION_2">$2<ex>notifications</ex></ph>.
+   </message>
+   <message name="IDS_SETTINGS_SAFETY_HUB_UNUSED_SITE_PERMISSIONS_REMOVED_THREE_PERMISSIONS_LABEL" desc="'Revoked Permissions' shows the revoked permissions of unused websites. This text describes which permissions were removed from an unused site and is shown if there are exactly three permissions.">
+-    You haven't visited recently. Helium removed <ph name="PERMISSION_1">$1<ex>location</ex></ph>, <ph name="PERMISSION_2">$2<ex>notifications</ex></ph>, <ph name="PERMISSION_3">$3<ex>camera</ex></ph>.
++    You haven't visited recently. Photon removed <ph name="PERMISSION_1">$1<ex>location</ex></ph>, <ph name="PERMISSION_2">$2<ex>notifications</ex></ph>, <ph name="PERMISSION_3">$3<ex>camera</ex></ph>.
+   </message>
+   <message name="IDS_SETTINGS_SAFETY_HUB_UNUSED_SITE_PERMISSIONS_REMOVED_FOUR_OR_MORE_PERMISSIONS_LABEL" desc="'Revoked Permissions' shows the revoked permissions of unused websites. This text describes which permissions were removed from an unused site and is shown if there are four or more permissions. The number indicates the count of permisions that are not shown explicitly. The number is always two or larger.">
+-    You haven't visited recently. Helium removed <ph name="PERMISSION_1">$1<ex>location</ex></ph>, <ph name="PERMISSION_2">$2<ex>notifications</ex></ph>, and <ph name="COUNT">$3<ex>2</ex></ph> more.
++    You haven't visited recently. Photon removed <ph name="PERMISSION_1">$1<ex>location</ex></ph>, <ph name="PERMISSION_2">$2<ex>notifications</ex></ph>, and <ph name="COUNT">$3<ex>2</ex></ph> more.
+   </message>
+   <message name="IDS_SETTINGS_SAFETY_HUB_ABUSIVE_NOTIFICATION_PERMISSIONS_SETTING_SUBLABEL" desc="'Revoked Permissions' module shows the revoked permissions of websites. This text describes that abusive notification permissions were removed.">
+-    Dangerous site. Helium removed notifications.
++    Dangerous site. Photon removed notifications.
+   </message>
+ 
+   <!-- Bundled Security Settings (chrome://settings/security) -->
+   <message name="IDS_SETTINGS_SECURITY_PASSWORDS_LEAK_DETECTION_DESC" desc="Text that briefly describes the 'Password Leak Detection' feature.">
+-    Get warned if Helium finds one of your passwords in a public data breach
++    Get warned if Photon finds one of your passwords in a public data breach
+   </message>
+   <message name="IDS_SETTINGS_SECURITY_SAFE_BROWSING_STANDARD_HOW_IT_WORKS_CONTENT" desc="Content of the Safe Browsing standard protection column describing how it works">
+-    When you visit a site, Helium sends an obfuscated portion of the URL to <ph name="BEGIN_LINK">&lt;a target="_blank" href="https://safebrowsing.9oo91e.qjz9zk/"&gt;</ph>Google Safe Browsing<ph name="END_LINK">&lt;/a&gt;</ph> through a privacy server that hides your IP address. If a site does something suspicious, full URLs and bits of page content are also sent.
++    When you visit a site, Photon sends an obfuscated portion of the URL to <ph name="BEGIN_LINK">&lt;a target="_blank" href="https://safebrowsing.9oo91e.qjz9zk/"&gt;</ph>Google Safe Browsing<ph name="END_LINK">&lt;/a&gt;</ph> through a privacy server that hides your IP address. If a site does something suspicious, full URLs and bits of page content are also sent.
+   </message>
+   <message name="IDS_SETTINGS_SECURITY_JAVASCRIPT_GUARDRAILS_UNRECOGNIZED_SITES_DESCRIPTION" desc="Description of JavaScript Guardrails unrecognized sites option.">
+-    Enhanced protection turns off JavaScript optimization for sites Helium doesn’t recognize
++    Enhanced protection turns off JavaScript optimization for sites Photon doesn’t recognize
+   </message>
+   <message name="IDS_SETTINGS_SECURITY_BUNDLE_ENHANCED_BULLET_ONE" desc="First bullet point under the security settings enhanced bundle section">
+-    Turns on additional features to provide Helium’s strongest protections
++    Turns on additional features to provide Photon’s strongest protections
+   </message>
+ 
+   <!-- Secure connections -->
+   <message name="IDS_SETTINGS_SECURE_CONNECTIONS_SECTION_DESCRIPTION" desc="Description for the Secure Connections section in Security settings, explaining the baseline behavior of the browser even if the 'Always use secure connections' toggle is disabled.">
+-    Helium upgrades insecure connections to HTTPS automatically when possible
++    Photon upgrades insecure connections to HTTPS automatically when possible
+   </message>
+   <message name="IDS_SETTINGS_HTTPS_FIRST_MODE_SUBTITLE" desc="Subtitle for HTTPS-First Mode section in Security settings">
+-    Helium will try to upgrade navigations to HTTPS
++    Photon will try to upgrade navigations to HTTPS
+   </message>
+   <message name="IDS_SETTINGS_HTTPS_FIRST_MODE_ENABLED_FULL_SUBLABEL" desc="Sublabel for radio button to fully enable HTTPS-First Mode">
+-    Helium will warn you before loading any site using an insecure connection
++    Photon will warn you before loading any site using an insecure connection
+   </message>
+   <message name="IDS_SETTINGS_HTTPS_FIRST_MODE_ENABLED_INCOGNITO_SUBLABEL" desc="Sublabel for radio button to enable HTTPS-First Mode in Incognito">
+-    When browsing in Incognito mode, Helium will warn you before loading a site using an insecure connection
++    When browsing in Incognito mode, Photon will warn you before loading a site using an insecure connection
+   </message>
+   <message name="IDS_SETTINGS_HTTPS_FIRST_MODE_DISABLED_SUBLABEL" desc="Sublabel for radio button to disable HTTPS-First Mode">
+-    When HTTPS isn't available, Helium will use an insecure connection without warning you
++    When HTTPS isn't available, Photon will use an insecure connection without warning you
+   </message>
+   <!-- Skills Settings Page -->
+   <message name="IDS_SETTINGS_SKILLS_SETTING_LABEL" desc="Label for the Skills setting entry point in Settings &gt; AI page.">
+-    Skills in Helium
++    Skills in Photon
+   </message>
+   <message name="IDS_SETTINGS_SKILLS_TOGGLE_LABEL" desc="Label for the toggle button on the Skills settings subpage.">
+-    Enable Skills in Helium
++    Enable Skills in Photon
+   </message>
+   <message name="IDS_SETTINGS_SYNC_SKILLS_SEPARATE_INFORMATION" desc="Info text on the Sync page explaining that skills are managed separately from sync.">
+-    AI innovations like skills are saved to your Google Account and managed separately from Helium sync
++    AI innovations like skills are saved to your Google Account and managed separately from Photon sync
+   </message>
+   <message name="IDS_SETTINGS_SKILLS_WHEN_ON_BULLET_TWO" desc="Second bullet point under the 'When on' column in the Skills settings page.">
+-    Use them alongside other Gemini features in Helium
++    Use them alongside other Gemini features in Photon
+   </message>
+   <!-- Dictation Settings Page -->
+   <!-- TODO(b/510738735): Make these translatable when finalized. -->
+@@ -461,7 +461,7 @@
+     Dictation
+   </message>
+   <message name="IDS_SETTINGS_DICTATION_SETTING_SUBLABEL" translateable="false" desc="Sublabel for the Dictation setting entry point in Settings &gt; AI page.">
+-    Helium uses your microphone to capture your voice and fill in text fields with cleaned up content
++    Photon uses your microphone to capture your voice and fill in text fields with cleaned up content
+   </message>
+   <message name="IDS_SETTINGS_DICTATION_SHORTCUT_SUBLABEL" translateable="false" desc="Sublabel for the keyboard shortcut setting in Dictation settings page.">
+     Open Dictation with a keyboard shortcut
+--- a/chrome/app/settings_strings.grdp
++++ b/chrome/app/settings_strings.grdp
+@@ -67,7 +67,7 @@
+     </if>
+     <if expr="is_macosx">
+       <message name="IDS_ABOUT_CHROME_AUTOUPDATE_ALL" desc="The 'Automatically update Chrome for all users.' button in the About window.  Mac-only.">
+-        Automatically update Helium for all users
++        Automatically update Photon for all users
+       </message>
+       <message name="IDS_ABOUT_CHROME_AUTOUPDATE_ALL_IS_ON" desc="The text in About Page to indicate automatic update is turned on.  Mac-only.">
+         Automatic updates are turned on.
+@@ -94,7 +94,7 @@
+       Get image descriptions from Google
+     </message>
+     <message name="IDS_SETTINGS_ACCESSIBLE_IMAGE_LABELS_SUBTITLE" desc="Subtitle for screen reader image labels feature.">
+-      If an image doesn’t have a useful description, Helium will try to provide one for you. To create descriptions, images are sent to Google.
++      If an image doesn’t have a useful description, Photon will try to provide one for you. To create descriptions, images are sent to Google.
+     </message>
+     <message name="IDS_SETTINGS_MAIN_NODE_ANNOTATIONS_DOWNLOAD_COMPLETE" desc="Success message when it has downloaded main node annotation files.">
+       Main node annotation files downloaded
+@@ -259,7 +259,7 @@
+       Reset toolbar to default settings
+     </message>
+     <message name="IDS_SETTINGS_CHROME_COLORS" desc="Text of the label describing 'Chrome Colors' theme.">
+-      Helium Colors
++      Photon Colors
+     </message>
+     <message name="IDS_SETTINGS_COLOR_SCHEME_MODE" desc="Text of the label for selecting a color scheme mode for the browser.">
+       Mode
+@@ -403,7 +403,7 @@
+       Google Search AI Mode
+     </message>
+     <message name="IDS_SETTINGS_SIDE_PANEL_ALIGNMENT_CHROME_PANELS" desc="Label for the default Chrome Panels alignment setting.">
+-      Helium Panels
++      Photon Panels
+     </message>
+     <message name="IDS_SETTINGS_SIDE_PANEL_ALIGNMENT_A11Y_LABEL" is_accessibility_with_no_ui="true" desc="Accessible label for side panel alignment dropdown menus, combining the side panel item name and the side panel position category name for screen readers.">
+       <ph name="ITEM_NAME">$1<ex>Google Search AI Mode</ex></ph> <ph name="CATEGORY_NAME">$2<ex>Side panel position</ex></ph>
+@@ -455,13 +455,13 @@
+       Search settings
+     </message>
+     <message name="IDS_SETTINGS_SEARCH_NO_RESULTS_HELP" desc="Help text for a search that has no results.">
+-      Go to <ph name="BEGIN_LINK_CHROMIUM">&lt;a target="_blank" href="$1"&gt;</ph>Helium help<ph name="END_LINK_CHROMIUM">&lt;/a&gt;</ph> if you can't find what you're looking for
++      Go to <ph name="BEGIN_LINK_CHROMIUM">&lt;a target="_blank" href="$1"&gt;</ph>Photon help<ph name="END_LINK_CHROMIUM">&lt;/a&gt;</ph> if you can't find what you're looking for
+     </message>
+     <message name="IDS_SETTINGS_SETTINGS" desc="The settings page title.">
+       Settings
+     </message>
+     <message name="IDS_SETTINGS_ALT_PAGE_TITLE" desc="The settings page title for the about page.">
+-      Settings - <ph name="SECTION_TITLE">$1<ex>About Helium</ex></ph>
++      Settings - <ph name="SECTION_TITLE">$1<ex>About Photon</ex></ph>
+     </message>
+     <message name="IDS_SETTINGS_SUBPAGE_BUTTON" desc="Accessibility description for a button navigating the user from a settings page to one of the settings subpages.">
+       Subpage button
+@@ -910,16 +910,16 @@
+       Edit in Google Account
+     </message>
+     <message name="IDS_SETTINGS_HOME_AND_WORK_ADDRESS_REMOVE" desc="Label for a context menu item that removes the selected home and work address from Chrome.">
+-      Remove from Helium
++      Remove from Photon
+     </message>
+     <message name="IDS_SETTINGS_HOME_ADDRESS_REMOVE_CONFIRMATION_DIALOG_TITLE" desc="Title for the dialog that asks for confirmation to remove the selected home address from Chrome.">
+-      Remove your home address from Helium autofill?
++      Remove your home address from Photon autofill?
+     </message>
+     <message name="IDS_SETTINGS_WORK_ADDRESS_REMOVE_CONFIRMATION_DIALOG_TITLE" desc="Title for the dialog that asks for confirmation to remove the selected work address from Chrome.">
+-      Remove your work address from Helium autofill?
++      Remove your work address from Photon autofill?
+     </message>
+     <message name="IDS_SETTINGS_NAME_EMAIL_ADDRESS_REMOVE_CONFIRMATION_DIALOG_TITLE" desc="Title for the dialog that asks for confirmation to remove the selected name and email address from Chrome.">
+-      Remove this info from Helium autofill?
++      Remove this info from Photon autofill?
+     </message>
+     <message name="IDS_SETTINGS_HOME_ADDRESS_REMOVE_CONFIRMATION_DIALOG_NOTICE" desc="Body for the dialog that asks for confirmation to remove the selected home address from Chrome.">
+       Your home address can help you get things done across Google services, like more relevant Search results and directions in Google Maps. You can edit or delete your address in your <ph name="BEGIN_LINK">&lt;a href="$1" target="_blank"&gt;</ph>Google Account<ph name="END_LINK">&lt;/a&gt;</ph> <ph name="USERNAME">$2<ex>example@9ma1l.qjz9zk</ex></ph>.
+@@ -976,7 +976,7 @@
+       Signs you out of most sites. You'll stay signed in to your Google Account so your synced data can be deleted.
+     </message>
+     <message name="IDS_SETTINGS_CLEAR_COOKIES_AND_SITE_DATA_SUMMARY_BASIC_SUPERVISED_PROFILE" desc="A summary for the 'Cookies and site data' option in the 'Clear Browsing Data' screen, explaining that deleting cookies and site data will sign the the child user out of most websites but your Google account and Family Link settings will stay .">
+-      Signs you out of most sites. You'll stay signed in to your Google Account so your Family Link settings for Helium apply.
++      Signs you out of most sites. You'll stay signed in to your Google Account so your Family Link settings for Photon apply.
+     </message>
+     <message name="IDS_SETTINGS_CLEAR_COOKIES_AND_SITE_DATA_SUMMARY_BASIC_SIGNED_IN_PROFILE" desc="A summary for the 'Cookies and site data' option in the 'Clear Browsing Data' screen, explaining that deleting cookies and site data will sign the user out of most websites but your Google sign in will stay.">
+       Signs you out of most sites. You'll stay signed in to your Google Account.
+@@ -1387,7 +1387,7 @@
+           Please check with your network administrator to make sure that the firewall is not blocking downloads from Google servers.
+         </message>
+         <message name="IDS_SETTINGS_LANGUAGES_DICTIONARY_DOWNLOAD_FAILED_HELP_HELIUM" desc="Error message when spell dictionary download fails more than once possibly due to a network policy or configuration.">
+-          Please check that Helium services are enabled (including spell check downloads) and make sure that the firewall is not blocking downloads from Helium servers.
++          Please check that Photon services are enabled (including spell check downloads) and make sure that the firewall is not blocking downloads from Photon servers.
+         </message>
+       </if>
+     </if>
+@@ -1508,10 +1508,10 @@
+       Sites you visit can verify that you're a real person and not a bot
+     </message>
+     <message name="IDS_SETTINGS_ANTI_ABUSE_WHEN_ON_SECTION_ONE" desc="A description that informs users that Chrome saves a small amount of data when the anti-abuse features are enabled.">
+-      A site you visit can save a small amount of info with Helium, mainly to validate you're not a bot
++      A site you visit can save a small amount of info with Photon, mainly to validate you're not a bot
+     </message>
+     <message name="IDS_SETTINGS_ANTI_ABUSE_WHEN_ON_SECTION_TWO" desc="A description that informs users how the anti-abuse features work.">
+-      As you keep browsing, sites can check with Helium and verify with a previous site you've visited that you're likely a real person
++      As you keep browsing, sites can check with Photon and verify with a previous site you've visited that you're likely a real person
+     </message>
+     <message name="IDS_SETTINGS_ANTI_ABUSE_WHEN_ON_SECTION_THREE" desc="A description that informs users how their browsing could be helped by the anti-abuse features.">
+       Browsing is faster because a site is less likely to ask you to verify you're a real person
+@@ -1571,7 +1571,7 @@
+       Web &amp; App Activity
+     </message>
+     <message name="IDS_SETTINGS_PRIVACY_GUIDE_COMPLETION_CARD_AI_SETTINGS_LABEL" desc="Text of the AI Innovations sublabel in the completion card of the 'Privacy Guide'.">
+-      Learn more about how AI shapes your experience and the controls provided by Helium
++      Learn more about how AI shapes your experience and the controls provided by Photon
+     </message>
+     <message name="IDS_SETTINGS_PRIVACY_GUIDE_MSBB_CARD_HEADER" desc="Header of the 'make searches and browsing better' card in the 'Privacy Guide'.">
+       Choose your search and browsing quality
+@@ -1632,22 +1632,22 @@
+         Sends an obfuscated portion of the URL to Google through a privacy server that hides your IP address
+       </message>
+       <message name="IDS_SETTINGS_PRIVACY_GUIDE_SAFE_BROWSING_CARD_STANDARD_PROTECTION_PRIVACY_DESCRIPTION1_PROXY" desc="A part of the privacy description of the standard protection section of the safe browsing card in the 'Privacy Guide'.">
+-        If a site tries to steal your password, or when you download a harmful file, Helium may also send URLs, including bits of page content, to Google
++        If a site tries to steal your password, or when you download a harmful file, Photon may also send URLs, including bits of page content, to Google
+       </message>
+     </if>
+ 
+-    <!-- Helium Services Privacy Settings (helium://settings/privacy/services) -->
+-    <message name="IDS_SETTINGS_HELIUM_SERVICES" desc="Name of the page which controls connectivity to Helium services">
+-      Helium services
++    <!-- Photon Services Privacy Settings (helium://settings/privacy/services) -->
++    <message name="IDS_SETTINGS_HELIUM_SERVICES" desc="Name of the page which controls connectivity to Photon services">
++      Photon services
+     </message>
+-    <message name="IDS_SETTINGS_HELIUM_SERVICES_DESCRIPTION" desc="Description of the controls available on the Helium services settings page">
+-      Manage what Helium services are allowed in your browser
++    <message name="IDS_SETTINGS_HELIUM_SERVICES_DESCRIPTION" desc="Description of the controls available on the Photon services settings page">
++      Manage what Photon services are allowed in your browser
+     </message>
+     <message name="IDS_SETTINGS_HELIUM_CRASH_REPORTING_TITLE" desc="Title of the setting that controls crash reporting">
+       Crash reporting
+     </message>
+     <message name="IDS_SETTINGS_HELIUM_CRASH_REPORTING_DESCRIPTION" desc="Description of the setting that controls crash reporting">
+-      Choose whether Helium can ask to send crash reports or send them automatically. Disabling reports will delete all pending reports.
++      Choose whether Photon can ask to send crash reports or send them automatically. Disabling reports will delete all pending reports.
+     </message>
+     <message name="IDS_SETTINGS_HELIUM_CRASH_REPORTING_DISABLED" desc="Crash reporting option that disables prompts and submissions">
+       Disabled
+@@ -1658,51 +1658,51 @@
+     <message name="IDS_SETTINGS_HELIUM_CRASH_REPORTING_AUTOMATIC" desc="Crash reporting option that automatically submits reports">
+       Send automatically
+     </message>
+-    <message name="IDS_SETTINGS_HELIUM_SCHEMA_NOTICE_TITLE" desc="Title of the alert shown when Helium services have a change in behavior">
+-      Updates to Helium services:
++    <message name="IDS_SETTINGS_HELIUM_SCHEMA_NOTICE_TITLE" desc="Title of the alert shown when Photon services have a change in behavior">
++      Updates to Photon services:
+     </message>
+-    <message name="IDS_SETTINGS_HELIUM_SCHEMA_NOTICE_DESCRIPTION" desc="Description of the alert shown when Helium services have a change in behavior">
++    <message name="IDS_SETTINGS_HELIUM_SCHEMA_NOTICE_DESCRIPTION" desc="Description of the alert shown when Photon services have a change in behavior">
+       These changes are not active until you dismiss this notice.
+     </message>
+     <message name="IDS_SETTINGS_HELIUM_SCHEMA_IGNORE" desc="Checkbox label to ignore any future services change alerts">
+       Don't notify me again
+     </message>
+     <message name="IDS_SETTINGS_HELIUM_SERVICES_SETUP_PENDING_TEXT" desc="Description shown in services settings when user has not completed onboarding">
+-      Helium services are not available until setup is complete to ensure your privacy and consent.
++      Photon services are not available until setup is complete to ensure your privacy and consent.
+     </message>
+     <message name="IDS_SETTINGS_HELIUM_SERVICES_SETUP_PENDING_BUTTON" desc="Button label directing user to complete onboarding">
+       Complete setup
+     </message>
+-    <message name="IDS_SETTINGS_HELIUM_SERVICES_TOGGLE" desc="Global toggle for enabling/disabling of all Helium services">
+-      Allow connecting to Helium services
++    <message name="IDS_SETTINGS_HELIUM_SERVICES_TOGGLE" desc="Global toggle for enabling/disabling of all Photon services">
++      Allow connecting to Photon services
+     </message>
+-    <message name="IDS_SETTINGS_HELIUM_SERVICES_TOGGLE_DESCRIPTION" desc="Description of the toggle for enabling/disabling of all Helium services">
+-      When enabled, Helium will be able to connect to anonymous web services to provide additional functionality. When disabled, additional features will not work.
++    <message name="IDS_SETTINGS_HELIUM_SERVICES_TOGGLE_DESCRIPTION" desc="Description of the toggle for enabling/disabling of all Photon services">
++      When enabled, Photon will be able to connect to anonymous web services to provide additional functionality. When disabled, additional features will not work.
+     </message>
+     <message name="IDS_SETTINGS_HELIUM_SERVICES_EXT_PROXY_TOGGLE" desc="Toggle for enabling/disabling of downloading and proxying extensions">
+       Proxy extension downloads and updates
+     </message>
+     <message name="IDS_SETTINGS_HELIUM_SERVICES_EXT_PROXY_TOGGLE_DESCRIPTION" desc="Description of the toggle for enabling/disabling of downloading and proxying extensions">
+-      When enabled, Helium will proxy extension downloads and updates to protect your privacy. When disabled, downloading and updating extensions will not work.
++      When enabled, Photon will proxy extension downloads and updates to protect your privacy. When disabled, downloading and updating extensions will not work.
+     </message>
+     <message name="IDS_SETTINGS_HELIUM_SERVICES_BANGS_TOGGLE" desc="Toggle for enabling/disabling of downloading bangs">
+       Allow downloading the !bangs list
+     </message>
+     <message name="IDS_SETTINGS_HELIUM_SERVICES_BANGS_TOGGLE_DESCRIPTION" desc="Description of the toggle for enabling/disabling of downloading bangs">
+-      Helium will fetch a list of bangs that help you browse the Internet faster, such as !w or !gh. When disabled, bangs will not work.
++      Photon will fetch a list of bangs that help you browse the Internet faster, such as !w or !gh. When disabled, bangs will not work.
+     </message>
+     <message name="IDS_SETTINGS_HELIUM_SERVICES_SPELLCHECK_TOGGLE" desc="Toggle for enabling/disabling of downloading spellcheck files">
+       Allow downloading dictionary files for spell checking
+     </message>
+     <message name="IDS_SETTINGS_HELIUM_SERVICES_SPELLCHECK_TOGGLE_DESCRIPTION" desc="Description of the for enabling/disabling of downloading spellcheck files">
+-      Helium will fetch dictionary files used for spell checking when requested. When disabled, spell checking will not work.
++      Photon will fetch dictionary files used for spell checking when requested. When disabled, spell checking will not work.
+     </message>
+     <if expr="not is_linux">
+       <message name="IDS_SETTINGS_HELIUM_SERVICES_UPDATE" desc="Toggle for automatic update downloads">
+         Allow automatic browser updates
+       </message>
+       <message name="IDS_SETTINGS_HELIUM_SERVICES_UPDATE_DESCRIPTION" desc="Description of the toggle for automatic update downloads">
+-        Helium will automatically check for updates and install them. This includes browser and component updates. We recommend keeping this setting enabled to ensure you get the latest features and security updates.
++        Photon will automatically check for updates and install them. This includes browser and component updates. We recommend keeping this setting enabled to ensure you get the latest features and security updates.
+       </message>
+     </if>
+     <if expr="is_linux">
+@@ -1710,28 +1710,28 @@
+         Allow automatic component updates
+       </message>
+       <message name="IDS_SETTINGS_HELIUM_SERVICES_UPDATE_DESCRIPTION" desc="Description of the toggle for automatic update downloads">
+-        Helium will automatically check for component updates and install them. We recommend keeping this setting enabled. On Linux, browser updates are handled by your distro's package manager. Please check for Helium package updates at least every week.
++        Photon will automatically check for component updates and install them. We recommend keeping this setting enabled. On Linux, browser updates are handled by your distro's package manager. Please check for Photon package updates at least every week.
+       </message>
+     </if>
+     <message name="IDS_SETTINGS_HELIUM_SERVICES_UBO" desc="Description of the toggle for uBO filter lists">
+       Allow downloading filter lists for uBlock Origin
+     </message>
+     <message name="IDS_SETTINGS_HELIUM_SERVICES_UBO_DESCRIPTION" desc="Description of the toggle for automatic update downloads">
+-      Helium will fetch fresh filter lists for uBlock Origin. All requests to lists are proxied to protect your privacy. When disabled, default filter lists will be loaded from local storage, which are only updated along with Helium. Optional filter lists will be requested without proxying.
++      Photon will fetch fresh filter lists for uBlock Origin. All requests to lists are proxied to protect your privacy. When disabled, default filter lists will be loaded from local storage, which are only updated along with Photon. Optional filter lists will be requested without proxying.
+     </message>
+-    <message name="IDS_SETTINGS_HELIUM_SERVICES_OVERRIDE" desc="Text input for overriding the Helium services server">
+-      Use your own instance of Helium services
++    <message name="IDS_SETTINGS_HELIUM_SERVICES_OVERRIDE" desc="Text input for overriding the Photon services server">
++      Use your own instance of Photon services
+     </message>
+-    <message name="IDS_SETTINGS_HELIUM_SERVICES_OVERRIDE_DESCRIPTION" desc="Description of the text input for overriding the Helium services server">
+-      You can host your own instance of Helium services and use it in your browser instead of the default one. HTTPS only.
++    <message name="IDS_SETTINGS_HELIUM_SERVICES_OVERRIDE_DESCRIPTION" desc="Description of the text input for overriding the Photon services server">
++      You can host your own instance of Photon services and use it in your browser instead of the default one. HTTPS only.
+     </message>
+-    <message name="IDS_SETTINGS_HELIUM_SERVICES_OVERRIDE_DESCRIPTION_WARNING" desc="Warning section of description for overriding the Helium services server">
++    <message name="IDS_SETTINGS_HELIUM_SERVICES_OVERRIDE_DESCRIPTION_WARNING" desc="Warning section of description for overriding the Photon services server">
+       Do not use this field unless you know exactly what you are doing. Never paste URLs from other people here, they are trying to steal your data. We are not responsible for any damages caused by using a custom server and will not be able to help you.
+     </message>
+-    <message name="IDS_SETTINGS_HELIUM_SERVICES_OVERRIDE_ARIA_LABEL" desc="ARIA label of the text input for overriding the Helium services server">
+-      Custom origin URL for Helium services
++    <message name="IDS_SETTINGS_HELIUM_SERVICES_OVERRIDE_ARIA_LABEL" desc="ARIA label of the text input for overriding the Photon services server">
++      Custom origin URL for Photon services
+     </message>
+-    <message name="IDS_SETTINGS_HELIUM_SERVICES_OVERRIDE_INVALID_ORIGIN" desc="Validation error shown when the custom Helium services origin is invalid.">
++    <message name="IDS_SETTINGS_HELIUM_SERVICES_OVERRIDE_INVALID_ORIGIN" desc="Validation error shown when the custom Photon services origin is invalid.">
+       Invalid origin
+     </message>
+ 
+@@ -1887,10 +1887,10 @@
+     </message>
+     <if expr="_google_chrome">
+       <message name="IDS_SETTINGS_SAFEBROWSING_STANDARD_DESC_PROXY" desc="Description for safe browsing standard protection mode">
+-        Protects against sites, downloads, and extensions that are known to be dangerous. When you visit a site, Helium sends an obfuscated portion of the URL to Google through a privacy server that hides your IP address. If a site does something suspicious, full URLs and bits of page content are also sent.
++        Protects against sites, downloads, and extensions that are known to be dangerous. When you visit a site, Photon sends an obfuscated portion of the URL to Google through a privacy server that hides your IP address. If a site does something suspicious, full URLs and bits of page content are also sent.
+       </message>
+       <message name="IDS_SETTINGS_SAFEBROWSING_STANDARD_BULLET_TWO_PROXY" desc="Bullet point under the safe browsing standard protection mode">
+-        Sends an obfuscated portion of the URL to Google through a privacy server that hides your IP address. If a site tries to steal your password, or when you download a harmful file, Helium may also send URLs, including bits of page content, to Google.
++        Sends an obfuscated portion of the URL to Google through a privacy server that hides your IP address. If a site tries to steal your password, or when you download a harmful file, Photon may also send URLs, including bits of page content, to Google.
+       </message>
+     </if>
+     <message name="IDS_SETTINGS_SAFEBROWSING_STANDARD_EXPAND_ACCESSIBILITY_LABEL" desc="Label for the button that toggles showing the detailed description of safe browsing standard protection. Only visible by screen reader software.">
+@@ -1945,7 +1945,7 @@
+       Network and security
+     </message>
+     <message name="IDS_SETTINGS_NETWORK_AND_SECURITY_DESCRIPTION" desc="Description of the settings row that opens the security settings page">
+-      Manage how Helium connects to sites, what privacy signals are allowed, and more
++      Manage how Photon connects to sites, what privacy signals are allowed, and more
+     </message>
+     <message name="IDS_SETTINGS_NETWORK_SECTION_TITLE" desc="Title of the network section on the network and security settings page">
+       Network
+@@ -2242,21 +2242,21 @@
+       Delete history, cookies, cache, and more
+     </message>
+ 
+-    <!-- Helium Noise -->
+-    <message name="IDS_SETTINGS_NOISE" desc="Title of the settings page for Helium's fingerprinting protection feature.">
++    <!-- Photon Noise -->
++    <message name="IDS_SETTINGS_NOISE" desc="Title of the settings page for Photon's fingerprinting protection feature.">
+       Fingerprinting protection
+     </message>
+     <message name="IDS_SETTINGS_NOISE_LINK_DESCRIPTION" desc="Description of the fingerprinting protection link on the Privacy and security settings page.">
+-      Manage how Helium protects you against fingerprinting
++      Manage how Photon protects you against fingerprinting
+     </message>
+     <message name="IDS_SETTINGS_NOISE_TOGGLE_DESCRIPTION" desc="Description of the global fingerprinting protection toggle.">
+       Make it harder for sites to fingerprint your browser and device
+     </message>
+-    <message name="IDS_SETTINGS_NOISE_DESCRIPTION" desc="Description of how Helium protects against browser fingerprinting.">
+-      When fingerprinting protection is enabled, Helium adds noise to certain browser features to make it harder for sites to track and profile you. Each site sees consistent randomized information during your browsing session to reduce the chances of detection.
++    <message name="IDS_SETTINGS_NOISE_DESCRIPTION" desc="Description of how Photon protects against browser fingerprinting.">
++      When fingerprinting protection is enabled, Photon adds noise to certain browser features to make it harder for sites to track and profile you. Each site sees consistent randomized information during your browsing session to reduce the chances of detection.
+     </message>
+-    <message name="IDS_SETTINGS_NOISE_DISCLAIMER" desc="Disclaimer shown below the fingerprinting protection description explaining that Helium makes fingerprint recovery harder but cannot prevent fingerprinting completely.">
+-      Fingerprinting cannot be fully prevented, but Helium's analysis defenses make it harder to recover the original fingerprint.
++    <message name="IDS_SETTINGS_NOISE_DISCLAIMER" desc="Disclaimer shown below the fingerprinting protection description explaining that Photon makes fingerprint recovery harder but cannot prevent fingerprinting completely.">
++      Fingerprinting cannot be fully prevented, but Photon's analysis defenses make it harder to recover the original fingerprint.
+     </message>
+     <message name="IDS_SETTINGS_NOISE_CUSTOM_DESCRIPTION" desc="General explanation of fingerprinting protection site rules and wildcard behavior.">
+       When the general fingerprinting protection feature is enabled, sites listed below follow a custom setting. Inserting "[*.]" before a domain name applies it to the entire domain.
+@@ -2321,10 +2321,10 @@
+       Learn more about resetting settings
+     </message>
+     <message name="IDS_SETTINGS_RESET_AUTOMATED_DIALOG_V2_TITLE" desc="The title of the dialog informing the user that automated resetting of some settings occurred.">
+-      Helium reset these settings
++      Photon reset these settings
+     </message>
+     <message name="IDS_SETTINGS_RESET_AUTOMATED_DIALOG_V2_BODY" desc="The body of the dialog informing the user that automated resetting of some settings occurred.">
+-      These settings were changed from outside of Helium. To protect you, Helium reset them.
++      These settings were changed from outside of Photon. To protect you, Photon reset them.
+     </message>
+     <message name="IDS_SETTINGS_RESET_PINNED_TABS" desc="A string that is used to describe the pinned tabs setting.">
+       Pinned tabs
+@@ -2457,7 +2457,7 @@
+       Site search
+     </message>
+     <message name="IDS_SETTINGS_SEARCH_ENGINES_SITE_SEARCH_EXPLANATION" desc="Explanation for 'Site Search' section. Used interchangeably with IDS_SETTINGS_SEARCH_ENGINES_SITE_SEARCH_EXPLANATION_STARTER_PACK">
+-      To search a specific site or part of Helium, type its shortcut in the address bar, followed by your preferred keyboard shortcut.
++      To search a specific site or part of Photon, type its shortcut in the address bar, followed by your preferred keyboard shortcut.
+     </message>
+     <message name="IDS_SETTINGS_SEARCH_ENGINES_NO_SITES_ADDED" desc="Text shown when the 'Site Search' section is empty">
+       No sites added
+@@ -2472,7 +2472,7 @@
+       Extensions
+     </message>
+     <message name="IDS_SETTINGS_SEARCH_ENGINES_EXTENSION_ENGINES_EXPLANATION" desc="Explanation for a section that displays search engines added by extensions">
+-      Some extensions can add search engines to Helium
++      Some extensions can add search engines to Photon
+     </message>
+     <message name="IDS_SETTINGS_SEARCH_ENGINES_NAME" desc="Label for a table column that holds the name of a search engine or site search provider">
+       Name
+@@ -3145,7 +3145,7 @@
+     </if>
+     <if expr="is_win and _google_chrome">
+       <message name="IDS_SETTINGS_SITE_SETTINGS_PROTECTED_CONTENT_IDENTIFIERS_ALLOWED_SUB_LABEL" desc="A subtitle for the ‘Protected Content IDs’ setting, shown if user chooses to allow Protected Content IDs. This text explains that enabling protected content IDs may result in live captioning not working.">
+-        Helium Live Caption might not work
++        Photon Live Caption might not work
+       </message>
+     </if>
+     <message name="IDS_SETTINGS_SITE_SETTINGS_PROTOCOL_HANDLERS_DESCRIPTION" desc="Description of the protocol handlers content setting.">
+@@ -3347,7 +3347,7 @@
+       Insecure content is blocked by default on secure sites
+     </message>
+     <message name="IDS_SETTINGS_SITE_SETTINGS_PDF_DOWNLOAD_PDFS" desc="Label for downloading PDF documents instead of automatically opening them in Chrome.">
+-      Download PDF files instead of automatically opening them in Helium
++      Download PDF files instead of automatically opening them in Photon
+     </message>
+     <message name="IDS_SETTINGS_SITE_SETTINGS_RECENT_ACTIVITY" desc="Label for the section which contains the user's recent permissions changes">
+       Recent activity
+@@ -3641,7 +3641,7 @@
+       No sites added
+     </message>
+     <message name="IDS_SETTINGS_SITE_SETTINGS_BLOCK_AUTOPLAY" desc="A label for a toggle in site settings to block autoplay. If the toggle is on then Chrome will block autoplay by default and use an algorithm to determine which sites should still be able to autoplay. If the toggle is off then autoplay will be enabled for all sites.">
+-      Let Helium choose when sites can play sound (recommended)
++      Let Photon choose when sites can play sound (recommended)
+     </message>
+     <message name="IDS_SETTINGS_SITE_SETTINGS_EMPTY_ALL_SITES_PAGE" desc="Explanation shown when there are no sites that have appeared yet on the All Sites page.">
+       Sites you visit will appear here
+@@ -3937,7 +3937,7 @@
+       Show profile stats
+     </message>
+     <message name="IDS_SETTINGS_ENCRYPT_WITH_SYNC_PASSPHRASE_LABEL" desc="Label for the radio button which, when selected, causes synced settings to be encrypted with a user-provided password.">
+-      Encrypt synced data with your own <ph name="BEGIN_LINK">&lt;a href="$1" target="_blank"&gt;<ex>&lt;a href="$1" target="_blank"&gt;</ex></ph>sync passphrase<ph name="END_LINK">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph>. Payment methods and addresses from Google Pay won’t be encrypted. Browsing history from Helium won’t sync.
++      Encrypt synced data with your own <ph name="BEGIN_LINK">&lt;a href="$1" target="_blank"&gt;<ex>&lt;a href="$1" target="_blank"&gt;</ex></ph>sync passphrase<ph name="END_LINK">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph>. Payment methods and addresses from Google Pay won’t be encrypted. Browsing history from Photon won’t sync.
+     </message>
+     <message name="IDS_SETTINGS_PASSPHRASE_EXPLANATION_TEXT" desc="Message shown when explicit passphrase is selected.">
+       Only someone with your passphrase can read your encrypted data. The passphrase is not sent to or stored by Google. If you forget your passphrase or want to change this setting, you'll need to <ph name="BEGIN_LINK">&lt;a href="$1" target="_blank"&gt;<ex>&lt;a href="$1" target="_blank"&gt;</ex></ph>reset sync<ph name="END_LINK">&lt;/a&gt;<ex>&lt;/a&gt;</ex></ph>.
+@@ -4078,7 +4078,7 @@
+       When you ask questions about your history, you can get answers about specific information from a page you visited
+     </message>
+     <message name="IDS_SETTINGS_HISTORY_SEARCH_WITH_ANSWERS_CONSIDER_DATA_ENCRYPTED" desc="This is a bullet point in the ‘Things to consider’ column, which describes things users should consider about a feature. This string explains that AI features will save data to the user’s device in order to provide the feature’s respective benefit. The data will be appropriately encrypted for security. The tone should be informative.">
+-      As you browse sites, their page contents are encrypted and saved to your device. This may affect Helium's performance
++      As you browse sites, their page contents are encrypted and saved to your device. This may affect Photon's performance
+     </message>
+     <message name="IDS_SETTINGS_HISTORY_SEARCH_WITH_ANSWERS_CONSIDER_OUTDATED" desc="This is a bullet point in the ‘Things to consider’ column, which describes things users should consider about a feature. This string explains that history search results and answers powered by AI may become outdated since they are dependent on the user's last visit to the page contents.">
+       AI-powered history search results and answers may become outdated if site content has changed since your last visit
+@@ -4169,11 +4169,11 @@
+           Enable Process Isolation
+         </message>
+         <message name="IDS_SETTINGS_SYSTEM_ISOLATION_STATE_SUBLABEL" desc="Sublabel for the Enable process isolation toggle.">
+-          Process Isolation prevents other applications from tampering with <ph name="IDS_SHORT_PRODUCT_NAME">$1<ex>Helium</ex></ph>.
++          Process Isolation prevents other applications from tampering with <ph name="IDS_SHORT_PRODUCT_NAME">$1<ex>Photon</ex></ph>.
+         </message>
+       </if>
+       <message name="IDS_SETTINGS_SYSTEM_FEATURE_NOTIFICATIONS_LABEL" desc="Label for the toggle that enables Chrome system notifications about features.">
+-        Show system notifications about Helium features and tips
++        Show system notifications about Photon features and tips
+       </message>
+       <message name="IDS_SETTINGS_SHORTCUTS_TITLE" desc="Title of the keyboard shortcuts Settings subpage and row.">
+         Keyboard shortcuts
+@@ -4218,10 +4218,10 @@
+         Open your computer's proxy settings
+       </message>
+       <message name="IDS_SETTINGS_SYSTEM_PROXY_SETTINGS_EXTENSION_LABEL" desc="Non-interactive label that describes when Chrome's proxy settings are overwritten by an extension. This is used in place of IDS_SETTINGS_SYSTEM_PROXY_SETTINGS_LABEL above.">
+-        <ph name="IDS_SHORT_PRODUCT_NAME">$1<ex>Helium</ex></ph> is using proxy settings from an extension
++        <ph name="IDS_SHORT_PRODUCT_NAME">$1<ex>Photon</ex></ph> is using proxy settings from an extension
+       </message>
+       <message name="IDS_SETTINGS_SYSTEM_PROXY_SETTINGS_POLICY_LABEL" desc="Non-interactive label that describes when Chrome's proxy settings are overwritten by policy. This is used in place of IDS_SETTINGS_SYSTEM_PROXY_SETTINGS_LABEL above.">
+-        <ph name="IDS_SHORT_PRODUCT_NAME">$1<ex>Helium</ex></ph> is using proxy settings from your administrator
++        <ph name="IDS_SHORT_PRODUCT_NAME">$1<ex>Photon</ex></ph> is using proxy settings from your administrator
+       </message>
+       <message name="IDS_SETTINGS_SYSTEM_PROXY_SETTINGS_YOUR_ORGANIZATION_LABEL" desc="Non-interactive label that describes when Chrome's proxy settings are overwritten by the user's organization. This is used in place of IDS_SETTINGS_SYSTEM_PROXY_SETTINGS_LABEL above.">
+         Your organization
+@@ -4238,10 +4238,10 @@
+         On-device AI
+       </message>
+       <message name="IDS_SETTINGS_SYSTEM_FEATURE_ON_DEVICE_AI_ENABLED_SUB_LABEL" desc="This string describes what turning off the toggle implies.">
+-        To power features like scam detection, Helium can use AI models that run directly on your device. When this is off, these features might not work. <ph name="BEGIN_LINK">&lt;a href="$1" target="_blank" aria-description="$2"&gt;</ph>Learn more about on-device AI<ph name="END_LINK">&lt;/a&gt;</ph>
++        To power features like scam detection, Photon can use AI models that run directly on your device. When this is off, these features might not work. <ph name="BEGIN_LINK">&lt;a href="$1" target="_blank" aria-description="$2"&gt;</ph>Learn more about on-device AI<ph name="END_LINK">&lt;/a&gt;</ph>
+       </message>
+       <message name="IDS_SETTINGS_SYSTEM_ON_DEVICE_AI_LINK_SUBTITLE" desc="Subtitle for the link row that points to the on-device AI settings.">
+-        Choose whether Helium uses AI models that run directly on your device
++        Choose whether Photon uses AI models that run directly on your device
+       </message>
+     </if>
+ 
+@@ -4531,7 +4531,7 @@
+       Enhanced Safe Browsing is on
+     </message>
+     <message name="IDS_SETTINGS_SAFETY_HUB_SB_ON_ENHANCED_SUBHEADER" desc="Safety Hub settings page (chrome://settings/safetyHub) gives users an overview over their safety status. Safe browsing card in this page shows the current state of Safe browsing setting (chrome://settings/security). This string is the body text of the Safe Browsing card when the current state is Enhanced protection.">
+-      You have Helium's strongest security
++      You have Photon's strongest security
+     </message>
+     <message name="IDS_SETTINGS_SAFETY_HUB_SB_ON_STANDARD_HEADER" desc="Safety Hub settings page (chrome://settings/safetyHub) gives users an overview over their safety status. Safe browsing card in this page shows the current state of Safe browsing setting (chrome://settings/security). This string is the headline of the Safe Browsing card when the current state is Standard protection.">
+       Safe Browsing is on
+@@ -4641,10 +4641,10 @@
+         AI innovations
+       </message>
+       <message name="IDS_SETTINGS_AI_PAGE_TITLE" desc="This label is on the left Navigation sidebar in Chrome’s settings. It tells the user that they can see settings related to AI (artificial intelligence) in this section. It is a noun phrase that refers to our collection of AI settings. These settings include Help me write and more.">
+-        AI in Helium
++        AI in Photon
+       </message>
+       <message name="IDS_SETTINGS_AI_PAGE_MAIN_SUBLABEL_3" desc="This is a bullet point on a card that sets the context for the ‘AI innovations’ section of Chrome’s settings. Here, the user can see settings related to AI (artificial intelligence) in this section; these settings include Help me write and more. This bullet point is after the ‘Reimagine Chrome, supercharged with AI’ title and ‘Things to consider’ subheading. We want users to read this card and understand the considerations that apply to all Chrome’s AI features. This bullet point specifically notes that AI features are actively developing and results may include errors. The tone should be informative.">
+-        Data sent to Google may be seen by human reviewers to improve Helium AI’s technology
++        Data sent to Google may be seen by human reviewers to improve Photon AI’s technology
+       </message>
+       <message name="IDS_SETTINGS_AI_PAGE_MAIN_MANAGED_LEARN_MORE_ACCESSIBILITY_LABEL" desc="This string is found in a link that takes the user to the AI features and policies help center article when the user taps it. The tone should be informative">
+         Learn more about using generative AI at work
+@@ -4667,7 +4667,7 @@
+         Automated Password Change
+       </message>
+       <message name="IDS_SETTINGS_PASSWORD_CHANGE_SUBLABEL" desc="Sublabel for password change entry in settings. The description of the feature beneath the “Automated password change” feature title. This and the bullets beneath this paragraph represent the full description of the feature. * “public” does two things: 1) it provides distance between “Chrome” and “data breach”, because we don’t want users to associate the breach with Chrome (Chrome didn’t have a data leak, 2) and related, it might reassure the user to know that Chrome is using public information to establish these lists of compromised passwords. * “Google Password Manager can offer…”: The user has to agree to have this feature update their password for them each time. So Google Password Manager is ‘offering’ to do something for the user.">
+-        If Helium finds one of your passwords in a public data breach, Google Password Manager can offer to change your password for you if you're signed in.
++        If Photon finds one of your passwords in a public data breach, Google Password Manager can offer to change your password for you if you're signed in.
+       </message>
+       <message name="IDS_SETTINGS_PASSWORD_CHANGE_DATA_BREACH" desc="Bullet 1 of 2 that appears beneath the “When used” subtitle. This string is repetitive of the feature description, but we want to have a complete description of what happens when the feature is used. * “Google Password Manager asks…”: This part is similar to the general feature description above, but it’s written as if the feature is being used by the user, so we use “asks” and not “can offer”. * “Strong password”: As an existing autofill feature, Google Password Manager can offer to generate and save passwords for the user. These passwords are typically stronger than passwords the user might create on their own">
+         If one of your passwords is found in a data breach, Google Password Manager asks if you want it changed to a strong password
+@@ -4723,7 +4723,7 @@
+ 
+   <!-- Experimental settings strings -->
+   <message name="IDS_SETTINGS_AI_PAGE_MAIN_TITLE" desc="This string is the title of a card that sets the context for the ‘AI innovations’ section of Chrome’s settings. Here, the user can see settings related to AI (artificial intelligence) in this section; these settings include Help me write and more. This title is before the ‘Things to consider’ subheading and bullet points. We want users to read this card and understand the considerations that apply to all Chrome’s AI features. The tone should be motivating." formatter_data="android_java">
+-    Reimagine Helium, supercharged with AI
++    Reimagine Photon, supercharged with AI
+   </message>
+   <message name="IDS_SETTINGS_AI_PAGE_MAIN_SUBLABEL_1" desc="This is a bullet point on a card that sets the context for the ‘AI innovations’ section of Chrome’s settings. Here, the user can see settings related to AI (artificial intelligence) in this section; these settings include Help me write and more. This bullet point is after the ‘Reimagine Chrome, supercharged with AI’ title and ‘Things to consider’ subheading. We want users to read this card and understand the considerations that apply to all Chrome’s AI features. This bullet point specifically notes that AI features are actively developing and results may include errors. The tone should be informative." formatter_data="android_java">
+     These features use AI, are in early development, and won’t always get it right
+--- a/components/policy_strings.grdp
++++ b/components/policy_strings.grdp
+@@ -232,7 +232,7 @@
+     Ignored because the policy can only be set as a cloud user policy.
+   </message>
+   <message name="IDS_POLICY_CLOUD_MANAGEMENT_ENROLLMENT_ONLY_ERROR" desc="The text displayed in the status column when a policy that is effective only when the machine is enrolled with the Chrome Browser Cloud Management.">
+-    Ignored because the machine is not enrolled with Helium Browser Cloud Management.
++    Ignored because the machine is not enrolled with Photon Browser Cloud Management.
+   </message>
+   <message name="IDS_POLICY_DEFAULT_SEARCH_DISABLED" desc="The text displayed in the status column when a policy value has been ignored because default search has not been enabled.">
+     Ignored because default search is not enabled by policy.
+@@ -723,8 +723,8 @@ Additional details:
+   <message name="IDS_POLICY_SOURCE_RESTRICTED_MANAGED_GUEST_SESSION_OVERRIDE" desc="Indicates that the policy originates from the restricted managed guest session override.">
+     Restricted managed guest session override
+   </message>
+-  <message name="IDS_POLICY_SOURCE_HOP" desc="Indicates that the policy originates from Helium defaults.">
+-    Helium defaults
++  <message name="IDS_POLICY_SOURCE_HOP" desc="Indicates that the policy originates from Photon defaults.">
++    Photon defaults
+   </message>
+   <message name="IDS_POLICY_SOURCE_ACTIVE_DIRECTORY" desc="Indicates that the policy originates from a local server, e.g. Samba or Active Directory.">
+     <ph name="MICROSOFT_ACTIVE_DIRECTORY">Local Server</ph>
+@@ -805,10 +805,10 @@ Additional details:
+     This policy cannot be set to "True" and be mandatory, therefore it was changed to recommended.
+   </message>
+   <message name="IDS_POLICY_IGNORED_CHROME_PROFILE" desc="Text explaining that the policy cannot be set at the Chrome profile level and is therefore ignored.">
+-    This policy cannot be set at the Helium profile level and will be ignored.
++    This policy cannot be set at the Photon profile level and will be ignored.
+   </message>
+   <message name="IDS_POLICY_IGNORED_UNAFFILIATED" desc="Text describing that the policy value is not applied because the user is unaffiliated.">
+-    This policy is ignored because the user is unaffiliated. For this policy to be applied, the Helium browser and profile must be managed through the Admin console by the same organization.
++    This policy is ignored because the user is unaffiliated. For this policy to be applied, the Photon browser and profile must be managed through the Admin console by the same organization.
+   </message>
+   <message name="IDS_POLICY_IGNORED_EXTENSION" desc="Text explaining that extension policies are likely ignored by the extension.">
+     Likely ignored by the extension.
+@@ -888,13 +888,13 @@ Additional details:
+     Streamline how your organization manages policies
+   </message>
+   <message name="IDS_POLICY_BANNER_PROMOTION_DESC" desc="Description for Chrome Enterprise Core (CEC) promotion banner">
+-    Helium Enterprise Core gives you a centralized tool for configuring browser policies from the cloud
++    Photon Enterprise Core gives you a centralized tool for configuring browser policies from the cloud
+   </message>
+   <message name="IDS_POLICY_BANNER_PROMOTION_BTN" desc="Button for Chrome Enterprise Core (CEC) promotion banner">
+-    Try Helium Enterprise Core
++    Try Photon Enterprise Core
+   </message>
+   <message name="IDS_POLICY_COMMAND_LINE_FLAGS_WARNING" desc="Warning shown on chrome://policy when custom command line flags are explicitly specified by the user upon launching Chrome.">
+-    This instance of Helium is running with command line flags manually set. Note that command line flags may change at any time and are not supported.
++    This instance of Photon is running with command line flags manually set. Note that command line flags may change at any time and are not supported.
+   </message>
+   <message name="IDS_DEVTOOLS_BLOCKED_BY_POLICY" desc="Message shown when DevTools is blocked by policy.">
+     Your organization has blocked the use of DevTools on this page
+--- a/components/search_engine_choice_strings.grdp
++++ b/components/search_engine_choice_strings.grdp
+@@ -63,12 +63,12 @@
+ 
+     <if expr="_google_chrome">
+       <message name="IDS_SEARCH_ENGINE_CHOICE_PAGE_SUBTITLE_INFO_LINK_A11Y_LABEL" desc="Accessibility label for the “Learn more” link in the search engine choice screen. Clicking the link will open a card that explains why users are being prompted to choose a search engine, and what a search engine does in Chrome.">
+-        Learn more about your search engine in Helium
++        Learn more about your search engine in Photon
+       </message>
+     </if>
+     <if expr="not _google_chrome">
+       <message name="IDS_SEARCH_ENGINE_CHOICE_PAGE_SUBTITLE_INFO_LINK_A11Y_LABEL" desc="Accessibility label for the “Learn more” link in the search engine choice screen. Clicking the link will open a card that explains why users are being prompted to choose a search engine, and what a search engine does in Chromium.">
+-        Learn more about your search engine in Helium
++        Learn more about your search engine in Photon
+       </message>
+     </if>
+ 
+@@ -96,49 +96,49 @@
+     <if expr="_google_chrome">
+       <if expr="use_titlecase">
+         <message name="IDS_SEARCH_ENGINE_CHOICE_INFO_DIALOG_TITLE" desc="This string is the heading of a card that explains why users are being prompted to choose a search engine, and what a search engine does in Chrome. (A search engine provides answers to search queries; this is different from a browser, which displays web pages. A search engine powers many experiences within a browser.) This screen appears when the user taps or clicks “Learn more” on the search engine choice screen. This string is before the “Based on a law in your region...” string. We want users to read this screen and understand that they can use any search engine with Chrome and what the impact of their choice might be.">
+-          Your Search Engine in Helium
++          Your Search Engine in Photon
+         </message>
+       </if>
+       <if expr="not use_titlecase">
+         <message name="IDS_SEARCH_ENGINE_CHOICE_INFO_DIALOG_TITLE" desc="This string is the heading of a card that explains why users are being prompted to choose a search engine, and what a search engine does in Chrome. (A search engine provides answers to search queries; this is different from a browser, which displays web pages. A search engine powers many experiences within a browser.) This screen appears when the user taps or clicks “Learn more” on the search engine choice screen. This string is before the “Based on a law in your region...” string. We want users to read this screen and understand that they can use any search engine with Chrome and what the impact of their choice might be.">
+-          Your search engine in Helium
++          Your search engine in Photon
+         </message>
+       </if>
+       <message name="IDS_SEARCH_ENGINE_CHOICE_INFO_DIALOG_BODY_FIRST_PARAGRAPH" desc="This is the first paragraph of the body text of a card that explains why users are being prompted to choose a search engine, and what a search engine does in Chrome. This screen provides the following details: 1. the list includes search engines that are popular in the user’s region and the order includes randomization (not in order of recommendation); 2. features may be unavailable if the chosen default search engine doesn’t support them; 3. the user can change their mind at any time. This card appears when the user taps or clicks “Learn more” on the search engine choice screen. The headline for this card is “Your search engine in Chrome”.">
+-        Based on a law in your region, Helium asks you to choose your default search engine. These search engines are popular in your region and are shown in random order.
++        Based on a law in your region, Photon asks you to choose your default search engine. These search engines are popular in your region and are shown in random order.
+       </message>
+       <message name="IDS_SEARCH_ENGINE_CHOICE_INFO_DIALOG_BODY_SECOND_PARAGRAPH" desc="This is the second paragraph of the body text of a card that explains why users are being prompted to choose a search engine, and what a search engine does in Chrome. This screen provides the following details: 1. the list includes search engines that are popular in the user’s region and the order includes randomization (not in order of recommendation); 2. features may be unavailable if the chosen default search engine doesn’t support them; 3. the user can change their mind at any time. This card appears when the user taps or clicks “Learn more” on the search engine choice screen. The headline for this card is “Your search engine in Chrome”.">
+-        <ph name="BEGIN_BOLD">&lt;b&gt;</ph>Your default search engine lets you search the web and powers Helium features<ph name="END_BOLD">&lt;/b&gt;</ph> like searching from the address bar and from images on web pages. A feature might not be available if your search engine doesn’t support it.
++        <ph name="BEGIN_BOLD">&lt;b&gt;</ph>Your default search engine lets you search the web and powers Photon features<ph name="END_BOLD">&lt;/b&gt;</ph> like searching from the address bar and from images on web pages. A feature might not be available if your search engine doesn’t support it.
+       </message>
+       <message name="IDS_SEARCH_ENGINE_CHOICE_INFO_DIALOG_BODY_THIRD_PARAGRAPH" desc="This is the third paragraph of the body text of a card that explains why users are being prompted to choose a search engine, and what a search engine does in Chrome. This screen provides the following details: 1. the list includes search engines that are popular in the user’s region and the order includes randomization (not in order of recommendation); 2. features may be unavailable if the chosen default search engine doesn’t support them; 3. the user can change their mind at any time. This card appears when the user taps or clicks “Learn more” on the search engine choice screen. The headline for this card is “Your search engine in Chrome”.">
+-        You can change your search engine anytime in Helium’s settings.
++        You can change your search engine anytime in Photon’s settings.
+       </message>
+       <message name="IDS_SEARCH_ENGINE_CHOICE_INFO_DIALOG_BODY_THIRD_PARAGRAPH_INSTRUCTIVE" desc="This is the third paragraph of the body text of a card that explains why users are being prompted to choose a search engine, and what a search engine does in Chrome. This screen provides the following details: 1. the list includes search engines that are popular in the user’s region and the order includes randomization (not in order of recommendation); 2. features may be unavailable if the chosen default search engine doesn’t support them; 3. the user can change their mind at any time. For JSA, we add more information on how to add non-regional search engines. This card appears when the user taps or clicks “Learn more” on the search engine choice screen. The headline for this card is “Your search engine in Chrome”.">
+-        You can change your search engine anytime in Helium’s settings. If you don’t see your preferred search engine, you can perform a search from their site. You’ll see it listed as a recently visited search engine in Helium settings, and you can make it your default.
++        You can change your search engine anytime in Photon’s settings. If you don’t see your preferred search engine, you can perform a search from their site. You’ll see it listed as a recently visited search engine in Photon settings, and you can make it your default.
+       </message>
+     </if>
+     <if expr="not _google_chrome">
+       <if expr="use_titlecase">
+         <message name="IDS_SEARCH_ENGINE_CHOICE_INFO_DIALOG_TITLE" desc="This string is the heading of a card that explains why users are being prompted to choose a search engine, and what a search engine does in Chromium. (A search engine provides answers to search queries; this is different from a browser, which displays web pages. A search engine powers many experiences within a browser.) This screen appears when the user taps or clicks “Learn more” on the search engine choice screen. This string is before the “Based on a law in your region...” string. We want users to read this screen and understand that they can use any search engine with Chromium and what the impact of their choice might be.">
+-          Your Search Engine in Helium
++          Your Search Engine in Photon
+         </message>
+       </if>
+       <if expr="not use_titlecase">
+         <message name="IDS_SEARCH_ENGINE_CHOICE_INFO_DIALOG_TITLE" desc="This string is the heading of a card that explains why users are being prompted to choose a search engine, and what a search engine does in Chromium. (A search engine provides answers to search queries; this is different from a browser, which displays web pages. A search engine powers many experiences within a browser.) This screen appears when the user taps or clicks “Learn more” on the search engine choice screen. This string is before the “Based on a law in your region...” string. We want users to read this screen and understand that they can use any search engine with Chromium and what the impact of their choice might be.">
+-          Your search engine in Helium
++          Your search engine in Photon
+         </message>
+       </if>
+       <message name="IDS_SEARCH_ENGINE_CHOICE_INFO_DIALOG_BODY_FIRST_PARAGRAPH" desc="This is the first paragraph of the body text of a card that explains why users are being prompted to choose a search engine, and what a search engine does in Chrome. This screen provides the following details: 1. the list includes search engines that are popular in the user’s region and the order includes randomization (not in order of recommendation); 2. features may be unavailable if the chosen default search engine doesn’t support them; 3. the user can change their mind at any time. This card appears when the user taps or clicks “Learn more” on the search engine choice screen. The headline for this card is “Your search engine in Chromium”.">
+-        Based on a law in your region, Helium asks you to choose your default search engine. These search engines are popular in your region and are shown in random order.
++        Based on a law in your region, Photon asks you to choose your default search engine. These search engines are popular in your region and are shown in random order.
+       </message>
+       <message name="IDS_SEARCH_ENGINE_CHOICE_INFO_DIALOG_BODY_SECOND_PARAGRAPH" desc="This is the second paragraph of the body text of a card that explains why users are being prompted to choose a search engine, and what a search engine does in Chromium. This screen provides the following details: 1. the list includes search engines that are popular in the user’s region and the order includes randomization (not in order of recommendation); 2. features may be unavailable if the chosen default search engine doesn’t support them; 3. the user can change their mind at any time. This card appears when the user taps or clicks “Learn more” on the search engine choice screen. The headline for this card is “Your search engine in Chromium”.">
+-        <ph name="BEGIN_BOLD">&lt;b&gt;</ph>Your default search engine lets you search the web and powers Helium features<ph name="END_BOLD">&lt;/b&gt;</ph> like searching from the address bar and from images on web pages. A feature might not be available if your search engine doesn’t support it.
++        <ph name="BEGIN_BOLD">&lt;b&gt;</ph>Your default search engine lets you search the web and powers Photon features<ph name="END_BOLD">&lt;/b&gt;</ph> like searching from the address bar and from images on web pages. A feature might not be available if your search engine doesn’t support it.
+       </message>
+       <message name="IDS_SEARCH_ENGINE_CHOICE_INFO_DIALOG_BODY_THIRD_PARAGRAPH" desc="This is the third paragraph of the body text of a card that explains why users are being prompted to choose a search engine, and what a search engine does in Chromium. This screen provides the following details: 1. the list includes search engines that are popular in the user’s region and the order includes randomization (not in order of recommendation); 2. features may be unavailable if the chosen default search engine doesn’t support them; 3. the user can change their mind at any time. This card appears when the user taps or clicks “Learn more” on the search engine choice screen. The headline for this card is “Your search engine in Chromium”.">
+-        You can change your search engine anytime in Helium’s settings.
++        You can change your search engine anytime in Photon’s settings.
+       </message>
+       <message name="IDS_SEARCH_ENGINE_CHOICE_INFO_DIALOG_BODY_THIRD_PARAGRAPH_INSTRUCTIVE" desc="This is the third paragraph of the body text of a card that explains why users are being prompted to choose a search engine, and what a search engine does in Chromium. This screen provides the following details: 1. the list includes search engines that are popular in the user’s region and the order includes randomization (not in order of recommendation); 2. features may be unavailable if the chosen default search engine doesn’t support them; 3. the user can change their mind at any time. For JSA, we add more information on how to add non-regional search engines. This card appears when the user taps or clicks “Learn more” on the search engine choice screen. The headline for this card is “Your search engine in Chromium”.">
+-        You can change your search engine anytime in Helium’s settings. If you don’t see your preferred search engine, you can perform a search from their site. You’ll see it listed as a recently visited search engine in Helium settings, and you can make it your default.
++        You can change your search engine anytime in Photon’s settings. If you don’t see your preferred search engine, you can perform a search from their site. You’ll see it listed as a recently visited search engine in Photon settings, and you can make it your default.
+       </message>
+     </if>
+ 

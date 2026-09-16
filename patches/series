@@ -106,9 +106,12 @@ helium/core/fix-building-without-safebrowsing.patch
 helium/core/services-prefs.patch
 helium/core/services-schema-nag.patch
 helium/core/override-chrome-protocol.patch
+photon/protocol-branding.patch
 helium/core/onboarding-page.patch
 helium/core/change-chromium-branding.patch
 photon/branding.patch
+photon/about-credits-branding.patch
+photon/app-menu-branding.patch
 helium/core/scan-chrome-native-messaging-hosts.patch
 
 helium/core/search/restore-google.patch
@@ -360,3 +363,10 @@ helium/ui/show-tabs-from-non-account-backends.patch
 helium/ui/compact-debugger-warning.patch
 helium/ui/progress-bar.patch
 helium/ui/exclusive-access-bubble.patch
+
+photon/onboarding-branding.patch
+photon/onboarding-document-title.patch
+photon/about-branding.patch
+photon/settings-branding.patch
+photon/autofill-branding.patch
+photon/crash-dialog-branding.patch

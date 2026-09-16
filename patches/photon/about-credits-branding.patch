@@ -1,0 +1,26 @@
+--- a/chrome/app/chromium_strings.grd
++++ b/chrome/app/chromium_strings.grd
+@@ -512,8 +512,8 @@
+         </message>
+       </then>
+       <else>
+         <message name="IDS_ABOUT_VERSION_COMPANY_NAME" desc="Company name on the about pages">
+           The Helium Authors
+         </message>
+-        <message name="IDS_ABOUT_VERSION_COPYRIGHT" desc="Copyright information on the about pages">
+-          Copyright <ph name="YEAR">{0,date,y}<ex>2016</ex></ph> The Helium Authors. All rights reserved.
++        <message name="IDS_ABOUT_VERSION_COPYRIGHT" desc="Copyright information on the about pages">
++          Copyright <ph name="YEAR">{0,date,y}<ex>2016</ex></ph> The Photon Authors. All rights reserved.
+         </message>
+       </else>
+--- a/chrome/browser/ui/webui/settings/settings_localized_strings_provider.cc
++++ b/chrome/browser/ui/webui/settings/settings_localized_strings_provider.cc
+@@ -353,5 +353,5 @@
+           base::Time::Now()));
+ 
+   std::u16string license = l10n_util::GetStringFUTF16(
+-      IDS_VERSION_UI_LICENSE, chrome::kChromiumProjectURL,
+-      chrome::kChromeUICreditsURL16,
++      IDS_VERSION_UI_LICENSE, u"https://helium.computer/",
++      chrome::kChromiumProjectURL, chrome::kChromeUICreditsURL16,
+       l10n_util::GetStringUTF16(IDS_SETTINGS_OPENS_IN_NEW_TAB));
