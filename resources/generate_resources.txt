@@ -1,8 +1,12 @@
 # input size output
-branding/app_icon/raw.png 256 generated/product_icon/256x256.png
-branding/app_icon/raw.png 128 generated/product_icon/128x128.png
-branding/app_icon/raw.png 64 generated/product_icon/64x64.png
-branding/app_icon/raw.png 48 generated/product_icon/48x48.png
-branding/app_icon/raw.png 32 generated/product_icon/32x32.png
-branding/app_icon/raw.png 24 generated/product_icon/24x24.png
-branding/app_icon/raw.png 16 generated/product_icon/16x16.png
+brand-kit/logo/logo-color-1024.png 256 generated/product_icon/256x256.png
+brand-kit/logo/logo-color-1024.png 128 generated/product_icon/128x128.png
+brand-kit/logo/logo-color-1024.png 64 generated/product_icon/64x64.png
+brand-kit/logo/logo-color-1024.png 48 generated/product_icon/48x48.png
+brand-kit/logo/logo-color-1024.png 32 generated/product_icon/32x32.png
+brand-kit/logo/logo-color-1024.png 24 generated/product_icon/24x24.png
+brand-kit/logo/logo-color-1024.png 16 generated/product_icon/16x16.png
+brand-kit/logo/logo-color-512.png 140x32 generated/product_logo/product_logo.png
+brand-kit/logo/logo-white-512.png 140x32 generated/product_logo/product_logo_white.png
+brand-kit/logo/logo-color-1024.png 280x64 generated/product_logo/product_logo_200.png
+brand-kit/logo/logo-white-1024.png 280x64 generated/product_logo/product_logo_white_200.png

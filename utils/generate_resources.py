@@ -11,7 +11,7 @@ import os
 import sys
 
 from pathlib import Path
-from PIL import Image
+from PIL import Image, ImageOps
 
 
 def scale_image(input_file, size, output_path):
@@ -21,7 +21,13 @@ def scale_image(input_file, size, output_path):
     img = Image.open(input_file).convert("RGBA")
 
     if size is not None:
-        img.thumbnail((size, size))
+        if isinstance(size, tuple):
+            contained = ImageOps.contain(img, size)
+            img = Image.new("RGBA", size)
+            img.paste(contained, ((size[0] - contained.width) // 2,
+                                  (size[1] - contained.height) // 2), contained)
+        else:
+            img.thumbnail((size, size))
 
     # make sure output path exists
     os.makedirs(output_path.parent, exist_ok=True)
@@ -49,13 +55,21 @@ def generate_resources(resource_list, resource_dir):
             if len(line_parts) == 2:
                 output_file = resource_dir / line_parts[1]
             elif len(line_parts) == 3:
-                size = int(line_parts[1])
+                size_parts = line_parts[1].split("x")
+                if len(size_parts) == 1:
+                    size = int(size_parts[0])
+                elif len(size_parts) == 2:
+                    size = (int(size_parts[0]), int(size_parts[1]))
+                else:
+                    raise ValueError(f"Line {line_number} in the resource file is invalid.")
                 output_file = resource_dir / line_parts[2]
             else:
                 raise ValueError(f"Line {line_number} in the resource file is invalid.")
 
             scale_image(input_file, size, output_file)
-            size_str = "undefined" if size is None else f"{size}x{size}"
+            size_str = "undefined" if size is None else (
+                f"{size[0]}x{size[1]}" if isinstance(size, tuple)
+                else f"{size}x{size}")
             print(f"Created {output_file} (size {size_str})")
 
 

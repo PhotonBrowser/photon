@@ -1,38 +1,38 @@
-favicons/favicon_bookmarks_16.png chrome/app/theme/default_100_percent/common/favicon_bookmarks.png
-favicons/favicon_conflicts_16.png chrome/app/theme/default_100_percent/common/favicon_conflicts.png
-favicons/favicon_downloads_16.png chrome/app/theme/default_100_percent/common/favicon_downloads.png
-favicons/favicon_management_16.png chrome/app/theme/default_100_percent/common/favicon_management.png
-favicons/favicon_ntp_16.png chrome/app/theme/default_100_percent/common/favicon_ntp.png
-favicons/favicon_plugins_16.png chrome/app/theme/default_100_percent/common/favicon_plugins.png
-favicons/favicon_settings_16.png chrome/app/theme/default_100_percent/common/favicon_settings.png
+brand-kit/generated/favicons/monotone-planet-16.png chrome/app/theme/default_100_percent/common/favicon_bookmarks.png
+brand-kit/generated/favicons/monotone-planet-16.png chrome/app/theme/default_100_percent/common/favicon_conflicts.png
+brand-kit/generated/favicons/monotone-planet-16.png chrome/app/theme/default_100_percent/common/favicon_downloads.png
+brand-kit/generated/favicons/monotone-planet-16.png chrome/app/theme/default_100_percent/common/favicon_management.png
+brand-kit/generated/favicons/monotone-planet-16.png chrome/app/theme/default_100_percent/common/favicon_ntp.png
+brand-kit/generated/favicons/monotone-planet-16.png chrome/app/theme/default_100_percent/common/favicon_plugins.png
+brand-kit/generated/favicons/monotone-planet-16.png chrome/app/theme/default_100_percent/common/favicon_settings.png
 
-favicons/favicon_bookmarks_32.png chrome/app/theme/default_200_percent/common/favicon_bookmarks.png
-favicons/favicon_conflicts_32.png chrome/app/theme/default_200_percent/common/favicon_conflicts.png
-favicons/favicon_downloads_32.png chrome/app/theme/default_200_percent/common/favicon_downloads.png
-favicons/favicon_management_32.png chrome/app/theme/default_200_percent/common/favicon_management.png
-favicons/favicon_ntp_32.png chrome/app/theme/default_200_percent/common/favicon_ntp.png
-favicons/favicon_plugins_32.png chrome/app/theme/default_200_percent/common/favicon_plugins.png
-favicons/favicon_settings_32.png chrome/app/theme/default_200_percent/common/favicon_settings.png
+brand-kit/generated/favicons/monotone-planet-32.png chrome/app/theme/default_200_percent/common/favicon_bookmarks.png
+brand-kit/generated/favicons/monotone-planet-32.png chrome/app/theme/default_200_percent/common/favicon_conflicts.png
+brand-kit/generated/favicons/monotone-planet-32.png chrome/app/theme/default_200_percent/common/favicon_downloads.png
+brand-kit/generated/favicons/monotone-planet-32.png chrome/app/theme/default_200_percent/common/favicon_management.png
+brand-kit/generated/favicons/monotone-planet-32.png chrome/app/theme/default_200_percent/common/favicon_ntp.png
+brand-kit/generated/favicons/monotone-planet-32.png chrome/app/theme/default_200_percent/common/favicon_plugins.png
+brand-kit/generated/favicons/monotone-planet-32.png chrome/app/theme/default_200_percent/common/favicon_settings.png
 
-favicons/favicon_flags_16.png components/resources/default_100_percent/flags_ui/favicon_flags.png
-favicons/favicon_flags_32.png components/resources/default_200_percent/flags_ui/favicon_flags.png
-favicons/favicon_flags_48.png components/resources/default_300_percent/flags_ui/favicon_flags.png
+brand-kit/generated/favicons/monotone-planet-16.png components/resources/default_100_percent/flags_ui/favicon_flags.png
+brand-kit/generated/favicons/monotone-planet-32.png components/resources/default_200_percent/flags_ui/favicon_flags.png
+brand-kit/generated/favicons/monotone-planet-48.png components/resources/default_300_percent/flags_ui/favicon_flags.png
 
-favicons/favicon_history_16.png components/resources/default_100_percent/favicon_history.png
-favicons/favicon_history_32.png components/resources/default_200_percent/favicon_history.png
-favicons/favicon_history_48.png components/resources/default_300_percent/favicon_history.png
+brand-kit/generated/favicons/monotone-planet-16.png components/resources/default_100_percent/favicon_history.png
+brand-kit/generated/favicons/monotone-planet-32.png components/resources/default_200_percent/favicon_history.png
+brand-kit/generated/favicons/monotone-planet-48.png components/resources/default_300_percent/favicon_history.png
 
-favicons/favicon_plugins_16.png extensions/browser/resources/default_100_percent/favicon_extensions.png
-favicons/favicon_plugins_32.png extensions/browser/resources/default_200_percent/favicon_extensions.png
+brand-kit/generated/favicons/monotone-planet-16.png extensions/browser/resources/default_100_percent/favicon_extensions.png
+brand-kit/generated/favicons/monotone-planet-32.png extensions/browser/resources/default_200_percent/favicon_extensions.png
 
-branding/product_logo.png components/resources/default_100_percent/chromium/product_logo.png
-branding/product_logo_white.png components/resources/default_100_percent/chromium/product_logo_white.png
-branding/product_logo_200.png components/resources/default_200_percent/chromium/product_logo.png
-branding/product_logo_white_200.png components/resources/default_200_percent/chromium/product_logo_white.png
+generated/product_logo/product_logo.png components/resources/default_100_percent/chromium/product_logo.png
+generated/product_logo/product_logo_white.png components/resources/default_100_percent/chromium/product_logo_white.png
+generated/product_logo/product_logo_200.png components/resources/default_200_percent/chromium/product_logo.png
+generated/product_logo/product_logo_white_200.png components/resources/default_200_percent/chromium/product_logo_white.png
 
-branding/product_logo_22_mono.png chrome/app/theme/chromium/product_logo_22_mono.png
+brand-kit/logo/logo-white-512.png chrome/app/theme/chromium/product_logo_22_mono.png
 
-branding/product_logo.svg chrome/app/theme/chromium/product_logo.svg
+brand-kit/logo/logo-color.svg chrome/app/theme/chromium/product_logo.svg
 
 branding/product_logo.icon chrome/app/vector_icons/browser_logo.icon
 branding/product_logo.icon chrome/app/vector_icons/browser_logo_old.icon
