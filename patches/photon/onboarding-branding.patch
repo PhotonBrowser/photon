@@ -1,0 +1,186 @@
+--- a/components/helium_onboarding/helium_onboarding_strings.grdp
++++ b/components/helium_onboarding/helium_onboarding_strings.grdp
+@@ -1,7 +1,7 @@
+ <grit-part>
+ 
+-<message name="IDS_HELIUM_ONBOARDING_PAGE_TITLE" desc="The title of the Helium setup onboarding page.">
+-  Helium Setup
++<message name="IDS_HELIUM_ONBOARDING_PAGE_TITLE" desc="The title of the Photon setup onboarding page.">
++  Photon Setup
+ </message>
+ 
+ <message name="IDS_HELIUM_ONBOARDING_BUTTON_USE_DEFAULTS" desc="Button label that skips detailed setup and applies the default onboarding choices.">
+@@ -21,85 +21,85 @@
+ </message>
+ 
+ <message name="IDS_HELIUM_ONBOARDING_PARTNER_TITLE" desc="Badge title shown for partner services in onboarding.">
+-  Helium Partner
++  Photon Partner
+ </message>
+-<message name="IDS_HELIUM_ONBOARDING_PARTNER_TOOLTIP" desc="Tooltip explaining why a listed service is marked as a Helium partner.">
+-  Paying for this service will support the development of Helium.
++<message name="IDS_HELIUM_ONBOARDING_PARTNER_TOOLTIP" desc="Tooltip explaining why a listed service is marked as a Photon partner.">
++  Paying for this service will support the development of Photon.
+ </message>
+ 
+ <message name="IDS_HELIUM_ONBOARDING_WELCOME_GREETING" desc="Main greeting on the first onboarding screen.">
+-  Meet Helium
++  Meet Photon
+ </message>
+ <message name="IDS_HELIUM_ONBOARDING_WELCOME_BODY" desc="Introductory body text on the first onboarding screen.">
+-  Configure Helium to match your taste and import data from other browsers. Make it feel like home or jump straight to browsing.
++  Configure Photon to match your taste and import data from other browsers. Make it feel like home or jump straight to browsing.
+ </message>
+ <message name="IDS_HELIUM_ONBOARDING_WELCOME_TERMS" desc="Legal note shown during onboarding. Keep each BEGIN/END placeholder pair around its corresponding link text, but move the pairs as needed for a natural translation.">
+   By continuing, you agree to the <ph name="BEGIN_LINK_PRIVACY">$1</ph>privacy policy<ph name="END_LINK_PRIVACY">$2</ph> and <ph name="BEGIN_LINK_TERMS">$3</ph>terms of use<ph name="END_LINK_TERMS">$4</ph>.
+ </message>
+-<message name="IDS_HELIUM_ONBOARDING_WELCOME_FOOTER" desc="Footer text explaining that setup can be skipped but Helium services require consent.">
+-  If you use defaults, Helium services will be automatically enabled.
++<message name="IDS_HELIUM_ONBOARDING_WELCOME_FOOTER" desc="Footer text explaining that setup can be skipped but Photon services require consent.">
++  If you use defaults, Photon services will be automatically enabled.
+ </message>
+ 
+ <message name="IDS_HELIUM_ONBOARDING_FINISH_TITLE" desc="Title on the final onboarding screen.">
+   Ready to browse?
+ </message>
+ <message name="IDS_HELIUM_ONBOARDING_FINISH_BODY" desc="Body text on the final onboarding screen.">
+-  The setup is complete, thank you for choosing Helium. Time to enjoy the internet again.
++  The setup is complete, thank you for choosing Photon. Time to enjoy the internet again.
+ </message>
+ 
+-<message name="IDS_HELIUM_ONBOARDING_SERVICES_TITLE" desc="Title of the onboarding screen for Helium services consent.">
+-  Helium services
++<message name="IDS_HELIUM_ONBOARDING_SERVICES_TITLE" desc="Title of the onboarding screen for Photon services consent.">
++  Photon services
+ </message>
+-<message name="IDS_HELIUM_ONBOARDING_SERVICES_SUBTITLE" desc="Subtitle explaining when Helium services consent choices take effect.">
++<message name="IDS_HELIUM_ONBOARDING_SERVICES_SUBTITLE" desc="Subtitle explaining when Photon services consent choices take effect.">
+   Services are not active until you consent to using them. Changes will be applied after you go to the next page.
+ </message>
+-<message name="IDS_HELIUM_ONBOARDING_SERVICES_CONNECTION_TITLE" desc="Title of the global toggle for connecting to Helium services.">
+-  Allow connecting to Helium services
++<message name="IDS_HELIUM_ONBOARDING_SERVICES_CONNECTION_TITLE" desc="Title of the global toggle for connecting to Photon services.">
++  Allow connecting to Photon services
+ </message>
+-<message name="IDS_HELIUM_ONBOARDING_SERVICES_CONNECTION_DESC" desc="Description of the global Helium services toggle.">
+-  Helium services provide additional functionality, such as: extension downloads, native !bangs, filter list updates, and browser updates. When disabled, none of these features will work, but Helium will not make any web requests.
++<message name="IDS_HELIUM_ONBOARDING_SERVICES_CONNECTION_DESC" desc="Description of the global Photon services toggle.">
++  Photon services provide additional functionality, such as: extension downloads, native !bangs, filter list updates, and browser updates. When disabled, none of these features will work, but Photon will not make any web requests.
+ </message>
+-<message name="IDS_HELIUM_ONBOARDING_SERVICES_BANGS_TITLE" desc="Title of the toggle for downloading the Helium bangs list.">
++<message name="IDS_HELIUM_ONBOARDING_SERVICES_BANGS_TITLE" desc="Title of the toggle for downloading the Photon bangs list.">
+   Allow downloading the !bangs list
+ </message>
+-<message name="IDS_HELIUM_ONBOARDING_SERVICES_BANGS_DESC" desc="Description of the toggle for downloading the Helium bangs list.">
+-  Helium will fetch a list of bangs that help you browse the Internet faster, such as !w or !gh. When disabled, bangs will not work.
++<message name="IDS_HELIUM_ONBOARDING_SERVICES_BANGS_DESC" desc="Description of the toggle for downloading the Photon bangs list.">
++  Photon will fetch a list of bangs that help you browse the Internet faster, such as !w or !gh. When disabled, bangs will not work.
+ </message>
+ <message name="IDS_HELIUM_ONBOARDING_SERVICES_EXTENSIONS_TITLE" desc="Title of the toggle for proxying extension downloads and updates.">
+   Proxy extension downloads and updates
+ </message>
+ <message name="IDS_HELIUM_ONBOARDING_SERVICES_EXTENSIONS_DESC" desc="Description of the toggle for proxying extension downloads and updates.">
+-  When enabled, Helium will proxy extension downloads and updates to protect your privacy. When disabled, downloading and updating extensions will not work.
++  When enabled, Photon will proxy extension downloads and updates to protect your privacy. When disabled, downloading and updating extensions will not work.
+ </message>
+ <message name="IDS_HELIUM_ONBOARDING_SERVICES_UBLOCK_TITLE" desc="Title of the toggle for downloading uBlock Origin filter lists.">
+   Allow downloading filter lists for uBlock Origin
+ </message>
+ <message name="IDS_HELIUM_ONBOARDING_SERVICES_UBLOCK_DESC" desc="Description of the toggle for downloading uBlock Origin filter lists.">
+-  Helium will fetch fresh filter lists for uBlock Origin. All requests to lists are proxied to protect your privacy. When disabled, default filter lists will be loaded from local storage, which are only updated along with Helium. Optional filter lists will be requested without proxying.
++  Photon will fetch fresh filter lists for uBlock Origin. All requests to lists are proxied to protect your privacy. When disabled, default filter lists will be loaded from local storage, which are only updated along with Photon. Optional filter lists will be requested without proxying.
+ </message>
+-<message name="IDS_HELIUM_ONBOARDING_SERVICES_AUTOUPDATES_TITLE" desc="Title of the toggle for automatic browser updates on platforms where Helium updates the browser.">
++<message name="IDS_HELIUM_ONBOARDING_SERVICES_AUTOUPDATES_TITLE" desc="Title of the toggle for automatic browser updates on platforms where Photon updates the browser.">
+   Allow automatic browser updates
+ </message>
+-<message name="IDS_HELIUM_ONBOARDING_SERVICES_AUTOUPDATES_DESC" desc="Description of the toggle for automatic browser updates on platforms where Helium updates the browser.">
+-  Helium will automatically check for updates and install them. This includes browser and component updates. We recommend keeping this setting enabled to ensure you get the latest features and security updates.
++<message name="IDS_HELIUM_ONBOARDING_SERVICES_AUTOUPDATES_DESC" desc="Description of the toggle for automatic browser updates on platforms where Photon updates the browser.">
++  Photon will automatically check for updates and install them. This includes browser and component updates. We recommend keeping this setting enabled to ensure you get the latest features and security updates.
+ </message>
+ <message name="IDS_HELIUM_ONBOARDING_SERVICES_AUTOUPDATES_TITLE_LINUX" desc="Title of the toggle for automatic component updates on Linux.">
+   Allow automatic component updates
+ </message>
+ <message name="IDS_HELIUM_ONBOARDING_SERVICES_AUTOUPDATES_DESC_LINUX" desc="Description of the toggle for automatic component updates on Linux.">
+-  Helium will automatically check for component updates and install them. We recommend keeping this setting enabled. On Linux, browser updates are handled by your distro's package manager. Please check for Helium package updates at least every week.
++  Photon will automatically check for component updates and install them. We recommend keeping this setting enabled. On Linux, browser updates are handled by your distro's package manager. Please check for Photon package updates at least every week.
+ </message>
+ <message name="IDS_HELIUM_ONBOARDING_SERVICES_SPELLCHECK_TITLE" desc="Title of the toggle for downloading spell check dictionary files.">
+   Allow downloading dictionary files for spell checking
+ </message>
+ <message name="IDS_HELIUM_ONBOARDING_SERVICES_SPELLCHECK_DESC" desc="Description of the toggle for downloading spell check dictionary files.">
+-  Helium will fetch dictionary files used for spell checking when requested. When disabled, spell checking will not work.
++  Photon will fetch dictionary files used for spell checking when requested. When disabled, spell checking will not work.
+ </message>
+-<message name="IDS_HELIUM_ONBOARDING_SERVICES_INSTANCE_TITLE" desc="Title of the option describing custom Helium services instances.">
+-  Use your own instance of Helium services
++<message name="IDS_HELIUM_ONBOARDING_SERVICES_INSTANCE_TITLE" desc="Title of the option describing custom Photon services instances.">
++  Use your own instance of Photon services
+ </message>
+-<message name="IDS_HELIUM_ONBOARDING_SERVICES_INSTANCE_DESC" desc="Description of the option describing custom Helium services instances.">
+-  You can host your own instance of Helium services and use it in your browser instead of the pre-hosted server. If you have one, you can set it in Helium settings.
++<message name="IDS_HELIUM_ONBOARDING_SERVICES_INSTANCE_DESC" desc="Description of the option describing custom Photon services instances.">
++  You can host your own instance of Photon services and use it in your browser instead of the pre-hosted server. If you have one, you can set it in Photon settings.
+ </message>
+ 
+ <message name="IDS_HELIUM_ONBOARDING_SEARCH_TITLE" desc="Title of the onboarding screen for selecting a default search engine.">
+@@ -118,7 +118,7 @@
+   A mainstream search engine which collects extensive personal data.
+ </message>
+ <message name="IDS_HELIUM_ONBOARDING_SEARCH_CATEGORIES_CUSTOM" desc="Description for a custom search engine in onboarding.">
+-  A custom search engine. Its privacy wasn't verified by Helium.
++  A custom search engine. Its privacy wasn't verified by Photon.
+ </message>
+ <message name="IDS_HELIUM_ONBOARDING_SEARCH_ENGINES_DUCKDUCKGO" desc="Onboarding description of DuckDuckGo as a search engine option.">
+   Privacy-focused. Relies on Bing for results. Promises not to track or profile you.
+@@ -145,23 +145,23 @@
+   Privacy-focused. Doesn't use Google or Bing. Promises not to track or profile you. May show promotions related to Brave services.
+ </message>
+ 
+-<message name="IDS_HELIUM_ONBOARDING_DEFAULT_BROWSER_TITLE" desc="Title of the onboarding screen asking whether Helium should be the default browser.">
+-  Ready to switch to Helium?
++<message name="IDS_HELIUM_ONBOARDING_DEFAULT_BROWSER_TITLE" desc="Title of the onboarding screen asking whether Photon should be the default browser.">
++  Ready to switch to Photon?
+ </message>
+-<message name="IDS_HELIUM_ONBOARDING_DEFAULT_BROWSER_SUBTITLE" desc="Subtitle of the onboarding screen asking whether Helium should be the default browser.">
+-  Better privacy, speed, and comfort. All in one click. Wanna make links open in Helium by default?
++<message name="IDS_HELIUM_ONBOARDING_DEFAULT_BROWSER_SUBTITLE" desc="Subtitle of the onboarding screen asking whether Photon should be the default browser.">
++  Better privacy, speed, and comfort. All in one click. Wanna make links open in Photon by default?
+ </message>
+-<message name="IDS_HELIUM_ONBOARDING_DEFAULT_BROWSER_YES" desc="Label for the option to make Helium the default browser.">
++<message name="IDS_HELIUM_ONBOARDING_DEFAULT_BROWSER_YES" desc="Label for the option to make Photon the default browser.">
+   Yes
+ </message>
+ <message name="IDS_HELIUM_ONBOARDING_DEFAULT_BROWSER_NO" desc="Label for the option to keep the current default browser.">
+   No
+ </message>
+-<message name="IDS_HELIUM_ONBOARDING_DEFAULT_BROWSER_YES_DESC" desc="Description for the option to make Helium the default browser.">
+-  Make Helium my default browser.
++<message name="IDS_HELIUM_ONBOARDING_DEFAULT_BROWSER_YES_DESC" desc="Description for the option to make Photon the default browser.">
++  Make Photon my default browser.
+ </message>
+ <message name="IDS_HELIUM_ONBOARDING_DEFAULT_BROWSER_NO_DESC" desc="Description for the option to keep the current default browser.">
+-  Just trying Helium for now.
++  Just trying Photon for now.
+ </message>
+ 
+ <message name="IDS_HELIUM_ONBOARDING_DATA_IMPORT_TITLE" desc="Title of the onboarding screen for importing browser data.">
+@@ -184,7 +184,7 @@
+   Password manager
+ </message>
+ <message name="IDS_HELIUM_ONBOARDING_PASSWORD_SUBTITLE" desc="Subtitle of the onboarding screen for choosing a password manager.">
+-  Helium doesn't have a built-in password manager. Would you like to install one from the Web Store?
++  Photon doesn't have a built-in password manager. Would you like to install one from the Web Store?
+ </message>
+ <message name="IDS_HELIUM_ONBOARDING_PASSWORD_IMPORT_GUIDE" desc="Link label linking to a password manager import guide. Short title for a guide.">
+   Import
+@@ -212,7 +212,7 @@
+   Secure and the most popular open-source password manager. Offers data storage in Europe or US. Free with an optional paid plan. Can be self-hosted.
+ </message>
+ <message name="IDS_HELIUM_ONBOARDING_PASSWORD_MANAGERS_ONE_PASSWORD" desc="Onboarding description of 1Password as a password manager option.">
+-  Popular, paid, and closed-source password manager. Offers data storage in Europe or US. May not work correctly with Helium without extra configuration.
++  Popular, paid, and closed-source password manager. Offers data storage in Europe or US. May not work correctly with Photon without extra configuration.
+ </message>
+ <message name="IDS_HELIUM_ONBOARDING_PASSWORD_MANAGERS_DASHLANE" desc="Onboarding description of Dashlane as a password manager option.">
+   Popular, paid, and closed-source password manager. Stores data in Europe. Known for aggressive upselling tactics.

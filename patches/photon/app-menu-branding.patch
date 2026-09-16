@@ -1,0 +1,57 @@
+--- a/chrome/app/chromium_strings.grd
++++ b/chrome/app/chromium_strings.grd
+@@ -1101,8 +1101,8 @@
+       <!-- Main Chrome menu -->
+       <message name="IDS_APPMENU_TOOLTIP" desc="The tooltip to show for the browser menu">
+-        Customize and control Helium
++        Customize and control Photon
+       </message>
+ 
+       <message name="IDS_APPMENU_TOOLTIP_UPDATE_AVAILABLE" desc="The tooltip to show for the browser menu when an update is available">
+-        Customize and control Helium. Update is available.
++        Customize and control Photon. Update is available.
+       </message>
+@@ -1116,3 +1116,3 @@
+       <message name="IDS_APPMENU_TOOLTIP_ALERT" desc="The tooltip to show for the browser menu when a non-update alert is displayed">
+-        Customize and control Helium. Something needs your attention - click for details.
++        Customize and control Photon. Something needs your attention - click for details.
+       </message>
+@@ -1132,3 +1132,3 @@
+            <message name="IDS_ABOUT" desc="In Title Case: The text label of the About Chrome menu item">
+-              About &amp;Helium
++              About &amp;Photon
+            </message>
+@@ -1149,3 +1149,3 @@
+             <message name="IDS_ABOUT" desc="The text label of the About Chrome menu item">
+-              About &amp;Helium
++              About &amp;Photon
+             </message>
+@@ -1159,3 +1159,3 @@
+         <message name="IDS_ABOUT" desc="The text label of the About Chrome menu item">
+-          About &amp;Helium
++          About &amp;Photon
+         </message>
+@@ -1328,3 +1328,3 @@
+          <message name="IDS_NTP_CUSTOMIZE_BUTTON_LABEL" desc="Label for button on the New Tab Page that opens dialog to customize Chromium browser.">
+-            Customize Helium
++            Customize Photon
+          </message>
+@@ -1332,3 +1332,3 @@
+       <message name="IDS_NTP_MODULES_SETUP_LIST_TITLE" desc="Title shown at the top of the Setup List card.">
+-        Make Helium Yours
++        Make Photon Yours
+       </message>
+       <message name="IDS_NTP_CUSTOMIZE_CHROME_RESET_TO_CLASSIC_CHROME_LABEL" desc="The label for the button for resetting theme back to default chrome in the New Tab Page customize chrome side panel.">
+-        Reset to Default Helium
++        Reset to Default Photon
+       </message>
+@@ -1335,3 +1335,3 @@
+        <message name="IDS_NTP_CUSTOMIZATION_PROMO" desc="The text shown in the body of the New Tab Page browser customization promotion">
+-          Customize Helium to give your browser a new look
++          Customize Photon to give your browser a new look
+        </message>
+@@ -1995,3 +1995,3 @@
+       <message name="IDS_SIDE_PANEL_CUSTOMIZE_CHROME_TITLE" desc="The name of the Customize Chrome feature in the side panel combo box.">
+-        Customize Helium
++        Customize Photon
+       </message>

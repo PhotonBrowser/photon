@@ -1,0 +1,472 @@
+--- a/components/components_chromium_strings.grd
++++ b/components/components_chromium_strings.grd
+@@ -194,7 +194,7 @@
+       <if expr="not is_android and not is_ios">
+         <message name="IDS_ERRORPAGES_SUGGESTION_NETWORK_PREDICTION_BODY" desc="When a page fails to load, sometimes we suggest disabling predicting network actions.  These are details below a header for non Android devices.">
+           Go to
+-          the Helium menu &gt;
++          the Photon menu &gt;
+           <ph name="SETTINGS_TITLE">&lt;span&gt;$1&lt;/span&gt;<ex>Settings</ex></ph>
+           &gt;
+           <ph name="ADVANCED_TITLE">&lt;span&gt;$2&lt;/span&gt;<ex>Under the Hood</ex></ph>
+@@ -203,12 +203,12 @@
+           again for improved performance.
+         </message>
+         <message name="IDS_ERRORPAGES_SUGGESTION_FIREWALL_CONFIG_HEADER" desc="When a webpage fails to load, in some cases we suggest reconfiguring the firewall.  This is a header above some details.">
+-          Allow Helium to access the network in your firewall or antivirus
++          Allow Photon to access the network in your firewall or antivirus
+           settings.
+         </message>
+       </if>
+       <message name="IDS_ERRORPAGES_SUMMARY_BLOCKED_BY_CLIENT" desc="Summary in the error page when a request is blocked by the browser.">
+-        This page has been blocked by Helium
++        This page has been blocked by Photon
+       </message>
+       <if expr="is_macosx">
+         <message name="IDS_ERRORPAGES_SUGGESTION_PROXY_DISABLE_PLATFORM" desc="macOS instructions for disabling use of a proxy server.">
+@@ -221,7 +221,7 @@
+       <if expr="is_linux">
+         <message name="IDS_ERRORPAGES_SUGGESTION_PROXY_DISABLE_PLATFORM" desc="Linux instructions for disabling use of a proxy server.">
+           Go to
+-          the Helium menu &gt;
++          the Photon menu &gt;
+           <ph name="SETTINGS_TITLE">&lt;span&gt;$1&lt;/span&gt;<ex>Settings</ex></ph>
+           &gt;
+           <ph name="SYSTEM_TITLE">&lt;span&gt;$2&lt;/span&gt;<ex>System</ex></ph>
+@@ -233,7 +233,7 @@
+       <if expr="is_win">
+         <message name="IDS_ERRORPAGES_SUGGESTION_PROXY_DISABLE_PLATFORM" desc="Windows instructions for disabling use of a proxy server.">
+           Go to
+-          the Helium menu &gt;
++          the Photon menu &gt;
+           <ph name="SETTINGS_TITLE">&lt;span&gt;$1&lt;/span&gt;<ex>Settings</ex></ph>
+           &gt;
+           <ph name="SYSTEM_TITLE">&lt;span&gt;$2&lt;/span&gt;<ex>System</ex></ph>
+@@ -244,17 +244,17 @@
+           and deselect "Automatically detect settings".
+         </message>
+         <message name="IDS_PAYMENTS_AUTOFILL_MANDATORY_REAUTH_PROMPT" desc="Message to be displayed to the user in the device authentication prompt when they click on the mandatory auth toggle on the Payments settings page, irrespective to enable or disable it. When mandatory auth toggle is enabled, we would authenticate the user before autofilling in the payment details.">
+-          Helium is trying to modify settings for filling payment methods.
++          Photon is trying to modify settings for filling payment methods.
+         </message>
+         <message name="IDS_PAYMENTS_AUTOFILL_EDIT_CARD_MANDATORY_REAUTH_PROMPT" desc="Message to be displayed to the user in the device authentication prompt when they try to edit a local card on the Payments settings page if the mandatory auth toggle is enabled. If the user auth was succesful, we would then show the edit card dialog.">
+-          Helium is trying to edit payment methods.
++          Photon is trying to edit payment methods.
+         </message>
+       </if>
+ 
+       <!-- About Flags UI -->
+       <if expr="not is_chromeos">
+         <message name="IDS_FLAGS_UI_RELAUNCH_NOTICE" desc="Notifies the user that they need to relaunch Chromium. Shown next to a button that says 'Relaunch Now'.">
+-          Your changes will take effect the next time you relaunch Helium.
++          Your changes will take effect the next time you relaunch Photon.
+         </message>
+       </if>
+       <if expr="is_chromeos">
+@@ -265,25 +265,25 @@
+ 
+       <!-- chrome://crashes strings -->
+       <message name="IDS_CRASH_DISABLED_MESSAGE" desc="The explanatory message for chrome://crashes when crash reporting is disabled">
+-        Crash reporting is disabled in Helium settings or by policy.
++        Crash reporting is disabled in Photon settings or by policy.
+       </message>
+ 
+       <!-- Version UI -->
+       <message name="IDS_SHORT_PRODUCT_LOGO_ALT_TEXT" desc="Alt text for the Chromium logo image.">
+-        Helium logo
++        Photon logo
+       </message>
+ 
+       <message name="IDS_VERSION_UI_LICENSE" desc="The label below the copyright message, containing the URLs.">
+-        Helium is made possible by the <ph name="BEGIN_LINK_CHROMIUM">&lt;a target="_blank" href="$1" aria-description="$3"&gt;</ph>Chromium<ph name="END_LINK_CHROMIUM">&lt;/a&gt;</ph> open source project and other <ph name="BEGIN_LINK_OSS">&lt;a target="_blank" href="$2" aria-description="$3"&gt;</ph>open source software<ph name="END_LINK_OSS">&lt;/a&gt;</ph>.
++        Photon is based on <ph name="BEGIN_LINK_HELIUM">&lt;a target="_blank" href="$1" aria-description="$4"&gt;</ph>Helium<ph name="END_LINK_HELIUM">&lt;/a&gt;</ph> and <ph name="BEGIN_LINK_CHROMIUM">&lt;a target="_blank" href="$2" aria-description="$4"&gt;</ph>Chromium<ph name="END_LINK_CHROMIUM">&lt;/a&gt;</ph>, and is made possible by <ph name="BEGIN_LINK_OSS">&lt;a target="_blank" href="$3" aria-description="$4"&gt;</ph>other open source software<ph name="END_LINK_OSS">&lt;/a&gt;</ph>.
+       </message>
+ 
+       <if expr="is_chromeos">
+         <message name="IDS_VERSION_UI_LICENSE_CHROMIUM" desc="The label below the copyright message, containing the link to the Chromium project.">
+-          Helium is made possible by the <ph name="BEGIN_LINK_CHROMIUM">&lt;a target="_blank" href="$1"&gt;</ph>Chromium<ph name="END_LINK_CHROMIUM">&lt;/a&gt;</ph> open source project.
++          Photon is made possible by the <ph name="BEGIN_LINK_CHROMIUM">&lt;a target="_blank" href="$1"&gt;</ph>Chromium<ph name="END_LINK_CHROMIUM">&lt;/a&gt;</ph> open source project.
+         </message>
+ 
+         <message name="IDS_VERSION_UI_LICENSE_OTHER" desc="The label below the copyright message, containing the link to other open source software.">
+-          Helium is also made possible by other <ph name="BEGIN_LINK_OSS">&lt;a href='#'&gt;</ph>open source software<ph name="END_LINK_OSS">&lt;/a&gt;</ph>.
++          Photon is also made possible by other <ph name="BEGIN_LINK_OSS">&lt;a href='#'&gt;</ph>open source software<ph name="END_LINK_OSS">&lt;/a&gt;</ph>.
+         </message>
+       </if>
+ 
+@@ -291,42 +291,42 @@
+       <if expr="_is_chrome_for_testing_branded">
+         <then>
+           <message name="IDS_PAGE_INFO_INTERNAL_PAGE" desc="Message to display in the page info bubble when the page you are on is a chrome:// page or about:something.">
+-            You're viewing a secure Helium for Testing page
++            You're viewing a secure Photon for Testing page
+           </message>
+         </then>
+         <else>
+           <message name="IDS_PAGE_INFO_INTERNAL_PAGE" desc="Message to display in the page info bubble when the page you are on is a chrome:// page or about:something.">
+-            You're viewing a secure Helium page
++            You're viewing a secure Photon page
+           </message>
+         </else>
+       </if>
+ 
+       <!-- Session Crash -->
+       <message name="IDS_SESSION_CRASHED_VIEW_MESSAGE" desc="Message shown when the last session didn't exit cleanly.">
+-        Helium didn't shut down correctly.
++        Photon didn't shut down correctly.
+       </message>
+ 
+       <!-- Device Chooser Prompt -->
+       <message name="IDS_BLUETOOTH_DEVICE_CHOOSER_AUTHORIZE_BLUETOOTH" desc="Text shown in the Chooser when browser does not have Bluetooth permission. The '&#10;' is a newline character to force the desired line wrapping.">
+-        Helium needs Bluetooth access to continue 
++        Photon needs Bluetooth access to continue
+  pairing. <ph name="IDS_BLUETOOTH_DEVICE_CHOOSER_AUTHORIZE_BLUETOOTH_LINK">$1<ex>Open Preferences</ex></ph>
+       </message>
+ 
+       <!-- Internal debug pages disabled interstitial. -->
+       <message name="IDS_INTERNAL_DEBUG_PAGES_DISABLED_BODY" desc="This is the text, with a link, that appears below the heading for the page that appears when the user attempts to load an internal developer debugging page when such pages are disabled by a pref. It instructs the user on how to enable the pref if they wish.">
+-        These pages are intended for use by Helium developers, and may not be actively maintained or tested. To enable them, navigate to <ph name="BEGIN_LINK">&lt;a href="$1"&gt;</ph>helium://chrome-urls<ph name="LINK_END">&lt;/a&gt;</ph>, click the button to enable debug pages, and then navigate to this page again.
++        These pages are intended for use by Photon developers, and may not be actively maintained or tested. To enable them, navigate to <ph name="BEGIN_LINK">&lt;a href="$1"&gt;</ph>helium://chrome-urls<ph name="LINK_END">&lt;/a&gt;</ph>, click the button to enable debug pages, and then navigate to this page again.
+       </message>
+ 
+       <!-- Desktop-to-Mobile Promo Notifications -->
+       <if expr="not is_android">
+         <message name="IDS_IOS_DESKTOP_PASSWORD_PROMO_NOTIFICATION_TITLE" desc="The title for the iOS desktop Password promo notification.">
+-          Helium Tip: Save Passwords
++          Photon Tip: Save Passwords
+         </message>
+         <message name="IDS_IOS_DESKTOP_SAFE_BROWSING_PROMO_NOTIFICATION_TITLE" desc="The title for the iOS desktop Enhanced Safe Browsing promo notification.">
+-          Helium Tip: Enhanced Safe Browsing
++          Photon Tip: Enhanced Safe Browsing
+         </message>
+         <message name="IDS_IOS_DESKTOP_LENS_PROMO_NOTIFICATION_TITLE" desc="The title for the iOS desktop Lens promo notification.">
+-          Helium Tip: Search With Lens
++          Photon Tip: Search With Lens
+         </message>
+       </if>
+     </messages>
+--- a/components/page_info_strings.grdp
++++ b/components/page_info_strings.grdp
+@@ -23,7 +23,7 @@
+     Be careful on this site
+   </message>
+   <message name="IDS_PAGE_INFO_SUSPICIOUS_SITE_DETAILS" desc="Description of the page info bubble for a suspicious site.">
+-    Helium has detected details that are common on sites associated with phishing, malware, or scams. <ph name="BEGIN_LINK">&lt;link&gt;<ex>&lt;link&gt;</ex></ph>Learn more<ph name="END_LINK">&lt;/link&gt;<ex>&lt;/link&gt;</ex></ph>
++    Photon has detected details that are common on sites associated with phishing, malware, or scams. <ph name="BEGIN_LINK">&lt;link&gt;<ex>&lt;link&gt;</ex></ph>Learn more<ph name="END_LINK">&lt;/link&gt;<ex>&lt;/link&gt;</ex></ph>
+   </message>
+   <message name="IDS_PAGE_INFO_SUSPICIOUS_SITE_BUTTON_MARK_AS_SAFE" desc="Button text to mark a suspicious site as safe." formatter_data="android_java">
+     Mark as safe
+@@ -44,10 +44,10 @@
+     You're viewing a developer tools page
+   </message>
+   <message name="IDS_PAGE_INFO_READER_MODE_PAGE_SECURE" desc="Message to display in the page info bubble when the page you are viewing is the reader mode version of an article which was retrieved over a secure connection.">
+-    Helium simplified this page to make it easier to read. Helium retrieved the original page over a secure connection.
++    Photon simplified this page to make it easier to read. Photon retrieved the original page over a secure connection.
+   </message>
+   <message name="IDS_PAGE_INFO_READER_MODE_PAGE" desc="Message to display in the page info bubble when the page you are viewing is the reader mode version of an article which was retrieved over an insecure connection.">
+-    Helium simplified this page to make it easier to read. Helium retrieved the original page over an insecure connection.
++    Photon simplified this page to make it easier to read. Photon retrieved the original page over an insecure connection.
+   </message>
+ 
+   <!-- Safety Tip summary strings -->
+@@ -103,12 +103,12 @@
+   </message>
+   <if expr="_google_chrome">
+     <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_SAVED" desc="A short paragraph explaining to a Chrome user that they have reused their saved password on the current website.">
+-      You just entered your password on a deceptive site. To secure your accounts, Helium recommends checking your saved passwords.
++      You just entered your password on a deceptive site. To secure your accounts, Photon recommends checking your saved passwords.
+     </message>
+   </if>
+   <if expr="not _google_chrome">
+     <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_SAVED" desc="A short paragraph explaining to a Chromium user that they have reused their saved password on the current website.">
+-      You just entered your password on a deceptive site. To secure your accounts, Helium recommends checking your saved passwords.
++      You just entered your password on a deceptive site. To secure your accounts, Photon recommends checking your saved passwords.
+     </message>
+   </if>
+   <if expr="use_titlecase">
+@@ -211,7 +211,7 @@
+     <if expr="is_android">
+     <!-- Only used in the dialog shown after tapping "Details" in page info -->
+     <message name="IDS_PAGE_INFO_SECURE_IDENTITY_VERIFIED" desc="The text of the identity section when the page is secure and uses a valid certificate">
+-      <ph name="BROWSER">$1<ex>Helium</ex></ph> verified that <ph name="ISSUER">$2<ex>VeriSign</ex></ph> issued this website's certificate.
++      <ph name="BROWSER">$1<ex>Photon</ex></ph> verified that <ph name="ISSUER">$2<ex>VeriSign</ex></ph> issued this website's certificate.
+     </message>
+     </if>
+ 
+@@ -428,16 +428,16 @@
+       </message>
+     </if>
+     <message name="IDS_PAGE_INFO_CAMERA_SYSTEM_SETTINGS_DESCRIPTION" desc="The description for the camera permission with a link to system settings.">
+-        To use your camera, give Helium access in <ph name="LINK">$1<ex>system settings</ex></ph>.
++        To use your camera, give Photon access in <ph name="LINK">$1<ex>system settings</ex></ph>.
+     </message>
+     <message name="IDS_PAGE_INFO_MICROPHONE_SYSTEM_SETTINGS_DESCRIPTION" desc="The description for the microphone permission with a link to system settings.">
+-        To use your microphone, give Helium access in <ph name="LINK">$1<ex>system settings</ex></ph>.
++        To use your microphone, give Photon access in <ph name="LINK">$1<ex>system settings</ex></ph>.
+     </message>
+     <message name="IDS_PAGE_INFO_LOCATION_SYSTEM_SETTINGS_DESCRIPTION" desc="The description for the location permission with a link to system settings.">
+-        To use your location, give Helium access in <ph name="LINK">$1<ex>system settings</ex></ph>.
++        To use your location, give Photon access in <ph name="LINK">$1<ex>system settings</ex></ph>.
+     </message>
+     <message name="IDS_PAGE_INFO_CLIPBOARD_SYSTEM_SETTINGS_DESCRIPTION" desc="The description for the clipboard permission with a link to system settings.">
+-        To use your clipboard, give Helium access in <ph name="LINK">$1<ex>system settings</ex></ph>.
++        To use your clipboard, give Photon access in <ph name="LINK">$1<ex>system settings</ex></ph>.
+     </message>
+     <message name="IDS_PAGE_INFO_SETTINGS_OF_A_SYSTEM_LINK" desc="This is the text of the link pointing to settings of a system. This appears under a permission in the Page Info bubble if the permission is blocked on the system level.">
+         system settings
+@@ -498,36 +498,36 @@
+     <!-- Password Protection -->
+     <if expr="_google_chrome">
+       <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS" desc="A short paragraph explaining to the user that they has reuse their google password on current website.">
+-        You could lose access to your Google Account. Helium recommends changing your password now. You'll be asked to sign in.
++        You could lose access to your Google Account. Photon recommends changing your password now. You'll be asked to sign in.
+       </message>
+       <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_SYNC" desc="A short paragraph explaining to a Chrome sync user that they have reused their Google password on the current website.">
+-        Helium can help you protect your Google Account and change your password.
++        Photon can help you protect your Google Account and change your password.
+       </message>
+       <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_SIGNED_IN_NON_SYNC" desc="A short paragraph explaining to a non-sync user that they have reused their Google password on the current website.">
+-        You just entered your password on a deceptive site. Helium can help. To change your password and notify Google that your account may be at risk, click Protect Account.
++        You just entered your password on a deceptive site. Photon can help. To change your password and notify Google that your account may be at risk, click Protect Account.
+       </message>
+       <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_ENTERPRISE" desc="A short paragraph explaining to the user that they have reused their password on the current website.">
+-        You could lose access to your organization's account or experience identity theft. Helium recommends changing your password now.
++        You could lose access to your organization's account or experience identity theft. Photon recommends changing your password now.
+       </message>
+       <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_ENTERPRISE_WITH_ORG_NAME" desc="A short paragraph explaining to the user that they have reused their password on the current website.">
+-        You could lose access to your <ph name="ORG_NAME">$1<ex>Google</ex></ph> account or experience identity theft. Helium recommends changing your password now.
++        You could lose access to your <ph name="ORG_NAME">$1<ex>Google</ex></ph> account or experience identity theft. Photon recommends changing your password now.
+       </message>
+     </if>
+     <if expr="not _google_chrome">
+       <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS" desc="A short paragraph explaining to the user that they has reuse their google password on current website.">
+-        You could lose access to your Google Account. Helium recommends changing your password now. You'll be asked to sign in.
++        You could lose access to your Google Account. Photon recommends changing your password now. You'll be asked to sign in.
+       </message>
+       <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_SYNC" desc="A short paragraph explaining to a Chrome sync user that they have reused their Google password on the current website.">
+-        Helium can help you protect your Google Account and change your password.
++        Photon can help you protect your Google Account and change your password.
+       </message>
+       <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_SIGNED_IN_NON_SYNC" desc="A short paragraph explaining to a non-sync user that they have reused their Google password on the current website.">
+-        You just entered your password on a deceptive site. Helium can help. To change your password and notify Google that your account may be at risk, click Protect Account.
++        You just entered your password on a deceptive site. Photon can help. To change your password and notify Google that your account may be at risk, click Protect Account.
+       </message>
+       <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_ENTERPRISE" desc="A short paragraph explaining to the user that they have reused their password on the current website.">
+-        You could lose access to your organization's account or experience identity theft. Helium recommends changing your password now.
++        You could lose access to your organization's account or experience identity theft. Photon recommends changing your password now.
+       </message>
+       <message name="IDS_PAGE_INFO_CHANGE_PASSWORD_DETAILS_ENTERPRISE_WITH_ORG_NAME" desc="A short paragraph explaining to the user that they have reused their password on the current website.">
+-        You could lose access to your <ph name="ORG_NAME">$1<ex>Google</ex></ph> account or experience identity theft. Helium recommends changing your password now.
++        You could lose access to your <ph name="ORG_NAME">$1<ex>Google</ex></ph> account or experience identity theft. Photon recommends changing your password now.
+       </message>
+     </if>
+ 
+@@ -1048,23 +1048,23 @@
+     Your organization has blocked this site because it violates a policy.
+   </message>
+ 
+-  <!-- Helium Noise strings -->
++  <!-- Photon Noise strings -->
+   <message name="IDS_PAGE_INFO_HELIUM_NOISE_HEADER" desc="The title of the fingerprinting protection row and subpage in Page Info.">
+     Fingerprinting protection
+   </message>
+   <message name="IDS_PAGE_INFO_HELIUM_NOISE_TOOLTIP" desc="Tooltip for the fingerprinting protection row in Page Info.">
+     Manage fingerprinting protection for this site
+   </message>
+-  <message name="IDS_PAGE_INFO_HELIUM_NOISE_DESCRIPTION" desc="Explanation of how Helium fingerprinting protection works.">
+-    When fingerprinting protection is enabled, Helium adds noise to certain browser features to make it harder for sites to track and profile you.
++  <message name="IDS_PAGE_INFO_HELIUM_NOISE_DESCRIPTION" desc="Explanation of how Photon fingerprinting protection works.">
++    When fingerprinting protection is enabled, Photon adds noise to certain browser features to make it harder for sites to track and profile you.
+   </message>
+-  <message name="IDS_PAGE_INFO_HELIUM_NOISE_BREAKAGE" desc="Explanation of how disabling Helium's fingerprinting protection may fix privacy-invasive websites, but will reduce user's privacy.">
++  <message name="IDS_PAGE_INFO_HELIUM_NOISE_BREAKAGE" desc="Explanation of how disabling Photon's fingerprinting protection may fix privacy-invasive websites, but will reduce user's privacy.">
+     Turning off the protection will reduce your privacy, but may fix site features that require fingerprinting.
+   </message>
+   <message name="IDS_PAGE_INFO_HELIUM_NOISE_GLOBALLY_DISABLED" desc="Explanation shown when the site toggle is unavailable because fingerprinting protection is disabled globally.">
+-    Fingerprinting protection is turned off in Helium settings.
++    Fingerprinting protection is turned off in Photon settings.
+   </message>
+-  <message name="IDS_PAGE_INFO_HELIUM_NOISE_SETTINGS_BUTTON" desc="A button label that opens Helium's global fingerprinting protection settings page.">
++  <message name="IDS_PAGE_INFO_HELIUM_NOISE_SETTINGS_BUTTON" desc="A button label that opens Photon's global fingerprinting protection settings page.">
+     Manage fingerprinting protection
+   </message>
+ </grit-part>
+\ No newline at end of file
+--- a/components/security_interstitials_strings.grdp
++++ b/components/security_interstitials_strings.grdp
+@@ -42,7 +42,7 @@
+ 
+   <!-- MITM software interstitial -->
+   <message name="IDS_MITM_SOFTWARE_HEADING" desc="Header of an error page. A user visits a website, antivirus or firewall software interferes with their connection, and they are shown this error.">
+-    An application is stopping Helium from safely connecting to this site
++    An application is stopping Photon from safely connecting to this site
+   </message>
+   <message name="IDS_MITM_SOFTWARE_PRIMARY_PARAGRAPH_ENTERPRISE" desc="Main body of an error page. A user visits a website, antivirus or firewall software interferes with their connection, and they are shown this error. There is a title above and a button below that exposes more information. ‘IT administrator’ here refers to the information technology expert at the user’s school or company. Placeholder text is the name of a computer program.">
+     "<ph name="SOFTWARE_NAME">$1<ex>Misconfigured Antivirus</ex></ph>" wasn’t installed properly on your computer or network. Ask your IT administrator to resolve this issue.
+@@ -169,12 +169,12 @@
+   </if>
+   <if expr="_google_chrome">
+     <message name="IDS_CLOCK_ERROR_EXPLANATION" desc="Body text under an 'Advanced' button. Context: error shown when the browser can't load a page because the device's clock is wrong. This paragraph explains why a correct clock is necessary.">
+-      To establish a secure connection, your clock needs to be set correctly. This is because the certificates that websites use to identify themselves are only valid for specific periods of time. Since your device's clock is incorrect, Helium cannot verify these certificates.
++      To establish a secure connection, your clock needs to be set correctly. This is because the certificates that websites use to identify themselves are only valid for specific periods of time. Since your device's clock is incorrect, Photon cannot verify these certificates.
+     </message>
+   </if>
+   <if expr="not _google_chrome">
+     <message name="IDS_CLOCK_ERROR_EXPLANATION" desc="Body text under an 'Advanced' button. Context: error shown when the browser can't load a page because the device's clock is wrong. This paragraph explains why a correct clock is necessary.">
+-      To establish a secure connection, your clock needs to be set correctly. This is because the certificates that websites use to identify themselves are only valid for specific periods of time. Since your device's clock is incorrect, Helium cannot verify these certificates.
++      To establish a secure connection, your clock needs to be set correctly. This is because the certificates that websites use to identify themselves are only valid for specific periods of time. Since your device's clock is incorrect, Photon cannot verify these certificates.
+     </message>
+   </if>
+ 
+@@ -215,18 +215,18 @@
+   </message>
+   <if expr="_google_chrome">
+     <message name="IDS_SSL_NONOVERRIDABLE_MORE" desc="Body text for the explanation shown if user clicks on the Details button.">
+-      <ph name="SITE">$1<ex>9oo91e.qjz9zk</ex></ph> normally uses encryption to protect your information. When Helium tried to connect to <ph name="SITE">$1<ex>9oo91e.qjz9zk</ex></ph> this time, the website sent back unusual and incorrect credentials. This may happen when an attacker is trying to pretend to be <ph name="SITE">$1<ex>9oo91e.qjz9zk</ex></ph>, or a Wi-Fi sign-in screen has interrupted the connection. Your information is still secure because Helium stopped the connection before any data was exchanged.
++      <ph name="SITE">$1<ex>9oo91e.qjz9zk</ex></ph> normally uses encryption to protect your information. When Photon tried to connect to <ph name="SITE">$1<ex>9oo91e.qjz9zk</ex></ph> this time, the website sent back unusual and incorrect credentials. This may happen when an attacker is trying to pretend to be <ph name="SITE">$1<ex>9oo91e.qjz9zk</ex></ph>, or a Wi-Fi sign-in screen has interrupted the connection. Your information is still secure because Photon stopped the connection before any data was exchanged.
+     </message>
+     <message name="IDS_SSL_NONOVERRIDABLE_INVALID" desc="A sentence to explain why the user can't proceed.">
+-      You cannot visit <ph name="SITE">$1<ex>9oo91e.qjz9zk</ex></ph> right now because the website sent scrambled credentials that Helium cannot process. Network errors and attacks are usually temporary, so this page will probably work later.
++      You cannot visit <ph name="SITE">$1<ex>9oo91e.qjz9zk</ex></ph> right now because the website sent scrambled credentials that Photon cannot process. Network errors and attacks are usually temporary, so this page will probably work later.
+     </message>
+   </if>
+   <if expr="not _google_chrome">
+     <message name="IDS_SSL_NONOVERRIDABLE_MORE" desc="Body text for the explanation shown if user clicks on the Details button.">
+-      <ph name="SITE">$1<ex>9oo91e.qjz9zk</ex></ph> normally uses encryption to protect your information. When Helium tried to connect to <ph name="SITE">$1<ex>9oo91e.qjz9zk</ex></ph> this time, the website sent back unusual and incorrect credentials. This may happen when an attacker is trying to pretend to be <ph name="SITE">$1<ex>9oo91e.qjz9zk</ex></ph>, or a Wi-Fi sign-in screen has interrupted the connection. Your information is still secure because Helium stopped the connection before any data was exchanged.
++      <ph name="SITE">$1<ex>9oo91e.qjz9zk</ex></ph> normally uses encryption to protect your information. When Photon tried to connect to <ph name="SITE">$1<ex>9oo91e.qjz9zk</ex></ph> this time, the website sent back unusual and incorrect credentials. This may happen when an attacker is trying to pretend to be <ph name="SITE">$1<ex>9oo91e.qjz9zk</ex></ph>, or a Wi-Fi sign-in screen has interrupted the connection. Your information is still secure because Photon stopped the connection before any data was exchanged.
+     </message>
+     <message name="IDS_SSL_NONOVERRIDABLE_INVALID" desc="A sentence to explain why the user can't proceed.">
+-      You cannot visit <ph name="SITE">$1<ex>9oo91e.qjz9zk</ex></ph> right now because the website sent scrambled credentials that Helium cannot process. Network errors and attacks are usually temporary, so this page will probably work later.
++      You cannot visit <ph name="SITE">$1<ex>9oo91e.qjz9zk</ex></ph> right now because the website sent scrambled credentials that Photon cannot process. Network errors and attacks are usually temporary, so this page will probably work later.
+     </message>
+   </if>
+ 
+@@ -249,10 +249,10 @@
+ 
+   <!-- Malware interstitial -->
+   <message name="IDS_MALWARE_V3_PRIMARY_PARAGRAPH" desc="Mac: The primary explanatory paragraph for the malware interstitial.">
+-    Attackers on the site you tried visiting might install harmful software that steals or deletes things like your passwords, photos, messages, or credit card numbers. Helium strongly recommends going back to safety. <ph name="BEGIN_LEARN_MORE_LINK">&lt;a href="#" id="learn-more-link"&gt;</ph>Learn more about this warning<ph name="END_LEARN_MORE_LINK">&lt;/a&gt;</ph>
++    Attackers on the site you tried visiting might install harmful software that steals or deletes things like your passwords, photos, messages, or credit card numbers. Photon strongly recommends going back to safety. <ph name="BEGIN_LEARN_MORE_LINK">&lt;a href="#" id="learn-more-link"&gt;</ph>Learn more about this warning<ph name="END_LEARN_MORE_LINK">&lt;/a&gt;</ph>
+   </message>
+   <message name="IDS_MALWARE_V3_EXPLANATION_PARAGRAPH" desc="The explanation of why Safe Browsing has blocked the page.">
+-    Helium has built-in safety features to protect you while you browse — like Google Safe Browsing, which <ph name="BEGIN_LINK">&lt;a href="#" id="diagnostic-link"&gt;</ph>recently found malware<ph name="END_LINK">&lt;/a&gt;</ph> on the site you tried visiting.
++    Photon has built-in safety features to protect you while you browse — like Google Safe Browsing, which <ph name="BEGIN_LINK">&lt;a href="#" id="diagnostic-link"&gt;</ph>recently found malware<ph name="END_LINK">&lt;/a&gt;</ph> on the site you tried visiting.
+   </message>
+   <message name="IDS_MALWARE_V3_PROCEED_PARAGRAPH" desc="The paragraph that lets the user skip the warning.">
+     Even sites that are normally safe are sometimes compromised by attackers. Only visit <ph name="BEGIN_LINK">&lt;a href="#" id="proceed-link"&gt;</ph>this unsafe site<ph name="END_LINK">&lt;/a&gt;</ph> if you're sure you understand the risks.
+@@ -261,16 +261,16 @@
+     Help improve security on the web for everyone by sending <ph name="BEGIN_WHITEPAPER_LINK">&lt;a href="#" id="whitepaper-link"&gt;</ph>URLs of some pages you visit, limited system information, and some page content<ph name="END_WHITEPAPER_LINK">&lt;/a&gt;</ph> to Google. <ph name="BEGIN_PRIVACY_PAGE_LINK">&lt;a id="privacy-link" href="#"&gt;</ph>Privacy policy<ph name="END_PRIVACY_PAGE_LINK">&lt;/a&gt;</ph>
+   </message>
+   <message name="IDS_SAFE_BROWSING_ENHANCED_PROTECTION_MESSAGE" desc="SafeBrowsing enhanced protection promo message">
+-    <ph name="BEGIN_ENHANCED_PROTECTION_LINK">&lt;a href="#" id="enhanced-protection-link"&gt;</ph>Turn on enhanced protection<ph name="END_ENHANCED_PROTECTION_LINK">&lt;/a&gt;</ph> to get Helium's highest level of security
++    <ph name="BEGIN_ENHANCED_PROTECTION_LINK">&lt;a href="#" id="enhanced-protection-link"&gt;</ph>Turn on enhanced protection<ph name="END_ENHANCED_PROTECTION_LINK">&lt;/a&gt;</ph> to get Photon's highest level of security
+   </message>
+ 
+   <!-- Harmful download interstitial -->
+   <message name="IDS_HARMFUL_V3_PRIMARY_PARAGRAPH" desc="The primary explanatory paragraph for the unwanted software interstitial.">
+-    Attackers on the site you tried visiting might trick you into installing harmful software that affects the way you browse — for example, by changing your homepage or showing you extra ads on sites you visit. Helium strongly recommends going back to safety to avoid harm. <ph name="BEGIN_LEARN_MORE_LINK">&lt;a href="#" id="learn-more-link"&gt;</ph>Learn more about this warning<ph name="END_LEARN_MORE_LINK">&lt;/a&gt;</ph>
++    Attackers on the site you tried visiting might trick you into installing harmful software that affects the way you browse — for example, by changing your homepage or showing you extra ads on sites you visit. Photon strongly recommends going back to safety to avoid harm. <ph name="BEGIN_LEARN_MORE_LINK">&lt;a href="#" id="learn-more-link"&gt;</ph>Learn more about this warning<ph name="END_LEARN_MORE_LINK">&lt;/a&gt;</ph>
+   </message>
+ 
+   <message name="IDS_HARMFUL_V3_EXPLANATION_PARAGRAPH" desc="The explanation of why Safe Browsing has blocked the page.">
+-    Helium has built-in safety features to protect you while you browse —  like Google Safe Browsing, which recently <ph name="BEGIN_LINK">&lt;a href="#" id="diagnostic-link"&gt;</ph>found harmful software<ph name="END_LINK">&lt;/a&gt;</ph> on the site you tried visiting.
++    Photon has built-in safety features to protect you while you browse —  like Google Safe Browsing, which recently <ph name="BEGIN_LINK">&lt;a href="#" id="diagnostic-link"&gt;</ph>found harmful software<ph name="END_LINK">&lt;/a&gt;</ph> on the site you tried visiting.
+   </message>
+ 
+   <message name="IDS_HARMFUL_V3_PROCEED_PARAGRAPH" desc="The paragraph that lets the user skip the warning.">
+@@ -279,10 +279,10 @@
+ 
+   <!-- Phishing interstitial -->
+   <message name="IDS_PHISHING_V4_PRIMARY_PARAGRAPH" desc="The primary explanatory paragraph for the phishing interstitial.">
+-    Attackers on the site you tried visiting might trick you into installing software or revealing things like your passwords, phone, or credit card numbers. Helium strongly recommends going back to safety. <ph name="BEGIN_LEARN_MORE_LINK">&lt;a href="#" id="learn-more-link"&gt;</ph>Learn more about this warning<ph name="END_LEARN_MORE_LINK">&lt;/a&gt;</ph>
++    Attackers on the site you tried visiting might trick you into installing software or revealing things like your passwords, phone, or credit card numbers. Photon strongly recommends going back to safety. <ph name="BEGIN_LEARN_MORE_LINK">&lt;a href="#" id="learn-more-link"&gt;</ph>Learn more about this warning<ph name="END_LEARN_MORE_LINK">&lt;/a&gt;</ph>
+   </message>
+   <message name="IDS_PHISHING_V4_EXPLANATION_PARAGRAPH" desc="The explanation of why Safe Browsing has blocked the page.">
+-    Helium has built-in safety features to protect you while you browse — like Google Safe Browsing, which <ph name="BEGIN_LINK">&lt;a href="#" id="diagnostic-link"&gt;</ph>recently found phishing<ph name="END_LINK">&lt;/a&gt;</ph> on the site you tried visiting. Phishing sites pretend to be other sites to trick you.<ph name="NEW_LINE">&lt;br/&gt;&lt;br/&gt;</ph>Even sites that are normally safe are sometimes compromised by attackers. <ph name="BEGIN_ERROR_LINK">&lt;a href="#" id="report-error-link"&gt;</ph>Let us know<ph name="END_ERROR_LINK">&lt;/a&gt;</ph> if you think there's been a mistake and that this site doesn't pose a danger.
++    Photon has built-in safety features to protect you while you browse — like Google Safe Browsing, which <ph name="BEGIN_LINK">&lt;a href="#" id="diagnostic-link"&gt;</ph>recently found phishing<ph name="END_LINK">&lt;/a&gt;</ph> on the site you tried visiting. Phishing sites pretend to be other sites to trick you.<ph name="NEW_LINE">&lt;br/&gt;&lt;br/&gt;</ph>Even sites that are normally safe are sometimes compromised by attackers. <ph name="BEGIN_ERROR_LINK">&lt;a href="#" id="report-error-link"&gt;</ph>Let us know<ph name="END_ERROR_LINK">&lt;/a&gt;</ph> if you think there's been a mistake and that this site doesn't pose a danger.
+   </message>
+   <message name="IDS_PHISHING_V4_PROCEED_PARAGRAPH" desc="The paragraph that lets the user skip the warning.">
+     Only visit <ph name="BEGIN_LINK">&lt;a href="#" id="proceed-link"&gt;</ph>this unsafe site<ph name="END_LINK">&lt;/a&gt;</ph> if you're sure you understand the risks.
+@@ -363,11 +363,11 @@
+     &lt;/ol&gt;
+     &lt;h4&gt;Step 2: Open the page in Incognito mode (computer only)&lt;/h4&gt;
+     &lt;p&gt;Open the page you were visiting in an Incognito window.&lt;/p&gt;
+-    &lt;p&gt;If the page opens, a Helium extension isn't working right. To fix the error, turn off the extension.&lt;/p&gt;
++    &lt;p&gt;If the page opens, a Photon extension isn't working right. To fix the error, turn off the extension.&lt;/p&gt;
+     &lt;h4&gt;Step 3: Update your operating system&lt;/h4&gt;
+     &lt;p&gt;Make sure your device is up-to-date.&lt;/p&gt;
+     &lt;h4&gt;Step 4: Temporarily turn off your antivirus&lt;/h4&gt;
+-    &lt;p&gt;You'll see this error if you have antivirus software that provides "HTTPS protection" or "HTTPS scanning." The antivirus is preventing Helium from providing security.&lt;/p&gt;
++    &lt;p&gt;You'll see this error if you have antivirus software that provides "HTTPS protection" or "HTTPS scanning." The antivirus is preventing Photon from providing security.&lt;/p&gt;
+     &lt;p&gt;To fix the problem, turn off your antivirus software. If the page works after turning off the software, turn off this software when you use secure sites.&lt;/p&gt;
+     &lt;p&gt;Remember to turn your antivirus program back on when you're done.&lt;/p&gt;
+     &lt;h4&gt;Step 5: Get extra help&lt;/h4&gt;
+@@ -383,7 +383,7 @@
+   </message>
+   <if expr="is_win">
+     <message name="IDS_CONNECTION_HELP_MITM_SOFTWARE_TITLE" desc="Title for MITM software section in chrome://connection-help. Matches the heading for the nineth section in https://support.google.com/chrome/answer/6098869">
+-    "Software on your computer is stopping Helium from safely connecting to the web" (Windows computers only)
++    "Software on your computer is stopping Photon from safely connecting to the web" (Windows computers only)
+   </message>
+     <message name="IDS_CONNECTION_HELP_MITM_SOFTWARE_DETAILS" desc="Details for MITM software section in chrome://connection-help. Matches the nineth section in https://support.google.com/chrome/answer/6098869">
+       &lt;p&gt;You'll see this error if you have Superfish software on your Windows computer.&lt;/p&gt;
+@@ -394,7 +394,7 @@
+       &lt;li&gt;Under &lt;strong&gt;Startup type&lt;/strong&gt;, select &lt;strong&gt;Disabled&lt;/strong&gt;
+       &lt;li&gt;Under &lt;strong&gt;Service status&lt;/strong&gt;, click &lt;strong&gt;Stop&lt;/strong&gt;
+       &lt;li&gt;Click &lt;strong&gt;Apply&lt;/strong&gt;, then click &lt;strong&gt;OK&lt;/strong&gt;
+-      &lt;li&gt;Visit the &lt;a href="https://support.google.com/chrome/answer/6098869"&gt;Helium help center&lt;/a&gt; to learn how to permanently remove the software from your computer
++      &lt;li&gt;Visit the &lt;a href="https://support.google.com/chrome/answer/6098869"&gt;Photon help center&lt;/a&gt; to learn how to permanently remove the software from your computer
+       &lt;/ol&gt;
+     </message>
+   </if>
+@@ -439,12 +439,12 @@
+ 
+     <if expr="_google_chrome">
+       <message name="IDS_KNOWN_INTERCEPTION_BODY2" desc="Second body text for the chrome://connection-monitoring-detected/ page with more details">
+-        This problem happens because of a certificate you or someone else installed on your device. The certificate is known to be used to monitor and intercept networks, and is not trusted by Helium. While some legitimate cases for monitoring do exist, like on a school or company network, Helium wants to make sure you're aware it's happening, even if you can't stop it. Monitoring may happen in any browser or application that accesses the web.
++        This problem happens because of a certificate you or someone else installed on your device. The certificate is known to be used to monitor and intercept networks, and is not trusted by Photon. While some legitimate cases for monitoring do exist, like on a school or company network, Photon wants to make sure you're aware it's happening, even if you can't stop it. Monitoring may happen in any browser or application that accesses the web.
+       </message>
+     </if>
+     <if expr="not _google_chrome">
+       <message name="IDS_KNOWN_INTERCEPTION_BODY2" desc="Second body text for the chrome://connection-monitoring-detected/ page with more details">
+-        This problem happens because of a certificate you or someone else installed on your device. The certificate is known to be used to monitor and intercept networks, and is not trusted by Helium. While some legitimate cases for monitoring do exist, like on a school or company network, Helium wants to make sure you're aware it's happening, even if you can't stop it. Monitoring may happen in any browser or application that accesses the web.
++        This problem happens because of a certificate you or someone else installed on your device. The certificate is known to be used to monitor and intercept networks, and is not trusted by Photon. While some legitimate cases for monitoring do exist, like on a school or company network, Photon wants to make sure you're aware it's happening, even if you can't stop it. Monitoring may happen in any browser or application that accesses the web.
+       </message>
+     </if>
+ 
+@@ -520,10 +520,10 @@
+   </if>
+ 
+   <message name="IDS_HTTPS_ONLY_MODE_WITH_SITE_ENGAGEMENT_PRIMARY_PARAGRAPH" desc="Main paragraph of the HTTPS-Only Mode warning. This warning is shown when the browser tries to upgrade a navigation to a site to HTTPS but the site does not support HTTPS. The user is seeing this warning because they typically visit HTTPS URLs.">
+-    You usually connect to this site securely, but Helium couldn't use a secure connection this time. An attacker might be trying to eavesdrop or modify your network connection. <ph name="BEGIN_LEARN_MORE_LINK">&lt;a href="#" id="learn-more-link"&gt;</ph>Learn more about this warning<ph name="END_LEARN_MORE_LINK">&lt;/a&gt;</ph>
++    You usually connect to this site securely, but Photon couldn't use a secure connection this time. An attacker might be trying to eavesdrop or modify your network connection. <ph name="BEGIN_LEARN_MORE_LINK">&lt;a href="#" id="learn-more-link"&gt;</ph>Learn more about this warning<ph name="END_LEARN_MORE_LINK">&lt;/a&gt;</ph>
+   </message>
+   <message name="IDS_HTTPS_ONLY_MODE_FOR_TYPICALLY_SECURE_BROWSING_PRIMARY_PARAGRAPH" desc="Main paragraph of the HTTPS-Only Mode warning. This warning is shown when the browser tries to upgrade a navigation to a site to HTTPS but the site does not support HTTPS. The user has previously engaged with the HTTPS version of the site.">
+-    You usually connect to sites securely, but Helium couldn't use a secure connection this time. An attacker might be trying to eavesdrop or modify your network connection. <ph name="BEGIN_LEARN_MORE_LINK">&lt;a href="#" id="learn-more-link"&gt;</ph>Learn more about this warning<ph name="END_LEARN_MORE_LINK">&lt;/a&gt;</ph>
++    You usually connect to sites securely, but Photon couldn't use a secure connection this time. An attacker might be trying to eavesdrop or modify your network connection. <ph name="BEGIN_LEARN_MORE_LINK">&lt;a href="#" id="learn-more-link"&gt;</ph>Learn more about this warning<ph name="END_LEARN_MORE_LINK">&lt;/a&gt;</ph>
+   </message>
+   <message name="IDS_HTTPS_ONLY_MODE_FOR_INCOGNITO_PRIMARY_PARAGRAPH" desc="Main paragrpah of the HTTPS-Only Mode warning. This warning is shown when the browser tries to upgrade a navigation to a site to HTTPS but the site does not support HTTPS. The user is seeing this warning because they are browsing in Incognito mode.">
+     You are seeing this warning because this site does not support HTTPS and you are in Incognito mode. <ph name="BEGIN_LEARN_MORE_LINK">&lt;a href="#" id="learn-more-link"&gt;</ph>Learn more about this warning<ph name="END_LEARN_MORE_LINK">&lt;/a&gt;</ph>
+@@ -553,10 +553,10 @@
+     Learn more about this warning
+   </message>
+   <message name="IDS_ABH_PROMPT_SITE_ENGAGEMENT_PRIMARY_PARAGRAPH" desc="Main paragraph shown in the Ask-before-HTTP warning dialog. This warning is shown when the browser tries to upgrade a navigation to a site to HTTPS but the site does not support HTTPS. The user is seeing this warning because they typically visit HTTPS URLs.">
+-    You usually connect to this site securely, but Helium couldn’t use a secure connection this time. An attacker might be trying to eavesdrop or modify your network connection. <ph name="LEARN_MORE">$1<ex>Learn more about this warning</ex></ph>
++    You usually connect to this site securely, but Photon couldn’t use a secure connection this time. An attacker might be trying to eavesdrop or modify your network connection. <ph name="LEARN_MORE">$1<ex>Learn more about this warning</ex></ph>
+   </message>
+   <message name="IDS_ABH_PROMPT_TYPICALLY_SECURE_BROWSING_PRIMARY_PARAGRAPH" desc="Main paragraph of the Ask-before-HTTP warning dialog. This warning is shown when the browser tries to upgrade a navigation to a site to HTTPS but the site does not support HTTPS. The user has previously engaged with the HTTPS version of the site.">
+-    You usually connect to sites securely, but Helium couldn’t use a secure connection this time. An attacker might be trying to eavesdrop or modify your network connection. <ph name="LEARN_MORE">$1<ex>Learn more about this warning</ex></ph>
++    You usually connect to sites securely, but Photon couldn’t use a secure connection this time. An attacker might be trying to eavesdrop or modify your network connection. <ph name="LEARN_MORE">$1<ex>Learn more about this warning</ex></ph>
+   </message>
+   <message name="IDS_ABH_PROMPT_INCOGNITO_PRIMARY_PARAGRAPH" desc="Main paragrpah of the Ask-before-HTTP warning dialog. This warning is shown when the browser tries to upgrade a navigation to a site to HTTPS but the site does not support HTTPS. The user is seeing this warning because they are browsing in Incognito mode.">
+     You are seeing this warning because this site does not support HTTPS and you are in Incognito mode. <ph name="LEARN_MORE">$1<ex>Learn more about this warning</ex></ph>
+@@ -596,7 +596,7 @@
+     Mark as safe
+   </message>
+   <message name="IDS_SAFE_BROWSING_HATS_CUSTOM_INVITATION" desc="The custom invitation string shown in the Happiness Tracking Survey (HaTS) prompt banner for Safe Browsing warnings (such as red warning interstitials or suspicious site warnings) on Android">
+-    Helium just flagged a website you were trying to visit. Help us improve these warnings by taking a 1-minute survey.
++    Photon just flagged a website you were trying to visit. Help us improve these warnings by taking a 1-minute survey.
+   </message>
+ 
+ </grit-part>
+\ No newline at end of file

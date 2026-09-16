@@ -1,0 +1,10 @@
+--- a/chrome/app/chrome_crash_reporter_client.cc
++++ b/chrome/app/chrome_crash_reporter_client.cc
+@@ -131,6 +131,6 @@ bool ChromeCrashReporterClient::GetCrash
+ void ChromeCrashReporterClient::GetProductInfo(ProductInfo* product_info) {
+   CHECK(product_info);
+-  product_info->product_name = "Helium";
++  product_info->product_name = "Photon";
+   product_info->version = version_info::GetHeliumVersionNumber();
+   product_info->channel =
+       chrome::GetChannelName(chrome::WithExtendedStable(true));

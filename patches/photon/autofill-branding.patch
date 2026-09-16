@@ -1,0 +1,397 @@
+--- a/components/autofill_payments_strings.grdp
++++ b/components/autofill_payments_strings.grdp
+@@ -62,7 +62,7 @@
+     Google Wallet logo
+   </message>
+   <message name="IDS_AUTOFILL_CHROME_LOGO_ACCESSIBLE_NAME" desc="The accessible name for the Chrome logo.">
+-    Helium logo
++    Photon logo
+   </message>
+ 
+   <if expr="not is_android">
+@@ -115,7 +115,7 @@
+   <if expr="is_ios">
+     <then>
+       <message name="IDS_AUTOFILL_SAVE_CARD_ONLY_PROMPT_EXPLANATION_LOCAL" desc="Explanation text for the Autofill save card prompt to save a card locally. It is shown when a new card is used during checkout, and sync is not enabled. This prompt description is shown on iOS bottomsheet.">
+-        Pay faster when your card is saved. Card details are saved to Helium on your device.
++        Pay faster when your card is saved. Card details are saved to Photon on your device.
+       </message>
+     </then>
+     <else>
+@@ -257,10 +257,10 @@
+     </message>
+   </if>
+   <message name="IDS_AUTOFILL_SAVE_CARD_PROMPT_UPLOAD_EXPLANATION_TOOLTIP" desc="The tooltip hover text that explains why credit card upload to Google Payments is being offered.">
+-    Helium is offering to save your cards in your Google Account because you are signed in. You can change this behavior in settings.
++    Photon is offering to save your cards in your Google Account because you are signed in. You can change this behavior in settings.
+   </message>
+   <message name="IDS_AUTOFILL_SAVE_CARD_PROMPT_UPLOAD_EXPLANATION_AND_CARDHOLDER_NAME_TOOLTIP" desc="The tooltip hover text that explains why credit card upload to Google Account is being offered and where the suggested cardholder name came from.">
+-    Helium is offering to save your cards in your Google Account because you are signed in. You can change this behavior in settings. The cardholder name comes from your account.
++    Photon is offering to save your cards in your Google Account because you are signed in. You can change this behavior in settings. The cardholder name comes from your account.
+   </message>
+   <message name="IDS_AUTOFILL_SAVE_CARD_PROMPT_LOADING_THROBBER_ACCESSIBLE_NAME" desc="Accessible name announced by the screenreader for save card bubble in loading state showing a throbber.">
+     Saving card info
+@@ -276,24 +276,24 @@
+     </message>
+     <if expr="_google_chrome">
+       <message name="IDS_AUTOFILL_SAVE_AND_FILL_DIALOG_EXPLANATION_LOCAL" desc="Explanation text for the Autofill Save and Fill dialog for cards that will be saved locally.">
+-        Autofill this card for purchases made in Helium when it's saved on this device
++        Autofill this card for purchases made in Photon when it's saved on this device
+       </message>
+       <message name="IDS_AUTOFILL_SAVE_AND_FILL_DIALOG_EXPLANATION_UPLOAD" desc="Explanation text for the Autofill Save and Fill dialog for cards that will be saved to the GPay server.">
+-        Autofill this card for purchases made in Helium when it's saved to use with Google Pay
++        Autofill this card for purchases made in Photon when it's saved to use with Google Pay
+       </message>
+       <message name="IDS_AUTOFILL_SAVE_AND_FILL_TO_WALLET_DIALOG_EXPLANATION_UPLOAD" desc="Explanation text for the Autofill Save and Fill dialog for cards that will be saved to Google Wallet.">
+-        Autofill this card for purchases made in Helium when it's saved in Google Wallet
++        Autofill this card for purchases made in Photon when it's saved in Google Wallet
+       </message>
+     </if>
+     <if expr="not _google_chrome">
+       <message name="IDS_AUTOFILL_SAVE_AND_FILL_DIALOG_EXPLANATION_LOCAL" desc="Explanation text for the Autofill Save and Fill dialog for cards that will be saved locally.">
+-        Autofill this card for purchases made in Helium when it's saved on this device
++        Autofill this card for purchases made in Photon when it's saved on this device
+       </message>
+       <message name="IDS_AUTOFILL_SAVE_AND_FILL_DIALOG_EXPLANATION_UPLOAD" desc="Explanation text for the Autofill Save and Fill dialog for cards that will be saved to the GPay server.">
+-        Autofill this card for purchases made in Helium when it's saved to use with Google Pay
++        Autofill this card for purchases made in Photon when it's saved to use with Google Pay
+       </message>
+       <message name="IDS_AUTOFILL_SAVE_AND_FILL_TO_WALLET_DIALOG_EXPLANATION_UPLOAD" desc="Explanation text for the Autofill Save and Fill dialog for cards that will be saved to Google Wallet.">
+-        Autofill this card for purchases made in Helium when it's saved in Google Wallet
++        Autofill this card for purchases made in Photon when it's saved in Google Wallet
+       </message>
+     </if>
+     <message name="IDS_AUTOFILL_SAVE_AND_FILL_DIALOG_CARD_NUMBER_LABEL" desc="The label text for the card number textfield.">
+@@ -580,7 +580,7 @@
+   </if>
+   <if expr="is_win">
+     <message name="IDS_PAYMENTS_AUTOFILL_FILLING_MANDATORY_REAUTH" desc="Text that appears in the payments autofill mandatory re-authentication popup, asking the user to authenticate using biometric or device unlock before filling.">
+-      Helium is trying to verify it's you so it can fill in your payment info.
++      Photon is trying to verify it's you so it can fill in your payment info.
+     </message>
+   </if>
+   <if expr="is_ios">
+@@ -598,24 +598,24 @@
+     </message>
+     <if expr="_google_chrome">
+       <message name="IDS_PAYMENTS_AUTOFILL_FILLING_MANDATORY_REAUTH" desc="Text that appears in the payments autofill mandatory re-authentication popup as the sublabel, asking the user to authenticate using biometric or device unlock before filling.">
+-        Verify it's you so Helium can fill in your payment info.
++        Verify it's you so Photon can fill in your payment info.
+       </message>
+       <message name="IDS_PAYMENTS_AUTOFILL_SETTINGS_TOGGLE_MANDATORY_REAUTH" desc="Text that appears in the payments autofill mandatory re-authentication popup as the sublabel when users try to switch the mandatory reauth settings page toggle, asking the user to authenticate using biometric or device unlock before the toggle is switched.">
+-        Helium is trying to modify settings for filling payment methods.
++        Photon is trying to modify settings for filling payment methods.
+       </message>
+       <message name="IDS_PAYMENTS_AUTOFILL_SETTINGS_EDIT_MANDATORY_REAUTH" desc="Text that appears in the payments autofill mandatory re-authentication popup as the sublabel when users try to edit cards in the settings page, asking the user to authenticate using biometric or device unlock first.">
+-        Helium is trying to edit payment methods.
++        Photon is trying to edit payment methods.
+       </message>
+     </if>
+     <if expr="not _google_chrome">
+       <message name="IDS_PAYMENTS_AUTOFILL_FILLING_MANDATORY_REAUTH" desc="Text that appears in the payments autofill mandatory re-authentication popup as the sublabel, asking the user to authenticate using biometric or device unlock before filling.">
+-        Verify it's you so Helium can fill in your payment info.
++        Verify it's you so Photon can fill in your payment info.
+       </message>
+       <message name="IDS_PAYMENTS_AUTOFILL_SETTINGS_TOGGLE_MANDATORY_REAUTH" desc="Text that appears in the payments autofill mandatory re-authentication popup as the sublabel when users try to switch the mandatory reauth settings page toggle, asking the user to authenticate using biometric or device unlock before the toggle is switched.">
+-        Helium is trying to modify settings for filling payment methods.
++        Photon is trying to modify settings for filling payment methods.
+       </message>
+       <message name="IDS_PAYMENTS_AUTOFILL_SETTINGS_EDIT_MANDATORY_REAUTH" desc="Text that appears in the payments autofill mandatory re-authentication popup as the sublabel when users try to edit cards in the settings page, asking the user to authenticate using biometric or device unlock first.">
+-        Helium is trying to edit payment methods.
++        Photon is trying to edit payment methods.
+       </message>
+     </if>
+   </if>
+@@ -774,7 +774,7 @@
+     You're all set
+   </message>
+   <message name="IDS_AUTOFILL_MANDATORY_REAUTH_CONFIRMATION_EXPLANATION" desc="Explanation text for the mandatory reauth confirmation prompt that is displayed to the user after opting into mandatory reauth. Mandatory reauth requires the user to unlock their device or pass a biometric auth when autofilling payment method information.">
+-    Helium will now verify it's you before filling in payment methods. You can update this at any time in <ph name="IDS_AUTOFILL_MANDATORY_REAUTH_CONFIRMATION_SETTINGS_LINK">$1<ex>settings</ex></ph>.
++    Photon will now verify it's you before filling in payment methods. You can update this at any time in <ph name="IDS_AUTOFILL_MANDATORY_REAUTH_CONFIRMATION_SETTINGS_LINK">$1<ex>settings</ex></ph>.
+   </message>
+   <message name="IDS_AUTOFILL_MANDATORY_REAUTH_CONFIRMATION_SETTINGS_LINK" desc="A link to the settings page for the mandatory reauth confirmation prompt that is displayed to the user after opting into mandatory reauth. Mandatory reauth requires the user to unlock their device or pass a biometric auth when autofilling payment method information.">
+     settings
+@@ -1436,7 +1436,7 @@
+       Check out faster with autofill
+     </message>
+     <message name="IDS_AUTOFILL_CREATE_FIRST_CREDIT_CARD_SUMMARY" desc="Summary for a call to action settings preference to add a new autofill credit card when the user does not have any cards added." formatter_data="android_java">
+-      Save a payment method in your Google Account to autofill it for purchases made in Helium
++      Save a payment method in your Google Account to autofill it for purchases made in Photon
+     </message>
+     <message name="IDS_AUTOFILL_CREATE_FIRST_CREDIT_CARD_BUTTON_TEXT" desc="Button text for a call to action settings preference to add a new autofill credit card when the user does not have any cards added." formatter_data="android_java">
+       Add payment method
+@@ -1469,7 +1469,7 @@
+     View autofill settings
+   </message>
+   <message name="IDS_AUTOFILL_CHURNED_USERS_CONFIRMATION_BUBBLE_DESCRIPTION" desc="Description for the churned users confirmation bubble, which comes after the user has accepted the churned users bubble, letting the user know that autofill is turned on.">
+-    Now you can save payment methods to autofill at checkout in Helium. <ph name="LINK_TEXT">$1<ex>View autofill settings</ex></ph>
++    Now you can save payment methods to autofill at checkout in Photon. <ph name="LINK_TEXT">$1<ex>View autofill settings</ex></ph>
+   </message>
+   <if expr="not is_android">
+     <message name="IDS_AUTOFILL_CHURNED_USERS_CONFIRMATION_BUBBLE_LOADING_THROBBER_ACCESSIBLE_NAME" desc="Accessible name announced by the screenreader for virtual card prompt in loading state showing a throbber." is_accessibility_with_no_ui="true" formatter_data="android_java">
+@@ -1743,10 +1743,10 @@ To hide pay later options, go to <ph nam
+     This card is saved in Google Wallet so you can use it across Google services
+   </message>
+   <message name="IDS_AUTOFILL_SAVE_CARD_CONFIRMATION_FAILURE_DESCRIPTION_TEXT" desc="Description text for confirmation shown after save card upload to the server was unsuccessful.">
+-    This card couldn't be saved in your Google Account. It's saved to Helium on this device instead.
++    This card couldn't be saved in your Google Account. It's saved to Photon on this device instead.
+   </message>
+   <message name="IDS_AUTOFILL_SAVE_CARD_TO_WALLET_CONFIRMATION_FAILURE_DESCRIPTION_TEXT" desc="Description text for confirmation shown after Google Wallet save card upload to the server was unsuccessful.">
+-    This card couldn't be saved in Google Wallet. It's saved to Helium on this device instead.
++    This card couldn't be saved in Google Wallet. It's saved to Photon on this device instead.
+   </message>
+   <message name="IDS_AUTOFILL_SAVE_IBAN_CONFIRMATION_SUCCESS_DESCRIPTION_TEXT" desc="Description text for confirmation shown after upload save IBAN attempt was successful and it was uploaded to the server.">
+     This IBAN is saved in your Google Account so you can use it across Google services.
+@@ -1755,16 +1755,16 @@ To hide pay later options, go to <ph nam
+     This IBAN is saved in Google Wallet so you can use it across Google services.
+   </message>
+   <message name="IDS_AUTOFILL_SAVE_IBAN_CONFIRMATION_FAILURE_DESCRIPTION_TEXT" desc="Description text for confirmation shown after upload save IBAN attempt was failed and and it was not uploaded to the server.">
+-    This IBAN couldn't be saved in your Google Account. It's saved to Helium on this device instead. Helium will ask you again the next time you use this IBAN.
++    This IBAN couldn't be saved in your Google Account. It's saved to Photon on this device instead. Photon will ask you again the next time you use this IBAN.
+   </message>
+   <message name="IDS_AUTOFILL_SAVE_IBAN_TO_WALLET_CONFIRMATION_FAILURE_DESCRIPTION_TEXT" desc="Description text for confirmation shown after upload save IBAN to Google Wallet attempt was failed and and it was not uploaded to the server.">
+-     This IBAN couldn't be saved in Google Wallet. It's saved to Helium on this device instead. Helium will ask you again the next time you use this IBAN.
++     This IBAN couldn't be saved in Google Wallet. It's saved to Photon on this device instead. Photon will ask you again the next time you use this IBAN.
+   </message>
+   <message name="IDS_AUTOFILL_SAVE_IBAN_CONFIRMATION_FAILURE_HIT_MAX_STRIKE_DESCRIPTION_TEXT" desc="Description text for confirmation shown after upload save IBAN attempt was failed and and it was not uploaded to the server. Other than that, the number of offer-to-upload has hit the max strike.">
+-    This IBAN couldn't be saved in your Google Account. It's saved to Helium on this device instead.
++    This IBAN couldn't be saved in your Google Account. It's saved to Photon on this device instead.
+   </message>
+   <message name="IDS_AUTOFILL_SAVE_IBAN_TO_WALLET_CONFIRMATION_FAILURE_HIT_MAX_STRIKE_DESCRIPTION_TEXT" desc="Description text for confirmation shown after upload save IBAN to Google Wallet attempt was failed and and it was not uploaded to the server. Other than that, the number of offer-to-upload has hit the max strike.">
+-    This IBAN couldn't be saved in Google Wallet. It's saved to Helium on this device instead.
++    This IBAN couldn't be saved in Google Wallet. It's saved to Photon on this device instead.
+   </message>
+   <message name="IDS_AUTOFILL_VIRTUAL_CARD_ENROLL_CONFIRMATION_SUCCESS_DESCRIPTION_TEXT" desc="Description text for confirmation shown after virtual card enrollment is successful.">
+     You can now use a virtual card to check out more securely with autofill.
+--- a/components/autofill_strings.grdp
++++ b/components/autofill_strings.grdp
+@@ -16,29 +16,29 @@
+   </message>
+   <if expr="is_ios">
+     <message name="IDS_AUTOFILL_AI_FILLING_REAUTH" desc="Message shown to the user when they need to authenticate to fill an Autofill AI form.">
+-      Helium is trying to fill your sensitive info on <ph name="APP_NAME">$1<ex>9oo91e.qjz9zk</ex></ph>.
++      Photon is trying to fill your sensitive info on <ph name="APP_NAME">$1<ex>9oo91e.qjz9zk</ex></ph>.
+     </message>
+   </if>
+   <if expr="is_chromeos">
+     <message name="IDS_AUTOFILL_AI_FILLING_REAUTH" desc="Message shown to the user when they need to authenticate to fill an Autofill AI form.">
+-      Helium browser is trying to fill your sensitive info on <ph name="APP_NAME">$1<ex>9oo91e.qjz9zk</ex></ph>.
++      Photon browser is trying to fill your sensitive info on <ph name="APP_NAME">$1<ex>9oo91e.qjz9zk</ex></ph>.
+     </message>
+     <message name="IDS_AUTOFILL_AI_VIEWING_REAUTH" desc="Message shown to the user when they need to authenticate to view Autofill AI data.">
+-      Helium browser is trying to show sensitive info
++      Photon browser is trying to show sensitive info
+     </message>
+     <message name="IDS_AUTOFILL_AI_UPDATE_REAUTH_REQUIREMENT" desc="Message shown to the user when they need to authenticate to update whether reauth is required when filling or viewing Autofill AI sensitive data.">
+-      Helium browser wants to verify it's you before you change settings
++      Photon browser wants to verify it's you before you change settings
+     </message>
+   </if>
+   <if expr="is_win">
+     <message name="IDS_AUTOFILL_AI_FILLING_REAUTH" desc="Message shown to the user when they need to authenticate to fill an Autofill AI form.">
+-      Helium is trying to fill your sensitive info on <ph name="APP_NAME">$1<ex>9oo91e.qjz9zk</ex></ph>.
++      Photon is trying to fill your sensitive info on <ph name="APP_NAME">$1<ex>9oo91e.qjz9zk</ex></ph>.
+     </message>
+     <message name="IDS_AUTOFILL_AI_VIEWING_REAUTH" desc="Message shown to the user when they need to authenticate to view Autofill AI data.">
+-      Helium is trying to show sensitive info
++      Photon is trying to show sensitive info
+     </message>
+     <message name="IDS_AUTOFILL_AI_UPDATE_REAUTH_REQUIREMENT" desc="Message shown to the user when they need to authenticate to update whether reauth is required when filling or viewing Autofill AI sensitive data.">
+-      Helium wants to verify it's you before you change settings
++      Photon wants to verify it's you before you change settings
+     </message>
+   </if>
+   <if expr="is_macosx">
+@@ -54,40 +54,40 @@
+   </if>
+   <if expr="_google_chrome">
+     <message name="IDS_AUTOFILL_DELETE_AUTOCOMPLETE_SUGGESTION_CONFIRMATION_BODY" desc="Text in a dialog to confirm that the user wants to delete an autocomplete form history suggestion.">
+-      Remove form suggestion from Helium?
++      Remove form suggestion from Photon?
+     </message>
+     <message name="IDS_AUTOFILL_DELETE_CREDIT_CARD_SUGGESTION_CONFIRMATION_BODY" desc="Text in a dialog to confirm that the user wants to delete a credit card from Autofill.">
+-      Remove credit card from Helium?
++      Remove credit card from Photon?
+     </message>
+     <message name="IDS_AUTOFILL_DELETE_PROFILE_SUGGESTION_CONFIRMATION_BODY" desc="Text in a dialog to confirm that the user wants to delete an address from Autofill.">
+-      Remove address from Helium?
++      Remove address from Photon?
+     </message>
+   </if>
+   <if expr="not _google_chrome">
+     <message name="IDS_AUTOFILL_DELETE_AUTOCOMPLETE_SUGGESTION_CONFIRMATION_BODY" desc="Text in a dialog to confirm that the user wants to delete an autocomplete form history suggestion.">
+-      Remove form suggestion from Helium?
++      Remove form suggestion from Photon?
+     </message>
+     <message name="IDS_AUTOFILL_DELETE_CREDIT_CARD_SUGGESTION_CONFIRMATION_BODY" desc="Text in a dialog to confirm that the user wants to delete a credit card from Autofill.">
+-      Remove credit card from Helium?
++      Remove credit card from Photon?
+     </message>
+     <message name="IDS_AUTOFILL_DELETE_PROFILE_SUGGESTION_CONFIRMATION_BODY" desc="Text in a dialog to confirm that the user wants to delete an address from Autofill.">
+-      Remove address from Helium?
++      Remove address from Photon?
+     </message>
+   </if>
+   <message name="IDS_AUTOFILL_REMOVE_HOME_PROFILE_SUGGESTION_CONFIRMATION_TITLE" desc="Title in a dialog to confirm that the user wants to delete their Home address from Autofill." formatter_data="android_java">
+-    Remove home address from Helium autofill?
++    Remove home address from Photon autofill?
+   </message>
+   <message name="IDS_AUTOFILL_REMOVE_HOME_PROFILE_SUGGESTION_CONFIRMATION_BODY" desc="Text in a dialog to confirm that the user wants to delete their Home address from Autofill." formatter_data="android_java">
+     Your home address can help you get things done across Google services, like more relevant Search results and directions in Google Maps. You can edit or delete your address <ph name="BEGIN_LINK">&lt;link&gt;</ph>in your Google Account <ph name="ACCOUNT">$1<ex>alexpark@9ma1l.qjz9zk</ex></ph><ph name="END_LINK">&lt;/link&gt;</ph>.
+   </message>
+   <message name="IDS_AUTOFILL_REMOVE_WORK_PROFILE_SUGGESTION_CONFIRMATION_TITLE" desc="Title in a dialog to confirm that the user wants to delete their Work address from Autofill." formatter_data="android_java">
+-    Remove work address from Helium autofill?
++    Remove work address from Photon autofill?
+   </message>
+   <message name="IDS_AUTOFILL_REMOVE_WORK_PROFILE_SUGGESTION_CONFIRMATION_BODY" desc="Title in a dialog to confirm that the user wants to delete their Work address from Autofill." formatter_data="android_java">
+     Your work address can help you get things done across Google services, like more relevant Search results and directions in Google Maps. You can edit or delete your address <ph name="BEGIN_LINK">&lt;link&gt;</ph>in your Google Account <ph name="ACCOUNT">$1<ex>alexpark@9ma1l.qjz9zk</ex></ph><ph name="END_LINK">&lt;/link&gt;</ph>.
+   </message>
+   <message name="IDS_AUTOFILL_REMOVE_ACCOUNT_NAME_AND_EMAIL_PROFILE_SUGGESTION_CONFIRMATION_TITLE" desc="Title in a dialog to confirm that the user wants to delete their account name and email from Autofill." formatter_data="android_java">
+-    Remove this info from Helium autofill?
++    Remove this info from Photon autofill?
+   </message>
+   <message name="IDS_AUTOFILL_REMOVE_ACCOUNT_NAME_AND_EMAIL_PROFILE_SUGGESTION_CONFIRMATION_BODY" desc="Title in a dialog to confirm that the user wants to delete their account name and email address from Autofill." formatter_data="android_java">
+     You can edit your name in your <ph name="BEGIN_LINK">&lt;link&gt;</ph>Google Account<ph name="END_LINK">&lt;/link&gt;</ph> <ph name="ACCOUNT">$1<ex>example@9ma1l.qjz9zk</ex></ph>
+@@ -96,7 +96,7 @@
+     Remove verified email?
+   </message>
+   <message name="IDS_AUTOFILL_REMOVE_VERIFIED_EMAIL_BODY" desc="Text in a dialog to confirm that the user wants to delete a verified email address." formatter_data="android_java">
+-    Helium will stop automatically confirming this email on supported sites.
++    Photon will stop automatically confirming this email on supported sites.
+   </message>
+ 
+   <message name="IDS_AUTOFILL_REMOVE_SUGGESTION_BUTTON" desc="Text in a remove button for Autofill suggestion." formatter_data="android_java">
+@@ -380,7 +380,7 @@
+     You can use saved addresses across Google products. This won’t change your existing work address. It’ll be saved in your Google Account, <ph name="ACCOUNT">$1<ex>alexpark@9ma1l.qjz9zk</ex></ph>.
+   </message>
+   <message name="IDS_AUTOFILL_ADDRESS_HOME_AND_WORK_RECORD_TYPE_NOTICE" desc="The footer message used to notify user that their Home/Work address is used to fill forms faster in Chrome." formatter_data="android_java">
+-    Info from your Google Account <ph name="ACCOUNT">$1<ex>elisa.beckett@9ma1l.qjz9zk</ex></ph> can help you fill forms faster in Helium
++    Info from your Google Account <ph name="ACCOUNT">$1<ex>elisa.beckett@9ma1l.qjz9zk</ex></ph> can help you fill forms faster in Photon
+   </message>
+   <message name="IDS_AUTOFILL_EDIT_ADDRESS_REQUIRED_FIELD_FORM_ERROR" desc="The form error message shown to the user in case of a single required field missing.">
+     A required field is empty. Fill it before saving.
+@@ -432,7 +432,7 @@
+     Autofill verification codes from Gmail
+   </message>
+   <message name="IDS_AUTOFILL_GMAIL_OTP_FILLING_TOGGLE_DESCRIPTION" desc="Description for the toggle that enables autofilling verification codes from Gmail.">
+-    Autofill verification codes sites use to improve your security. Helium can get these codes from your Gmail. <ph name="BEGIN_LINK">&lt;a href="$1" tabindex="0" aria-description="$2" target="_blank"&gt;</ph>Learn more about this feature<ph name="LINK_END">&lt;/a&gt;</ph>
++    Autofill verification codes sites use to improve your security. Photon can get these codes from your Gmail. <ph name="BEGIN_LINK">&lt;a href="$1" tabindex="0" aria-description="$2" target="_blank"&gt;</ph>Learn more about this feature<ph name="LINK_END">&lt;/a&gt;</ph>
+   </message>
+   <message name="IDS_AUTOFILL_DISABLE_SETTINGS_EXPLANATION_TITLE" desc="Title of the card explaining why the settings page was disabled. Sentence-Cased." formatter_data="android_java">
+     Google isn’t your autofill provider
+@@ -472,10 +472,10 @@
+       Use info saved in your Google Account to autofill passwords, passkeys, addresses, payment methods, and other info
+     </message>
+     <message name="IDS_AUTOFILL_THIRD_PARTY_FILLING_OPT_IN_DESCRIPTION" desc="Description shown on the option enabling the use of third-party autofill in Chrome." formatter_data="android_java">
+-      To use another autofill service in Helium, choose your autofill provider in Android settings
++      To use another autofill service in Photon, choose your autofill provider in Android settings
+     </message>
+     <message name="IDS_AUTOFILL_THIRD_PARTY_FILLING_OPT_IN_DESCRIPTION_V2" desc="The description text below the Autofill using another service radio button. It provides instructions on how to enable third-party services, noting the dependency on system-level Android settings." formatter_data="android_java">
+-      To use another autofill service in Helium, turn it on in Android settings and here
++      To use another autofill service in Photon, turn it on in Android settings and here
+     </message>
+     <message name="IDS_PAYMENT_METHODS_SETTINGS_LOYALTY_CARDS_TITLE" desc="Title for the payment methods settings page row that links the user to the Google Wallet app." formatter_data="android_java">
+       Loyalty cards
+@@ -520,7 +520,7 @@
+ 
+   <!-- Wallet Reminder Notice strings -->
+   <message name="IDS_AUTOFILL_WALLET_REMINDER_NOTICE_TITLE" desc="Title for the Wallet Reminder Notice prompt explaining that Google Wallet settings apply to info saved from Chrome.">
+-    Your Google Wallet settings apply to info saved from Helium
++    Your Google Wallet settings apply to info saved from Photon
+   </message>
+   <message name="IDS_AUTOFILL_WALLET_REMINDER_NOTICE_CONFIRM_BUTTON_LABEL" desc="Button label to acknowledge and dismiss the Wallet Reminder Notice prompt.">
+     Got it
+@@ -571,7 +571,7 @@
+     You can use saved addresses across Google products. This address is saved in your Google Account, <ph name="ACCOUNT">$1<ex>alexpark@9ma1l.qjz9zk</ex></ph>.
+   </message>
+   <message name="IDS_AUTOFILL_SYNCABLE_PROFILE_MIGRATION_PROMPT_NOTICE" desc="The syncable profile prompt body text.">
+-    This address is currently saved to Helium. To use it across Google products, save it in your Google Account, <ph name="ACCOUNT">$1<ex>alexpark@9ma1l.qjz9zk</ex></ph>.
++    This address is currently saved to Photon. To use it across Google products, save it in your Google Account, <ph name="ACCOUNT">$1<ex>alexpark@9ma1l.qjz9zk</ex></ph>.
+   </message>
+   <message name="IDS_AUTOFILL_LOCAL_PROFILE_MIGRATION_PROMPT_NOTICE" desc="The local profile prompt body text.">
+     This address is currently saved to this device. To use it across Google products, save it in your Google Account, <ph name="ACCOUNT">$1<ex>alexpark@9ma1l.qjz9zk</ex></ph>.
+@@ -648,7 +648,7 @@
+       You can use saved addresses across Google products. This address will be saved in your Google Account, <ph name="USER_EMAIL">$1<ex>janedoe@9oo91e.qjz9zk</ex></ph>.
+     </message>
+     <message name="IDS_IOS_AUTOFILL_HOME_WORK_PROFILE_FOOTER" desc="Footer text shown in the settings when home and work profile details are shown">
+-      Info from your Google Account <ph name="USER_EMAIL">$1<ex>janedoe@9oo91e.qjz9zk</ex></ph> can help you fill forms faster in Helium
++      Info from your Google Account <ph name="USER_EMAIL">$1<ex>janedoe@9oo91e.qjz9zk</ex></ph> can help you fill forms faster in Photon
+     </message>
+   </if>
+   <!-- Autofill Settings Pages -->
+@@ -842,7 +842,7 @@
+     Another verification is in progress. Try again later.
+   </message>
+   <message name="IDS_AUTOFILL_AT_MEMORY_SEARCH_AFFORDANCE_TITLE" desc="Title of the AtMemory search trigger affordance." translateable="false">
+-    Try searching in Helium Memory
++    Try searching in Photon Memory
+   </message>
+   <message name="IDS_AUTOFILL_AT_MEMORY_SEARCH_AFFORDANCE_SUBTITLE" desc="Descriptor under the query for enhanced autofill. 'Gemini' is a brand name and should match standard branding guidelines across languages.">
+     Find and fill with Gemini
+@@ -863,7 +863,7 @@
+     Couldn't find this info
+   </message>
+   <message name="IDS_AUTOFILL_AT_MEMORY_UNSUPPORTED_QUERY_DESCRIPTION" desc="A linkout that suggests using Gemini for a broader search or query, as the current recall feature could not handle the request. This text is a verb phrase short for the longer phrase: 'Try submitting your query to the Gemini in Chrome side panel'.">
+-    Ask Gemini in Helium instead
++    Ask Gemini in Photon instead
+   </message>
+   <message name="IDS_AUTOFILL_AT_MEMORY_PREVIOUSLY_FILLED" desc="Title shown in the @memory suggestions above suggestions that was previously filled on this page." translateable="false">
+     Previously filled
+@@ -1503,7 +1503,7 @@
+       Info saved to device only
+     </message>
+     <message name="IDS_AUTOFILL_AI_LOCAL_SAVE_NOTIFICATION_DESCRIPTION" desc="The body text of an informational dialog. The user sees this after a failed attempt to save to Google Wallet. 'Couldn't save...' acknowledges the server failure. 'Saved to Chrome...' confirms the safety of the data (local fallback). 'Chrome will offer...' sets expectations that the system will retry the cloud save the next time this data is accessed.">
+-      Couldn't save this info to your Google Wallet. It's saved to Helium on this device instead. Helium will offer to save it to Wallet next time you use it.
++      Couldn't save this info to your Google Wallet. It's saved to Photon on this device instead. Photon will offer to save it to Wallet next time you use it.
+     </message>
+     <message name="IDS_AUTOFILL_AI_LOCAL_SAVE_NOTIFICATION_DISMISS_BUTTON_LABEL" desc="A button on an informational dialog. Clicking this button dismisses the dialog. The user accepts that the data is saved locally for now.">
+       Got it
+@@ -1714,7 +1714,7 @@
+       Info saved to device only
+     </message>
+     <message name="IDS_AUTOFILL_AI_SAVE_OR_UPDATE_ENTITY_FAILED_WALLET_SAVE_DIALOG_DESCRIPTION" desc="The description text of the dialog shown when an entity (like passport, driver's license, etc) fails to be saved to Google Wallet." formatter_data="android_java">
+-      Helium will offer to save it to <ph name="IDS_AUTOFILL_GOOGLE_WALLET_TITLE">$1<ex>Google Wallet</ex></ph> next time you use it
++      Photon will offer to save it to <ph name="IDS_AUTOFILL_GOOGLE_WALLET_TITLE">$1<ex>Google Wallet</ex></ph> next time you use it
+     </message>
+     <message name="IDS_AUTOFILL_AI_SNACK_BAR_CONFIRMATION_BUTTON_LABEL" desc="The confirmation button text of the dialog shown when an entity (like passport, driver's license, etc) fails to be saved to Google Wallet." formatter_data="android_java">
+       Got it
+@@ -1824,24 +1824,24 @@
+   </message>
+   <if expr="_google_chrome">
+     <message name="IDS_SETTINGS_AUTOFILL_AI_TOGGLE_SUB_LABEL" desc="The description of the setting. By 'understand forms better', we mean that when a user submits a form on a website, and if they're using smarter form understanding, this feature can offer to save the user's submitted info. When Chrome saves that info, we save the submitted values and consider the page context." formatter_data="android_java">
+-      Helium understands forms better and can autofill them faster for you
++      Photon understands forms better and can autofill them faster for you
+     </message>
+     <message name="IDS_SETTINGS_AUTOFILL_AI_TOGGLE_SUB_LABEL_V2" desc="The description of the setting. This explains to users that Google can process page data in Google servers as a way to provide a better experience. Importantly, it mentions that this is done safely and cannot be viewed by anyone." formatter_data="android_java">
+-      Help Helium better understand and fill complex forms by securely processing data on Google's servers. Your info remains private and isn't reviewed by anyone.
++      Help Photon better understand and fill complex forms by securely processing data on Google's servers. Your info remains private and isn't reviewed by anyone.
+     </message>
+     <message name="IDS_SETTINGS_AUTOFILL_AI_WHEN_ON_CAN_FILL_DIFFICULT_FIELDS" desc="Bullet point that appears beneath appears beneath the 'When on' title when seeing the Smarter Form Understanding description page. This string explains one of the advantages users will get from enabling the feature and serves as a way to incentivize the user to do so." formatter_data="android_java">
+-      Helium can autofill difficult fields that standard autofill might miss
++      Photon can autofill difficult fields that standard autofill might miss
+     </message>
+   </if>
+   <if expr="not _google_chrome">
+     <message name="IDS_SETTINGS_AUTOFILL_AI_TOGGLE_SUB_LABEL" desc="The description of the setting. By 'understand forms better', we mean that when a user submits a form on a website, and if they're using smarter form understanding, this feature can offer to save the user's submitted info. When Chromium saves that info, we save the submitted values and consider the page context." formatter_data="android_java">
+-      Helium understands forms better and can autofill them faster for you
++      Photon understands forms better and can autofill them faster for you
+     </message>
+     <message name="IDS_SETTINGS_AUTOFILL_AI_TOGGLE_SUB_LABEL_V2" desc="The description of the setting. This explains to users that Google can process page data in Google servers as a way to provide a better experience. Importantly, it mentions that this is done safely and cannot be viewed by anyone." formatter_data="android_java">
+-      Help Helium better understand and fill complex forms by securely processing data on Google's servers. Your info remains private and isn't reviewed by anyone.
++      Help Photon better understand and fill complex forms by securely processing data on Google's servers. Your info remains private and isn't reviewed by anyone.
+     </message>
+     <message name="IDS_SETTINGS_AUTOFILL_AI_WHEN_ON_CAN_FILL_DIFFICULT_FIELDS" desc="Bullet point that appears beneath the 'When on' title when seeing the Smarter Form Understanding description page. This string explains one of the advantages users will get from enabling the feature and serves as a way to incentivize the user to do so." formatter_data="android_java">
+-      Helium can autofill difficult fields that standard autofill might miss
++      Photon can autofill difficult fields that standard autofill might miss
+     </message>
+   </if>
+ 
+@@ -1861,7 +1861,7 @@
+     When you make a request for enhanced autofill, your usage data, requests, and page details are shared with Google to improve the autofill experience
+   </message>
+   <message name="IDS_SETTINGS_SUGGESTIONS_FROM_GEMINI_WHEN_USED_1" desc="Bullet point 1 under When used in the quality logging section.">
+-    Helium logs how you use the feature, such as your requests and behavior when you accept or ignore suggestions
++    Photon logs how you use the feature, such as your requests and behavior when you accept or ignore suggestions
+   </message>
+   <message name="IDS_SETTINGS_SUGGESTIONS_FROM_GEMINI_WHEN_USED_2" desc="Bullet point 2 under When used in the quality logging section.">
+     System data, including form fields and feature performance, is analyzed to improve future suggestions
