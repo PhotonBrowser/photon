@@ -1,0 +1,16 @@
+From: The Photon Authors <photon@example.com>
+Subject: [PATCH] Photon: use Browser profile accessor for sidebar location bar
+
+Use the public Browser profile accessor when reading the Photon preference.
+
+Index: src/chrome/browser/ui/views/frame/browser_view.cc
+===================================================================
+--- src.orig/chrome/browser/ui/views/frame/browser_view.cc
++++ src/chrome/browser/ui/views/frame/browser_view.cc
+@@ -1804,7 +1804,7 @@ void BrowserView::UpdateVerticalLocation
+   const bool show_in_sidebar =
+       controller->IsVerticalLayout() &&
+-      browser_->profile()->GetPrefs()->GetBoolean(
++      browser_->GetProfile()->GetPrefs()->GetBoolean(
+           prefs::kHeliumVerticalLocationBar);
+   views::View* location_bar_view = toolbar_->location_bar_view();

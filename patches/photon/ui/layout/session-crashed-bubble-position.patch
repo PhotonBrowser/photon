@@ -1,0 +1,30 @@
+From: The Photon Authors <photon@example.com>
+Subject: [PATCH] Photon: keep session crash bubble inside vertical layout
+
+Open the session restore bubble toward the window content when the app menu
+is anchored in the left vertical tab sidebar.
+
+Index: src/chrome/browser/ui/views/session_crashed_bubble_view.cc
+===================================================================
+--- src.orig/chrome/browser/ui/views/session_crashed_bubble_view.cc
++++ src/chrome/browser/ui/views/session_crashed_bubble_view.cc
+@@ -29,3 +29,4 @@
+ #include "chrome/browser/ui/browser_window/public/global_browser_collection.h"
+ #include "chrome/browser/ui/bubble_anchor_util.h"
++#include "chrome/browser/ui/helium/helium_layout_state_controller.h"
+ #include "chrome/browser/ui/tabs/tab_strip_model.h"
+@@ -317,3 +317,13 @@ views::BubbleDialogDelegate* SessionCrash
+ 
+   auto bubble = std::make_unique<views::BubbleDialogModelHost>(
+-      dialog_builder.Build(), anchor, views::BubbleBorder::TOP_RIGHT);
++      dialog_builder.Build(), anchor,
++      [&] {
++        const auto* layout_controller =
++            HeliumLayoutStateController::From(browser);
++        if (layout_controller && layout_controller->IsVerticalLayout()) {
++          return browser_view->IsVerticalTabStripRightAligned()
++                     ? views::BubbleBorder::TOP_RIGHT
++                     : views::BubbleBorder::TOP_LEFT;
++        }
++        return views::BubbleBorder::TOP_RIGHT;
++      }());

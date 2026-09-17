@@ -1,0 +1,16 @@
+From: The Photon Authors <photon@example.com>
+Subject: [PATCH] Photon: size the vertical sidebar location bar
+
+Give the vertical sidebar location bar an explicit preferred height.
+
+Index: src/chrome/browser/ui/views/frame/vertical_tab_strip_region_view.cc
+===================================================================
+--- src.orig/chrome/browser/ui/views/frame/vertical_tab_strip_region_view.cc
++++ src/chrome/browser/ui/views/frame/vertical_tab_strip_region_view.cc
+@@ -306,4 +306,5 @@ void VerticalTabStripRegionView::SetLocat
+                                views::MaximumFlexSizeRule::kPreferred));
+   location_bar_view_->SetProperty(
+-      views::kMarginsKey, gfx::Insets::TLBR(12, 6, 12, 6));
++      views::kMarginsKey, gfx::Insets::TLBR(8, 6, 8, 6));
++  location_bar_view_->SetPreferredSize(gfx::Size(0, 48));
+   ReorderChildView(location_bar_view_, 0);

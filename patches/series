@@ -352,6 +352,10 @@ helium/ui/layout/zen-mode-wiring.patch
 helium/ui/layout/zen-caption-buttons.patch
 helium/ui/layout/zen-mode.patch
 photon/ui/layout/default-vertical.patch
+photon/ui/layout/vertical-location-bar.patch
+photon/ui/layout/vertical-location-bar-profile.patch
+photon/ui/layout/vertical-location-bar-size.patch
+photon/ui/layout/session-crashed-bubble-position.patch
 
 helium/ui/generate-standard-qr-codes.patch
 helium/ui/pdf-viewer.patch
