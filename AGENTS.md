@@ -10,3 +10,5 @@
 8. Keep Photon Engine regularly mergeable with Ladybird upstream.
 9. Do not add another rendering or UI framework without an explicit architecture decision.
 10. Keep ordinary UI work independent of engine internals.
+11. Run linter and formatter commands: ./photon check (--verbose if needed) ./photon format#
+12. Do not use computer use, unless you are ONLY screenshotting.

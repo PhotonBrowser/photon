@@ -4,6 +4,18 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 find_package(Qt6 6.5 REQUIRED COMPONENTS Quick Qml QuickControls2)
+# The QML source lives outside this CMake directory, so generate the language
+# server config beside Main.qml where editors will discover it.
+file(GENERATE
+    OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/../../ui/.qmlls.ini"
+    CONTENT "[General]\nbuildDir=\"${CMAKE_BINARY_DIR}\"\nno-cmake-calls=true\n"
+)
+if (NOT PHOTON_ENGINE_BUILD_DIR)
+    message(FATAL_ERROR "PHOTON_ENGINE_BUILD_DIR must point to photon/build/engine-debug or engine-release")
+endif()
+find_library(PHOTON_EMBEDDER_LIBRARY NAMES lagom-photonembedder PATHS "${PHOTON_ENGINE_BUILD_DIR}/lib64" "${PHOTON_ENGINE_BUILD_DIR}/lib" NO_DEFAULT_PATH REQUIRED)
+add_library(Photon::Embedder SHARED IMPORTED GLOBAL)
+set_target_properties(Photon::Embedder PROPERTIES IMPORTED_LOCATION "${PHOTON_EMBEDDER_LIBRARY}")
 qt_policy(SET QTP0001 NEW)
 if (Qt6_VERSION VERSION_GREATER_EQUAL 6.8)
     qt_policy(SET QTP0004 NEW)
@@ -13,3 +25,8 @@ set_source_files_properties(../../ui/theme/Theme.qml PROPERTIES QT_RESOURCE_ALIA
 qt_add_executable(photon main.cpp PhotonWebView.cpp PhotonWebView.h)
 qt_add_qml_module(photon URI Photon VERSION 1.0 QML_FILES ../../ui/Main.qml ../../ui/theme/Theme.qml)
 target_link_libraries(photon PRIVATE Qt6::Quick Qt6::Qml Qt6::QuickControls2)
+target_include_directories(photon PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../Engine/Libraries/LibPhotonEmbedder/include")
+target_include_directories(photon PRIVATE "${PHOTON_ENGINE_BUILD_DIR}/Libraries")
+target_link_libraries(photon PRIVATE Photon::Embedder)
+target_compile_definitions(photon PRIVATE PHOTON_HELPER_DIRECTORY="${PHOTON_HELPER_DIRECTORY}")
+set_target_properties(photon PROPERTIES BUILD_RPATH "${PHOTON_ENGINE_BUILD_DIR}/lib64;${PHOTON_ENGINE_BUILD_DIR}/vcpkg_installed/x64-linux-dynamic/lib;${PHOTON_ENGINE_BUILD_DIR}/vcpkg_installed/x64-linux-dynamic/debug/lib")
