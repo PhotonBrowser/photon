@@ -10,6 +10,8 @@ pub(crate) fn format(root: &Path, verbose: bool) -> Result<(), String> {
             &[
                 "-i",
                 "native/qt/main.cpp",
+                "native/qt/PhotonAppearance.h",
+                "native/qt/PhotonAppearance.cpp",
                 "native/qt/PhotonWebView.h",
                 "native/qt/PhotonWebView.cpp",
             ],
