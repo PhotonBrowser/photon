@@ -2,40 +2,69 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Photon
+import Photon as PhotonUi
 
 ApplicationWindow {
+    id: window
     visible: true
-    width: 1100
-    height: 720
-    minimumWidth: 640
-    minimumHeight: 420
-    title: "Photon"
-    color: Theme.background
+    width: Theme.defaultWindowWidth
+    height: Theme.defaultWindowHeight
+    minimumWidth: Theme.minimumWindowWidth
+    minimumHeight: Theme.minimumWindowHeight
+    title: browser.title.length > 0 ? browser.title + " — Photon" : "Photon"
+    color: Theme.clearColor
+    topPadding: Theme.zero
+    readonly property bool isMacOS: Qt.platform.os === "osx"
+    Shortcut {
+        sequence: window.isMacOS ? "Meta+L" : "Ctrl+L"
+        context: Qt.ApplicationShortcut
+        onActivated: titleBar.focusOmnibox()
+    }
+    flags: Qt.Window | (isMacOS ? Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint : Qt.FramelessWindowHint)
 
-    Rectangle {
-        anchors.fill: parent
+    background: Rectangle {
         color: Theme.background
+        radius: Theme.radius
+        antialiasing: true
+    }
 
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: Theme.spacing
-            spacing: Theme.spacing
+    ColumnLayout {
+        id: chromeLayout
+        anchors.fill: parent
+        spacing: Theme.zero
+        readonly property real titlebarSafeHeight: window.isMacOS ? SafeArea.margins.top : Theme.zero
+        readonly property real titlebarSafeLeft: window.isMacOS ? SafeArea.margins.left : Theme.zero
+        readonly property real titlebarSafeRight: window.isMacOS ? SafeArea.margins.right : Theme.zero
 
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.minimumHeight: 0
+        PhotonUi.TitleBar {
+            id: titleBar
+            window: window
+            toggleMaximized: function () {
+                window.toggleMaximized();
+            }
+            macOS: window.isMacOS
+            safeHeight: chromeLayout.titlebarSafeHeight
+            safeLeft: chromeLayout.titlebarSafeLeft
+            safeRight: chromeLayout.titlebarSafeRight
+            browser: browser
+        }
 
-                radius: Theme.radius
-                color: Theme.surface
+        PhotonPage {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
 
-                clip: true
-
-                PhotonWebView {
-                    anchors.fill: parent
-                    cornerRadius: Theme.radius
-                }
+            contentItem: PhotonUi.WebSurface {
+                browser: browser
             }
         }
+    }
+
+    // Keep Rust browser state alive until PhotonWebView has shut down its engine callbacks.
+    BrowserController {
+        id: browser
+    }
+
+    function toggleMaximized() {
+        visibility = visibility === Window.Maximized ? Window.Windowed : Window.Maximized;
     }
 }
