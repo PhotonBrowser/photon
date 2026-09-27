@@ -11,6 +11,18 @@ After cloning with submodules, use the repository CLI for local setup and builds
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`Documentation/Building.md`](Documentation/Building.md) for current ownership and build workflows.
 
+The Qt 6 development tools must include `qmllint` and `qmlformat` alongside Qt Quick, QML, and Quick Controls. `./photon check` runs the QML linter, treats warnings and errors as failures, and prints a copyable AI-agent prompt with the diagnostics. Use `./photon fix-prompt` to print a prompt on demand. `./photon format` formats QML files using the repository's `.qmlformat.ini` settings.
+
+## QML editor diagnostics
+
+Build the Qt shell once with `./photon build` so CMake generates the `Photon` QML module metadata, including the `PhotonWebView` type. Qt Creator and `qmlls` need the app build directory for those generated types. For a standalone language server, launch it from the repository root with:
+
+```bash
+qmlls --build-dir build/app-debug
+```
+
+If you build a release configuration, use `build/app-release` instead. Re-run `./photon build` after changing QML module registrations or C++ `QML_ELEMENT` types.
+
 Photon is split into two repositories:
 
 - [`PhotonBrowser/photon`](https://github.com/PhotonBrowser/photon) — the browser application, UI, Rust application logic, build tooling, and documentation.
