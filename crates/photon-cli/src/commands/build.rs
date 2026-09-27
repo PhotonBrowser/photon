@@ -2,7 +2,7 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::Instant;
 
-use crate::support::{command, invoke, path, stage, with_progress};
+use crate::support::{invoke, path, stage, with_progress};
 
 pub(crate) fn build(root: &Path, release: bool, verbose: bool) -> Result<(), String> {
     stage("Run checks before building");
@@ -197,12 +197,24 @@ fn invoke_engine_configure(
     ))
 }
 
-pub(crate) fn run_app(root: &Path, release: bool) -> Result<(), String> {
+pub(crate) fn run_app(root: &Path, release: bool, verbose: bool) -> Result<(), String> {
     let exe = root
         .join("build")
         .join(if release { "app-release" } else { "app-debug" })
         .join("photon");
-    command(&path(&exe), &[], root, true)
+    let mut process = Command::new(&exe);
+    process.current_dir(root);
+    if verbose {
+        process.env("PHOTON_VERBOSE", "1");
+    }
+    let status = process
+        .status()
+        .map_err(|error| format!("cannot launch Photon: {error}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("Photon exited with {status}"))
+    }
 }
 
 pub(crate) fn clean(root: &Path, scope: Option<&str>) -> Result<(), String> {
