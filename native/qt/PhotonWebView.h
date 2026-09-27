@@ -2,6 +2,7 @@
 #include <LibPhotonEmbedder/PhotonEmbedder.h>
 #include <QImage>
 #include <QMutex>
+#include <QPointer>
 #include <QQuickItem>
 #include <QSizeF>
 #include <QTimer>
@@ -14,11 +15,14 @@ class PhotonWebView : public QQuickItem {
   QML_ELEMENT
   Q_PROPERTY(qreal cornerRadius READ cornerRadius WRITE setCornerRadius NOTIFY
                  cornerRadiusChanged)
+  Q_PROPERTY(QObject *browser READ browser WRITE setBrowser)
 public:
   explicit PhotonWebView(QQuickItem *parent = nullptr);
   ~PhotonWebView() override;
   qreal cornerRadius() const { return m_corner_radius; }
   void setCornerRadius(qreal radius);
+  QObject *browser() const { return m_browser.data(); }
+  void setBrowser(QObject *browser);
 
 signals:
   void cornerRadiusChanged();
@@ -60,5 +64,10 @@ private:
   std::atomic_int m_last_frame_height{0};
   bool m_component_complete{false};
   bool m_verbose{false};
+  QPointer<QObject> m_browser;
+  std::chrono::steady_clock::time_point m_navigation_started;
+  std::chrono::steady_clock::time_point m_first_frame_started;
+  bool m_navigation_loading{false};
+  bool m_navigation_timing_active{false};
   qreal m_corner_radius{0};
 };

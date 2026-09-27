@@ -1,4 +1,5 @@
 #include "PhotonWebView.h"
+#include "BrowserController.h"
 
 #include <QDebug>
 #include <QFocusEvent>
@@ -48,6 +49,8 @@ PhotonWebView::~PhotonWebView() {
   // process/runtime owner after its view has been destroyed.
   if (m_view)
     m_view->shutdown();
+  if (auto *browser = qobject_cast<BrowserController *>(m_browser.data()))
+    browser->setExecutor({});
   m_view.reset();
   {
     QMutexLocker lock(&m_frame_mutex);
@@ -71,17 +74,37 @@ void PhotonWebView::componentComplete() {
 
   Photon::ViewCallbacks callbacks;
   callbacks.state_changed = [this](Photon::ViewState const &state) {
-    if (!m_verbose || m_shutting_down.load(std::memory_order_acquire))
+    if (m_shutting_down.load(std::memory_order_acquire))
       return;
-    qInfo().noquote() << "Photon page:" << QString::fromStdString(state.url)
-                      << "|" << QString::fromStdString(state.title)
-                      << "| loading=" << state.loading
-                      << " back=" << state.can_go_back
-                      << " forward=" << state.can_go_forward;
+    if (auto *browser = qobject_cast<BrowserController *>(m_browser.data()))
+      browser->engineStateChanged(QString::fromStdString(state.url),
+                                  QString::fromStdString(state.title),
+                                  state.loading, state.can_go_back,
+                                  state.can_go_forward);
+    if (m_verbose)
+      qInfo().noquote() << "Photon page:" << QString::fromStdString(state.url)
+                        << "|" << QString::fromStdString(state.title)
+                        << "| loading=" << state.loading
+                        << " back=" << state.can_go_back
+                        << " forward=" << state.can_go_forward;
+    if (state.loading && m_navigation_timing_active)
+      m_navigation_loading = true;
+    if (!state.loading && m_navigation_loading) {
+      auto elapsed =
+          std::chrono::duration_cast<std::chrono::milliseconds>(
+              std::chrono::steady_clock::now() - m_navigation_started)
+              .count();
+      if (m_verbose)
+        qInfo() << "Photon navigation finished in" << elapsed << "ms";
+      m_navigation_loading = false;
+      m_navigation_timing_active = false;
+    }
   };
   callbacks.failed = [this](std::string const &message) {
     if (m_shutting_down.load(std::memory_order_acquire))
       return;
+    if (auto *browser = qobject_cast<BrowserController *>(m_browser.data()))
+      browser->engineLoadFailed(QString::fromStdString(message));
     qWarning() << "Photon page error:" << QString::fromStdString(message);
   };
   callbacks.frame_ready =
@@ -91,9 +114,25 @@ void PhotonWebView::componentComplete() {
         if (!frame || frame->width <= 0 || frame->height <= 0 ||
             frame->pixels.empty())
           return;
+        if (m_navigation_timing_active &&
+            m_first_frame_started != std::chrono::steady_clock::time_point{}) {
+          auto elapsed =
+              std::chrono::duration_cast<std::chrono::milliseconds>(
+                  std::chrono::steady_clock::now() - m_first_frame_started)
+                  .count();
+          if (m_verbose)
+            qInfo() << "Photon first frame after navigation:" << elapsed
+                    << "ms";
+          m_first_frame_started = {};
+        }
         m_frames_received.fetch_add(1, std::memory_order_relaxed);
         if (m_has_pending_frame.exchange(true, std::memory_order_acq_rel))
           m_frames_coalesced.fetch_add(1, std::memory_order_relaxed);
+        const auto engine_copy_us = frame->copy_time_microseconds;
+        const auto frame_width = frame->width;
+        const auto frame_height = frame->height;
+        const auto dpr =
+            frame->device_pixel_ratio > 0 ? frame->device_pixel_ratio : 1.0;
         auto copy_started = std::chrono::steady_clock::now();
         QImage image(frame->pixels.data(), frame->width, frame->height,
                      static_cast<qsizetype>(frame->stride),
@@ -106,16 +145,13 @@ void PhotonWebView::componentComplete() {
         {
           QMutexLocker lock(&m_frame_mutex);
           m_pending_image = std::move(image);
-          auto dpr =
-              frame->device_pixel_ratio > 0 ? frame->device_pixel_ratio : 1.0;
-          m_pending_frame_size =
-              QSizeF(frame->width / dpr, frame->height / dpr);
+          m_pending_frame_size = QSizeF(frame_width / dpr, frame_height / dpr);
         }
-        m_engine_copy_microseconds.fetch_add(frame->copy_time_microseconds,
+        m_engine_copy_microseconds.fetch_add(engine_copy_us,
                                              std::memory_order_relaxed);
         m_qt_copy_microseconds.fetch_add(qt_copy_us, std::memory_order_relaxed);
-        m_last_frame_width.store(frame->width, std::memory_order_relaxed);
-        m_last_frame_height.store(frame->height, std::memory_order_relaxed);
+        m_last_frame_width.store(frame_width, std::memory_order_relaxed);
+        m_last_frame_height.store(frame_height, std::memory_order_relaxed);
         update();
       };
 
@@ -127,6 +163,45 @@ void PhotonWebView::componentComplete() {
     qCritical() << "Photon Engine could not create a webpage view";
     return;
   }
+  if (auto *browser = qobject_cast<BrowserController *>(m_browser.data()))
+    browser->setExecutor([this](int command, QString url) {
+      if (!m_view)
+        return;
+      switch (command) {
+      case 0:
+        m_navigation_started = std::chrono::steady_clock::now();
+        m_first_frame_started = m_navigation_started;
+        m_navigation_loading = false;
+        m_navigation_timing_active = true;
+        m_view->navigate(url.toStdString());
+        break;
+      case 1:
+        m_navigation_started = std::chrono::steady_clock::now();
+        m_first_frame_started = m_navigation_started;
+        m_navigation_loading = false;
+        m_navigation_timing_active = true;
+        m_view->reload();
+        break;
+      case 2:
+        m_navigation_started = std::chrono::steady_clock::now();
+        m_first_frame_started = m_navigation_started;
+        m_navigation_loading = false;
+        m_navigation_timing_active = true;
+        m_view->go_back();
+        break;
+      case 3:
+        m_navigation_started = std::chrono::steady_clock::now();
+        m_first_frame_started = m_navigation_started;
+        m_navigation_loading = false;
+        m_navigation_timing_active = true;
+        m_view->go_forward();
+        break;
+      }
+    });
+  m_navigation_started = std::chrono::steady_clock::now();
+  m_first_frame_started = m_navigation_started;
+  m_navigation_loading = false;
+  m_navigation_timing_active = true;
   m_view->navigate("https://example.com");
 
   auto *pump_timer = new QTimer(this);
@@ -164,6 +239,8 @@ void PhotonWebView::componentComplete() {
   }
   resizeEngineView();
 }
+
+void PhotonWebView::setBrowser(QObject *browser) { m_browser = browser; }
 
 void PhotonWebView::geometryChange(const QRectF &newGeometry,
                                    const QRectF &oldGeometry) {

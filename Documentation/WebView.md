@@ -42,13 +42,14 @@ The Qt item reports logical dimensions and the window's device-pixel ratio. LibP
 
 ## State and diagnostics
 
-Engine callbacks expose URL, title, loading, can-go-back, can-go-forward and WebContent failure. The current shell logs state changes. With `PHOTON_VERBOSE=1` (or `./photon run --verbose`), the Qt shell reports five-second aggregates for frames received/presented/coalesced, the latest frame size and DPR, engine copy time, Qt image-copy time, and texture-upload time.
+Engine callbacks expose URL, title, loading, can-go-back, can-go-forward and WebContent failure. `PhotonWebView` forwards these callbacks through `BrowserController` into Rust `BrowserState`; QML reads the Rust-backed properties through that adapter. With `PHOTON_VERBOSE=1` (or `./photon --verbose run`), the Qt shell reports five-second aggregates for frames received/presented/coalesced, the latest frame size and DPR, engine copy time, Qt image-copy time, and texture-upload time.
 
 ## Current limitations
 
 - The first URL is fixed to `https://example.com`.
 - Presentation is CPU-backed with full-frame copies and Qt texture uploads.
 - No GPU-native shared presentation path exists yet.
-- Rust browser state does not yet own or command the runtime/view.
+- Rust owns state and commands for the single active view; C++ still owns the `Runtime` and `View` objects.
+- Search queries, suggestions, and multiple tabs are not implemented.
 - Input translation compiles but needs focused manual interaction verification.
 - The QML language server needs the generated `ui/.qmlls.ini` build-directory hint. CMake refreshes this ignored file during configuration so editors can resolve the `Photon` module and `PhotonWebView` type.
