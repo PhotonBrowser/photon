@@ -1,0 +1,13 @@
+{
+  "files.watcherExclude": {
+    "**/.git/**": true,
+    "**/build/**": true,
+    "**/target/**": true,
+    "**/vcpkg_installed/**": true
+  },
+  "search.exclude": {
+    "**/build/**": true,
+    "**/target/**": true,
+    "**/vcpkg_installed/**": true
+  }
+}
