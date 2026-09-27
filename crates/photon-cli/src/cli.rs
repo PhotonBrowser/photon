@@ -99,10 +99,7 @@ pub fn run() -> Result<(), String> {
         Some(Command::Setup) => commands::setup::setup(&root),
         Some(Command::Doctor) => commands::setup::doctor(&root),
         Some(Command::Build { release }) => commands::build::build(&root, release, verbose),
-        Some(Command::Run { release }) => {
-            commands::build::build(&root, release, verbose)?;
-            commands::build::run_app(&root, release, verbose)
-        }
+        Some(Command::Run { release }) => commands::build::watch_run(&root, release, verbose),
         Some(Command::Clean { scope }) => {
             let scope = scope.map(|scope| match scope {
                 CleanScope::Engine => "engine",

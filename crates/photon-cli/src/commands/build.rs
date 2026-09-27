@@ -1,6 +1,9 @@
 use std::path::Path;
 use std::process::{Command, Stdio};
+use std::sync::mpsc;
 use std::time::Instant;
+
+use notify::{RecursiveMode, Watcher};
 
 use crate::support::{invoke, path, stage, with_progress};
 
@@ -215,6 +218,70 @@ pub(crate) fn run_app(root: &Path, release: bool, verbose: bool) -> Result<(), S
     } else {
         Err(format!("Photon exited with {status}"))
     }
+}
+
+pub(crate) fn watch_run(root: &Path, release: bool, verbose: bool) -> Result<(), String> {
+    let (events_tx, events_rx) = mpsc::channel();
+    let mut watcher = notify::recommended_watcher(events_tx)
+        .map_err(|error| format!("cannot start file watcher: {error}"))?;
+    watcher
+        .watch(root, RecursiveMode::Recursive)
+        .map_err(|error| format!("cannot watch {}: {error}", root.display()))?;
+
+    println!("Watching {} for changes (Ctrl+C to stop).", root.display());
+    match build(root, release, verbose) {
+        Ok(()) => {
+            if let Err(error) = run_app(root, release, verbose) {
+                eprintln!("{error}");
+            }
+        }
+        Err(error) => eprintln!("Build failed: {error}"),
+    }
+
+    loop {
+        let event = match events_rx.recv() {
+            Ok(event) => event,
+            Err(error) => return Err(format!("file watcher stopped: {error}")),
+        };
+        let event = match event {
+            Ok(event) => event,
+            Err(error) => {
+                eprintln!("File watcher error: {error}");
+                continue;
+            }
+        };
+        if !event.paths.iter().any(|path| should_rebuild(root, path)) {
+            continue;
+        }
+
+        // Coalesce the burst of events produced by a save or generated files.
+        while events_rx
+            .recv_timeout(std::time::Duration::from_millis(250))
+            .is_ok()
+        {}
+        println!("\nChange detected; rebuilding Photon...");
+        match build(root, release, verbose) {
+            Ok(()) => {
+                if let Err(error) = run_app(root, release, verbose) {
+                    eprintln!("{error}");
+                }
+            }
+            Err(error) => eprintln!("Build failed: {error}"),
+        }
+    }
+}
+
+fn should_rebuild(root: &Path, changed: &Path) -> bool {
+    let Ok(relative) = changed.strip_prefix(root) else {
+        return false;
+    };
+    if relative.as_os_str().is_empty() {
+        return false;
+    }
+    !relative.components().any(|component| {
+        let component = component.as_os_str().to_string_lossy();
+        matches!(component.as_ref(), ".git" | "build" | "target")
+    })
 }
 
 pub(crate) fn clean(root: &Path, scope: Option<&str>) -> Result<(), String> {
