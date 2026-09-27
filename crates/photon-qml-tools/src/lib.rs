@@ -13,7 +13,19 @@ pub fn format(root: &Path, verbose: bool) -> Result<(), String> {
     let formatter = qt_tool("qmlformat", root)?;
     run(
         &formatter,
-        &["-i", "ui/Main.qml", "ui/theme/Theme.qml"],
+        &[
+            "-i",
+            "ui/Main.qml",
+            "ui/PhotonPage.qml",
+            "ui/browser/Omnibox.qml",
+            "ui/components/Button.qml",
+            "ui/components/Icon.qml",
+            "ui/components/IconButton.qml",
+            "ui/components/PressableControl.qml",
+            "ui/chrome/TitleBar.qml",
+            "ui/pages/WebSurface.qml",
+            "ui/theme/Theme.qml",
+        ],
         root,
         verbose,
     )
@@ -26,9 +38,9 @@ pub fn lint(root: &Path) -> Result<LintOutput, String> {
     let qt_version = output(&qtpaths, &["--qt-version"], root).map_err(|_| {
         "Qt 6 development tools are missing; install Qt Quick, QML, and Quick Controls development packages".to_owned()
     })?;
-    if !version_at_least(&qt_version, (6, 5)) {
+    if !version_at_least(&qt_version, (6, 9)) {
         return Err(format!(
-            "Qt 6.5 or newer is required; found {}",
+            "Qt 6.9 or newer is required; found {}",
             qt_version.trim()
         ));
     }
@@ -36,6 +48,16 @@ pub fn lint(root: &Path) -> Result<LintOutput, String> {
     let mut args = vec!["--ignore-settings".to_owned()];
     let build_dir = root.join("build/app-debug");
     let generated_qmldir = build_dir.join("Photon/qmldir");
+    let generated_main = build_dir.join("Photon/Main.qml");
+    let generated_page = build_dir.join("Photon/PhotonPage.qml");
+    let generated_omnibox = build_dir.join("Photon/browser/Omnibox.qml");
+    let generated_icon_button = build_dir.join("Photon/IconButton.qml");
+    let generated_button = build_dir.join("Photon/Button.qml");
+    let generated_icon = build_dir.join("Photon/Icon.qml");
+    let generated_pressable_control = build_dir.join("Photon/PressableControl.qml");
+    let generated_title_bar = build_dir.join("Photon/TitleBar.qml");
+    let generated_web_surface = build_dir.join("Photon/WebSurface.qml");
+    let generated_theme = build_dir.join("Photon/theme/Theme.qml");
     let generated_resource = build_dir.join(".qt/rcc/photon_raw_qml_0.qrc");
     if generated_qmldir.is_file() {
         args.extend([
@@ -50,7 +72,45 @@ pub fn lint(root: &Path) -> Result<LintOutput, String> {
     if generated_resource.is_file() {
         args.extend(["--resource".into(), path(&generated_resource)]);
     }
-    args.extend(["ui/Main.qml".into(), "ui/theme/Theme.qml".into()]);
+    // CMake copies QML module files into the build tree. Use those copies so
+    // qmllint sees every module type and the current singleton properties.
+    if generated_main.is_file()
+        && generated_page.is_file()
+        && generated_omnibox.is_file()
+        && generated_icon_button.is_file()
+        && generated_button.is_file()
+        && generated_icon.is_file()
+        && generated_pressable_control.is_file()
+        && generated_title_bar.is_file()
+        && generated_web_surface.is_file()
+        && generated_theme.is_file()
+    {
+        args.extend([
+            path(&generated_main),
+            path(&generated_button),
+            path(&generated_icon),
+            path(&generated_pressable_control),
+            path(&generated_icon_button),
+            path(&generated_page),
+            path(&generated_omnibox),
+            path(&generated_title_bar),
+            path(&generated_web_surface),
+            path(&generated_theme),
+        ]);
+    } else {
+        args.extend([
+            "ui/Main.qml".into(),
+            "ui/PhotonPage.qml".into(),
+            "ui/browser/Omnibox.qml".into(),
+            "ui/components/Button.qml".into(),
+            "ui/components/Icon.qml".into(),
+            "ui/components/IconButton.qml".into(),
+            "ui/components/PressableControl.qml".into(),
+            "ui/chrome/TitleBar.qml".into(),
+            "ui/pages/WebSurface.qml".into(),
+            "ui/theme/Theme.qml".into(),
+        ]);
+    }
     let string_args: Vec<_> = args.iter().map(String::as_str).collect();
     let result = Command::new(qmllint)
         .args(&string_args)
