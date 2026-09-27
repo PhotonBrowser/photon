@@ -3,7 +3,7 @@ use std::path::Path;
 
 use crate::support::{command, compiler_version, output, require_tool, run_tool, version_at_least};
 
-pub(crate) fn setup(root: &Path) -> Result<(), String> {
+pub(crate) fn setup(root: &Path, verbose: bool) -> Result<(), String> {
     let engine = root.join("Engine");
     if !engine.join(".git").exists() {
         command(
@@ -60,13 +60,13 @@ pub(crate) fn setup(root: &Path) -> Result<(), String> {
         photon_qml_tools::tool_path("qtpaths6", root).unwrap_or_else(|| "qtpaths6".into());
     let qt_version = output(&qtpaths, &["--qt-version"], root)
         .map_err(|_| "Qt 6 development tools are missing; install Qt Quick, QML, and Quick Controls development packages".to_owned())?;
-    if !version_at_least(&qt_version, (6, 5)) {
+    if !version_at_least(&qt_version, (6, 9)) {
         return Err(format!(
-            "Qt 6.5 or newer is required; found {}",
+            "Qt 6.9 or newer is required; found {}",
             qt_version.trim()
         ));
     }
-    for tool in ["qmllint", "qmlformat"] {
+    for tool in ["qmllint", "qmlformat", "qmlls"] {
         photon_qml_tools::tool_path(tool, root)
             .ok_or_else(|| format!("{tool} is missing; install the Qt 6 QML development tools"))?;
     }
@@ -95,6 +95,7 @@ pub(crate) fn setup(root: &Path) -> Result<(), String> {
     for path in ["build/engine-debug", "build/app-debug", "build/bin"] {
         std::fs::create_dir_all(root.join(path)).map_err(|e| e.to_string())?;
     }
+    crate::commands::ide::setup(root, verbose)?;
     println!(
         "Setup ready. The first engine build prepares Ladybird's pinned dependencies under build/."
     );
@@ -181,5 +182,6 @@ pub(crate) fn doctor(root: &Path) -> Result<(), String> {
             }
         );
     }
+    crate::commands::ide::doctor(root);
     Ok(())
 }

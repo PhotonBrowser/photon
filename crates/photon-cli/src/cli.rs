@@ -37,6 +37,11 @@ enum Command {
     Setup,
     /// Report toolchain, Qt, Engine, and build environment details.
     Doctor,
+    /// Configure and validate Photon editor metadata.
+    Ide {
+        #[command(subcommand)]
+        command: IdeCommand,
+    },
     /// Run checks, then build Photon Engine and the Qt Quick shell.
     Build {
         /// Build with optimizations.
@@ -68,6 +73,35 @@ enum Command {
         #[command(subcommand)]
         command: Option<EngineCommand>,
     },
+    /// Import assets from supported providers.
+    Import {
+        #[command(subcommand)]
+        command: ImportCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum ImportCommand {
+    /// Import an SVG icon into Photon UI assets.
+    Icon {
+        /// Icon name in the selected provider.
+        name: String,
+        /// Asset provider (currently: lucide).
+        #[arg(long = "from")]
+        provider: String,
+        /// Local name for the imported asset.
+        #[arg(long = "as")]
+        alias: Option<String>,
+        /// Replace an existing icon and its manifest entry.
+        #[arg(long)]
+        force: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum IdeCommand {
+    /// Prepare the debug build metadata used by editor language servers.
+    Setup,
 }
 
 #[derive(Clone, Copy, Debug, clap::ValueEnum)]
@@ -96,8 +130,11 @@ pub fn run() -> Result<(), String> {
 
     match cli.command {
         None => print_help(),
-        Some(Command::Setup) => commands::setup::setup(&root),
+        Some(Command::Setup) => commands::setup::setup(&root, verbose),
         Some(Command::Doctor) => commands::setup::doctor(&root),
+        Some(Command::Ide { command }) => match command {
+            IdeCommand::Setup => commands::ide::setup(&root, verbose),
+        },
         Some(Command::Build { release }) => commands::build::build(&root, release, verbose),
         Some(Command::Run { release }) => commands::build::watch_run(&root, release, verbose),
         Some(Command::Clean { scope }) => {
@@ -126,6 +163,14 @@ pub fn run() -> Result<(), String> {
             Some(EngineCommand::Sync) => {
                 commands::engine::engine(&root, Some("sync"), false, verbose)
             }
+        },
+        Some(Command::Import { command }) => match command {
+            ImportCommand::Icon {
+                name,
+                provider,
+                alias,
+                force,
+            } => commands::import::icon(&root, &name, &provider, alias.as_deref(), force),
         },
     }
 }

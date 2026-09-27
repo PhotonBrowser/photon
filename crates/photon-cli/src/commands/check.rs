@@ -19,6 +19,8 @@ pub(crate) fn check(root: &Path, verbose: bool) -> Result<(), String> {
 }
 
 fn check_inner(root: &Path, verbose: bool, diagnostics: &mut String) -> Result<(), String> {
+    crate::commands::ide::refresh(root, verbose)?;
+    crate::commands::ide::check_cpp(root, verbose)?;
     invoke("cargo", &["fmt", "--all", "--", "--check"], root, verbose)?;
     with_progress("Check Rust workspace", !verbose, || {
         invoke("cargo", &["check", "--workspace"], root, verbose)
