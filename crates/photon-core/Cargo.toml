@@ -3,3 +3,9 @@ name = "photon-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]
+url = "2"
