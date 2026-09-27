@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/photon-cli", "crates/photon-core"]
+members = ["crates/photon-cli", "crates/photon-core", "crates/photon-qml-tools"]
 exclude = ["Engine/Libraries/LibJS/Flap"]
 
 [workspace.package]
