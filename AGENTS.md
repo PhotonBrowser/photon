@@ -12,3 +12,5 @@
 10. Keep ordinary UI work independent of engine internals.
 11. Run linter and formatter commands: ./photon check (--verbose if needed) ./photon format#
 12. Do not use computer use, unless you are ONLY screenshotting.
+13. Always check Engine/UI/ source code for any features / implementations either the QT or the AppKit Ladybird browser has that can solve your problem if you ported it to QML.
+14. Ensure everything is compatible with rust, tiny bit of c++, and QML.
