@@ -1,9 +1,9 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Layouts
 import Photon
 
 ApplicationWindow {
-    id: rootWindow
     visible: true
     width: 1100
     height: 720
@@ -16,14 +16,20 @@ ApplicationWindow {
         anchors.fill: parent
         color: Theme.background
 
-        Column {
-            anchors.centerIn: parent
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: Theme.spacing
             spacing: Theme.spacing
+
             Rectangle {
-                width: Math.max(1, Math.min(720, rootWindow.width - 48))
-                height: Math.max(160, Math.min(400, rootWindow.height - 320))
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Layout.minimumHeight: 0
+
                 radius: Theme.radius
                 color: Theme.surface
+
+                clip: true
 
                 PhotonWebView {
                     anchors.fill: parent

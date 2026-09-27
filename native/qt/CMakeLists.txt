@@ -3,7 +3,7 @@ project(PhotonShell LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
-find_package(Qt6 6.5 REQUIRED COMPONENTS Quick Qml QuickControls2)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Quick Qml QuickControls2 QuickLayouts)
 # The QML source lives outside this CMake directory, so generate the language
 # server config beside Main.qml where editors will discover it.
 file(GENERATE
@@ -24,7 +24,7 @@ set_source_files_properties(../../ui/Main.qml PROPERTIES QT_RESOURCE_ALIAS Main.
 set_source_files_properties(../../ui/theme/Theme.qml PROPERTIES QT_RESOURCE_ALIAS theme/Theme.qml QT_QML_SINGLETON_TYPE TRUE)
 qt_add_executable(photon main.cpp PhotonWebView.cpp PhotonWebView.h)
 qt_add_qml_module(photon URI Photon VERSION 1.0 QML_FILES ../../ui/Main.qml ../../ui/theme/Theme.qml)
-target_link_libraries(photon PRIVATE Qt6::Quick Qt6::Qml Qt6::QuickControls2)
+target_link_libraries(photon PRIVATE Qt6::Quick Qt6::Qml Qt6::QuickControls2 Qt6::QuickLayouts)
 target_include_directories(photon PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../Engine/Libraries/LibPhotonEmbedder/include")
 target_include_directories(photon PRIVATE "${PHOTON_ENGINE_BUILD_DIR}/Libraries")
 target_link_libraries(photon PRIVATE Photon::Embedder)

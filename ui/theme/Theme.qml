@@ -6,7 +6,7 @@ SystemPalette {
     readonly property color surface: mid
     readonly property color foreground: text
     readonly property color subdued: dark
-    readonly property int spacing: 16
-    readonly property int radius: 10
+    readonly property int spacing: 4
+    readonly property int radius: 6
     readonly property int motion: 180
 }
