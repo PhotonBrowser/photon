@@ -50,7 +50,10 @@ pub fn lint(root: &Path) -> Result<LintOutput, String> {
     if generated_resource.is_file() {
         args.extend(["--resource".into(), path(&generated_resource)]);
     }
-    args.extend(["ui/Main.qml".into(), "ui/theme/Theme.qml".into()]);
+    // Lint the module entry point. Linting Theme.qml independently makes
+    // qmllint treat its singleton declaration as a second, conflicting module
+    // declaration and loses its exported type metadata.
+    args.push("ui/Main.qml".into());
     let string_args: Vec<_> = args.iter().map(String::as_str).collect();
     let result = Command::new(qmllint)
         .args(&string_args)
