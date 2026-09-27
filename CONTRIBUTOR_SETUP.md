@@ -1,5 +1,16 @@
 # Contributor Setup
 
+After cloning with submodules, use the repository CLI for local setup and builds:
+
+```bash
+./photon setup
+./photon doctor
+./photon build
+./photon run
+```
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`Documentation/Building.md`](Documentation/Building.md) for current ownership and build workflows.
+
 Photon is split into two repositories:
 
 - [`PhotonBrowser/photon`](https://github.com/PhotonBrowser/photon) — the browser application, UI, Rust application logic, build tooling, and documentation.
