@@ -43,7 +43,9 @@ ApplicationWindow {
                 radius: Theme.radius
                 color: Theme.surface
 
-                PhotonWebView { anchors.fill: parent }
+                PhotonWebView {
+                    anchors.fill: parent
+                }
 
                 Text {
                     anchors.centerIn: parent
