@@ -53,6 +53,9 @@ enum Command {
         /// Build with optimizations.
         #[arg(long)]
         release: bool,
+        /// Deprecated CPU painting fallback for Vulkan troubleshooting; may be removed.
+        #[arg(long)]
+        force_cpu_painting: bool,
     },
     /// Remove generated build directories.
     Clean {
@@ -136,7 +139,10 @@ pub fn run() -> Result<(), String> {
             IdeCommand::Setup => commands::ide::setup(&root, verbose),
         },
         Some(Command::Build { release }) => commands::build::build(&root, release, verbose),
-        Some(Command::Run { release }) => commands::build::watch_run(&root, release, verbose),
+        Some(Command::Run {
+            release,
+            force_cpu_painting,
+        }) => commands::build::watch_run(&root, release, verbose, force_cpu_painting),
         Some(Command::Clean { scope }) => {
             let scope = scope.map(|scope| match scope {
                 CleanScope::Engine => "engine",

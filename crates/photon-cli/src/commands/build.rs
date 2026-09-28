@@ -213,22 +213,39 @@ fn invoke_engine_configure(
     ))
 }
 
-fn start_app(root: &Path, release: bool, verbose: bool) -> Result<Child, String> {
+fn start_app(
+    root: &Path,
+    release: bool,
+    verbose: bool,
+    force_cpu_painting: bool,
+) -> Result<Child, String> {
     let exe = root
         .join("build")
         .join(if release { "app-release" } else { "app-debug" })
         .join("photon");
     let mut process = Command::new(&exe);
     process.current_dir(root);
+    process.env_remove("PHOTON_FORCE_CPU_PAINTING");
     if verbose {
         process.env("PHOTON_VERBOSE", "1");
+    }
+    if force_cpu_painting {
+        eprintln!(
+            "CPU painting is a deprecated troubleshooting fallback and may be removed in a future release."
+        );
+        process.env("PHOTON_FORCE_CPU_PAINTING", "1");
     }
     process
         .spawn()
         .map_err(|error| format!("cannot launch Photon: {error}"))
 }
 
-pub(crate) fn watch_run(root: &Path, release: bool, verbose: bool) -> Result<(), String> {
+pub(crate) fn watch_run(
+    root: &Path,
+    release: bool,
+    verbose: bool,
+    force_cpu_painting: bool,
+) -> Result<(), String> {
     let (events_tx, events_rx) = mpsc::channel();
     let mut watcher = notify::recommended_watcher(events_tx)
         .map_err(|error| format!("cannot start file watcher: {error}"))?;
@@ -237,7 +254,7 @@ pub(crate) fn watch_run(root: &Path, release: bool, verbose: bool) -> Result<(),
         .map_err(|error| format!("cannot watch {}: {error}", root.display()))?;
 
     println!("Watching {} for changes (Ctrl+C to stop).", root.display());
-    let mut app = build_and_start(root, release, verbose);
+    let mut app = build_and_start(root, release, verbose, force_cpu_painting);
 
     loop {
         if let Some(status) = take_app_exit_status(&mut app)? {
@@ -276,7 +293,7 @@ pub(crate) fn watch_run(root: &Path, release: bool, verbose: bool) -> Result<(),
             return report_app_exit(status);
         }
         stop_app(&mut app);
-        app = build_and_start(root, release, verbose);
+        app = build_and_start(root, release, verbose, force_cpu_painting);
     }
 }
 
@@ -302,9 +319,14 @@ fn report_app_exit(status: ExitStatus) -> Result<(), String> {
     }
 }
 
-fn build_and_start(root: &Path, release: bool, verbose: bool) -> Option<Child> {
+fn build_and_start(
+    root: &Path,
+    release: bool,
+    verbose: bool,
+    force_cpu_painting: bool,
+) -> Option<Child> {
     match build(root, release, verbose) {
-        Ok(()) => match start_app(root, release, verbose) {
+        Ok(()) => match start_app(root, release, verbose, force_cpu_painting) {
             Ok(child) => {
                 println!("Photon started (pid {}).", child.id());
                 Some(child)
