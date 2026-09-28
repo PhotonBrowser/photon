@@ -27,17 +27,9 @@ TextField {
 
     onTextEdited: editorDirty = true
     Component.onCompleted: text = url
-    onActiveFocusChanged: {
-        if (!activeFocus) {
-            editorDirty = false;
-            text = root.url;
-        }
-    }
     onUrlChanged: {
-        if (!activeFocus || !editorDirty) {
-            editorDirty = false;
+        if (!editorDirty)
             text = url;
-        }
     }
     onAccepted: {
         submit();
@@ -51,6 +43,11 @@ TextField {
     Keys.onEnterPressed: event => {
         event.accepted = true;
         submit();
+    }
+    Keys.onEscapePressed: event => {
+        event.accepted = true;
+        editorDirty = false;
+        text = root.url;
     }
 
     function submit() {

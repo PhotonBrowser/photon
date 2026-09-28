@@ -105,9 +105,9 @@ Rectangle {
             IconButton {
                 Layout.preferredWidth: Theme.titlebarButtonSize
                 Layout.fillHeight: true
-                iconSource: Qt.resolvedUrl("icons/lucide/reload.svg")
-                Accessible.name: "Reload"
-                onClicked: root.browser.reload()
+                iconSource: Qt.resolvedUrl(root.browser.loading ? "icons/lucide/close.svg" : "icons/lucide/reload.svg")
+                Accessible.name: root.browser.loading ? "Cancel loading" : "Reload"
+                onClicked: root.browser.loading ? root.browser.cancelNavigation() : root.browser.reload()
             }
 
             Omnibox {

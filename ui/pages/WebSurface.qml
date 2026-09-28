@@ -15,5 +15,6 @@ Rectangle {
         anchors.fill: parent
         browser: root.browser
         cornerRadius: root.radius
+        darkMode: Theme.isDark
     }
 }
