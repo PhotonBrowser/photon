@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import Photon
 
@@ -7,11 +8,12 @@ Rectangle {
 
     radius: Theme.radius
     color: Theme.surface
+    antialiasing: true
     clip: true
 
     PhotonWebView {
         anchors.fill: parent
         browser: root.browser
-        cornerRadius: Theme.radius
+        cornerRadius: root.radius
     }
 }

@@ -9,13 +9,45 @@
 #include <QQuickWindow>
 #include <QSGClipNode>
 #include <QSGSimpleTextureNode>
+#include <QSGTexture>
 #include <QStyleHints>
 #include <QTimer>
 #include <QWheelEvent>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
+
+namespace {
+
+class PhotonPageNode final : public QSGClipNode {
+public:
+  PhotonPageNode() {
+    m_texture_node = new QSGSimpleTextureNode;
+    appendChildNode(m_texture_node);
+  }
+
+  QSGSimpleTextureNode *textureNode() const { return m_texture_node; }
+  qreal clipRadius() const { return m_clip_radius; }
+  void setClipRadius(qreal radius) { m_clip_radius = radius; }
+
+  void setTexture(QSGTexture *texture, bool owned) {
+    auto *previous = m_texture_node->texture();
+    const bool previous_owned = m_texture_node->ownsTexture();
+    m_texture_node->setOwnsTexture(false);
+    m_texture_node->setTexture(texture);
+    if (previous_owned && previous && previous != texture)
+      delete previous;
+    m_texture_node->setOwnsTexture(owned);
+  }
+
+private:
+  QSGSimpleTextureNode *m_texture_node{nullptr};
+  qreal m_clip_radius{-1};
+};
+
+} // namespace
 
 PhotonWebView::PhotonWebView(QQuickItem *parent) : QQuickItem(parent) {
   setFlag(ItemHasContents, true);
@@ -198,12 +230,6 @@ void PhotonWebView::componentComplete() {
         break;
       }
     });
-  m_navigation_started = std::chrono::steady_clock::now();
-  m_first_frame_started = m_navigation_started;
-  m_navigation_loading = false;
-  m_navigation_timing_active = true;
-  m_view->navigate("https://example.com");
-
   auto *pump_timer = new QTimer(this);
   pump_timer->setInterval(5);
   connect(pump_timer, &QTimer::timeout, this, [this] {
@@ -480,10 +506,6 @@ void PhotonWebView::focusOutEvent(QFocusEvent *event) {
 
 QSGNode *PhotonWebView::updatePaintNode(QSGNode *oldNode,
                                         UpdatePaintNodeData *) {
-  auto *clip = static_cast<QSGClipNode *>(oldNode);
-  auto *texture_node =
-      clip ? static_cast<QSGSimpleTextureNode *>(clip->firstChild()) : nullptr;
-
   QImage image;
   QSizeF frame_size;
   {
@@ -494,6 +516,12 @@ QSGNode *PhotonWebView::updatePaintNode(QSGNode *oldNode,
       m_pending_frame_size = {};
     }
   }
+  auto *clip = static_cast<PhotonPageNode *>(oldNode);
+  if (!clip && image.isNull())
+    return nullptr;
+  if (!clip)
+    clip = new PhotonPageNode;
+
   if (!image.isNull() && window()) {
     auto upload_started = std::chrono::steady_clock::now();
     auto *texture = window()->createTextureFromImage(image);
@@ -506,30 +534,21 @@ QSGNode *PhotonWebView::updatePaintNode(QSGNode *oldNode,
       qWarning() << "Qt Quick failed to upload a Photon page frame";
       return clip;
     }
-    if (!clip) {
-      clip = new QSGClipNode;
-      texture_node = new QSGSimpleTextureNode;
-      clip->appendChildNode(texture_node);
-    }
-    auto *previous = texture_node->texture();
-    texture_node->setOwnsTexture(false);
-    texture_node->setTexture(texture);
-    if (previous && previous != texture)
-      delete previous;
-    texture_node->setOwnsTexture(true);
-    texture_node->setFiltering(QSGTexture::Linear);
+    clip->setTexture(texture, true);
+    clip->textureNode()->setFiltering(QSGTexture::Linear);
     m_displayed_frame_size = frame_size;
     m_has_pending_frame.store(false, std::memory_order_release);
     m_frames_presented.fetch_add(1, std::memory_order_relaxed);
   }
-  if (!clip)
-    return nullptr;
   if (m_displayed_frame_size.isValid() && !m_displayed_frame_size.isEmpty())
-    texture_node->setRect(QRectF(QPointF(0, 0), m_displayed_frame_size));
+    clip->textureNode()->setRect(QRectF(QPointF(0, 0), m_displayed_frame_size));
 
   auto bounds = boundingRect();
   auto radius = std::min<qreal>(m_corner_radius,
                                 std::min(bounds.width(), bounds.height()) / 2);
+  if (clip->geometry() && clip->clipRect() == bounds &&
+      clip->clipRadius() == radius)
+    return clip;
   QVector<QPointF> vertices;
   constexpr int segments_per_corner = 8;
   vertices.reserve(1 + 4 * (segments_per_corner + 1) + 1);
@@ -564,6 +583,7 @@ QSGNode *PhotonWebView::updatePaintNode(QSGNode *oldNode,
   clip->setGeometry(geometry);
   clip->setFlag(QSGNode::OwnsGeometry, true);
   clip->setClipRect(bounds);
+  clip->setClipRadius(radius);
   clip->setIsRectangular(false);
   return clip;
 }
