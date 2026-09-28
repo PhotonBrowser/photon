@@ -27,9 +27,11 @@ public:
   bool canGoForward() const;
   void setExecutor(std::function<void(int, QString)> executor);
   void engineStateChanged(QString url, QString title, bool loading, bool back, bool forward);
+  void engineFramePresented();
   void engineLoadFailed(QString message);
   Q_INVOKABLE void navigate(QString text);
   Q_INVOKABLE void reload();
+  Q_INVOKABLE void cancelNavigation();
   Q_INVOKABLE void back();
   Q_INVOKABLE void forward();
 signals:

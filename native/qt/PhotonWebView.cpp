@@ -5,6 +5,7 @@
 #include <QFocusEvent>
 #include <QHoverEvent>
 #include <QKeyEvent>
+#include <QMetaObject>
 #include <QMouseEvent>
 #include <QQuickWindow>
 #include <QSGClipNode>
@@ -163,6 +164,8 @@ void PhotonWebView::componentComplete() {
         const auto engine_copy_us = frame->copy_time_microseconds;
         const auto frame_width = frame->width;
         const auto frame_height = frame->height;
+        const auto frame_generation =
+            m_frame_generation.fetch_add(1, std::memory_order_relaxed) + 1;
         const auto dpr =
             frame->device_pixel_ratio > 0 ? frame->device_pixel_ratio : 1.0;
         auto copy_started = std::chrono::steady_clock::now();
@@ -178,6 +181,7 @@ void PhotonWebView::componentComplete() {
           QMutexLocker lock(&m_frame_mutex);
           m_pending_image = std::move(image);
           m_pending_frame_size = QSizeF(frame_width / dpr, frame_height / dpr);
+          m_pending_frame_generation = frame_generation;
         }
         m_engine_copy_microseconds.fetch_add(engine_copy_us,
                                              std::memory_order_relaxed);
@@ -195,12 +199,16 @@ void PhotonWebView::componentComplete() {
     qCritical() << "Photon Engine could not create a webpage view";
     return;
   }
+  applyPreferredColorScheme();
   if (auto *browser = qobject_cast<BrowserController *>(m_browser.data()))
     browser->setExecutor([this](int command, QString url) {
       if (!m_view)
         return;
       switch (command) {
       case 0:
+        m_required_frame_generation.store(
+            m_frame_generation.load(std::memory_order_relaxed) + 1,
+            std::memory_order_relaxed);
         m_navigation_started = std::chrono::steady_clock::now();
         m_first_frame_started = m_navigation_started;
         m_navigation_loading = false;
@@ -208,6 +216,9 @@ void PhotonWebView::componentComplete() {
         m_view->navigate(url.toStdString());
         break;
       case 1:
+        m_required_frame_generation.store(
+            m_frame_generation.load(std::memory_order_relaxed) + 1,
+            std::memory_order_relaxed);
         m_navigation_started = std::chrono::steady_clock::now();
         m_first_frame_started = m_navigation_started;
         m_navigation_loading = false;
@@ -215,6 +226,9 @@ void PhotonWebView::componentComplete() {
         m_view->reload();
         break;
       case 2:
+        m_required_frame_generation.store(
+            m_frame_generation.load(std::memory_order_relaxed) + 1,
+            std::memory_order_relaxed);
         m_navigation_started = std::chrono::steady_clock::now();
         m_first_frame_started = m_navigation_started;
         m_navigation_loading = false;
@@ -222,11 +236,17 @@ void PhotonWebView::componentComplete() {
         m_view->go_back();
         break;
       case 3:
+        m_required_frame_generation.store(
+            m_frame_generation.load(std::memory_order_relaxed) + 1,
+            std::memory_order_relaxed);
         m_navigation_started = std::chrono::steady_clock::now();
         m_first_frame_started = m_navigation_started;
         m_navigation_loading = false;
         m_navigation_timing_active = true;
         m_view->go_forward();
+        break;
+      case 4:
+        m_view->stop_loading();
         break;
       }
     });
@@ -267,6 +287,22 @@ void PhotonWebView::componentComplete() {
 }
 
 void PhotonWebView::setBrowser(QObject *browser) { m_browser = browser; }
+
+void PhotonWebView::setDarkMode(bool dark) {
+  if (m_dark_mode == dark)
+    return;
+  m_dark_mode = dark;
+  emit darkModeChanged();
+  applyPreferredColorScheme();
+}
+
+void PhotonWebView::applyPreferredColorScheme() {
+  if (!m_view)
+    return;
+  m_view->set_preferred_color_scheme(m_dark_mode
+                                         ? Photon::PreferredColorScheme::Dark
+                                         : Photon::PreferredColorScheme::Light);
+}
 
 void PhotonWebView::geometryChange(const QRectF &newGeometry,
                                    const QRectF &oldGeometry) {
@@ -508,12 +544,14 @@ QSGNode *PhotonWebView::updatePaintNode(QSGNode *oldNode,
                                         UpdatePaintNodeData *) {
   QImage image;
   QSizeF frame_size;
+  std::uint64_t frame_generation = 0;
   {
     QMutexLocker lock(&m_frame_mutex);
     image = std::move(m_pending_image);
     if (!image.isNull()) {
       frame_size = m_pending_frame_size;
       m_pending_frame_size = {};
+      frame_generation = m_pending_frame_generation;
     }
   }
   auto *clip = static_cast<PhotonPageNode *>(oldNode);
@@ -539,6 +577,18 @@ QSGNode *PhotonWebView::updatePaintNode(QSGNode *oldNode,
     m_displayed_frame_size = frame_size;
     m_has_pending_frame.store(false, std::memory_order_release);
     m_frames_presented.fetch_add(1, std::memory_order_relaxed);
+    auto browser = m_browser;
+    if (browser && frame_generation >= m_required_frame_generation.load(
+                                           std::memory_order_relaxed)) {
+      QMetaObject::invokeMethod(
+          browser,
+          [browser] {
+            if (auto *controller =
+                    qobject_cast<BrowserController *>(browser.data()))
+              controller->engineFramePresented();
+          },
+          Qt::QueuedConnection);
+    }
   }
   if (m_displayed_frame_size.isValid() && !m_displayed_frame_size.isEmpty())
     clip->textureNode()->setRect(QRectF(QPointF(0, 0), m_displayed_frame_size));

@@ -10,6 +10,9 @@ const char *photon_browser_string(const BrowserHandle *, unsigned);
 bool photon_browser_flag(const BrowserHandle *, unsigned);
 void photon_browser_update(BrowserHandle *, const char *, const char *, bool, bool, bool);
 void photon_browser_load_failed(BrowserHandle *, const char *);
+void photon_browser_navigation_started(BrowserHandle *, bool);
+void photon_browser_frame_presented(BrowserHandle *);
+void photon_browser_cancel_navigation(BrowserHandle *);
 bool photon_browser_navigate(BrowserHandle *, const char *, char *, size_t);
 const char *photon_browser_error(const BrowserHandle *);
 bool photon_browser_command(const BrowserHandle *, unsigned);
@@ -28,6 +31,10 @@ void BrowserController::engineStateChanged(QString url, QString title, bool load
   const auto urlBytes = url.toUtf8();
   const auto titleBytes = title.toUtf8();
   photon_browser_update(m_state, urlBytes.constData(), titleBytes.constData(), loading, back, forward);
+  emit stateChanged();
+}
+void BrowserController::engineFramePresented() {
+  photon_browser_frame_presented(m_state);
   emit stateChanged();
 }
 void BrowserController::engineLoadFailed(QString message) {
@@ -50,15 +57,27 @@ void BrowserController::navigate(QString text) {
   }
   if (qEnvironmentVariableIsSet("PHOTON_VERBOSE"))
     qInfo().noquote() << "Browser command: Navigate(" << output << ")";
+  photon_browser_navigation_started(m_state, false);
+  emit stateChanged();
   m_executor(0, QString::fromUtf8(output));
 }
 void BrowserController::command(int command) {
   if (photon_browser_command(m_state, static_cast<unsigned>(command)) && m_executor) {
     if (qEnvironmentVariableIsSet("PHOTON_VERBOSE"))
       qInfo() << "Browser command:" << command;
+    photon_browser_navigation_started(m_state, command == 1);
+    emit stateChanged();
     m_executor(command, {});
   }
 }
 void BrowserController::reload() { command(1); }
+void BrowserController::cancelNavigation() {
+  if (!loading())
+    return;
+  photon_browser_cancel_navigation(m_state);
+  emit stateChanged();
+  if (m_executor)
+    m_executor(4, {});
+}
 void BrowserController::back() { command(2); }
 void BrowserController::forward() { command(3); }

@@ -16,6 +16,8 @@ class PhotonWebView : public QQuickItem {
   Q_PROPERTY(qreal cornerRadius READ cornerRadius WRITE setCornerRadius NOTIFY
                  cornerRadiusChanged)
   Q_PROPERTY(QObject *browser READ browser WRITE setBrowser)
+  Q_PROPERTY(
+      bool darkMode READ darkMode WRITE setDarkMode NOTIFY darkModeChanged)
 public:
   explicit PhotonWebView(QQuickItem *parent = nullptr);
   ~PhotonWebView() override;
@@ -23,9 +25,12 @@ public:
   void setCornerRadius(qreal radius);
   QObject *browser() const { return m_browser.data(); }
   void setBrowser(QObject *browser);
+  bool darkMode() const { return m_dark_mode; }
+  void setDarkMode(bool dark);
 
 signals:
   void cornerRadiusChanged();
+  void darkModeChanged();
 
 protected:
   void componentComplete() override;
@@ -52,6 +57,9 @@ private:
   QImage m_pending_image;
   QSizeF m_pending_frame_size;
   QSizeF m_displayed_frame_size;
+  std::uint64_t m_pending_frame_generation{0};
+  std::atomic_uint64_t m_frame_generation{0};
+  std::atomic_uint64_t m_required_frame_generation{0};
   std::atomic_bool m_has_pending_frame{false};
   std::atomic_bool m_shutting_down{false};
   std::atomic_uint64_t m_frames_received{0};
@@ -70,4 +78,6 @@ private:
   bool m_navigation_loading{false};
   bool m_navigation_timing_active{false};
   qreal m_corner_radius{0};
+  bool m_dark_mode{false};
+  void applyPreferredColorScheme();
 };
