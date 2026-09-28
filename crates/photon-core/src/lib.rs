@@ -97,6 +97,11 @@ pub struct BrowserHandle {
     title: CString,
     error: CString,
     last_error: CString,
+    committed_url: String,
+    navigation_active: bool,
+    engine_loading: bool,
+    frame_presented: bool,
+    restore_url_after_cancel: bool,
 }
 
 fn c_string(value: &str) -> CString {
@@ -112,6 +117,11 @@ pub extern "C" fn photon_browser_create() -> *mut BrowserHandle {
         title: CString::default(),
         error: CString::default(),
         last_error: CString::default(),
+        committed_url: String::new(),
+        navigation_active: false,
+        engine_loading: false,
+        frame_presented: true,
+        restore_url_after_cancel: false,
     }))
 }
 
@@ -147,7 +157,7 @@ pub unsafe extern "C" fn photon_browser_flag(handle: *const BrowserHandle, field
         return false;
     };
     match field {
-        0 => handle.state.loading,
+        0 => handle.navigation_active,
         1 => handle.state.can_go_back,
         2 => handle.state.can_go_forward,
         _ => false,
@@ -176,10 +186,25 @@ pub unsafe extern "C" fn photon_browser_update(
                 .into_owned()
         }
     };
+    let mut next_url = read(url);
+    if handle.restore_url_after_cancel {
+        next_url.clone_from(&handle.committed_url);
+        if !loading {
+            handle.restore_url_after_cancel = false;
+        }
+    }
+    handle.engine_loading = loading;
+    if !handle.navigation_active {
+        handle.committed_url.clone_from(&next_url);
+    }
+    if !loading && handle.navigation_active && handle.frame_presented {
+        handle.navigation_active = false;
+        handle.committed_url.clone_from(&next_url);
+    }
     let state = BrowserState {
-        url: read(url),
+        url: next_url,
         title: read(title),
-        loading,
+        loading: handle.navigation_active,
         can_go_back: back,
         can_go_forward: forward,
         error: None,
@@ -188,6 +213,52 @@ pub unsafe extern "C" fn photon_browser_update(
     handle.title = c_string(&state.title);
     handle.error = CString::default();
     handle.state.apply(EngineEvent::ViewStateChanged(state));
+}
+
+/// Marks a browser initiated navigation and retains the last displayed address.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn photon_browser_navigation_started(
+    handle: *mut BrowserHandle,
+    reuse_displayed_frame: bool,
+) {
+    let Some(handle) = (unsafe { handle.as_mut() }) else {
+        return;
+    };
+    handle.committed_url.clone_from(&handle.state.url);
+    handle.navigation_active = true;
+    handle.engine_loading = true;
+    handle.frame_presented = reuse_displayed_frame && !handle.state.loading;
+    handle.restore_url_after_cancel = false;
+    handle.state.loading = true;
+}
+
+/// Completes loading after a frame has reached the Qt Quick scene graph.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn photon_browser_frame_presented(handle: *mut BrowserHandle) {
+    let Some(handle) = (unsafe { handle.as_mut() }) else {
+        return;
+    };
+    handle.frame_presented = true;
+    if handle.navigation_active && !handle.engine_loading {
+        handle.navigation_active = false;
+        handle.committed_url.clone_from(&handle.state.url);
+        handle.state.loading = false;
+    }
+}
+
+/// Restores the last committed address after stopping an in-flight navigation.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn photon_browser_cancel_navigation(handle: *mut BrowserHandle) {
+    let Some(handle) = (unsafe { handle.as_mut() }) else {
+        return;
+    };
+    handle.navigation_active = false;
+    handle.engine_loading = false;
+    handle.frame_presented = true;
+    handle.restore_url_after_cancel = true;
+    handle.state.url.clone_from(&handle.committed_url);
+    handle.state.loading = false;
+    handle.url = c_string(&handle.state.url);
 }
 
 /// Maps an address into the engine navigation target and stores any error.
@@ -250,6 +321,10 @@ pub unsafe extern "C" fn photon_browser_load_failed(
             .into_owned()
     };
     handle.state.apply(EngineEvent::LoadFailed(message));
+    handle.navigation_active = false;
+    handle.engine_loading = false;
+    handle.frame_presented = true;
+    handle.committed_url.clone_from(&handle.state.url);
     handle.error = c_string(handle.state.error.as_deref().unwrap_or_default());
 }
 
