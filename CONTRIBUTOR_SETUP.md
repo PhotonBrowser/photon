@@ -1,6 +1,8 @@
 # Contributor setup
 
-Clone the browser and its pinned dependencies, then initialize the development environment:
+## First checkout
+
+Install Git, Rust/Cargo (Rust 1.85 or newer), a C++ compiler, CMake 3.25 or newer, Ninja 1.10 or newer, Python 3, and Bun. Clone Photon with its pinned dependencies and let the CLI finish setup:
 
 ```bash
 git clone --recurse-submodules git@github.com:PhotonBrowser/photon.git
@@ -9,6 +11,24 @@ cd photon
 ./photon doctor
 ```
 
-Run `./photon build` to build Photon Engine and the source-built GPUIX addon. `./photon run` launches the GPUIX React development runtime. See [Building](Documentation/Building.md) for incremental build behavior and [Architecture](Documentation/Architecture.md) for ownership boundaries.
+`./photon setup` runs `git submodule update --init --recursive`, initializes the pinned Engine and GPUIX checkouts (including nested submodules), configures their Photon `origin` and upstream remotes, and installs the pinned JavaScript dependencies. It does not use Git's `--force` option. If setup cannot safely switch a submodule because it contains local edits, commit or save that work before retrying.
 
-`Engine/` uses `PhotonBrowser/photon-engine` as `origin`; its `upstream` should point to `LadybirdBrowser/ladybird`. `vendor/gpuix` uses `PhotonBrowser/gpuix` as its pinned source. Both dependencies are initialized through Git submodules.
+Run `./photon build` to build Photon Engine and the source-built GPUIX addon. `./photon run` starts the GPUIX React development runtime. For commands and incremental build behavior, see [Building](Documentation/Building.md). For architecture and ownership boundaries, see [Architecture](Documentation/Architecture.md).
+
+## Existing checkout or missing submodules
+
+From the Photon repository root:
+
+```bash
+git submodule sync --recursive
+./photon setup
+git submodule status --recursive
+```
+
+The leading status character should be a space for every initialized, correctly pinned submodule. `-` means a submodule is not initialized; `+` means its checkout differs from the commit recorded by Photon. Setup initializes missing submodules but does not discard local changes to fix a `+` checkout. Review and commit or save submodule work first, then restore the commit recorded by the parent repository when appropriate:
+
+```bash
+git submodule update --init --recursive Engine vendor/gpuix
+```
+
+Do not use `git submodule update --remote` for normal setup. Photon records exact tested commits; upstream updates are merged into the Photon-owned Engine/GPUIX repositories first, then the tested submodule commit is recorded here. Follow [Upstream maintenance](Documentation/Upstream.md) for that process and conflict handling.

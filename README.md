@@ -25,4 +25,6 @@ cd photon
 ./photon run
 ```
 
-See [Building](Documentation/Building.md), [Architecture](Documentation/Architecture.md), and [Contributing](CONTRIBUTING.md). Photon Engine remains a separate, actively maintained downstream of Ladybird in [PhotonBrowser/photon-engine](https://github.com/PhotonBrowser/photon-engine).
+For prerequisites and environment setup, see [Contributor setup](CONTRIBUTOR_SETUP.md). For everyday commands and build behavior, see [Building Photon](Documentation/Building.md). [Architecture](Documentation/Architecture.md), [GPUIX integration](Documentation/GPUIX.md), and [PhotonWebView](Documentation/WebView.md) describe the native data flow and presentation. The [upstream maintenance tutorial](Documentation/Upstream.md) explains how to bring Ladybird and GPUIX changes into Photon, resolve conflicts, and update the pinned submodules.
+
+Photon Engine remains a separate, actively maintained downstream of Ladybird in [PhotonBrowser/photon-engine](https://github.com/PhotonBrowser/photon-engine). GPUIX is maintained in [PhotonBrowser/gpuix](https://github.com/PhotonBrowser/gpuix), based on [remorses/gpuix](https://github.com/remorses/gpuix).

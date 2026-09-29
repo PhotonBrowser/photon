@@ -41,3 +41,5 @@ The current frame path copies an owned BGRA bitmap into GPUI. It is a correct tr
 The single `PhotonWebViewElement` owns the current engine session and view for this one-window spike. The session pumps the embedder as part of GPUIX's yielding custom-element update task; it does not spin on the UI thread. Frame callbacks coalesce into one latest-frame slot. When the native element is removed, it shuts down and destroys the view before destroying the runtime.
 
 See [GPUIX integration](GPUIX.md) for the fork extension and addon loading model.
+
+The Engine and GPUIX submodules point to Photon-maintained downstream repositories, not directly to their upstreams. Follow [Upstream maintenance](Upstream.md) to sync either upstream and update the tested commit pinned here.

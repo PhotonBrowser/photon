@@ -1,6 +1,6 @@
 # Building Photon
 
-Photon's `./photon` script is the developer entry point. It requires Git, Rust/Cargo, a C++ compiler, CMake, Ninja, Python 3, and Bun. Setup initializes the `Engine/` and `vendor/gpuix` submodules and installs the pinned JS dependencies.
+Photon's `./photon` script is the developer entry point. It requires Git, Rust/Cargo 1.85 or newer, a C++ compiler, CMake 3.25 or newer, Ninja 1.10 or newer, Python 3, and Bun. `./photon setup` initializes the `Engine/` and `vendor/gpuix` submodules recursively, configures their remotes, and installs the pinned JavaScript dependencies. See [Contributor setup](../CONTRIBUTOR_SETUP.md) for first checkout and recovery steps.
 
 ```bash
 ./photon setup
@@ -20,3 +20,5 @@ Incremental behavior:
 - An Engine source/revision/configuration change invalidates the Engine build fingerprint and rebuilds Engine.
 
 Use `./photon clean` to remove generated build trees. Build products, lock caches, and downloaded dependencies stay out of tracked source directories.
+
+To update Ladybird or GPUIX, first merge the upstream changes into Photon’s downstream dependency repository, test them there, then update Photon’s pinned submodule commit. See [Upstream maintenance](Upstream.md); do not advance dependencies with `git submodule update --remote` as part of an ordinary Photon build.
