@@ -4627,6 +4627,7 @@ version = "0.1.0"
 dependencies = [
  "cc",
  "gpui",
+ "gpui_platform",
  "gpuix-native",
  "serde_json",
 ]
