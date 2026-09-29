@@ -13,6 +13,8 @@ The root repository records the tested commit for each dependency as a submodule
 
 Start at the Photon repository root. Commit or save work in the root and both submodules before switching branches. Do not try to sync over local edits.
 
+Before switching or checking out an Engine revision, make sure no Photon or Engine build is compiling from `Engine/`. CMake and Ninja read source files throughout the build; changing the submodule worktree while they run can make files disappear temporarily and corrupt the generated Ninja graph. Let the build finish or stop it cleanly before changing the checkout.
+
 ```bash
 ./photon setup
 git status --short

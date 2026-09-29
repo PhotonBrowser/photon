@@ -19,3 +19,5 @@
 17. Perform upstream merges inside the dependency repository on a review branch. Resolve conflicts by understanding both sides and preserving Photon-specific patches; do not blanket-select `ours` or `theirs`. Run the dependency checks before merging to its Photon default branch.
 18. Update a submodule pin only after its tested commit is available on the Photon-owned remote. Commit the gitlink change in the Photon root repository and verify `git submodule status --recursive` afterward.
 19. Resolve a submodule conflict in the parent repository by choosing a tested dependency commit and staging the gitlink; a submodule entry is a commit pointer, not a text file to merge.
+20. Read gpuix docs for gpuix related changes: https://gpuix.dev/#gpuix
+21. Never switch or update the `Engine/` checkout while CMake or Ninja is building from it. Wait for the build to finish or stop it cleanly first.
