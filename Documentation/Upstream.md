@@ -2,13 +2,13 @@
 
 Photon pins exact commits of two Photon-maintained downstream repositories. GPUIX also pins the Photon Zed fork as a nested submodule. `photon.toml` configures which root submodules `./photon setup` initializes and the Git remotes it ensures in each checkout. Git still owns the pinned commits and clone URLs in `.gitmodules`; setup never advances a submodule to a branch tip.
 
-| Dependency | Photon remote (`origin`) | Upstream remote | Photon branch |
+| Dependency | Photon remote (`origin`) | Upstream remote/reference | Photon branch |
 | --- | --- | --- | --- |
-| `Engine/` | `PhotonBrowser/photon-engine` | `LadybirdBrowser/ladybird` | `master` |
-| `vendor/gpuix/` | `PhotonBrowser/gpuix` | `remorses/gpuix` | `main` |
-| `vendor/gpuix/zed/` (nested) | `PhotonBrowser/zed` | `remorses/zed` | `photon/live-image` |
+| `Engine/` | `PhotonBrowser/photon-engine` | `LadybirdBrowser/ladybird` (`master`) | `master` |
+| `vendor/gpuix/` | `PhotonBrowser/gpuix` | `remorses/gpuix` (`main`) | `main` |
+| `vendor/gpuix/zed/` (nested) | `PhotonBrowser/zed` | `remorses/zed` ([`ea042f2`](https://github.com/remorses/zed/tree/ea042f2f045157ada1d0ad71009520931dcace83)) | `photon/live-image` |
 
-The root repository records the tested Engine and GPUIX commits as submodule gitlinks. GPUIX records its tested Zed commit in its own nested gitlink. Merge upstream changes into each Photon-owned repository first, then update the gitlink that owns that dependency. This keeps Photon-specific changes in their respective downstreams and lets each layer pin tested revisions.
+The root repository records the tested Engine and GPUIX commits as submodule gitlinks. GPUIX records its tested Zed commit in its own nested gitlink. The Photon Zed branch is based on upstream commit `ea042f2`; use that explicit upstream reference rather than `remorses/zed` `main`. Merge upstream changes into each Photon-owned repository first, then update the gitlink that owns that dependency. This keeps Photon-specific changes in their respective downstreams and lets each layer pin tested revisions.
 
 ## Before syncing
 
