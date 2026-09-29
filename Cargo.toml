@@ -1,7 +1,12 @@
 [workspace]
 resolver = "2"
-members = ["crates/photon-cli", "crates/photon-core", "crates/photon-qml-tools"]
-exclude = ["Engine/Libraries/LibJS/Flap"]
+members = [
+    "crates/photon-cli",
+    "crates/photon-core",
+    "crates/photon-gpui",
+    "crates/photon-native-addon",
+]
+exclude = ["Engine/Libraries/LibJS/Flap", "vendor/gpuix"]
 
 [workspace.package]
 edition = "2024"

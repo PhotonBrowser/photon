@@ -51,8 +51,7 @@ pub(crate) fn require_tool(tool: &str) -> Result<(), String> {
 }
 
 pub(crate) fn run_tool(tool: &str, args: &[&str], root: &Path) -> Result<String, String> {
-    let resolved = photon_qml_tools::tool_path(tool, root).unwrap_or_else(|| tool.to_owned());
-    output(&resolved, args, root)
+    output(tool, args, root)
 }
 
 pub(crate) fn compiler_version(root: &Path) -> Option<String> {
@@ -111,8 +110,21 @@ pub(crate) fn invoke(
     cwd: &Path,
     verbose: bool,
 ) -> Result<(), String> {
+    invoke_with_environment(program, args, cwd, verbose, &[])
+}
+
+pub(crate) fn invoke_with_environment(
+    program: &str,
+    args: &[&str],
+    cwd: &Path,
+    verbose: bool,
+    environment: &[(&str, String)],
+) -> Result<(), String> {
     let mut cmd = Command::new(program);
     cmd.args(args).current_dir(cwd);
+    for (name, value) in environment {
+        cmd.env(name, value);
+    }
     if verbose {
         return cmd.status().map_err(|e| e.to_string()).and_then(|s| {
             if s.success() {

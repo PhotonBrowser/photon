@@ -3,52 +3,47 @@ use std::path::Path;
 use crate::support::{invoke, output, with_progress};
 
 pub(crate) fn check(root: &Path, verbose: bool) -> Result<(), String> {
-    let mut diagnostics = String::new();
-    match check_inner(root, verbose, &mut diagnostics) {
+    match check_inner(root, verbose) {
         Ok(()) => Ok(()),
         Err(error) => {
-            let detail = if diagnostics.is_empty() {
-                error.clone()
-            } else {
-                format!("{error}\n{diagnostics}")
-            };
-            print_fix_prompt(root, &detail);
+            print_fix_prompt(root, &error);
             Err(error)
         }
     }
 }
 
-fn check_inner(root: &Path, verbose: bool, diagnostics: &mut String) -> Result<(), String> {
-    crate::commands::ide::refresh(root, verbose)?;
-    crate::commands::ide::check_cpp(root, verbose)?;
-    invoke("cargo", &["fmt", "--all", "--", "--check"], root, verbose)?;
+fn check_inner(root: &Path, verbose: bool) -> Result<(), String> {
+    crate::commands::build::ensure_gpuix_js(root, verbose)?;
+    crate::commands::build::ensure_ui_dependencies(root, verbose)?;
+    invoke(
+        "cargo",
+        &[
+            "fmt",
+            "--package",
+            "photon-cli",
+            "--package",
+            "photon-core",
+            "--package",
+            "photon-gpui",
+            "--package",
+            "photon-native-addon",
+            "--",
+            "--check",
+        ],
+        root,
+        verbose,
+    )?;
     with_progress("Check Rust workspace", !verbose, || {
         invoke("cargo", &["check", "--workspace"], root, verbose)
     })?;
-    println!("==> Lint QML");
-    let lint = photon_qml_tools::lint(root)?;
-    print!("{}", lint.diagnostics);
-    diagnostics.push_str(&lint.diagnostics);
-    if !lint.succeeded
-        || lint
-            .diagnostics
-            .lines()
-            .any(|line| line.starts_with("Warning:") || line.starts_with("Error:"))
-    {
-        return Err("QML lint reported warnings or errors".into());
-    }
-    let forbidden = output(
-        "rg",
-        &["-n", "QWidget|QMainWindow|Qt::Widgets", "native/qt", "ui"],
-        root,
-    )
-    .unwrap_or_default();
-    if !forbidden.trim().is_empty() {
-        return Err(format!("Qt Widgets dependency found:\n{forbidden}"));
-    }
+    invoke("bun", &["run", "typecheck"], &root.join("ui"), verbose)?;
     let submodule = output("git", &["submodule", "status", "Engine"], root)?;
     if submodule.starts_with('-') || submodule.starts_with('+') {
         return Err(format!("Engine submodule mismatch: {}", submodule.trim()));
+    }
+    let gpuix = output("git", &["submodule", "status", "vendor/gpuix"], root)?;
+    if gpuix.starts_with(['-', '+']) {
+        return Err(format!("GPUIX submodule mismatch: {}", gpuix.trim()));
     }
     println!("Architecture checks passed.");
     Ok(())

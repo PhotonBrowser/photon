@@ -1,16 +1,28 @@
 # Photon
 
-Photon is a Qt Quick browser application with application logic owned by Rust and web technology provided by Photon Engine.
+Photon is a native browser shell built with React/TSX, GPUIX and GPUI. Photon Engine provides the Ladybird-derived web platform and rendering engine.
 
 ```text
-PhotonBrowser/photon (this repository)
-  Rust application and CLI · QML presentation · native Qt integration
-  Engine/ pins one exact commit
+React / TSX (ui/)
+      ↓ GPUIX React reconciler
+Photon source-built N-API addon
+      ↓ GPUI native scene
+PhotonWebView (Rust)
+      ↓ LibPhotonEmbedder
+Photon Engine (Engine/ submodule)
       ↓
-PhotonBrowser/photon-engine
-  Ladybird-derived engine and Photon embedding work
-      ↓ upstream remote
-LadybirdBrowser/ladybird
+Ladybird
 ```
 
-See [Building](Documentation/Building.md), [Architecture](Documentation/Architecture.md), and [Contributing](CONTRIBUTING.md). Photon Engine retains Ladybird attribution and licensing; it is an actively maintained downstream, not a source mirror.
+The shell is intentionally minimal. React controls layout and properties; page frames stay in native code and are presented as GPUI images. There is no Qt application shell.
+
+## Get started
+
+```bash
+git clone --recurse-submodules git@github.com:PhotonBrowser/photon.git
+cd photon
+./photon setup
+./photon run
+```
+
+See [Building](Documentation/Building.md), [Architecture](Documentation/Architecture.md), and [Contributing](CONTRIBUTING.md). Photon Engine remains a separate, actively maintained downstream of Ladybird in [PhotonBrowser/photon-engine](https://github.com/PhotonBrowser/photon-engine).

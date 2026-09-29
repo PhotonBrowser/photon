@@ -1,0 +1,22 @@
+{
+  "name": "photon-gpui-shell",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --hot src/main.tsx",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@gpuix/native": "file:../vendor/gpuix/packages/native",
+    "@gpuix/react": "0.10.0",
+    "react": "19.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.0",
+    "typescript": "5.9.3",
+    "prettier": "3.6.2"
+  },
+  "overrides": {
+    "@gpuix/native": "file:../vendor/gpuix/packages/native"
+  }
+}

@@ -3,4 +3,4 @@ target/
 .cache/
 .DS_Store
 *.user
-ui/.qmlls.ini
+ui/node_modules/

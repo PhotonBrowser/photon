@@ -13,6 +13,21 @@ pub(crate) fn setup(root: &Path, verbose: bool) -> Result<(), String> {
             true,
         )?;
     }
+    let gpuix = root.join("vendor/gpuix");
+    if !gpuix.join(".git").exists() {
+        command(
+            "git",
+            &[
+                "submodule",
+                "update",
+                "--init",
+                "--recursive",
+                "vendor/gpuix",
+            ],
+            root,
+            true,
+        )?;
+    }
     let submodule_state = output("git", &["submodule", "status", "Engine"], root)?;
     if submodule_state.starts_with(['+', '-']) {
         if !output(
@@ -56,20 +71,7 @@ pub(crate) fn setup(root: &Path, verbose: bool) -> Result<(), String> {
             ));
         }
     }
-    let qtpaths =
-        photon_qml_tools::tool_path("qtpaths6", root).unwrap_or_else(|| "qtpaths6".into());
-    let qt_version = output(&qtpaths, &["--qt-version"], root)
-        .map_err(|_| "Qt 6 development tools are missing; install Qt Quick, QML, and Quick Controls development packages".to_owned())?;
-    if !version_at_least(&qt_version, (6, 9)) {
-        return Err(format!(
-            "Qt 6.9 or newer is required; found {}",
-            qt_version.trim()
-        ));
-    }
-    for tool in ["qmllint", "qmlformat", "qmlls"] {
-        photon_qml_tools::tool_path(tool, root)
-            .ok_or_else(|| format!("{tool} is missing; install the Qt 6 QML development tools"))?;
-    }
+    require_tool("bun")?;
     if !root.join("Engine/CMakeLists.txt").is_file() {
         return Err(
             "Engine submodule is missing; run git submodule update --init --recursive".into(),
@@ -96,6 +98,8 @@ pub(crate) fn setup(root: &Path, verbose: bool) -> Result<(), String> {
         std::fs::create_dir_all(root.join(path)).map_err(|e| e.to_string())?;
     }
     crate::commands::ide::setup(root, verbose)?;
+    crate::commands::build::ensure_gpuix_js(root, verbose)?;
+    crate::commands::build::ensure_ui_dependencies(root, verbose)?;
     println!(
         "Setup ready. The first engine build prepares Ladybird's pinned dependencies under build/."
     );
@@ -110,7 +114,7 @@ pub(crate) fn doctor(root: &Path) -> Result<(), String> {
         ("Cargo", vec!["cargo", "--version"]),
         ("CMake", vec!["cmake", "--version"]),
         ("Ninja", vec!["ninja", "--version"]),
-        ("Qt", vec!["qtpaths6", "--qt-version"]),
+        ("Bun", vec!["bun", "--version"]),
     ] {
         let line = run_tool(args[0], &args[1..], root).unwrap_or_else(|_| "not found".into());
         println!("  {name:10} {}", line.lines().next().unwrap_or("unknown"));

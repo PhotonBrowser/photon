@@ -1,35 +1,43 @@
 # Architecture
 
-## Browser state and navigation
+Photon separates browser state, native presentation, and the web engine:
 
-Photon's persistent browser and application state is owned by `photon-core` in Rust. Its `BrowserState` is updated from complete state snapshots delivered by `LibPhotonEmbedder`, and its browser command model decides whether an omnibox submission is a valid navigation URL. QML owns presentation and transient editor state, including whether the omnibox is being edited. The Qt/C++ `BrowserController` is a narrow QObject adapter for QML properties and invokable commands; it does not keep a second browser state. `PhotonWebView` adapts those commands to the embedder view. The engine remains responsible for webpage navigation and rendering.
+```text
+ui/src/App.tsx
+    React composition and layout
+        ↓
+@gpuix/react reconciler
+        ↓
+Photon source-built N-API addon
+    GPUIX renderer and Photon factory registration
+        ↓
+crates/photon-gpui
+    PhotonWebViewElement and engine adapter
+        ↓ narrow C ABI
+native/gpui + LibPhotonEmbedder
+        ↓
+Engine/ (Photon Engine / Ladybird)
+```
 
-Navigation flows from `Omnibox.qml` to `BrowserController`, through the Rust URL normalizer and command model, back through the adapter to `Photon::View`. Engine URL, title, loading, and history snapshots flow from `Photon::ViewCallbacks` through `PhotonWebView` into Rust state, then QML reads the controller's state properties. Engine callbacks are currently delivered synchronously while the Qt GUI thread pumps the runtime every 5 ms; the adapter updates Rust state on that same thread. The view shuts down and disconnects its callbacks before the Rust state controller is destroyed.
+## Ownership
 
-The omnibox currently navigates URLs only. Search queries and suggestions are not implemented.
+- `ui/` contains the small React/TSX shell. It sets the initial URL and expresses layout; it has no engine or frame-buffer logic.
+- `crates/photon-core` owns framework-independent browser state and command rules. It does not depend on GPUI, GPUIX, or Ladybird types.
+- `crates/photon-gpui` owns the native web element, its GPUI presentation state, and the safe Rust-facing use of Photon Engine.
+- `crates/photon-native-addon` is the composition root. It exports GPUIX's N-API API and links Photon factory registration into the same addon.
+- `native/gpui` is the narrow C++ bridge to LibPhotonEmbedder. Engine implementation changes remain in `PhotonBrowser/photon-engine`.
+- `vendor/gpuix` is the exact `PhotonBrowser/gpuix` git submodule revision shared by Rust and the `@gpuix/native` local package.
 
-Photon is split across two repositories. This browser repository owns application behavior, tooling, QML and the Qt Quick shell. `Engine/` pins one exact Photon Engine revision; `photon-engine` owns the Ladybird-derived engine, services, tests and Photon-specific engine interfaces.
+## Frame and layout path
 
-Rust is the application layer and must not depend on Qt. QML owns presentation. C++ in `native/qt/` is limited to Qt classes and native engine glue. `PhotonWebView` is a `QQuickItem` that owns the Qt/engine lifetime bridge and uploads engine frames as scene-graph textures; no QWidget embedding is part of the architecture.
+`PresentedFrame` bytes remain native: Ladybird → LibPhotonEmbedder → Photon Rust → GPUI `RenderImage`. The React tree receives only element properties. Photon keeps the latest complete frame rather than queuing every frame.
 
-The Rust workspace keeps command concerns separate: `photon-cli` is a thin executable with command modules for setup, builds, checks, formatting, importing UI assets, and Engine operations. `photon-qml-tools` owns Qt tool discovery plus QML linting and formatting, so those details do not spread through command code. `photon-core` remains the browser application domain crate. `./photon import icon <name> --from lucide` stores normalized Lucide SVGs and their ISC attribution in `ui/icons`; Qt resource aliases include these assets in the Photon QML module.
+The element measures its laid-out GPUI bounds and uses GPUI's scale factor to derive the engine's physical viewport. It resizes only when dimensions or scale change. The frame image remains in the GPUI scene, so normal scene clipping, transforms, and z-order apply.
 
-`LibPhotonEmbedder` exposes Photon-owned `Runtime` and `View` types over the existing `LibWebView` lifecycle. Runtime initialization starts Ladybird services and `pump()` advances the engine event loop. A View owns one `HeadlessWebView`, supports navigation/history/resize/focus and translates pointer and key input. `ViewCallbacks` reports URL, title, loading/history state, failures and presented frames. The API header is the only engine surface included by the Qt shell.
+The current frame path copies an owned BGRA bitmap into GPUI. It is a correct transitional CPU-backed presentation path, not zero-copy GPU sharing.
 
-Normal Photon startup requests Vulkan painting in the Engine. If external shared-image allocation is unavailable, the Compositor keeps painting on a Vulkan render target and reads completed frames back to its CPU-shareable bitmap for the embedder; Qt then copies the frame into a `QImage` and uploads a `QSGTexture`. This CPU presentation path is transitional and may be removed when a safe native frame lease is implemented. The explicit troubleshooting command `./photon run --force-cpu-painting` sets the Engine's CPU rasterization option. That option is deprecated, may be removed, and is never enabled by normal `./photon run`.
+## Event processing and lifetime
 
-The Skia Vulkan extension registry must be initialized with the extensions enabled on the Engine's Vulkan device before creating its `GrDirectContext`. Without that initialization, the compositor submitted frames but Skia's render target readback contained blank pixels. `PhotonWebView` supplies the rounded page clip directly as a scene-graph clip node. Wrapping it in a QML `MultiEffect` layer hid valid page textures under the Qt Quick Vulkan backend, so page masking must stay in the view's scene-graph node until a compatible effect path is established.
+The single `PhotonWebViewElement` owns the current engine session and view for this one-window spike. The session pumps the embedder as part of GPUIX's yielding custom-element update task; it does not spin on the UI thread. Frame callbacks coalesce into one latest-frame slot. When the native element is removed, it shuts down and destroys the view before destroying the runtime.
 
-On the RTX 4060 tested here, the Engine advertises DRM modifiers for BGRA8 (`VK_FORMAT_B8G8R8A8_UNORM`) images and DMA-BUF export/import. Its linear modifier is single-plane and externally importable/exportable, but its reported feature bits (`0x1dd03`) omit `COLOR_ATTACHMENT`; the six tiled modifiers report render/sample support (`0x1dd83`). The current shared-image caller requests only the linear modifier, matching the linear-only importer in `Engine/UI/Qt/WebContentViewLinux.cpp`, so that capability probe fails before `vkCreateImage` or memory selection. The Compositor keeps Vulkan painting enabled and reads the completed GPU surface back to its CPU-shareable bitmap. The internal Vulkan surface must be flushed with `kNoAccess`; treating every Vulkan surface as externally presented caused Skia's Vulkan backend to assert while preparing an uninstantiated surface proxy.
-
-GPU-native Qt Quick presentation remains a separate milestone. The Engine selects the first discrete Vulkan adapter with the required external-memory extensions. Photon requests the Qt Quick Vulkan backend on Linux; verbose mode reports both devices. On this Linux machine, Engine and Qt Quick select the same NVIDIA GeForce RTX 4060 and device UUID (NVIDIA 615.71.09). There is no hardcoded GPU model or cross-process device handle sharing. Before replacing CPU readback, the embedder frame contract still needs an explicit lease, backing generation and ID, complete plane metadata, producer completion, external ownership/synchronization, Qt consumer completion, and acknowledgement only after Qt is finished sampling. A raw DMA-BUF import without those lifetime and synchronization guarantees is not safe.
-
-The intended cross-platform boundary is an opaque native presentation lease implemented in the native presentation layer. Linux can map Vulkan/DMA-BUF plus explicit sync and metadata to Qt Vulkan; macOS can map an IOSurface/Metal resource to Qt Metal; Windows can map a shared D3D resource to Qt D3D. QML and Rust browser state see only frame dimensions/generation and a generic presentation object; they never inspect native handles. The lease remains alive until Qt confirms its GPU sampling work has completed, then the Engine may reuse that backing. No such native lease exists yet.
-
-Photon uses one Qt Quick/QML frontend on Linux, macOS, and Windows. On macOS, Qt 6.9's `ExpandedClientAreaHint` and `NoTitleBarBackgroundHint` extend the QML window content behind the native title bar while preserving the `NSWindow` and its traffic lights. `ApplicationWindow` keeps its background edge to edge; the QML title-bar row uses Qt Quick's `SafeArea.margins` for its height and side clearances, while `topPadding: 0` prevents Qt Controls from adding a second safe-area inset. Qt's native window move API handles dragging. No AppKit shim is currently needed for this integration. AppKit is a native window integration layer, not a second Photon frontend; it must not own browser chrome or application state.
-
-Logical item dimensions and device-pixel ratio are sent to the engine on initial creation and geometry/screen changes; the embedder rounds logical size times DPR to physical pixels. Qt mouse, wheel, key, text and focus events are translated at `PhotonWebView` and passed through LibPhotonEmbedder. Photon starts on a blank view; address, reload and history commands go through Rust browser state before reaching the view.
-
-The current shutdown order is View before Runtime: `PhotonWebView` explicitly resets the view, then the runtime. QML keeps `BrowserController` alive until the view is torn down, and `QPointer` makes the adapter's reference safe during QObject destruction. The view callbacks are disconnected by `View::shutdown()`. Helper processes are owned by Ladybird's existing application lifecycle.
-
-Generated files and build trees belong under `build/`. Do not put tabs, config or other product state in C++ or Photon Engine.
+See [GPUIX integration](GPUIX.md) for the fork extension and addon loading model.

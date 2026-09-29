@@ -90,7 +90,7 @@ fn has_explicit_scheme(input: &str) -> bool {
         && !scheme.contains('.')
 }
 
-/// Opaque state allocation used by the C++ Qt adapter.
+/// Opaque state allocation used by native shell adapters.
 pub struct BrowserHandle {
     state: BrowserState,
     url: CString,
@@ -232,7 +232,7 @@ pub unsafe extern "C" fn photon_browser_navigation_started(
     handle.state.loading = true;
 }
 
-/// Completes loading after a frame has reached the Qt Quick scene graph.
+/// Completes loading after a frame has reached the native presentation scene.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn photon_browser_frame_presented(handle: *mut BrowserHandle) {
     let Some(handle) = (unsafe { handle.as_mut() }) else {
@@ -328,7 +328,7 @@ pub unsafe extern "C" fn photon_browser_load_failed(
     handle.error = c_string(handle.state.error.as_deref().unwrap_or_default());
 }
 
-/// Validates non-navigation commands before the Qt adapter executes them.
+/// Validates commands before the native shell adapter executes them.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn photon_browser_command(
     handle: *const BrowserHandle,

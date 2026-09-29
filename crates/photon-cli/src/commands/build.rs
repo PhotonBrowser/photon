@@ -1,12 +1,12 @@
 use std::path::Path;
-use std::process::{Child, Command, ExitStatus, Stdio};
-use std::sync::mpsc;
-use std::time::{Duration, Instant};
+use std::process::{Command, Stdio};
+use std::time::Instant;
+use std::{
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+};
 
-use notify::event::{CreateKind, ModifyKind, RemoveKind};
-use notify::{Event, EventKind, RecursiveMode, Watcher};
-
-use crate::support::{invoke, path, stage, with_progress};
+use crate::support::{invoke, output, path, stage, with_progress};
 
 pub(crate) fn build(root: &Path, release: bool, verbose: bool) -> Result<(), String> {
     stage("Run checks before building");
@@ -14,80 +14,127 @@ pub(crate) fn build(root: &Path, release: bool, verbose: bool) -> Result<(), Str
 
     let started = Instant::now();
     engine_build(root, release, verbose)?;
-    stage("Build Rust browser state");
+    stage("Build source native addon");
     let mut rust_args = vec![
         "build".to_owned(),
-        "--manifest-path".to_owned(),
-        path(&root.join("Cargo.toml")),
         "-p".to_owned(),
-        "photon-core".to_owned(),
+        "photon-native-addon".to_owned(),
     ];
     if release {
         rust_args.push("--release".to_owned());
     }
     let rust_refs: Vec<&str> = rust_args.iter().map(String::as_str).collect();
-    invoke("cargo", &rust_refs, root, verbose)?;
-    let app_build = root
-        .join("build")
-        .join(if release { "app-release" } else { "app-debug" });
-    stage("Build Photon shell");
-    let build_arg = path(&app_build);
-    let build_type = format!(
-        "-DCMAKE_BUILD_TYPE={}",
-        if release { "Release" } else { "Debug" }
-    );
-    let engine_build = path(&root.join("build").join(if release {
+    let engine_dir = root.join("build").join(if release {
         "engine-release"
     } else {
         "engine-debug"
-    }));
-    let helper_directory = if cfg!(any(target_os = "macos", target_os = "windows")) {
-        path(&app_build)
-    } else {
-        path(
-            &root
-                .join("build")
-                .join(if release {
-                    "engine-release"
-                } else {
-                    "engine-debug"
-                })
-                .join("bin"),
+    });
+    invoke_cargo_with_engine(&rust_refs, root, &engine_dir, verbose)?;
+    let app_build = root
+        .join("build")
+        .join(if release { "app-release" } else { "app-debug" });
+    std::fs::create_dir_all(&app_build).map_err(|error| error.to_string())?;
+    let profile = if release { "release" } else { "debug" };
+    let addon = root.join("target").join(profile).join(format!(
+        "{}photon_native_addon{}",
+        std::env::consts::DLL_PREFIX,
+        std::env::consts::DLL_SUFFIX
+    ));
+    let staged_addon = app_build.join("photon-native-addon.node");
+    std::fs::copy(&addon, &staged_addon).map_err(|error| {
+        format!(
+            "could not stage source-built GPUIX addon {}: {error}",
+            addon.display()
         )
-    };
-    with_progress("Configure Qt Quick shell", !verbose, || {
-        invoke(
-            "cmake",
-            &[
-                "-S",
-                &path(&root.join("native/qt")),
-                "-B",
-                &build_arg,
-                "-G",
-                "Ninja",
-                &build_type,
-                "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
-                &format!("-DPHOTON_ENGINE_BUILD_DIR={engine_build}"),
-                &format!("-DPHOTON_HELPER_DIRECTORY={helper_directory}"),
-            ],
-            root,
-            verbose,
-        )
-    })?;
-    with_progress("Compile Qt Quick shell", !verbose, || {
-        invoke("cmake", &["--build", &build_arg], root, verbose)
     })?;
     println!("Build succeeded in {:.1}s", started.elapsed().as_secs_f64());
     Ok(())
 }
 
+fn invoke_cargo_with_engine(
+    args: &[&str],
+    root: &Path,
+    engine_dir: &Path,
+    verbose: bool,
+) -> Result<(), String> {
+    let mut command = Command::new("cargo");
+    command
+        .args(args)
+        .current_dir(root)
+        .env("PHOTON_ENGINE_BUILD_DIR", engine_dir);
+    if verbose {
+        return command
+            .status()
+            .map_err(|error| error.to_string())
+            .and_then(|status| {
+                if status.success() {
+                    Ok(())
+                } else {
+                    Err(format!("cargo exited with {status}"))
+                }
+            });
+    }
+    let result = command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|error| format!("cannot run cargo: {error}"))?;
+    if result.status.success() {
+        return Ok(());
+    }
+    let stderr = String::from_utf8_lossy(&result.stderr);
+    Err(format!(
+        "cargo failed: {}",
+        stderr
+            .lines()
+            .rev()
+            .take(10)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect::<Vec<_>>()
+            .join("\n")
+    ))
+}
+
 pub(crate) fn engine_build(root: &Path, release: bool, verbose: bool) -> Result<(), String> {
-    stage("Build Photon Engine");
     let dir = root.join("build").join(if release {
         "engine-release"
     } else {
         "engine-debug"
     });
+    let fingerprint = engine_fingerprint(root, release)?;
+    let fingerprint_path = dir.join(".photon-build-fingerprint");
+    let required_outputs = [
+        dir.join("lib64/liblagom-photonembedder.so"),
+        dir.join("bin/WebContent"),
+        dir.join("bin/WebWorker"),
+        dir.join("bin/Compositor"),
+        dir.join("bin/RequestServer"),
+        dir.join("bin/ImageDecoder"),
+    ];
+    if std::fs::read_to_string(&fingerprint_path).ok().as_deref() == Some(fingerprint.as_str())
+        && required_outputs.iter().all(|output| output.exists())
+    {
+        if verbose {
+            println!("Photon Engine is up to date.");
+        }
+        return Ok(());
+    }
+    if !fingerprint_path.exists()
+        && required_outputs.iter().all(|output| output.exists())
+        && engine_targets_are_current(&dir, root)?
+    {
+        std::fs::write(&fingerprint_path, &fingerprint).map_err(|error| {
+            format!("could not record Photon Engine build fingerprint: {error}")
+        })?;
+        if verbose {
+            println!("Photon Engine outputs are current; recorded build fingerprint.");
+        }
+        return Ok(());
+    }
+
+    stage("Build Photon Engine");
     let mode = if release { "release" } else { "debug" };
     let vcpkg_root = root.join("build").join(format!("vcpkg-{mode}"));
     let engine_source = path(&root.join("Engine"));
@@ -161,7 +208,98 @@ pub(crate) fn engine_build(root: &Path, release: bool, verbose: bool) -> Result<
                 verbose,
             )
         },
-    )
+    )?;
+    std::fs::write(&fingerprint_path, fingerprint).map_err(|error| {
+        format!(
+            "could not record Photon Engine build fingerprint {}: {error}",
+            fingerprint_path.display()
+        )
+    })
+}
+
+fn engine_targets_are_current(engine_dir: &Path, root: &Path) -> Result<bool, String> {
+    let engine_dir = path(engine_dir);
+    let result = Command::new("ninja")
+        .args([
+            "-C",
+            &engine_dir,
+            "-n",
+            "WebContent",
+            "RequestServer",
+            "ImageDecoder",
+            "Compositor",
+            "MediaServer",
+            "WebWorker",
+            "LibPhotonEmbedder",
+        ])
+        .current_dir(root)
+        .output()
+        .map_err(|error| format!("cannot inspect Photon Engine build state: {error}"))?;
+    if !result.status.success() {
+        return Ok(false);
+    }
+    let output = String::from_utf8_lossy(&result.stdout);
+    Ok(output.contains("ninja: no work to do."))
+}
+
+fn engine_fingerprint(root: &Path, release: bool) -> Result<String, String> {
+    let engine_source = path(&root.join("Engine"));
+    let revision = output("git", &["-C", &engine_source, "rev-parse", "HEAD"], root)?;
+    let diff = Command::new("git")
+        .args(["-C", &engine_source, "diff", "--binary", "HEAD"])
+        .current_dir(root)
+        .output()
+        .map_err(|error| format!("cannot inspect Photon Engine changes: {error}"))?;
+    if !diff.status.success() {
+        return Err(format!(
+            "cannot inspect Photon Engine changes: {}",
+            String::from_utf8_lossy(&diff.stderr).trim()
+        ));
+    }
+    let status = output(
+        "git",
+        &[
+            "-C",
+            &engine_source,
+            "status",
+            "--porcelain",
+            "--untracked-files=all",
+        ],
+        root,
+    )?;
+    let untracked = output(
+        "git",
+        &[
+            "-C",
+            &engine_source,
+            "ls-files",
+            "--others",
+            "--exclude-standard",
+        ],
+        root,
+    )?;
+
+    let mut hasher = DefaultHasher::new();
+    revision.hash(&mut hasher);
+    diff.stdout.hash(&mut hasher);
+    status.hash(&mut hasher);
+    release.hash(&mut hasher);
+    "ENABLE_PHOTON_EMBEDDER=ON;ENABLE_LADYBIRD_UI=OFF;ENABLE_GUI_TARGETS=OFF;ENABLE_CRANELIFT_JIT=OFF"
+        .hash(&mut hasher);
+    for relative_path in untracked.lines() {
+        let file_path = root.join("Engine").join(relative_path);
+        relative_path.hash(&mut hasher);
+        if file_path.is_file() {
+            let contents = std::fs::read(&file_path).map_err(|error| {
+                format!(
+                    "cannot read untracked Engine file {}: {error}",
+                    file_path.display()
+                )
+            })?;
+            contents.hash(&mut hasher);
+        }
+    }
+    Ok(format!("{:016x}", hasher.finish()))
 }
 
 fn invoke_engine_configure(
@@ -213,105 +351,38 @@ fn invoke_engine_configure(
     ))
 }
 
-fn start_app(
-    root: &Path,
-    release: bool,
-    verbose: bool,
-    force_cpu_painting: bool,
-) -> Result<Child, String> {
-    let exe = root
+pub(crate) fn run(root: &Path, release: bool, verbose: bool) -> Result<(), String> {
+    ensure_gpuix_js(root, verbose)?;
+    ensure_ui_dependencies(root, verbose)?;
+    build(root, release, verbose)?;
+
+    let app_build = root
         .join("build")
-        .join(if release { "app-release" } else { "app-debug" })
-        .join("photon");
-    let mut process = Command::new(&exe);
-    process.current_dir(root);
-    process.env_remove("PHOTON_FORCE_CPU_PAINTING");
+        .join(if release { "app-release" } else { "app-debug" });
+    let addon_path = app_build.join("photon-native-addon.node");
+    let engine = root.join("build").join(if release {
+        "engine-release"
+    } else {
+        "engine-debug"
+    });
+    let helper_dir = if cfg!(any(target_os = "macos", target_os = "windows")) {
+        app_build.clone()
+    } else {
+        engine.join("bin")
+    };
+    let mut process = Command::new("bun");
+    process
+        .args(["--hot", "src/main.tsx"])
+        .current_dir(root.join("ui"))
+        .env("NAPI_RS_NATIVE_LIBRARY_PATH", addon_path)
+        .env("PHOTON_HELPER_DIRECTORY", helper_dir)
+        .env("LD_LIBRARY_PATH", runtime_library_path(&engine));
     if verbose {
         process.env("PHOTON_VERBOSE", "1");
     }
-    if force_cpu_painting {
-        eprintln!(
-            "CPU painting is a deprecated troubleshooting fallback and may be removed in a future release."
-        );
-        process.env("PHOTON_FORCE_CPU_PAINTING", "1");
-    }
-    process
-        .spawn()
-        .map_err(|error| format!("cannot launch Photon: {error}"))
-}
-
-pub(crate) fn watch_run(
-    root: &Path,
-    release: bool,
-    verbose: bool,
-    force_cpu_painting: bool,
-) -> Result<(), String> {
-    let (events_tx, events_rx) = mpsc::channel();
-    let mut watcher = notify::recommended_watcher(events_tx)
-        .map_err(|error| format!("cannot start file watcher: {error}"))?;
-    watcher
-        .watch(root, RecursiveMode::Recursive)
-        .map_err(|error| format!("cannot watch {}: {error}", root.display()))?;
-
-    println!("Watching {} for changes (Ctrl+C to stop).", root.display());
-    let mut app = build_and_start(root, release, verbose, force_cpu_painting);
-
-    loop {
-        if let Some(status) = take_app_exit_status(&mut app)? {
-            return report_app_exit(status);
-        }
-
-        let event = match events_rx.recv_timeout(Duration::from_millis(250)) {
-            Ok(Ok(event)) => event,
-            Ok(Err(error)) => {
-                eprintln!("File watcher error: {error}");
-                continue;
-            }
-            Err(mpsc::RecvTimeoutError::Timeout) => continue,
-            Err(mpsc::RecvTimeoutError::Disconnected) => {
-                return Err("file watcher stopped".into());
-            }
-        };
-        if !event_should_rebuild(root, &event) {
-            continue;
-        }
-
-        // Coalesce the burst of events produced by a save or generated files.
-        loop {
-            match events_rx.recv_timeout(Duration::from_millis(300)) {
-                Ok(Ok(event)) if event_should_rebuild(root, &event) => continue,
-                Ok(Err(error)) => eprintln!("File watcher error: {error}"),
-                Ok(_) => continue,
-                Err(mpsc::RecvTimeoutError::Timeout) => break,
-                Err(mpsc::RecvTimeoutError::Disconnected) => {
-                    return Err("file watcher stopped".into());
-                }
-            }
-        }
-        println!("\nChange detected; restarting Photon...");
-        if let Some(status) = take_app_exit_status(&mut app)? {
-            return report_app_exit(status);
-        }
-        stop_app(&mut app);
-        app = build_and_start(root, release, verbose, force_cpu_painting);
-    }
-}
-
-fn take_app_exit_status(app: &mut Option<Child>) -> Result<Option<ExitStatus>, String> {
-    let Some(child) = app.as_mut() else {
-        return Ok(None);
-    };
-    let status = child
-        .try_wait()
-        .map_err(|error| format!("cannot check Photon process: {error}"))?;
-    if status.is_some() {
-        app.take();
-    }
-    Ok(status)
-}
-
-fn report_app_exit(status: ExitStatus) -> Result<(), String> {
-    println!("Photon exited with {status}.");
+    let status = process
+        .status()
+        .map_err(|error| format!("cannot start GPUIX Bun runtime: {error}"))?;
     if status.success() {
         Ok(())
     } else {
@@ -319,108 +390,45 @@ fn report_app_exit(status: ExitStatus) -> Result<(), String> {
     }
 }
 
-fn build_and_start(
-    root: &Path,
-    release: bool,
-    verbose: bool,
-    force_cpu_painting: bool,
-) -> Option<Child> {
-    match build(root, release, verbose) {
-        Ok(()) => match start_app(root, release, verbose, force_cpu_painting) {
-            Ok(child) => {
-                println!("Photon started (pid {}).", child.id());
-                Some(child)
-            }
-            Err(error) => {
-                eprintln!("{error}");
-                None
-            }
-        },
-        Err(error) => {
-            eprintln!("Build failed: {error}");
-            None
-        }
+pub(crate) fn ensure_ui_dependencies(root: &Path, verbose: bool) -> Result<(), String> {
+    let ui = root.join("ui");
+    if ui.join("node_modules/@gpuix/react/package.json").is_file()
+        && ui.join("node_modules/@gpuix/native/package.json").is_file()
+        && ui
+            .join("node_modules/@gpuix/native/dist/host.d.ts")
+            .is_file()
+    {
+        return Ok(());
     }
+    stage("Install pinned GPUIX React dependencies");
+    invoke("bun", &["install", "--exact"], &ui, verbose)
 }
 
-fn stop_app(app: &mut Option<Child>) {
-    let Some(mut child) = app.take() else {
-        return;
-    };
-    match child.try_wait() {
-        Ok(Some(status)) => eprintln!("Photon exited with {status}"),
-        Ok(None) => {
-            if let Err(error) = child.kill() {
-                eprintln!("Could not stop Photon before rebuilding: {error}");
-            }
-            if let Err(error) = child.wait() {
-                eprintln!("Could not wait for Photon to stop: {error}");
-            }
-        }
-        Err(error) => eprintln!("Could not check Photon process state: {error}"),
+pub(crate) fn ensure_gpuix_js(root: &Path, verbose: bool) -> Result<(), String> {
+    let gpuix = root.join("vendor/gpuix");
+    if !gpuix.join("node_modules/typescript/bin/tsc").is_file() {
+        stage("Install pinned GPUIX development dependencies");
+        invoke("bun", &["install", "--frozen-lockfile"], &gpuix, verbose)?;
     }
+    let native = gpuix.join("packages/native");
+    if !native.join("dist/host.d.ts").is_file() {
+        stage("Build GPUIX native JavaScript bindings");
+        invoke("bun", &["run", "build:js"], &native, verbose)?;
+    }
+    Ok(())
 }
 
-fn event_should_rebuild(root: &Path, event: &Event) -> bool {
-    let changes_files = matches!(
-        event.kind,
-        EventKind::Create(CreateKind::File | CreateKind::Any)
-            | EventKind::Modify(ModifyKind::Any | ModifyKind::Data(_))
-            | EventKind::Modify(ModifyKind::Name(_))
-            | EventKind::Remove(RemoveKind::File | RemoveKind::Any)
-            | EventKind::Any
-    );
-    changes_files && event.paths.iter().any(|path| should_rebuild(root, path))
-}
-
-#[cfg(test)]
-mod watcher_tests {
-    use super::*;
-    use notify::event::{AccessKind, DataChange};
-
-    #[test]
-    fn file_saves_trigger_restart_but_reads_do_not() {
-        let root = Path::new("/workspace/photon");
-        let source = root.join("ui/Main.qml");
-        let save = Event::new(EventKind::Modify(ModifyKind::Data(DataChange::Content)))
-            .add_path(source.clone());
-        let read = Event::new(EventKind::Access(AccessKind::Read)).add_path(source);
-        assert!(event_should_rebuild(root, &save));
-        assert!(!event_should_rebuild(root, &read));
+pub(crate) fn runtime_library_path(engine: &Path) -> String {
+    let mut paths = vec![path(&engine.join("lib64")), path(&engine.join("lib"))];
+    for triplet in ["x64-linux-dynamic", "x64-linux-dynamic/debug"] {
+        paths.push(path(
+            &engine.join("vcpkg_installed").join(triplet).join("lib"),
+        ));
     }
-
-    #[test]
-    fn generated_files_and_repository_metadata_are_ignored() {
-        let root = Path::new("/workspace/photon");
-        for path in [
-            root.join("build/app-debug/photon"),
-            root.join("target/debug/photon"),
-            root.join(".git/index"),
-            root.join("ui/.qmlls.ini"),
-            root.join("ui/.qmlls.ini.tmpfd242"),
-        ] {
-            let event = Event::new(EventKind::Modify(ModifyKind::Any)).add_path(path);
-            assert!(!event_should_rebuild(root, &event));
-        }
+    if let Some(existing) = std::env::var_os("LD_LIBRARY_PATH") {
+        paths.push(existing.to_string_lossy().into_owned());
     }
-}
-
-fn should_rebuild(root: &Path, changed: &Path) -> bool {
-    let Ok(relative) = changed.strip_prefix(root) else {
-        return false;
-    };
-    if relative.as_os_str().is_empty() {
-        return false;
-    }
-    let generated_qmlls_config = relative == Path::new("ui/.qmlls.ini")
-        || relative
-            .file_name()
-            .is_some_and(|name| name.to_string_lossy().starts_with(".qmlls.ini.tmp"));
-    !generated_qmlls_config
-        && !relative.components().any(|component| {
-            let component = component.as_os_str().to_string_lossy();
-            matches!(component.as_ref(), ".git" | "build" | "target")
-        })
+    paths.join(":")
 }
 
 pub(crate) fn clean(root: &Path, scope: Option<&str>) -> Result<(), String> {
@@ -441,9 +449,6 @@ pub(crate) fn clean(root: &Path, scope: Option<&str>) -> Result<(), String> {
         if path.exists() {
             std::fs::remove_dir_all(path).map_err(|e| e.to_string())?;
         }
-    }
-    if scope != Some("engine") {
-        crate::commands::ide::remove_generated_config(root)?;
     }
     let helper_dir = root.join("build/bin");
     if helper_dir.exists() {

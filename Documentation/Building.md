@@ -1,25 +1,22 @@
-# Building
+# Building Photon
 
-Requirements: Git, Rust/Cargo, CMake 3.25+, Ninja, Clang, Qt 6.9+ Quick/Qml development packages, and the platform libraries required by Ladybird. `./photon setup` checks the main tools, initializes `Engine/`, and prepares editor metadata; it does not install system packages or build Photon Engine.
+Photon's `./photon` script is the developer entry point. It requires Git, Rust/Cargo, a C++ compiler, CMake, Ninja, Python 3, and Bun. Setup initializes the `Engine/` and `vendor/gpuix` submodules and installs the pinned JS dependencies.
 
-```sh
+```bash
 ./photon setup
-./photon doctor
-./photon ide setup
-./photon build
-./photon run
 ./photon check
-./photon format
 ./photon test
-./photon clean
+./photon build
+./photon run --verbose
 ```
 
-Builds are out of tree in `build/engine-debug`, `build/app-debug` and corresponding release directories. On the first engine build, the CLI bootstraps the vcpkg revision pinned by Ladybird and downloads/builds its third-party dependencies under `build/`. Use `--release` on build/run and `--verbose` to show configure/build output. Engine-only commands are `./photon engine status`, `./photon engine build`, and `./photon engine sync`.
+The first Engine build configures Ladybird's pinned dependencies under `build/` and compiles Photon Engine helper processes plus LibPhotonEmbedder. The Photon Rust addon is built from source and staged as `photon-native-addon.node`. `run` launches Bun's GPUIX development runtime with that addon selected explicitly.
 
-For VS Code, clone with submodules, run `./photon setup`, then open the repository with `code .`. The tracked `.clangd` uses the generated app compile database; QML tooling uses generated module metadata in `build/app-debug`. Run `./photon doctor` if diagnostics look wrong, or `./photon ide setup` to regenerate the metadata. See [IDE setup](IDE.md) for clangd, qmlls, Rust Analyzer, and Engine editor behavior.
+Incremental behavior:
 
-`./photon check` refreshes generated IDE metadata, compiles the Qt app's C++ objects without linking Engine or Rust libraries, runs Cargo checks, lints QML, and checks architecture rules.
+- A TSX-only edit is picked up by Bun hot reload and does not rebuild Engine or the Rust addon.
+- A Photon Rust/native edit rebuilds the addon and does not rebuild Engine unless Engine sources or configuration changed.
+- A GPUIX submodule revision change rebuilds its Rust addon dependency.
+- An Engine source/revision/configuration change invalidates the Engine build fingerprint and rebuilds Engine.
 
-`./photon clean` removes generated application, engine and helper binaries while keeping the vcpkg checkout and dependency caches for faster rebuilds. `./photon clean engine` removes only the engine build tree and helper binaries.
-
-For an engine sync, ensure `Engine/` is clean, then run `./photon engine sync`. This fetches `upstream` and merges `upstream/master` into the current engine branch. Resolve conflicts in `Engine/`, validate the result, publish it through the normal engine repository review process, and then update and commit the `Engine` gitlink in Photon. Neither repository is pushed by the CLI.
+Use `./photon clean` to remove generated build trees. Build products, lock caches, and downloaded dependencies stay out of tracked source directories.

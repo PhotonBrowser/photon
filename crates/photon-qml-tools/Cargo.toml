@@ -1,5 +1,0 @@
-[package]
-name = "photon-qml-tools"
-version.workspace = true
-edition.workspace = true
-license.workspace = true

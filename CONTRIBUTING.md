@@ -1,11 +1,19 @@
 # Contributing
 
-Clone with `git clone --recurse-submodules https://github.com/PhotonBrowser/photon.git`, then run `./photon setup` and `./photon doctor`.
+Run `./photon setup` after cloning, then use the repository entry point for everyday work:
 
-`./photon check` runs the Rust checks, QML lint, and architecture checks. QML lint warnings and errors fail the command and print a copyable AI-agent prompt containing the diagnostics and project instructions. Run `./photon fix-prompt` to print the prompt on demand. `./photon format` formats Rust and QML; Qt 6 `qmllint` and `qmlformat` must be installed.
+```bash
+./photon format
+./photon check
+./photon test
+./photon build
+./photon run
+```
 
-Run `./photon --help` for commands and options, or `./photon <command> --help` for command details. `./photon build` and `./photon run` run the full check first and stop if it fails. Build commands show phase progress in interactive terminals; pass `--verbose` to display the underlying tool output.
+Pass `--verbose` to `check`, `build`, or `run` to see underlying tool output. Keep generated output under `build/` and `target/`.
 
-Photon UI changes belong in `ui/` as QML. Browser/application domain and future state belong in Rust crates. `native/qt/` is limited to Qt Quick types and engine integration. Engine behavior belongs in the separate `PhotonBrowser/photon-engine` repository, checked out at `Engine/` here as a submodule.
+Photon UI composition belongs in `ui/` as React/TSX. Native GPUI integration belongs in `crates/photon-gpui` and `crates/photon-native-addon`; framework-independent browser state belongs in `crates/photon-core`. Engine behavior belongs in the separate `PhotonBrowser/photon-engine` repository, pinned at `Engine/` as a submodule.
 
-For engine work, create a branch in `Engine/`, modify and commit there, then update the `Engine` gitlink in the Photon repository after the engine commit is available from its origin. Keep generated output in `build/`.
+`vendor/gpuix` is the pinned `PhotonBrowser/gpuix` submodule. It is the single canonical GPUIX source used by Rust and the local `@gpuix/native` package. Keep generic framework changes there and Photon-specific behavior in this repository.
+
+For Engine changes, work and commit inside `Engine/`, push the commit to `PhotonBrowser/photon-engine`, then update the `Engine` gitlink here. Preserve Ladybird's upstream remote in the Engine checkout.

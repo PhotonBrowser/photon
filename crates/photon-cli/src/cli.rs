@@ -35,14 +35,14 @@ struct GlobalOptions {
 enum Command {
     /// Check prerequisites and initialize the Engine checkout.
     Setup,
-    /// Report toolchain, Qt, Engine, and build environment details.
+    /// Report toolchain, GPUIX, Engine, and build environment details.
     Doctor,
-    /// Configure and validate Photon editor metadata.
+    /// Report Rust and TypeScript editor metadata.
     Ide {
         #[command(subcommand)]
         command: IdeCommand,
     },
-    /// Run checks, then build Photon Engine and the Qt Quick shell.
+    /// Run checks, then build Photon Engine and the GPUIX addon.
     Build {
         /// Build with optimizations.
         #[arg(long)]
@@ -53,9 +53,6 @@ enum Command {
         /// Build with optimizations.
         #[arg(long)]
         release: bool,
-        /// Deprecated CPU painting fallback for Vulkan troubleshooting; may be removed.
-        #[arg(long)]
-        force_cpu_painting: bool,
     },
     /// Remove generated build directories.
     Clean {
@@ -63,11 +60,11 @@ enum Command {
         #[arg(value_enum)]
         scope: Option<CleanScope>,
     },
-    /// Check Rust formatting, compilation, QML lint, and architecture rules.
+    /// Check Rust formatting, compilation, TypeScript, and architecture rules.
     Check,
     /// Print a copyable AI prompt for fixing a check failure.
     FixPrompt,
-    /// Format Photon-owned Rust, C++, and QML files.
+    /// Format Photon-owned Rust, C++, and TypeScript files.
     Format,
     /// Run Rust workspace tests.
     Test,
@@ -75,29 +72,6 @@ enum Command {
     Engine {
         #[command(subcommand)]
         command: Option<EngineCommand>,
-    },
-    /// Import assets from supported providers.
-    Import {
-        #[command(subcommand)]
-        command: ImportCommand,
-    },
-}
-
-#[derive(Debug, Subcommand)]
-enum ImportCommand {
-    /// Import an SVG icon into Photon UI assets.
-    Icon {
-        /// Icon name in the selected provider.
-        name: String,
-        /// Asset provider (currently: lucide).
-        #[arg(long = "from")]
-        provider: String,
-        /// Local name for the imported asset.
-        #[arg(long = "as")]
-        alias: Option<String>,
-        /// Replace an existing icon and its manifest entry.
-        #[arg(long)]
-        force: bool,
     },
 }
 
@@ -139,10 +113,7 @@ pub fn run() -> Result<(), String> {
             IdeCommand::Setup => commands::ide::setup(&root, verbose),
         },
         Some(Command::Build { release }) => commands::build::build(&root, release, verbose),
-        Some(Command::Run {
-            release,
-            force_cpu_painting,
-        }) => commands::build::watch_run(&root, release, verbose, force_cpu_painting),
+        Some(Command::Run { release }) => commands::build::run(&root, release, verbose),
         Some(Command::Clean { scope }) => {
             let scope = scope.map(|scope| match scope {
                 CleanScope::Engine => "engine",
@@ -169,14 +140,6 @@ pub fn run() -> Result<(), String> {
             Some(EngineCommand::Sync) => {
                 commands::engine::engine(&root, Some("sync"), false, verbose)
             }
-        },
-        Some(Command::Import { command }) => match command {
-            ImportCommand::Icon {
-                name,
-                provider,
-                alias,
-                force,
-            } => commands::import::icon(&root, &name, &provider, alias.as_deref(), force),
         },
     }
 }
