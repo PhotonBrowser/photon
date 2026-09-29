@@ -10,6 +10,13 @@ recursive = true
 
 # Setup ensures these Git remotes exist with the configured URLs.
 [[repositories]]
+path = "."
+
+[[repositories.remotes]]
+name = "origin"
+url = "git@github.com:PhotonBrowser/photon.git"
+
+[[repositories]]
 path = "Engine"
 
 [[repositories.remotes]]

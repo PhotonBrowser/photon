@@ -108,7 +108,7 @@ impl SetupConfig {
     fn validate(&self) -> Result<(), String> {
         let mut submodule_paths = HashSet::new();
         for submodule in &self.submodules {
-            validate_relative_path(&submodule.path)?;
+            validate_relative_path(&submodule.path, false)?;
             if !submodule_paths.insert(&submodule.path) {
                 return Err(format!(
                     "photon.toml lists submodule {} more than once",
@@ -119,7 +119,7 @@ impl SetupConfig {
 
         let mut repository_paths = HashSet::new();
         for repository in &self.repositories {
-            validate_relative_path(&repository.path)?;
+            validate_relative_path(&repository.path, true)?;
             if !repository_paths.insert(&repository.path) {
                 return Err(format!(
                     "photon.toml configures repository {} more than once",
@@ -146,14 +146,15 @@ impl SetupConfig {
     }
 }
 
-fn validate_relative_path(path: &str) -> Result<(), String> {
+fn validate_relative_path(path: &str, allow_repository_root: bool) -> Result<(), String> {
     let path_buf = PathBuf::from(path);
     if path.is_empty()
         || path.contains('\\')
         || path_buf.is_absolute()
-        || path_buf
-            .components()
-            .any(|component| !matches!(component, Component::Normal(_)))
+        || path_buf.components().any(|component| {
+            !matches!(component, Component::Normal(_))
+                && !(allow_repository_root && path == "." && matches!(component, Component::CurDir))
+        })
     {
         return Err(format!(
             "photon.toml path must be a safe, repository-relative path: {path:?}"
@@ -203,9 +204,11 @@ mod tests {
 
     #[test]
     fn setup_config_rejects_paths_that_escape_the_repository() {
-        assert!(validate_relative_path("../outside").is_err());
-        assert!(validate_relative_path("/outside").is_err());
-        assert!(validate_relative_path("vendor/gpuix").is_ok());
+        assert!(validate_relative_path("../outside", true).is_err());
+        assert!(validate_relative_path("/outside", true).is_err());
+        assert!(validate_relative_path("vendor/gpuix", false).is_ok());
+        assert!(validate_relative_path(".", true).is_ok());
+        assert!(validate_relative_path(".", false).is_err());
     }
 }
 
