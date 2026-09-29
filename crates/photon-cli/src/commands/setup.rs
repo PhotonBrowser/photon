@@ -51,6 +51,18 @@ pub(crate) fn setup(root: &Path, verbose: bool) -> Result<(), String> {
         }
         for remote in &repository.remotes {
             ensure_remote(&path, &remote.name, &remote.url)?;
+            if !remote.fetch_branches.is_empty() {
+                let mut args = vec!["remote", "set-branches", remote.name.as_str()];
+                args.extend(remote.fetch_branches.iter().map(String::as_str));
+                command("git", &args, &path, verbose)?;
+
+                let mut args = vec!["fetch", "--prune", "--no-tags", remote.name.as_str()];
+                args.extend(remote.fetch_branches.iter().map(String::as_str));
+                command("git", &args, &path, verbose)?;
+            }
+        }
+        for branch in &repository.untrack_branches {
+            unset_branch_upstream(&path, branch, verbose)?;
         }
     }
     for path in ["build/engine-debug", "build/app-debug", "build/bin"] {
@@ -85,6 +97,8 @@ struct SubmoduleConfig {
 struct RepositoryConfig {
     path: String,
     remotes: Vec<RemoteConfig>,
+    #[serde(default)]
+    untrack_branches: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -92,6 +106,8 @@ struct RepositoryConfig {
 struct RemoteConfig {
     name: String,
     url: String,
+    #[serde(default)]
+    fetch_branches: Vec<String>,
 }
 
 impl SetupConfig {
@@ -140,10 +156,25 @@ impl SetupConfig {
                         remote.name, repository.path
                     ));
                 }
+                for branch in &remote.fetch_branches {
+                    validate_branch_name(branch)?;
+                }
+            }
+            for branch in &repository.untrack_branches {
+                validate_branch_name(branch)?;
             }
         }
         Ok(())
     }
+}
+
+fn validate_branch_name(branch: &str) -> Result<(), String> {
+    if branch.is_empty() || branch.starts_with('-') || branch.chars().any(char::is_whitespace) {
+        return Err(format!(
+            "photon.toml has an invalid Git branch name: {branch:?}"
+        ));
+    }
+    Ok(())
 }
 
 fn validate_relative_path(path: &str, allow_repository_root: bool) -> Result<(), String> {
@@ -173,6 +204,35 @@ fn ensure_remote(repository: &Path, name: &str, url: &str) -> Result<(), String>
     command("git", &["remote", action, name, url], repository, true)
 }
 
+fn unset_branch_upstream(repository: &Path, branch: &str, verbose: bool) -> Result<(), String> {
+    if output(
+        "git",
+        &[
+            "show-ref",
+            "--verify",
+            "--quiet",
+            &format!("refs/heads/{branch}"),
+        ],
+        repository,
+    )
+    .is_err()
+    {
+        return Ok(());
+    }
+
+    let upstream_key = format!("branch.{branch}.remote");
+    if output("git", &["config", "--get", &upstream_key], repository).is_err() {
+        return Ok(());
+    }
+
+    command(
+        "git",
+        &["branch", "--unset-upstream", branch],
+        repository,
+        verbose,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -193,6 +253,7 @@ mod tests {
                 [[repositories.remotes]]
                 name = "upstream"
                 url = "https://example.com/upstream.git"
+                fetch_branches = ["gpuix"]
             "#,
         )
         .unwrap();
@@ -200,6 +261,7 @@ mod tests {
         config.validate().unwrap();
         assert!(config.submodules[0].recursive);
         assert_eq!(config.repositories[0].remotes.len(), 2);
+        assert_eq!(config.repositories[0].remotes[1].fetch_branches, ["gpuix"]);
     }
 
     #[test]

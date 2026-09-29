@@ -40,6 +40,7 @@ url = "https://github.com/remorses/gpuix.git"
 
 [[repositories]]
 path = "vendor/gpuix/zed"
+untrack_branches = ["main"]
 
 [[repositories.remotes]]
 name = "origin"
@@ -48,3 +49,4 @@ url = "git@github.com:PhotonBrowser/zed.git"
 [[repositories.remotes]]
 name = "upstream"
 url = "https://github.com/remorses/zed.git"
+fetch_branches = ["gpuix"]
