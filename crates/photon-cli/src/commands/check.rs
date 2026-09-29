@@ -48,7 +48,9 @@ fn check_inner(root: &Path, verbose: bool, engine_enabled: bool) -> Result<(), S
     with_progress("Check Rust workspace", !verbose, || {
         invoke("cargo", &cargo_args, root, verbose)
     })?;
-    invoke("bun", &["run", "typecheck"], &root.join("ui"), verbose)?;
+    let ui = root.join("ui");
+    invoke("bun", &["run", "lint"], &ui, verbose)?;
+    invoke("bun", &["run", "typecheck"], &ui, verbose)?;
     if engine_enabled {
         let submodule = output("git", &["submodule", "status", "Engine"], root)?;
         if submodule.starts_with('-') || submodule.starts_with('+') {
