@@ -14,22 +14,44 @@ pub(crate) fn build(root: &Path, release: bool, verbose: bool) -> Result<(), Str
 
     let started = Instant::now();
     engine_build(root, release, verbose)?;
-    stage("Build source native addon");
+    build_native_addon(root, release, verbose, true)?;
+    println!("Build succeeded in {:.1}s", started.elapsed().as_secs_f64());
+    Ok(())
+}
+
+fn build_native_addon(
+    root: &Path,
+    release: bool,
+    verbose: bool,
+    engine_enabled: bool,
+) -> Result<(), String> {
+    stage(if engine_enabled {
+        "Build source native addon"
+    } else {
+        "Build UI-only native addon"
+    });
     let mut rust_args = vec![
         "build".to_owned(),
         "-p".to_owned(),
         "photon-native-addon".to_owned(),
     ];
+    if !engine_enabled {
+        rust_args.push("--no-default-features".to_owned());
+    }
     if release {
         rust_args.push("--release".to_owned());
     }
     let rust_refs: Vec<&str> = rust_args.iter().map(String::as_str).collect();
-    let engine_dir = root.join("build").join(if release {
-        "engine-release"
+    if engine_enabled {
+        let engine_dir = root.join("build").join(if release {
+            "engine-release"
+        } else {
+            "engine-debug"
+        });
+        invoke_cargo_with_engine(&rust_refs, root, &engine_dir, verbose)?;
     } else {
-        "engine-debug"
-    });
-    invoke_cargo_with_engine(&rust_refs, root, &engine_dir, verbose)?;
+        invoke("cargo", &rust_refs, root, verbose)?;
+    }
     let app_build = root
         .join("build")
         .join(if release { "app-release" } else { "app-debug" });
@@ -47,7 +69,6 @@ pub(crate) fn build(root: &Path, release: bool, verbose: bool) -> Result<(), Str
             addon.display()
         )
     })?;
-    println!("Build succeeded in {:.1}s", started.elapsed().as_secs_f64());
     Ok(())
 }
 
@@ -356,27 +377,45 @@ pub(crate) fn run(root: &Path, release: bool, verbose: bool) -> Result<(), Strin
     ensure_ui_dependencies(root, verbose)?;
     build(root, release, verbose)?;
 
+    launch_ui(root, release, verbose, true)
+}
+
+pub(crate) fn run_ui(root: &Path, release: bool, verbose: bool) -> Result<(), String> {
+    crate::commands::check::check_ui(root, verbose)?;
+    build_native_addon(root, release, verbose, false)?;
+    launch_ui(root, release, verbose, false)
+}
+
+fn launch_ui(
+    root: &Path,
+    release: bool,
+    verbose: bool,
+    engine_enabled: bool,
+) -> Result<(), String> {
     let app_build = root
         .join("build")
         .join(if release { "app-release" } else { "app-debug" });
     let addon_path = app_build.join("photon-native-addon.node");
-    let engine = root.join("build").join(if release {
-        "engine-release"
-    } else {
-        "engine-debug"
-    });
-    let helper_dir = if cfg!(any(target_os = "macos", target_os = "windows")) {
-        app_build.clone()
-    } else {
-        engine.join("bin")
-    };
     let mut process = Command::new("bun");
     process
         .args(["--hot", "src/main.tsx"])
         .current_dir(root.join("ui"))
-        .env("NAPI_RS_NATIVE_LIBRARY_PATH", addon_path)
-        .env("PHOTON_HELPER_DIRECTORY", helper_dir)
-        .env("LD_LIBRARY_PATH", runtime_library_path(&engine));
+        .env("NAPI_RS_NATIVE_LIBRARY_PATH", addon_path);
+    if engine_enabled {
+        let engine = root.join("build").join(if release {
+            "engine-release"
+        } else {
+            "engine-debug"
+        });
+        let helper_dir = if cfg!(any(target_os = "macos", target_os = "windows")) {
+            app_build
+        } else {
+            engine.join("bin")
+        };
+        process
+            .env("PHOTON_HELPER_DIRECTORY", helper_dir)
+            .env("LD_LIBRARY_PATH", runtime_library_path(&engine));
+    }
     if verbose {
         process.env("PHOTON_VERBOSE", "1");
     }

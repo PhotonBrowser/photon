@@ -10,6 +10,8 @@ Photon's `./photon` script is the developer entry point. It requires Git, Rust/C
 ./photon run --verbose
 ```
 
+Use `./photon run --ui` to work on the shell without building or starting Photon Engine. This mode still checks TypeScript and Rust and builds the source GPUIX addon with the `engine` feature disabled. The `PhotonWebView` host element remains in the React tree and paints a plain white surface; it does not create a runtime or view, load a URL, link the Engine bridge, or use Engine helper processes. It launches the same GPUIX window and hot-reload runtime.
+
 The first Engine build configures Ladybird's pinned dependencies under `build/` and compiles Photon Engine helper processes plus LibPhotonEmbedder. The Photon Rust addon is built from source and staged as `photon-native-addon.node`. `run` launches Bun's GPUIX development runtime with that addon selected explicitly.
 
 Incremental behavior:
@@ -18,6 +20,8 @@ Incremental behavior:
 - A Photon Rust/native edit rebuilds the addon and does not rebuild Engine unless Engine sources or configuration changed.
 - A GPUIX submodule revision change rebuilds its Rust addon dependency.
 - An Engine source/revision/configuration change invalidates the Engine build fingerprint and rebuilds Engine.
+
+The UI-only run compiles the Rust shell addon but skips the Engine build entirely. A later normal `./photon run` still builds Engine as needed and rebuilds the addon with Engine support enabled.
 
 Use `./photon clean` to remove generated build trees. Build products, lock caches, and downloaded dependencies stay out of tracked source directories.
 

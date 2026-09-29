@@ -2,6 +2,11 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 fn main() {
+    println!("cargo:rerun-if-env-changed=CARGO_FEATURE_ENGINE");
+    if env::var_os("CARGO_FEATURE_ENGINE").is_none() {
+        return;
+    }
+
     let root =
         PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("manifest directory")).join("../..");
     let root = root.canonicalize().expect("Photon repository root");

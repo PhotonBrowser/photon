@@ -48,11 +48,14 @@ enum Command {
         #[arg(long)]
         release: bool,
     },
-    /// Run checks, build Photon, and launch it.
+    /// Build Photon and launch it.
     Run {
         /// Build with optimizations.
         #[arg(long)]
         release: bool,
+        /// Build and launch the GPUIX shell without Photon Engine.
+        #[arg(long)]
+        ui: bool,
     },
     /// Remove generated build directories.
     Clean {
@@ -113,7 +116,13 @@ pub fn run() -> Result<(), String> {
             IdeCommand::Setup => commands::ide::setup(&root, verbose),
         },
         Some(Command::Build { release }) => commands::build::build(&root, release, verbose),
-        Some(Command::Run { release }) => commands::build::run(&root, release, verbose),
+        Some(Command::Run { release, ui }) => {
+            if ui {
+                commands::build::run_ui(&root, release, verbose)
+            } else {
+                commands::build::run(&root, release, verbose)
+            }
+        }
         Some(Command::Clean { scope }) => {
             let scope = scope.map(|scope| match scope {
                 CleanScope::Engine => "engine",

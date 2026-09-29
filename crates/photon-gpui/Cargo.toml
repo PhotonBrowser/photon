@@ -5,6 +5,10 @@ edition.workspace = true
 license.workspace = true
 build = "build.rs"
 
+[features]
+default = ["engine"]
+engine = []
+
 [dependencies]
 gpuix-native = { path = "../../vendor/gpuix/packages/native", default-features = false }
 gpui = { path = "../../vendor/gpuix/zed/crates/gpui", default-features = false, features = ["font-kit", "profiler"] }

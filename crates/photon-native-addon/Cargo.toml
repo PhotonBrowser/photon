@@ -5,12 +5,16 @@ edition.workspace = true
 license.workspace = true
 build = "build.rs"
 
+[features]
+default = ["engine"]
+engine = ["photon-gpui/engine"]
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 gpuix-native = { path = "../../vendor/gpuix/packages/native", default-features = false }
-photon-gpui = { path = "../photon-gpui" }
+photon-gpui = { path = "../photon-gpui", default-features = false }
 napi = { version = "3.12.7", features = ["napi8"] }
 napi-derive = "3.6.8"
 

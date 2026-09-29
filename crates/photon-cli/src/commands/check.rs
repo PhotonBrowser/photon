@@ -3,7 +3,15 @@ use std::path::Path;
 use crate::support::{invoke, output, with_progress};
 
 pub(crate) fn check(root: &Path, verbose: bool) -> Result<(), String> {
-    match check_inner(root, verbose) {
+    check_with_engine(root, verbose, true)
+}
+
+pub(crate) fn check_ui(root: &Path, verbose: bool) -> Result<(), String> {
+    check_with_engine(root, verbose, false)
+}
+
+fn check_with_engine(root: &Path, verbose: bool, engine_enabled: bool) -> Result<(), String> {
+    match check_inner(root, verbose, engine_enabled) {
         Ok(()) => Ok(()),
         Err(error) => {
             print_fix_prompt(root, &error);
@@ -12,7 +20,7 @@ pub(crate) fn check(root: &Path, verbose: bool) -> Result<(), String> {
     }
 }
 
-fn check_inner(root: &Path, verbose: bool) -> Result<(), String> {
+fn check_inner(root: &Path, verbose: bool, engine_enabled: bool) -> Result<(), String> {
     crate::commands::build::ensure_gpuix_js(root, verbose)?;
     crate::commands::build::ensure_ui_dependencies(root, verbose)?;
     invoke(
@@ -33,13 +41,19 @@ fn check_inner(root: &Path, verbose: bool) -> Result<(), String> {
         root,
         verbose,
     )?;
+    let mut cargo_args = vec!["check", "--workspace"];
+    if !engine_enabled {
+        cargo_args.push("--no-default-features");
+    }
     with_progress("Check Rust workspace", !verbose, || {
-        invoke("cargo", &["check", "--workspace"], root, verbose)
+        invoke("cargo", &cargo_args, root, verbose)
     })?;
     invoke("bun", &["run", "typecheck"], &root.join("ui"), verbose)?;
-    let submodule = output("git", &["submodule", "status", "Engine"], root)?;
-    if submodule.starts_with('-') || submodule.starts_with('+') {
-        return Err(format!("Engine submodule mismatch: {}", submodule.trim()));
+    if engine_enabled {
+        let submodule = output("git", &["submodule", "status", "Engine"], root)?;
+        if submodule.starts_with('-') || submodule.starts_with('+') {
+            return Err(format!("Engine submodule mismatch: {}", submodule.trim()));
+        }
     }
     let gpuix = output("git", &["submodule", "status", "vendor/gpuix"], root)?;
     if gpuix.starts_with(['-', '+']) {
