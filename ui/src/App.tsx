@@ -6,7 +6,7 @@ export function App() {
       style={{
         width: "100%",
         height: "100%",
-        padding: 8,
+        padding: 4,
         backgroundColor: "#111111",
         borderRadius: 12,
       }}
@@ -16,7 +16,7 @@ export function App() {
         style={{
           width: "100%",
           height: "100%",
-          borderRadius: 12,
+          borderRadius: 6,
           overflow: "hidden",
         }}
       />
