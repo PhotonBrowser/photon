@@ -18,21 +18,20 @@ Use the existing long-lived Photon branches for ordinary GPUI work. Do not make 
 - `vendor/gpuix/`: `main` tracks `PhotonBrowser/gpuix` and contains GPUIX changes plus the tested Zed gitlink.
 - The Photon root pins a tested GPUIX commit; it should stay detached at that pin during normal builds.
 
-After the first `./photon setup`, switch both repositories to those branches before editing:
+After the first `./photon setup`, enter edit mode with one command:
 
 ```bash
-git -C vendor/gpuix switch main
-git -C vendor/gpuix/zed switch photon/live-image
+./photon gpui edit
 ```
 
-For a GPUI-only change, edit and commit the relevant files in `vendor/gpuix/zed`, then push that commit to `origin photon/live-image`. Check that no build is reading the Zed checkout before switching its branch. Next, update and commit GPUIX's nested pin on its existing `main` branch:
+Edit GPUI in `vendor/gpuix/zed/crates/gpui`, then commit it on the existing `photon/live-image` branch. The command refuses to switch if either repository has uncommitted source changes. After the GPUI commit, update GPUIX's nested pin on its existing `main` branch:
 
 ```bash
 git -C vendor/gpuix add zed
 git -C vendor/gpuix commit -m "Update Photon GPUI pin"
 ```
 
-If the change also modifies GPUIX, include those files in the same GPUIX commit. Run the checks required by the change, then push the Zed commit and GPUIX commit to their Photon-owned remotes. Only after the tested GPUIX commit is available from `PhotonBrowser/gpuix` should the root repository update and commit `vendor/gpuix` as described below.
+If the change also modifies GPUIX, include those files in the same GPUIX commit. Run the checks required by the change, then push the Zed and GPUIX commits to their Photon-owned remotes. Only after the tested GPUIX commit is available from `PhotonBrowser/gpuix` should the root repository update and commit `vendor/gpuix` as described below. Run `./photon gpui pin` to return to the versions currently pinned by the root checkout; this preserves the commits on both long-lived branches.
 
 The nested gitlinks are deliberate: Zed owns GPUI source, GPUIX owns its tested Zed revision, and Photon owns its tested GPUIX revision. Keep the work on these two persistent branches and move each pin forward only after its dependency commit is ready. Avoid running `./photon setup` while developing on these branches because recursive submodule initialization restores the revisions recorded by the parent checkout.
 
