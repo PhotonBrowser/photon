@@ -1,0 +1,22 @@
+{
+  "languages": {
+    "TSX": {
+      "formatter": {
+        "external": {
+          "command": "bunx",
+          "arguments": ["biome", "format", "--stdin-file-path", "{buffer_path}"]
+        }
+      },
+      "format_on_save": "on"
+    },
+    "TypeScript": {
+      "formatter": {
+        "external": {
+          "command": "bunx",
+          "arguments": ["biome", "format", "--stdin-file-path", "{buffer_path}"]
+        }
+      },
+      "format_on_save": "on"
+    }
+  }
+}

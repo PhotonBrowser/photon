@@ -1,27 +1,28 @@
-import { PhotonWebView } from "./components/PhotonWebView";
-
-declare const Bun: { env: Record<string, string | undefined> };
+import { useState } from "react";
+import { Titlebar } from "./components/Titlebar";
+import { themes, type ThemeMode } from "./theme";
 
 export function App() {
+  const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
+  const theme = themes[themeMode];
+
   return (
     <div
       style={{
+        display: "flex",
+        flexDirection: "column",
         width: "100%",
         height: "100%",
-        padding: 4,
-        backgroundColor: "#111111",
-        borderRadius: 12,
       }}
     >
-      <PhotonWebView
-        url={Bun.env.PHOTON_URL ?? "https://example.com"}
-        style={{
-          width: "100%",
-          height: "100%",
-          borderRadius: 6,
-          overflow: "hidden",
-        }}
+      <Titlebar
+        theme={theme}
+        themeMode={themeMode}
+        onToggleTheme={() =>
+          setThemeMode(themeMode === "dark" ? "light" : "dark")
+        }
       />
+      <div style={{ flexGrow: 1, backgroundColor: theme.color.window }} />
     </div>
   );
 }
