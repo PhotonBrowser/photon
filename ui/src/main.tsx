@@ -12,6 +12,7 @@ render(<App />, {
   minHeight: 420,
   windowBackground: "blurred",
   titlebarTransparent: true,
+  appOwnsTitlebarDrag: true,
   // Position the native controls using the titlebar geometry from the theme.
   trafficLightX: TRAFFIC_LIGHT_X,
   trafficLightY: TRAFFIC_LIGHT_Y,
