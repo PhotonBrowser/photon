@@ -4,55 +4,14 @@ use std::path::Path;
 use crate::support::{command, compiler_version, output, require_tool, run_tool, version_at_least};
 
 pub(crate) fn setup(root: &Path, verbose: bool) -> Result<(), String> {
-    let engine = root.join("Engine");
-    if !engine.join(".git").exists() {
-        command(
-            "git",
-            &["submodule", "update", "--init", "--recursive"],
-            root,
-            true,
-        )?;
-    }
-    let gpuix = root.join("vendor/gpuix");
-    if !gpuix.join(".git").exists() {
-        command(
-            "git",
-            &[
-                "submodule",
-                "update",
-                "--init",
-                "--recursive",
-                "vendor/gpuix",
-            ],
-            root,
-            true,
-        )?;
-    }
-    let submodule_state = output("git", &["submodule", "status", "Engine"], root)?;
-    if submodule_state.starts_with(['+', '-']) {
-        if !output(
-            "git",
-            &[
-                "status",
-                "--porcelain",
-                "--ignore-submodules=none",
-                "--",
-                "Engine",
-            ],
-            root,
-        )?
-        .trim()
-        .is_empty()
-        {
-            return Err("Engine is dirty and does not match the pinned submodule commit; preserving its work. Review Engine and update the submodule manually.".into());
-        }
-        command(
-            "git",
-            &["submodule", "update", "--init", "--recursive", "Engine"],
-            root,
-            true,
-        )?;
-    }
+    // Always sync pinned dependencies, including their nested submodules.
+    // Without --force, Git preserves local edits and refuses unsafe checkouts.
+    command(
+        "git",
+        &["submodule", "update", "--init", "--recursive"],
+        root,
+        true,
+    )?;
     for tool in ["git", "cargo", "rustc", "cmake", "ninja", "python3"] {
         require_tool(tool)?;
     }
@@ -77,22 +36,29 @@ pub(crate) fn setup(root: &Path, verbose: bool) -> Result<(), String> {
             "Engine submodule is missing; run git submodule update --init --recursive".into(),
         );
     }
-    let upstream = output("git", &["remote", "get-url", "upstream"], &engine);
-    if upstream.as_deref().unwrap_or_default().trim_end()
-        != "https://github.com/LadybirdBrowser/ladybird.git"
-    {
-        let action = if upstream.is_ok() { "set-url" } else { "add" };
-        command(
-            "git",
-            &[
-                "remote",
-                action,
-                "upstream",
-                "https://github.com/LadybirdBrowser/ladybird.git",
+    for (submodule, remotes) in [
+        (
+            "Engine",
+            [
+                ("origin", "git@github.com:PhotonBrowser/photon-engine.git"),
+                (
+                    "upstream",
+                    "https://github.com/LadybirdBrowser/ladybird.git",
+                ),
             ],
-            &engine,
-            true,
-        )?;
+        ),
+        (
+            "vendor/gpuix",
+            [
+                ("origin", "git@github.com:PhotonBrowser/gpuix.git"),
+                ("upstream", "https://github.com/remorses/gpuix.git"),
+            ],
+        ),
+    ] {
+        let path = root.join(submodule);
+        for (name, url) in remotes {
+            ensure_remote(&path, name, url)?;
+        }
     }
     for path in ["build/engine-debug", "build/app-debug", "build/bin"] {
         std::fs::create_dir_all(root.join(path)).map_err(|e| e.to_string())?;
@@ -104,6 +70,16 @@ pub(crate) fn setup(root: &Path, verbose: bool) -> Result<(), String> {
         "Setup ready. The first engine build prepares Ladybird's pinned dependencies under build/."
     );
     Ok(())
+}
+
+fn ensure_remote(repository: &Path, name: &str, url: &str) -> Result<(), String> {
+    let existing = output("git", &["remote", "get-url", name], repository);
+    if existing.as_deref().unwrap_or_default().trim_end() == url {
+        return Ok(());
+    }
+
+    let action = if existing.is_ok() { "set-url" } else { "add" };
+    command("git", &["remote", action, name, url], repository, true)
 }
 
 pub(crate) fn doctor(root: &Path) -> Result<(), String> {
