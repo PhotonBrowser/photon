@@ -14,14 +14,14 @@ path = "."
 
 [[repositories.remotes]]
 name = "origin"
-url = "https://github.com/PhotonBrowser/photon.git"
+url = "git@github.com:PhotonBrowser/photon.git"
 
 [[repositories]]
 path = "Engine"
 
 [[repositories.remotes]]
 name = "origin"
-url = "https://github.com/PhotonBrowser/photon-engine.git"
+url = "git@github.com:PhotonBrowser/photon-engine.git"
 
 [[repositories.remotes]]
 name = "upstream"
@@ -32,7 +32,7 @@ path = "vendor/gpuix"
 
 [[repositories.remotes]]
 name = "origin"
-url = "https://github.com/PhotonBrowser/gpuix.git"
+url = "git@github.com:PhotonBrowser/gpuix.git"
 
 [[repositories.remotes]]
 name = "upstream"
@@ -44,7 +44,7 @@ untrack_branches = ["main"]
 
 [[repositories.remotes]]
 name = "origin"
-url = "https://github.com/PhotonBrowser/zed.git"
+url = "git@github.com:PhotonBrowser/zed.git"
 
 [[repositories.remotes]]
 name = "upstream"

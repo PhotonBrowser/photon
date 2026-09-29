@@ -1,6 +1,6 @@
 # Building Photon
 
-Photon's `./photon` script is the developer entry point. It requires Git, Rust/Cargo 1.85 or newer, a C++ compiler, CMake 3.25 or newer, Ninja 1.10 or newer, Python 3, and Bun. `./photon setup` initializes the `Engine/` and `vendor/gpuix` submodules recursively, configures their remotes, and installs the pinned JavaScript dependencies. See [Contributor setup](../CONTRIBUTOR_SETUP.md) for first checkout and recovery steps.
+Photon's `./photon` script is the developer entry point. It requires Git, Rust/Cargo 1.85 or newer, a C++23-capable compiler, CMake 3.30 or newer, Ninja 1.10 or newer, Python 3, Bun, and the system development packages required by the pinned Engine. `./photon setup` initializes the pinned submodules recursively, configures remotes from `photon.toml`, fetches the configured Zed upstream branch, and installs the pinned JavaScript dependencies. It prepares the checkout; `./photon build` performs the first Engine and native addon build. See [Contributor setup](../CONTRIBUTOR_SETUP.md) for first checkout and recovery steps, and [Ladybird's build instructions](../Engine/Documentation/BuildInstructionsLadybird.md) for platform packages.
 
 ```bash
 ./photon setup

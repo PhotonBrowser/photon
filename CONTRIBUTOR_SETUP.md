@@ -2,7 +2,7 @@
 
 ## First checkout
 
-Install Git, Rust/Cargo (Rust 1.85 or newer), a C++ compiler, CMake 3.25 or newer, Ninja 1.10 or newer, Python 3, and Bun. Clone Photon with its pinned dependencies and let the CLI finish setup:
+Install Git, Rust/Cargo (Rust 1.85 or newer), a C++23-capable compiler, CMake 3.30 or newer, Ninja 1.10 or newer, Python 3, and Bun. Install the system development packages required by the pinned Engine for your platform; see [Ladybird's build instructions](Engine/Documentation/BuildInstructionsLadybird.md). Clone Photon with its pinned dependencies and let the CLI finish setup:
 
 ```bash
 git clone --recurse-submodules https://github.com/PhotonBrowser/photon.git

@@ -32,7 +32,7 @@ pub(crate) fn setup(root: &Path, verbose: bool) -> Result<(), String> {
             "a C++ compiler is missing; install Clang or your platform's C++ build tools".into(),
         );
     }
-    for (tool, minimum) in [("cmake", (3, 25)), ("ninja", (1, 10)), ("rustc", (1, 85))] {
+    for (tool, minimum) in [("cmake", (3, 30)), ("ninja", (1, 10)), ("rustc", (1, 85))] {
         let version = output(tool, &["--version"], root)?;
         if !version_at_least(&version, minimum) {
             return Err(format!(
