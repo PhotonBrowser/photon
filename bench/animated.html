@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Photon animated surface benchmark</title>
+    <style>
+      :root { color-scheme: light; font: 16px system-ui, sans-serif; }
+      body { margin: 24px; color: #18212b; background: #f2f5f8; }
+      #stage { height: 180px; overflow: hidden; border: 1px solid #8ca1b5; background: white; }
+      #mover { position: relative; top: 54px; left: 0; width: 120px; height: 72px; background: #3979e5; border-radius: 12px; animation: travel 1.6s linear infinite alternate; }
+      @keyframes travel { from { transform: translateX(0); } to { transform: translateX(calc(100vw - 220px)); } }
+      input { margin: 12px 0; padding: 8px; }
+      a, button { margin-right: 12px; }
+    </style>
+  </head>
+  <body>
+    <h1>Photon live surface benchmark</h1>
+    <p>The blue rectangle animates continuously using a CSS transform.</p>
+    <div id="stage"><div id="mover"></div></div>
+    <label>Keyboard input <input aria-label="Benchmark text input" value="Type here" /></label>
+    <p><a href="#target">Jump to target</a><button type="button" onclick="this.textContent = 'Clicked'">Click me</button></p>
+    <div style="height: 760px"></div>
+    <p id="target">Scroll and selection target. Drag to select this text.</p>
+  </body>
+</html>

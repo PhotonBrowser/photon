@@ -1,5 +1,7 @@
 import { PhotonWebView } from "./components/PhotonWebView";
 
+declare const Bun: { env: Record<string, string | undefined> };
+
 export function App() {
   return (
     <div
@@ -12,7 +14,7 @@ export function App() {
       }}
     >
       <PhotonWebView
-        url="https://example.com"
+        url={Bun.env.PHOTON_URL ?? "https://example.com"}
         style={{
           width: "100%",
           height: "100%",

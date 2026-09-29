@@ -56,6 +56,12 @@ enum Command {
         /// Build and launch the GPUIX shell without Photon Engine.
         #[arg(long)]
         ui: bool,
+        /// Navigate the PhotonWebView to this URL after launch.
+        #[arg(long)]
+        url: Option<String>,
+        /// Force Ladybird's CPU painting path for comparison.
+        #[arg(long)]
+        force_cpu_painting: bool,
     },
     /// Remove generated build directories.
     Clean {
@@ -116,11 +122,16 @@ pub fn run() -> Result<(), String> {
             IdeCommand::Setup => commands::ide::setup(&root, verbose),
         },
         Some(Command::Build { release }) => commands::build::build(&root, release, verbose),
-        Some(Command::Run { release, ui }) => {
+        Some(Command::Run {
+            release,
+            ui,
+            url,
+            force_cpu_painting,
+        }) => {
             if ui {
                 commands::build::run_ui(&root, release, verbose)
             } else {
-                commands::build::run(&root, release, verbose)
+                commands::build::run(&root, release, verbose, url.as_deref(), force_cpu_painting)
             }
         }
         Some(Command::Clean { scope }) => {

@@ -372,18 +372,24 @@ fn invoke_engine_configure(
     ))
 }
 
-pub(crate) fn run(root: &Path, release: bool, verbose: bool) -> Result<(), String> {
+pub(crate) fn run(
+    root: &Path,
+    release: bool,
+    verbose: bool,
+    url: Option<&str>,
+    force_cpu_painting: bool,
+) -> Result<(), String> {
     ensure_gpuix_js(root, verbose)?;
     ensure_ui_dependencies(root, verbose)?;
     build(root, release, verbose)?;
 
-    launch_ui(root, release, verbose, true)
+    launch_ui(root, release, verbose, true, url, force_cpu_painting)
 }
 
 pub(crate) fn run_ui(root: &Path, release: bool, verbose: bool) -> Result<(), String> {
     crate::commands::check::check_ui(root, verbose)?;
     build_native_addon(root, release, verbose, false)?;
-    launch_ui(root, release, verbose, false)
+    launch_ui(root, release, verbose, false, None, false)
 }
 
 fn launch_ui(
@@ -391,6 +397,8 @@ fn launch_ui(
     release: bool,
     verbose: bool,
     engine_enabled: bool,
+    url: Option<&str>,
+    force_cpu_painting: bool,
 ) -> Result<(), String> {
     let app_build = root
         .join("build")
@@ -418,6 +426,12 @@ fn launch_ui(
     }
     if verbose {
         process.env("PHOTON_VERBOSE", "1");
+    }
+    if let Some(url) = url {
+        process.env("PHOTON_URL", url);
+    }
+    if force_cpu_painting {
+        process.env("PHOTON_FORCE_CPU_PAINTING", "1");
     }
     let status = process
         .status()
