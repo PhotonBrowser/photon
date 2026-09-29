@@ -259,12 +259,30 @@ impl CustomElement for PhotonWebViewElement {
             .size_full();
         let root = custom_element_surface(root, &context).child(gpui::div().absolute().size_full());
         let root = match image {
-            Some(image) => root.child(
-                gpui::img(image)
+            Some(image) => {
+                let mut frame = gpui::img(image)
                     .absolute()
                     .size_full()
-                    .object_fit(ObjectFit::Fill),
-            ),
+                    .object_fit(ObjectFit::Fill);
+                if let Some(style) = context.style() {
+                    if let Some(radius) = style.border_radius {
+                        frame = frame.rounded(gpui::px(radius as f32));
+                    }
+                    if let Some(radius) = style.border_top_left_radius {
+                        frame = frame.rounded_tl(gpui::px(radius as f32));
+                    }
+                    if let Some(radius) = style.border_top_right_radius {
+                        frame = frame.rounded_tr(gpui::px(radius as f32));
+                    }
+                    if let Some(radius) = style.border_bottom_left_radius {
+                        frame = frame.rounded_bl(gpui::px(radius as f32));
+                    }
+                    if let Some(radius) = style.border_bottom_right_radius {
+                        frame = frame.rounded_br(gpui::px(radius as f32));
+                    }
+                }
+                root.child(frame)
+            }
             None => root,
         };
         root.into_any_element()

@@ -8,6 +8,7 @@ export function App() {
         height: "100%",
         padding: 8,
         backgroundColor: "#111111",
+        borderRadius: 12,
       }}
     >
       <PhotonWebView
