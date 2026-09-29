@@ -1,0 +1,43 @@
+# `./photon setup` initializes these pinned submodules from .gitmodules.
+# Recursive entries also initialize submodules nested inside that dependency.
+[[submodules]]
+path = "Engine"
+recursive = true
+
+[[submodules]]
+path = "vendor/gpuix"
+recursive = true
+
+# Setup ensures these Git remotes exist with the configured URLs.
+[[repositories]]
+path = "Engine"
+
+[[repositories.remotes]]
+name = "origin"
+url = "git@github.com:PhotonBrowser/photon-engine.git"
+
+[[repositories.remotes]]
+name = "upstream"
+url = "https://github.com/LadybirdBrowser/ladybird.git"
+
+[[repositories]]
+path = "vendor/gpuix"
+
+[[repositories.remotes]]
+name = "origin"
+url = "git@github.com:PhotonBrowser/gpuix.git"
+
+[[repositories.remotes]]
+name = "upstream"
+url = "https://github.com/remorses/gpuix.git"
+
+[[repositories]]
+path = "vendor/gpuix/zed"
+
+[[repositories.remotes]]
+name = "origin"
+url = "git@github.com:PhotonBrowser/zed.git"
+
+[[repositories.remotes]]
+name = "upstream"
+url = "https://github.com/remorses/zed.git"

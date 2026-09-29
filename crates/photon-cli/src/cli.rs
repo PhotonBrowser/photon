@@ -33,7 +33,7 @@ struct GlobalOptions {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    /// Check prerequisites and initialize the Engine checkout.
+    /// Check prerequisites and initialize configured pinned repositories.
     Setup,
     /// Report toolchain, GPUIX, Engine, and build environment details.
     Doctor,

@@ -4610,6 +4610,8 @@ dependencies = [
  "clap",
  "indicatif",
  "owo-colors",
+ "serde",
+ "toml 0.8.23",
 ]
 
 [[package]]

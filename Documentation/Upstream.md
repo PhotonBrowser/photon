@@ -1,13 +1,14 @@
 # Upstream maintenance tutorial
 
-Photon pins exact commits of two Photon-maintained downstream repositories:
+Photon pins exact commits of two Photon-maintained downstream repositories. GPUIX also pins the Photon Zed fork as a nested submodule. `photon.toml` configures which root submodules `./photon setup` initializes and the Git remotes it ensures in each checkout. Git still owns the pinned commits and clone URLs in `.gitmodules`; setup never advances a submodule to a branch tip.
 
 | Dependency | Photon remote (`origin`) | Upstream remote | Photon branch |
 | --- | --- | --- | --- |
 | `Engine/` | `PhotonBrowser/photon-engine` | `LadybirdBrowser/ladybird` | `master` |
 | `vendor/gpuix/` | `PhotonBrowser/gpuix` | `remorses/gpuix` | `main` |
+| `vendor/gpuix/zed/` (nested) | `PhotonBrowser/zed` | `remorses/zed` | `photon/live-image` |
 
-The root repository records the tested commit for each dependency as a submodule gitlink. Merge upstream changes into the Photon-owned dependency first. Only then update the root gitlink. This keeps Photon-specific Engine and GPUIX changes in their respective downstreams and lets the application repository pin tested revisions.
+The root repository records the tested Engine and GPUIX commits as submodule gitlinks. GPUIX records its tested Zed commit in its own nested gitlink. Merge upstream changes into each Photon-owned repository first, then update the gitlink that owns that dependency. This keeps Photon-specific changes in their respective downstreams and lets each layer pin tested revisions.
 
 ## Before syncing
 
@@ -23,7 +24,7 @@ git -C vendor/gpuix status --short
 git submodule status --recursive
 ```
 
-The three worktrees should be clean. `./photon setup` initializes the pinned submodules and configures their remotes. Confirm the remotes before fetching:
+The three worktrees should be clean. `./photon setup` initializes the submodules listed in `photon.toml` and configures the repositories and remotes listed there. Edit that file when adding a dependency or changing a fork/upstream mapping. Confirm the remotes before fetching:
 
 ```bash
 git -C Engine remote -v
