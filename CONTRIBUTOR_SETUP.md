@@ -5,13 +5,13 @@
 Install Git, Rust/Cargo (Rust 1.85 or newer), a C++ compiler, CMake 3.25 or newer, Ninja 1.10 or newer, Python 3, and Bun. Clone Photon with its pinned dependencies and let the CLI finish setup:
 
 ```bash
-git clone --recurse-submodules git@github.com:PhotonBrowser/photon.git
+git clone --recurse-submodules https://github.com/PhotonBrowser/photon.git
 cd photon
 ./photon setup
 ./photon doctor
 ```
 
-`./photon setup` runs `git submodule update --init --recursive`, initializes the pinned Engine and GPUIX checkouts (including nested submodules), configures their Photon `origin` and upstream remotes, and installs the pinned JavaScript dependencies. It does not use Git's `--force` option. If setup cannot safely switch a submodule because it contains local edits, commit or save that work before retrying.
+`./photon setup` synchronizes the configured HTTPS submodule URLs, initializes the pinned Engine and GPUIX checkouts (including nested submodules), configures the Photon `origin` and upstream remotes from `photon.toml`, fetches Zed's configured `gpuix` upstream branch, and installs the pinned JavaScript dependencies. It does not use Git's `--force` option or advance a pinned submodule. If setup cannot safely switch a submodule because it contains local edits, commit or save that work before retrying.
 
 Run `./photon build` to build Photon Engine and the source-built GPUIX addon. `./photon run` starts the GPUIX React development runtime. For commands and incremental build behavior, see [Building](Documentation/Building.md). For architecture and ownership boundaries, see [Architecture](Documentation/Architecture.md).
 

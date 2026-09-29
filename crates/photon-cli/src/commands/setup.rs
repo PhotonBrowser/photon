@@ -10,6 +10,13 @@ pub(crate) fn setup(root: &Path, verbose: bool) -> Result<(), String> {
     let config = SetupConfig::load(root)?;
     for submodule in &config.submodules {
         let path = submodule.path.as_str();
+        let mut sync_args = vec!["submodule", "sync"];
+        if submodule.recursive {
+            sync_args.push("--recursive");
+        }
+        sync_args.extend(["--", path]);
+        command("git", &sync_args, root, verbose)?;
+
         let mut args = vec!["submodule", "update", "--init"];
         if submodule.recursive {
             args.push("--recursive");
