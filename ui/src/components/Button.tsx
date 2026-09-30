@@ -8,6 +8,7 @@ interface ButtonProps {
   label: string;
   icon?: boolean;
   color?: string;
+  hoverColor?: string;
   pressedColor?: string;
   iconColor?: string;
 }
@@ -18,6 +19,7 @@ export function Button({
   label,
   icon = false,
   color = theme.color.button,
+  hoverColor = theme.color.buttonHover,
   pressedColor = theme.color.buttonPressed,
   iconColor,
 }: ButtonProps) {
@@ -54,8 +56,7 @@ export function Button({
         justifyContent: "center",
         padding: icon ? theme.space.xxs : theme.space.sm,
         borderRadius: icon ? theme.radius.md : theme.radius.sm,
-        backgroundColor: pressed ? pressedColor : color,
-        opacity: hovered ? 0.78 : 1,
+        backgroundColor: pressed ? pressedColor : hovered ? hoverColor : color,
         cursor: "pointer",
       }}
     >

@@ -48,6 +48,7 @@ export function Titlebar({
         label={`Switch to ${themeMode === "dark" ? "light" : "dark"} theme`}
         onClick={onToggleTheme}
         color="transparent"
+        hoverColor={activeTheme.color.buttonHover}
         pressedColor={activeTheme.color.buttonPressed}
         iconColor={activeTheme.color.icon}
       >
