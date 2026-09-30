@@ -248,47 +248,6 @@ fn unset_branch_upstream(repository: &Path, branch: &str, verbose: bool) -> Resu
     )
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn setup_config_accepts_multiple_remotes_and_recursive_submodules() {
-        let config: SetupConfig = toml::from_str(
-            r#"
-                [[submodules]]
-                path = "vendor/gpuix"
-                recursive = true
-
-                [[repositories]]
-                path = "vendor/gpuix/zed"
-                [[repositories.remotes]]
-                name = "origin"
-                url = "https://example.com/fork.git"
-                [[repositories.remotes]]
-                name = "upstream"
-                url = "https://example.com/upstream.git"
-                fetch_branches = ["gpuix"]
-            "#,
-        )
-        .unwrap();
-
-        config.validate().unwrap();
-        assert!(config.submodules[0].recursive);
-        assert_eq!(config.repositories[0].remotes.len(), 2);
-        assert_eq!(config.repositories[0].remotes[1].fetch_branches, ["gpuix"]);
-    }
-
-    #[test]
-    fn setup_config_rejects_paths_that_escape_the_repository() {
-        assert!(validate_relative_path("../outside", true).is_err());
-        assert!(validate_relative_path("/outside", true).is_err());
-        assert!(validate_relative_path("vendor/gpuix", false).is_ok());
-        assert!(validate_relative_path(".", true).is_ok());
-        assert!(validate_relative_path(".", false).is_err());
-    }
-}
-
 pub(crate) fn doctor(root: &Path) -> Result<(), String> {
     println!("Photon environment");
     println!("  OS         {}/{}", env::consts::OS, env::consts::ARCH);
@@ -371,4 +330,45 @@ pub(crate) fn doctor(root: &Path) -> Result<(), String> {
     }
     crate::commands::ide::doctor(root);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn setup_config_accepts_multiple_remotes_and_recursive_submodules() {
+        let config: SetupConfig = toml::from_str(
+            r#"
+                [[submodules]]
+                path = "vendor/gpuix"
+                recursive = true
+
+                [[repositories]]
+                path = "vendor/gpuix/zed"
+                [[repositories.remotes]]
+                name = "origin"
+                url = "https://example.com/fork.git"
+                [[repositories.remotes]]
+                name = "upstream"
+                url = "https://example.com/upstream.git"
+                fetch_branches = ["gpuix"]
+            "#,
+        )
+        .unwrap();
+
+        config.validate().unwrap();
+        assert!(config.submodules[0].recursive);
+        assert_eq!(config.repositories[0].remotes.len(), 2);
+        assert_eq!(config.repositories[0].remotes[1].fetch_branches, ["gpuix"]);
+    }
+
+    #[test]
+    fn setup_config_rejects_paths_that_escape_the_repository() {
+        assert!(validate_relative_path("../outside", true).is_err());
+        assert!(validate_relative_path("/outside", true).is_err());
+        assert!(validate_relative_path("vendor/gpuix", false).is_ok());
+        assert!(validate_relative_path(".", true).is_ok());
+        assert!(validate_relative_path(".", false).is_err());
+    }
 }
