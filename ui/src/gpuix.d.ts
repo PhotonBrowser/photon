@@ -7,6 +7,9 @@ declare module "@gpuix/react/jsx-runtime" {
         url: string;
         style?: StyleDesc;
       };
+      "photon-titlebar-drag-region": {
+        style?: StyleDesc;
+      };
     }
   }
 }

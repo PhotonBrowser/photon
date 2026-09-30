@@ -12,8 +12,9 @@ render(<App />, {
   minHeight: 420,
   windowBackground: "blurred",
   titlebarTransparent: true,
-  // Let AppKit handle titlebar dragging and double-click zoom/restore.
-  appOwnsTitlebarDrag: false,
+  // Keep titlebar input in GPUI so clicks on app controls cannot drag or zoom
+  // the native window before the controls receive them.
+  appOwnsTitlebarDrag: true,
   // Position the native controls using the titlebar geometry from the theme.
   trafficLightX: TRAFFIC_LIGHT_X,
   trafficLightY: TRAFFIC_LIGHT_Y,

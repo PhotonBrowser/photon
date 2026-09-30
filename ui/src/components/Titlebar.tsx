@@ -42,8 +42,10 @@ export function Titlebar({
         backgroundColor: activeTheme.color.titlebar,
       }}
     >
-      <div style={{ width: CONTROL_CLEARANCE, flexShrink: 0 }} />
-      <div style={{ flexGrow: 1 }} />
+      <photon-titlebar-drag-region
+        style={{ width: CONTROL_CLEARANCE, height: "100%", flexShrink: 0 }}
+      />
+      <photon-titlebar-drag-region style={{ flexGrow: 1, height: "100%" }} />
       <IconButton
         label={`Switch to ${themeMode === "dark" ? "light" : "dark"} theme`}
         onClick={onToggleTheme}
@@ -54,7 +56,9 @@ export function Titlebar({
       >
         <ThemeIcon themeMode={themeMode} color={activeTheme.color.icon} />
       </IconButton>
-      <div style={{ width: theme.layout.titlebarActionInset }} />
+      <photon-titlebar-drag-region
+        style={{ width: theme.layout.titlebarActionInset, height: "100%" }}
+      />
     </div>
   );
 }

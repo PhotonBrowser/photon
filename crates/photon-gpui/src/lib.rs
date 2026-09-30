@@ -1,5 +1,7 @@
 //! Photon-owned GPUI elements.
 
+mod titlebar;
+
 #[cfg(feature = "engine")]
 mod engine;
 #[cfg(not(feature = "engine"))]
