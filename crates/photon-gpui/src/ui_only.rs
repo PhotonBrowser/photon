@@ -21,7 +21,9 @@ impl CustomElementFactory for PhotonWebViewFactory {
 
 gpuix_native::register_custom_element!(|| Box::new(PhotonWebViewFactory));
 
-pub fn ensure_linked() {}
+pub fn ensure_linked() {
+    super::titlebar::ensure_linked();
+}
 
 impl CustomElement for PhotonWebViewElement {
     fn render(

@@ -48,7 +48,9 @@ fn check_inner(root: &Path, verbose: bool, engine_enabled: bool) -> Result<(), S
     with_progress("Check Rust workspace", !verbose, || {
         invoke("cargo", &cargo_args, root, verbose)
     })?;
-    invoke("bun", &["run", "typecheck"], &root.join("ui"), verbose)?;
+    let ui = root.join("ui");
+    invoke("bun", &["run", "lint"], &ui, verbose)?;
+    invoke("bun", &["run", "typecheck"], &ui, verbose)?;
     if engine_enabled {
         let submodule = output("git", &["submodule", "status", "Engine"], root)?;
         if submodule.starts_with('-') || submodule.starts_with('+') {
@@ -56,8 +58,27 @@ fn check_inner(root: &Path, verbose: bool, engine_enabled: bool) -> Result<(), S
         }
     }
     let gpuix = output("git", &["submodule", "status", "vendor/gpuix"], root)?;
-    if gpuix.starts_with(['-', '+']) {
+    if gpuix.starts_with('-') {
         return Err(format!("GPUIX submodule mismatch: {}", gpuix.trim()));
+    }
+    if gpuix.starts_with('+') {
+        let gpuix_branch = output(
+            "git",
+            &["branch", "--show-current"],
+            &root.join("vendor/gpuix"),
+        )?;
+        let zed_branch = output(
+            "git",
+            &["branch", "--show-current"],
+            &root.join("vendor/gpuix/zed"),
+        )?;
+        if !crate::commands::gpui::edit_mode(root)
+            || gpuix_branch.trim() != "main"
+            || zed_branch.trim() != "photon/live-image"
+        {
+            return Err(format!("GPUIX submodule mismatch: {}", gpuix.trim()));
+        }
+        println!("Using GPUIX main and Photon Zed branches in local edit mode.");
     }
     println!("Architecture checks passed.");
     Ok(())

@@ -485,7 +485,9 @@ gpuix_native::register_custom_element!(|| Box::new(PhotonWebViewFactory));
 
 /// Kept reachable from the addon composition root so the linker includes the
 /// inventory registration in the final N-API binary.
-pub fn ensure_linked() {}
+pub fn ensure_linked() {
+    super::titlebar::ensure_linked();
+}
 
 impl CustomElement for PhotonWebViewElement {
     fn render(

@@ -25,7 +25,7 @@ url = "git@github.com:PhotonBrowser/photon-engine.git"
 
 [[repositories.remotes]]
 name = "upstream"
-url = "https://github.com/LadybirdBrowser/ladybird.git"
+url = "git@github.com:LadybirdBrowser/ladybird.git"
 
 [[repositories]]
 path = "vendor/gpuix"
@@ -36,7 +36,7 @@ url = "git@github.com:PhotonBrowser/gpuix.git"
 
 [[repositories.remotes]]
 name = "upstream"
-url = "https://github.com/remorses/gpuix.git"
+url = "git@github.com:remorses/gpuix.git"
 
 [[repositories]]
 path = "vendor/gpuix/zed"
@@ -48,5 +48,5 @@ url = "git@github.com:PhotonBrowser/zed.git"
 
 [[repositories.remotes]]
 name = "upstream"
-url = "https://github.com/remorses/zed.git"
+url = "git@github.com:remorses/zed.git"
 fetch_branches = ["gpuix"]

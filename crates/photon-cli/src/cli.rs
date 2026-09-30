@@ -75,6 +75,11 @@ enum Command {
     FixPrompt,
     /// Format Photon-owned Rust, C++, and TypeScript files.
     Format,
+    /// Switch between pinned GPUI dependencies and persistent edit branches.
+    Gpui {
+        #[command(subcommand)]
+        command: GpuiCommand,
+    },
     /// Run Rust workspace tests.
     Test,
     /// Inspect or maintain the Photon Engine checkout.
@@ -88,6 +93,16 @@ enum Command {
 enum IdeCommand {
     /// Prepare the debug build metadata used by editor language servers.
     Setup,
+}
+
+#[derive(Debug, Subcommand)]
+enum GpuiCommand {
+    /// Switch GPUIX and Zed to their persistent Photon development branches.
+    Edit,
+    /// Return GPUIX and Zed to the revisions pinned by this Photon checkout.
+    Pin,
+    /// Merge the configured upstream GPUIX and Zed branches into Photon branches.
+    Sync,
 }
 
 #[derive(Clone, Copy, Debug, clap::ValueEnum)]
@@ -149,6 +164,11 @@ pub fn run() -> Result<(), String> {
             Ok(())
         }
         Some(Command::Format) => commands::format::format(&root, verbose),
+        Some(Command::Gpui { command }) => match command {
+            GpuiCommand::Edit => commands::gpui::edit(&root, verbose),
+            GpuiCommand::Pin => commands::gpui::pin(&root, verbose),
+            GpuiCommand::Sync => commands::gpui::sync(&root, verbose),
+        },
         Some(Command::Test) => commands::tests::run(&root, verbose),
         Some(Command::Engine { command }) => match command {
             None | Some(EngineCommand::Status) => {

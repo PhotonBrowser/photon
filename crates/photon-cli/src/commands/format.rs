@@ -31,18 +31,6 @@ pub(crate) fn format(root: &Path, verbose: bool) -> Result<(), String> {
             verbose,
         )?;
     }
-    invoke(
-        "bun",
-        &[
-            "x",
-            "prettier",
-            "--write",
-            "src/**/*.tsx",
-            "src/**/*.ts",
-            "src/**/*.d.ts",
-        ],
-        &root.join("ui"),
-        verbose,
-    )?;
+    invoke("bun", &["run", "format"], &root.join("ui"), verbose)?;
     Ok(())
 }

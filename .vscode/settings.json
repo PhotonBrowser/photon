@@ -9,5 +9,12 @@
     "**/build/**": true,
     "**/target/**": true,
     "**/vcpkg_installed/**": true
-  }
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "editor.formatOnSave": true
 }
