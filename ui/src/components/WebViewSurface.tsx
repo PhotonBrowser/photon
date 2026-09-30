@@ -9,18 +9,20 @@ export function WebViewSurface({ url }: WebViewSurfaceProps) {
   return (
     <div
       style={{
+        display: "flex",
         flexGrow: 1,
         minHeight: 0,
-        paddingLeft: theme.space.xs,
-        paddingRight: theme.space.xs,
-        paddingBottom: theme.space.xs,
+        padding: theme.space.xs,
+        paddingTop: theme.space.none,
       }}
     >
       <PhotonWebView
         url={url}
         style={{
-          width: "100%",
-          height: "100%",
+          flexGrow: 1,
+          minWidth: 0,
+          minHeight: 0,
+          backgroundColor: "transparent",
           borderRadius: theme.radius.md,
           overflow: "hidden",
         }}

@@ -53,8 +53,21 @@ fn check_inner(root: &Path, verbose: bool, engine_enabled: bool) -> Result<(), S
     invoke("bun", &["run", "typecheck"], &ui, verbose)?;
     if engine_enabled {
         let submodule = output("git", &["submodule", "status", "Engine"], root)?;
-        if submodule.starts_with('-') || submodule.starts_with('+') {
-            return Err(format!("Engine submodule mismatch: {}", submodule.trim()));
+        if submodule.starts_with('-') {
+            return Err(format!(
+                "Engine submodule is not initialized: {}. Run `./photon setup`.",
+                submodule.trim()
+            ));
+        }
+        if submodule.starts_with('+') {
+            let engine_branch = output("git", &["branch", "--show-current"], &root.join("Engine"))?;
+            if !crate::commands::engine::edit_mode(root) || engine_branch.trim() != "master" {
+                return Err(format!(
+                    "Engine pin differs from the checkout: {}. Run `./photon engine edit` to use Engine/master, or `./photon engine pin` to restore the saved pin.",
+                    submodule.trim()
+                ));
+            }
+            println!("Using Engine/master development branch.");
         }
     }
     let gpuix = output("git", &["submodule", "status", "vendor/gpuix"], root)?;

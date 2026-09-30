@@ -1,7 +1,7 @@
 import moonSvg from "../assets/icons/moon.svg" with { type: "text" };
 import sunSvg from "../assets/icons/sun.svg" with { type: "text" };
 import { theme } from "../theme";
-import type { Theme, ThemeMode } from "../theme";
+import type { Theme, ThemeAppearance, ThemeMode } from "../theme";
 import { IconButton } from "./Button";
 
 const CONTROL_CLEARANCE =
@@ -10,14 +10,15 @@ const CONTROL_CLEARANCE =
 interface TitlebarProps {
   theme: Theme;
   themeMode: ThemeMode;
-  onToggleTheme: () => void;
+  appearance: ThemeAppearance;
+  onCycleTheme: () => void;
 }
 
 function ThemeIcon({
   themeMode,
   color,
 }: {
-  themeMode: ThemeMode;
+  themeMode: ThemeAppearance;
   color: string;
 }) {
   const source = themeMode === "dark" ? sunSvg : moonSvg;
@@ -27,7 +28,8 @@ function ThemeIcon({
 export function Titlebar({
   theme: activeTheme,
   themeMode,
-  onToggleTheme,
+  appearance,
+  onCycleTheme,
 }: TitlebarProps) {
   return (
     <div
@@ -47,14 +49,14 @@ export function Titlebar({
       />
       <photon-titlebar-drag-region style={{ flexGrow: 1, height: "100%" }} />
       <IconButton
-        label={`Switch to ${themeMode === "dark" ? "light" : "dark"} theme`}
-        onClick={onToggleTheme}
+        label={`Theme: ${themeMode}. Switch to ${themeMode === "system" ? "dark" : themeMode === "dark" ? "light" : "system"}`}
+        onClick={onCycleTheme}
         color="transparent"
         hoverColor={activeTheme.color.buttonHover}
         pressedColor={activeTheme.color.buttonPressed}
         iconColor={activeTheme.color.icon}
       >
-        <ThemeIcon themeMode={themeMode} color={activeTheme.color.icon} />
+        <ThemeIcon themeMode={appearance} color={activeTheme.color.icon} />
       </IconButton>
       <photon-titlebar-drag-region
         style={{ width: theme.layout.titlebarActionInset, height: "100%" }}

@@ -22,8 +22,9 @@ export const themes = {
   },
 } as const;
 
-export type ThemeMode = keyof typeof themes;
-export type Theme = (typeof themes)[ThemeMode];
+export type ThemeAppearance = keyof typeof themes;
+export type ThemeMode = ThemeAppearance | "system";
+export type Theme = (typeof themes)[ThemeAppearance];
 
 export const theme = {
   ...themes.dark,

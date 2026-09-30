@@ -1,14 +1,20 @@
 import { Titlebar } from "./Titlebar";
 import { Workspace } from "./Workspace";
-import type { Theme, ThemeMode } from "../theme";
+import type { Theme, ThemeAppearance, ThemeMode } from "../theme";
 
 interface AppShellProps {
   theme: Theme;
   themeMode: ThemeMode;
-  toggleTheme: () => void;
+  appearance: ThemeAppearance;
+  cycleTheme: () => void;
 }
 
-export function AppShell({ theme, themeMode, toggleTheme }: AppShellProps) {
+export function AppShell({
+  theme,
+  themeMode,
+  appearance,
+  cycleTheme,
+}: AppShellProps) {
   return (
     <div
       style={{
@@ -21,7 +27,8 @@ export function AppShell({ theme, themeMode, toggleTheme }: AppShellProps) {
       <Titlebar
         theme={theme}
         themeMode={themeMode}
-        onToggleTheme={toggleTheme}
+        appearance={appearance}
+        onCycleTheme={cycleTheme}
       />
       <Workspace theme={theme} />
     </div>

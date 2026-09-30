@@ -12,6 +12,17 @@ pub(crate) fn edit(root: &Path, verbose: bool) -> Result<(), String> {
     let zed = root.join(ZED_PATH);
     require_repository(&gpuix)?;
     require_repository(&zed)?;
+    if output("git", &["branch", "--show-current"], &gpuix)?.trim() == GPUIX_BRANCH
+        && output("git", &["branch", "--show-current"], &zed)?.trim() == ZED_BRANCH
+    {
+        command(
+            "git",
+            &["config", "--local", "photon.gpuiEditMode", "true"],
+            root,
+            verbose,
+        )?;
+        return Ok(());
+    }
     require_clean_source(&gpuix, "GPUIX")?;
     require_clean_source(&zed, "Zed")?;
 

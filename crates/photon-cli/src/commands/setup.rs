@@ -4,20 +4,20 @@ use std::path::{Component, Path, PathBuf};
 
 use serde::Deserialize;
 
-use crate::support::{command, compiler_version, output, require_tool, run_tool, version_at_least};
+use crate::support::{
+    command, compiler_version, output, require_tool, require_tool_version, run_tool,
+};
 
 pub(crate) fn setup(root: &Path, verbose: bool) -> Result<(), String> {
-    if crate::commands::gpui::edit_mode(root) {
-        command(
-            "git",
-            &["config", "--local", "--unset-all", "photon.gpuiEditMode"],
-            root,
-            verbose,
-        )?;
-    }
     let config = SetupConfig::load(root)?;
     for submodule in &config.submodules {
         let path = submodule.path.as_str();
+        // Updating an initialized submodule checks out the root gitlink and can
+        // detach a development branch. Only initialize it here; retain existing
+        // worktrees and their commits.
+        if root.join(path).join(".git").exists() {
+            continue;
+        }
         let mut sync_args = vec!["submodule", "sync"];
         if submodule.recursive {
             sync_args.push("--recursive");
@@ -32,7 +32,7 @@ pub(crate) fn setup(root: &Path, verbose: bool) -> Result<(), String> {
         args.extend(["--", path]);
         command("git", &args, root, verbose)?;
     }
-    for tool in ["git", "cargo", "rustc", "cmake", "ninja", "python3"] {
+    for tool in ["git", "cargo", "rustc", "python3"] {
         require_tool(tool)?;
     }
     if compiler_version(root).is_none() {
@@ -41,14 +41,7 @@ pub(crate) fn setup(root: &Path, verbose: bool) -> Result<(), String> {
         );
     }
     for (tool, minimum) in [("cmake", (3, 30)), ("ninja", (1, 10)), ("rustc", (1, 85))] {
-        let version = output(tool, &["--version"], root)?;
-        if !version_at_least(&version, minimum) {
-            return Err(format!(
-                "{tool} {} or newer is required; found {}",
-                minimum.0,
-                version.trim()
-            ));
-        }
+        require_tool_version(tool, minimum, root)?;
     }
     require_tool("bun")?;
     if !root.join("Engine/CMakeLists.txt").is_file() {
@@ -59,10 +52,28 @@ pub(crate) fn setup(root: &Path, verbose: bool) -> Result<(), String> {
     for repository in &config.repositories {
         let path = root.join(&repository.path);
         if !path.join(".git").exists() {
-            return Err(format!(
-                "repository {} from photon.toml is missing or not initialized",
-                repository.path
-            ));
+            if repository.path == "." {
+                return Err("Photon root repository is unavailable".into());
+            }
+            command(
+                "git",
+                &[
+                    "submodule",
+                    "update",
+                    "--init",
+                    "--recursive",
+                    "--",
+                    &repository.path,
+                ],
+                root,
+                verbose,
+            )?;
+            if !path.join(".git").exists() {
+                return Err(format!(
+                    "repository {} from photon.toml is missing or not initialized",
+                    repository.path
+                ));
+            }
         }
         for remote in &repository.remotes {
             ensure_remote(&path, &remote.name, &remote.url)?;
@@ -80,6 +91,8 @@ pub(crate) fn setup(root: &Path, verbose: bool) -> Result<(), String> {
             unset_branch_upstream(&path, branch, verbose)?;
         }
     }
+    crate::commands::engine::edit(root, verbose)?;
+    crate::commands::gpui::edit(root, verbose)?;
     for path in ["build/engine-debug", "build/app-debug", "build/bin"] {
         std::fs::create_dir_all(root.join(path)).map_err(|e| e.to_string())?;
     }
@@ -87,8 +100,9 @@ pub(crate) fn setup(root: &Path, verbose: bool) -> Result<(), String> {
     crate::commands::build::ensure_gpuix_js(root, verbose)?;
     crate::commands::build::ensure_ui_dependencies(root, verbose)?;
     println!(
-        "Setup ready. The first engine build prepares Ladybird's pinned dependencies under build/."
+        "Setup ready. Existing dependency worktrees were preserved; Engine and GPUI development branches are active."
     );
+    println!("The first engine build prepares Ladybird's pinned dependencies under build/.");
     Ok(())
 }
 

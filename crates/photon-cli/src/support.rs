@@ -50,6 +50,23 @@ pub(crate) fn require_tool(tool: &str) -> Result<(), String> {
         .map_err(|_| format!("{tool} is missing; install it using your OS package manager"))
 }
 
+pub(crate) fn require_tool_version(
+    tool: &str,
+    minimum: (u32, u32),
+    cwd: &Path,
+) -> Result<(), String> {
+    let version = output(tool, &["--version"], cwd)
+        .map_err(|_| format!("{tool} is missing; install it using your OS package manager"))?;
+    if !version_at_least(&version, minimum) {
+        return Err(format!(
+            "{tool} {} or newer is required; found {}",
+            minimum.0,
+            version.trim()
+        ));
+    }
+    Ok(())
+}
+
 pub(crate) fn run_tool(tool: &str, args: &[&str], root: &Path) -> Result<String, String> {
     output(tool, args, root)
 }

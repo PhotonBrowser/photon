@@ -6,7 +6,7 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use crate::support::{invoke, output, path, stage, with_progress};
+use crate::support::{invoke, output, path, require_tool_version, stage, with_progress};
 
 pub(crate) fn build(root: &Path, release: bool, verbose: bool) -> Result<(), String> {
     stage("Run checks before building");
@@ -119,6 +119,10 @@ fn invoke_cargo_with_engine(
 }
 
 pub(crate) fn engine_build(root: &Path, release: bool, verbose: bool) -> Result<(), String> {
+    for (tool, minimum) in [("cmake", (3, 30)), ("ninja", (1, 10))] {
+        require_tool_version(tool, minimum, root)?;
+    }
+
     let dir = root.join("build").join(if release {
         "engine-release"
     } else {
@@ -126,7 +130,7 @@ pub(crate) fn engine_build(root: &Path, release: bool, verbose: bool) -> Result<
     });
     let fingerprint = engine_fingerprint(root, release)?;
     let fingerprint_path = dir.join(".photon-build-fingerprint");
-    let required_outputs = [
+    let mut required_outputs = vec![
         dir.join("lib64/liblagom-photonembedder.so"),
         dir.join("bin/WebContent"),
         dir.join("bin/WebWorker"),
@@ -134,6 +138,17 @@ pub(crate) fn engine_build(root: &Path, release: bool, verbose: bool) -> Result<
         dir.join("bin/RequestServer"),
         dir.join("bin/ImageDecoder"),
     ];
+    if cfg!(target_os = "macos") {
+        let helper_dir = root
+            .join("build")
+            .join(if release { "app-release" } else { "app-debug" });
+        required_outputs.push(helper_dir.join("ProcessReaper"));
+        required_outputs.extend([
+            root.join("build/Resources/fonts/NotoEmoji.ttf"),
+            root.join("build/Resources/fonts/SerenitySans-Regular.ttf"),
+            root.join("build/Resources/ladybird/site-compatibility/cnn.com.json"),
+        ]);
+    }
     if std::fs::read_to_string(&fingerprint_path).ok().as_deref() == Some(fingerprint.as_str())
         && required_outputs.iter().all(|output| output.exists())
     {
@@ -207,28 +222,24 @@ pub(crate) fn engine_build(root: &Path, release: bool, verbose: bool) -> Result<
             verbose,
         )
     })?;
+    let mut targets = vec![
+        "WebContent",
+        "RequestServer",
+        "ImageDecoder",
+        "Compositor",
+        "MediaServer",
+        "WebWorker",
+        "LibPhotonEmbedder",
+    ];
+    if cfg!(target_os = "macos") {
+        targets.push("ProcessReaper");
+    }
+    let mut build_args = vec!["--build", build_arg.as_str(), "--target"];
+    build_args.extend(targets);
     with_progress(
         "Compile Photon Engine libraries and services",
         !verbose,
-        || {
-            invoke(
-                "cmake",
-                &[
-                    "--build",
-                    &build_arg,
-                    "--target",
-                    "WebContent",
-                    "RequestServer",
-                    "ImageDecoder",
-                    "Compositor",
-                    "MediaServer",
-                    "WebWorker",
-                    "LibPhotonEmbedder",
-                ],
-                root,
-                verbose,
-            )
-        },
+        || invoke("cmake", &build_args, root, verbose),
     )?;
     std::fs::write(&fingerprint_path, fingerprint).map_err(|error| {
         format!(
@@ -240,19 +251,22 @@ pub(crate) fn engine_build(root: &Path, release: bool, verbose: bool) -> Result<
 
 fn engine_targets_are_current(engine_dir: &Path, root: &Path) -> Result<bool, String> {
     let engine_dir = path(engine_dir);
+    let mut targets = vec![
+        "WebContent",
+        "RequestServer",
+        "ImageDecoder",
+        "Compositor",
+        "MediaServer",
+        "WebWorker",
+        "LibPhotonEmbedder",
+    ];
+    if cfg!(target_os = "macos") {
+        targets.push("ProcessReaper");
+    }
+    let mut args = vec!["-C", &engine_dir, "-n"];
+    args.extend(targets);
     let result = Command::new("ninja")
-        .args([
-            "-C",
-            &engine_dir,
-            "-n",
-            "WebContent",
-            "RequestServer",
-            "ImageDecoder",
-            "Compositor",
-            "MediaServer",
-            "WebWorker",
-            "LibPhotonEmbedder",
-        ])
+        .args(args)
         .current_dir(root)
         .output()
         .map_err(|error| format!("cannot inspect Photon Engine build state: {error}"))?;
@@ -420,9 +434,12 @@ fn launch_ui(
         } else {
             engine.join("bin")
         };
-        process
-            .env("PHOTON_HELPER_DIRECTORY", helper_dir)
-            .env("LD_LIBRARY_PATH", runtime_library_path(&engine));
+        process.env("PHOTON_HELPER_DIRECTORY", helper_dir);
+        if cfg!(target_os = "macos") {
+            process.env("DYLD_LIBRARY_PATH", runtime_library_path(&engine));
+        } else if cfg!(target_os = "linux") {
+            process.env("LD_LIBRARY_PATH", runtime_library_path(&engine));
+        }
     }
     if verbose {
         process.env("PHOTON_VERBOSE", "1");
@@ -473,12 +490,19 @@ pub(crate) fn ensure_gpuix_js(root: &Path, verbose: bool) -> Result<(), String> 
 
 pub(crate) fn runtime_library_path(engine: &Path) -> String {
     let mut paths = vec![path(&engine.join("lib64")), path(&engine.join("lib"))];
-    for triplet in ["x64-linux-dynamic", "x64-linux-dynamic/debug"] {
-        paths.push(path(
-            &engine.join("vcpkg_installed").join(triplet).join("lib"),
-        ));
+    if cfg!(target_os = "linux") {
+        for triplet in ["x64-linux-dynamic", "x64-linux-dynamic/debug"] {
+            paths.push(path(
+                &engine.join("vcpkg_installed").join(triplet).join("lib"),
+            ));
+        }
     }
-    if let Some(existing) = std::env::var_os("LD_LIBRARY_PATH") {
+    let variable = if cfg!(target_os = "macos") {
+        "DYLD_LIBRARY_PATH"
+    } else {
+        "LD_LIBRARY_PATH"
+    };
+    if let Some(existing) = std::env::var_os(variable) {
         paths.push(existing.to_string_lossy().into_owned());
     }
     paths.join(":")

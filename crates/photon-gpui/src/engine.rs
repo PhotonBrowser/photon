@@ -571,7 +571,11 @@ impl CustomElement for PhotonWebViewElement {
         let keydown_state = shared.clone();
         let keyup_state = shared.clone();
         let root = gpui::div()
-            .on_painted(move |_, window, _| {
+            .on_painted(move |bounds, window, _| {
+                // Create the engine view from the web surface's own painted
+                // bounds. Waiting for a child prepaint callback can leave the
+                // initial viewport unavailable until the first interaction.
+                apply_viewport(&shared, bounds, window.scale_factor());
                 let keydown_state = keydown_state.clone();
                 let keyup_state = keyup_state.clone();
                 window.on_root_key_event(move |event: &gpui::KeyDownEvent, phase, _, _| {
@@ -684,12 +688,6 @@ impl CustomElement for PhotonWebViewElement {
                     },
                     0,
                 );
-            })
-            .on_children_prepainted(move |children, window, _cx| {
-                let Some(bounds) = children.first() else {
-                    return;
-                };
-                apply_viewport(&shared, *bounds, window.scale_factor());
             })
             .id(root_id)
             .size_full();

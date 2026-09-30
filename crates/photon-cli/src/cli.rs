@@ -114,6 +114,10 @@ enum CleanScope {
 enum EngineCommand {
     /// Show repository state and upstream commit counts.
     Status,
+    /// Switch Engine to Photon’s persistent master development branch.
+    Edit,
+    /// Return Engine to the commit pinned by this Photon checkout.
+    Pin,
     /// Build Photon Engine libraries and services.
     Build {
         /// Build with optimizations.
@@ -177,6 +181,8 @@ pub fn run() -> Result<(), String> {
             Some(EngineCommand::Build { release }) => {
                 commands::engine::engine(&root, Some("build"), release, verbose)
             }
+            Some(EngineCommand::Edit) => commands::engine::edit(&root, verbose),
+            Some(EngineCommand::Pin) => commands::engine::pin(&root, verbose),
             Some(EngineCommand::Sync) => {
                 commands::engine::engine(&root, Some("sync"), false, verbose)
             }

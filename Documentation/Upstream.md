@@ -18,13 +18,9 @@ Use the existing long-lived Photon branches for ordinary GPUI work. Do not make 
 - `vendor/gpuix/`: `main` tracks `PhotonBrowser/gpuix` and contains GPUIX changes plus the tested Zed gitlink.
 - Photon normally pins a tested GPUIX commit. Local edit mode uses both branches directly, so that pin does not need to move for every edit.
 
-After the first `./photon setup`, switch both submodules to the persistent branches once:
+`./photon setup` initializes missing submodules at their saved commits, preserves initialized worktrees, configures remotes, and switches Engine, GPUIX, and Zed to their persistent Photon branches. Use `./photon engine edit` and `./photon gpui edit` to restore those branches manually after a checkout operation.
 
-```bash
-./photon gpui edit
-```
-
-Keep the checkout on these branches for normal work. Edit GPUI in `vendor/gpuix/zed/crates/gpui` and commit it on `photon/live-image`; edit generic GPUIX code on `vendor/gpuix/main`. Builds use the checked-out branch contents directly, and `./photon check` accepts these expected gitlink mismatches. You do not need to run `./photon gpui edit` again unless setup or another submodule operation has detached or reset the worktrees. Before switching branches, commit or save changes in the affected repository.
+Keep the checkout on these branches for normal work. Edit Engine code on `Engine/master`, GPUI in `vendor/gpuix/zed/crates/gpui` on `photon/live-image`, and generic GPUIX code on `vendor/gpuix/main`. Builds use checked-out branch contents directly. `./photon check` accepts a gitlink mismatch only when the matching edit mode is enabled. Before switching revisions, commit or save changes in the affected repository.
 
 Sync both Photon branches with their configured upstreams using:
 
@@ -34,9 +30,9 @@ Sync both Photon branches with their configured upstreams using:
 
 This merges `remorses/zed`'s `gpuix` branch (currently based at `ea042f2f045157ada1d0ad71009520931dcace83`) into `photon/live-image`, then merges `remorses/gpuix` `main` into Photon GPUIX `main`. It stages the resulting `zed` gitlink for review. Resolve any conflicts in place, then run the GPUIX checks before pushing. No per-change branches are created.
 
-For a shared Photon change, push the tested Zed and GPUIX commits to their Photon remotes, then advance the parent gitlinks once. To return to the exact revisions saved by the Photon root, run `./photon gpui pin`; this is for reproducible pinned checkouts, not a required step in normal development. Commits on the two development branches remain intact.
+For a shared Photon change, push the tested Engine, Zed, and GPUIX commits to their Photon remotes, then advance the parent gitlinks once. Run `./photon engine pin` or `./photon gpui pin` to return to the exact revisions saved by the Photon root. These commands are for reproducible pinned checkouts, not required in normal development. Commits on the development branches remain intact.
 
-The nested gitlinks keep release builds reproducible: GPUIX records the tested Zed revision and Photon records the tested GPUIX revision. Normal development uses persistent branches directly, so pins move only when changes are ready to share. `./photon setup` initializes the saved pins; after running it, switch back to the persistent branches with `./photon gpui edit`. Avoid running setup while editing because recursive submodule initialization checks out revisions recorded by the parent repositories.
+The nested gitlinks keep release builds reproducible: GPUIX records the tested Zed revision and Photon records the tested Engine and GPUIX revisions. Normal development uses persistent branches directly, so pins move only when changes are ready to share. Setup leaves initialized worktrees in place and activates persistent branches; it refuses to switch away from a dirty non-development branch.
 
 ## Before syncing
 
@@ -52,7 +48,7 @@ git -C vendor/gpuix status --short
 git submodule status --recursive
 ```
 
-The three worktrees should be clean. `./photon setup` initializes the submodules listed in `photon.toml` and configures the repositories and remotes listed there. Edit that file when adding a dependency or changing a fork/upstream mapping. Confirm the remotes before fetching:
+`./photon setup` initializes missing submodules at the saved pins, keeps initialized worktrees in place, configures remotes, then activates persistent development branches. Edit `photon.toml` when adding a dependency or changing a fork/upstream mapping. Confirm the remotes before fetching:
 
 ```bash
 git -C Engine remote -v
@@ -63,7 +59,7 @@ Engine `origin` must be Photon Engine and `upstream` must be Ladybird. GPUIX `or
 
 ## Sync Ladybird into Photon Engine
 
-The Engine is a downstream of Ladybird. Merge Ladybird's `master` into a review branch based on the current Photon Engine `master`:
+The Engine is a downstream of Ladybird. The persistent Photon branch is `Engine/master`; `./photon engine sync` fetches Ladybird `master` and merges it into this branch. For manual syncing:
 
 ```bash
 cd Engine
@@ -71,11 +67,10 @@ git fetch origin --prune
 git fetch upstream --prune
 git switch master
 git pull --ff-only origin master
-git switch -c sync/ladybird-YYYY-MM-DD
 git merge --no-ff upstream/master
 ```
 
-Replace `YYYY-MM-DD` with the sync date. This merge keeps Photon Engine's commits and combines them with Ladybird's new commits. Do not reset Photon Engine to `upstream/master` or replace the downstream history.
+This merge keeps Photon Engine's commits and combines them with Ladybird's new commits. Do not reset Photon Engine to `upstream/master` or replace the downstream history.
 
 If Git reports conflicts, use the conflict workflow below. After the merge is resolved, build and check it from the Photon root so the regular embedder configuration and pinned build are used:
 
@@ -87,13 +82,13 @@ git -C Engine submodule update --init --recursive
 ./photon build
 ```
 
-The merge command creates a merge commit when Git can merge cleanly; after conflicts, `git merge --continue` creates it. Once the checks pass, push the review branch to `origin` and merge it into `PhotonBrowser/photon-engine` `master` according to that repository's review policy:
+Once the checks pass, push the persistent branch to the Photon Engine remote:
 
 ```bash
-git -C Engine push -u origin sync/ladybird-YYYY-MM-DD
+git -C Engine push origin master
 ```
 
-The Photon root must only pin a merge commit that is present on the Photon Engine remote.
+The Photon root must only pin a tested commit that is present on `PhotonBrowser/photon-engine` `master`.
 
 ## Sync upstream GPUIX into the Photon fork
 
