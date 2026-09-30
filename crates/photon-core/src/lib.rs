@@ -51,9 +51,11 @@ pub fn normalize_url(input: &str) -> Result<String, &'static str> {
         return Err("Address is empty");
     }
 
-    let candidate = if input.starts_with("localhost") || looks_like_ip_with_port(input) {
-        format!("http://{input}")
-    } else if input.starts_with("127.") || input.starts_with("[::1]") {
+    let candidate = if input.starts_with("localhost")
+        || input.starts_with("127.")
+        || input.starts_with("[::1]")
+        || looks_like_ip_with_port(input)
+    {
         format!("http://{input}")
     } else if has_explicit_scheme(input) {
         input.to_owned()
@@ -126,6 +128,9 @@ pub extern "C" fn photon_browser_create() -> *mut BrowserHandle {
 }
 
 /// Destroys state returned by `photon_browser_create`.
+///
+/// # Safety
+/// `handle` must be null or a live pointer returned by `photon_browser_create`, not previously destroyed.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn photon_browser_destroy(handle: *mut BrowserHandle) {
     if !handle.is_null() {
@@ -134,6 +139,10 @@ pub unsafe extern "C" fn photon_browser_destroy(handle: *mut BrowserHandle) {
 }
 
 /// Returns a pointer to a state's null-terminated string field (0 URL, 1 title).
+///
+/// # Safety
+/// `handle` must be null or point to a live browser handle. The returned pointer is valid only while
+/// that handle remains alive and is not mutated.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn photon_browser_string(
     handle: *const BrowserHandle,
@@ -151,6 +160,9 @@ pub unsafe extern "C" fn photon_browser_string(
 }
 
 /// Returns a boolean state field (0 loading, 1 back, 2 forward).
+///
+/// # Safety
+/// `handle` must be null or point to a live browser handle.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn photon_browser_flag(handle: *const BrowserHandle, field: u32) -> bool {
     let Some(handle) = (unsafe { handle.as_ref() }) else {
@@ -165,6 +177,10 @@ pub unsafe extern "C" fn photon_browser_flag(handle: *const BrowserHandle, field
 }
 
 /// Applies a full state snapshot from the engine callback.
+///
+/// # Safety
+/// `handle` must be null or a live mutable browser handle. Non-null `url` and `title` must point to
+/// readable null-terminated strings.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn photon_browser_update(
     handle: *mut BrowserHandle,
@@ -216,6 +232,9 @@ pub unsafe extern "C" fn photon_browser_update(
 }
 
 /// Marks a browser initiated navigation and retains the last displayed address.
+///
+/// # Safety
+/// `handle` must be null or a live mutable browser handle.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn photon_browser_navigation_started(
     handle: *mut BrowserHandle,
@@ -233,6 +252,9 @@ pub unsafe extern "C" fn photon_browser_navigation_started(
 }
 
 /// Completes loading after a frame has reached the native presentation scene.
+///
+/// # Safety
+/// `handle` must be null or a live mutable browser handle.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn photon_browser_frame_presented(handle: *mut BrowserHandle) {
     let Some(handle) = (unsafe { handle.as_mut() }) else {
@@ -247,6 +269,9 @@ pub unsafe extern "C" fn photon_browser_frame_presented(handle: *mut BrowserHand
 }
 
 /// Restores the last committed address after stopping an in-flight navigation.
+///
+/// # Safety
+/// `handle` must be null or a live mutable browser handle.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn photon_browser_cancel_navigation(handle: *mut BrowserHandle) {
     let Some(handle) = (unsafe { handle.as_mut() }) else {
@@ -263,6 +288,10 @@ pub unsafe extern "C" fn photon_browser_cancel_navigation(handle: *mut BrowserHa
 
 /// Maps an address into the engine navigation target and stores any error.
 /// Returns 1 on success, 0 on failure. `output` receives a null-terminated URL.
+///
+/// # Safety
+/// `handle` must be null or a live mutable browser handle. Non-null `input` must be a readable
+/// null-terminated string. `output` must be writable for `capacity` bytes when non-null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn photon_browser_navigate(
     handle: *mut BrowserHandle,
@@ -299,12 +328,20 @@ pub unsafe extern "C" fn photon_browser_navigate(
 }
 
 /// Returns the last navigation error as a null-terminated string.
+///
+/// # Safety
+/// `handle` must be null or point to a live browser handle. The returned pointer is valid only while
+/// that handle remains alive and is not mutated.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn photon_browser_error(handle: *const BrowserHandle) -> *const c_char {
     unsafe { handle.as_ref() }.map_or(ptr::null(), |handle| handle.last_error.as_ptr())
 }
 
 /// Applies a failure reported by LibPhotonEmbedder.
+///
+/// # Safety
+/// `handle` must be null or a live mutable browser handle. Non-null `message` must point to a readable
+/// null-terminated string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn photon_browser_load_failed(
     handle: *mut BrowserHandle,
@@ -329,6 +366,9 @@ pub unsafe extern "C" fn photon_browser_load_failed(
 }
 
 /// Validates commands before the native shell adapter executes them.
+///
+/// # Safety
+/// `handle` must be null or point to a live browser handle.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn photon_browser_command(
     handle: *const BrowserHandle,
