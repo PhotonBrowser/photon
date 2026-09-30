@@ -3,7 +3,6 @@ export const themes = {
   dark: {
     color: {
       window: "oklch(0.12 0.012 265 / 0.45)",
-      titlebar: "oklch(0.12 0.012 265 / 0.58)",
       titlebarText: "oklch(0.72 0.012 265)",
       button: "oklch(0.24 0.012 265 / 0.9)",
       buttonHover: "oklch(0.3 0.012 265 / 0.8)",
@@ -14,7 +13,6 @@ export const themes = {
   light: {
     color: {
       window: "oklch(0.97 0.008 265 / 0.88)",
-      titlebar: "oklch(0.97 0.008 265 / 0.94)",
       titlebarText: "oklch(0.32 0.012 265)",
       button: "oklch(0.9 0.012 265 / 0.9)",
       buttonHover: "oklch(0.85 0.012 265)",
