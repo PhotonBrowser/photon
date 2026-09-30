@@ -39,7 +39,6 @@ export function Titlebar({
         paddingBottom: theme.layout.titlebarVerticalPadding,
         color: activeTheme.color.titlebarText,
         fontSize: theme.typography.titlebar,
-        backgroundColor: activeTheme.color.titlebar,
       }}
     >
       <photon-titlebar-drag-region
