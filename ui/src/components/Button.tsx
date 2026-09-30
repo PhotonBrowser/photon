@@ -22,6 +22,7 @@ export function Button({
   iconColor,
 }: ButtonProps) {
   const [pressed, setPressed] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const size = icon
     ? theme.layout.titlebarActionSize - theme.space.xxs * 2
     : undefined;
@@ -42,7 +43,11 @@ export function Button({
       }}
       onMouseDown={() => setPressed(true)}
       onMouseUp={() => setPressed(false)}
-      onMouseLeave={() => setPressed(false)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => {
+        setHovered(false);
+        setPressed(false);
+      }}
       style={{
         display: "flex",
         alignItems: "center",
@@ -50,6 +55,7 @@ export function Button({
         padding: icon ? theme.space.xxs : theme.space.sm,
         borderRadius: icon ? theme.radius.md : theme.radius.sm,
         backgroundColor: pressed ? pressedColor : color,
+        opacity: hovered ? 0.78 : 1,
         cursor: "pointer",
       }}
     >
