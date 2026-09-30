@@ -18,13 +18,13 @@ Use the existing long-lived Photon branches for ordinary GPUI work. Do not make 
 - `vendor/gpuix/`: `main` tracks `PhotonBrowser/gpuix` and contains GPUIX changes plus the tested Zed gitlink.
 - Photon normally pins a tested GPUIX commit. Local edit mode uses both branches directly, so that pin does not need to move for every edit.
 
-After the first `./photon setup`, enter edit mode with one command:
+After the first `./photon setup`, switch both submodules to the persistent branches once:
 
 ```bash
 ./photon gpui edit
 ```
 
-Edit GPUI in `vendor/gpuix/zed/crates/gpui` and commit it on the existing `photon/live-image` branch. Builds use that branch directly; `./photon check` permits the expected root gitlink mismatch while edit mode is active. The command refuses to switch if either repository has uncommitted source changes.
+Keep the checkout on these branches for normal work. Edit GPUI in `vendor/gpuix/zed/crates/gpui` and commit it on `photon/live-image`; edit generic GPUIX code on `vendor/gpuix/main`. Builds use the checked-out branch contents directly, and `./photon check` accepts these expected gitlink mismatches. You do not need to run `./photon gpui edit` again unless setup or another submodule operation has detached or reset the worktrees. Before switching branches, commit or save changes in the affected repository.
 
 Sync both Photon branches with their configured upstreams using:
 
@@ -34,9 +34,9 @@ Sync both Photon branches with their configured upstreams using:
 
 This merges `remorses/zed`'s `gpuix` branch (currently based at `ea042f2f045157ada1d0ad71009520931dcace83`) into `photon/live-image`, then merges `remorses/gpuix` `main` into Photon GPUIX `main`. It stages the resulting `zed` gitlink for review. Resolve any conflicts in place, then run the GPUIX checks before pushing. No per-change branches are created.
 
-For a shared Photon change, push the tested Zed and GPUIX commits to their Photon remotes, then advance the parent gitlinks once. Run `./photon gpui pin` to return to the revisions saved by the Photon root; commits on the two development branches remain intact.
+For a shared Photon change, push the tested Zed and GPUIX commits to their Photon remotes, then advance the parent gitlinks once. To return to the exact revisions saved by the Photon root, run `./photon gpui pin`; this is for reproducible pinned checkouts, not a required step in normal development. Commits on the two development branches remain intact.
 
-The nested gitlinks keep release builds reproducible: GPUIX records the tested Zed revision and Photon records the tested GPUIX revision. Day-to-day edit mode uses persistent branches directly, so pins move only when changes are ready to share. Avoid running `./photon setup` while editing; recursive submodule initialization restores revisions recorded by the parent checkout.
+The nested gitlinks keep release builds reproducible: GPUIX records the tested Zed revision and Photon records the tested GPUIX revision. Normal development uses persistent branches directly, so pins move only when changes are ready to share. `./photon setup` initializes the saved pins; after running it, switch back to the persistent branches with `./photon gpui edit`. Avoid running setup while editing because recursive submodule initialization checks out revisions recorded by the parent repositories.
 
 ## Before syncing
 
