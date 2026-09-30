@@ -19,7 +19,7 @@ export function App() {
         theme={theme}
         themeMode={themeMode}
         onToggleTheme={() =>
-          setThemeMode(themeMode === "dark" ? "light" : "dark")
+          setThemeMode((mode) => (mode === "dark" ? "light" : "dark"))
         }
       />
       <div style={{ flexGrow: 1, backgroundColor: theme.color.window }} />
