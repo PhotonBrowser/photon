@@ -7,6 +7,14 @@ use serde::Deserialize;
 use crate::support::{command, compiler_version, output, require_tool, run_tool, version_at_least};
 
 pub(crate) fn setup(root: &Path, verbose: bool) -> Result<(), String> {
+    if crate::commands::gpui::edit_mode(root) {
+        command(
+            "git",
+            &["config", "--local", "--unset-all", "photon.gpuiEditMode"],
+            root,
+            verbose,
+        )?;
+    }
     let config = SetupConfig::load(root)?;
     for submodule in &config.submodules {
         let path = submodule.path.as_str();

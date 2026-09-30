@@ -101,6 +101,8 @@ enum GpuiCommand {
     Edit,
     /// Return GPUIX and Zed to the revisions pinned by this Photon checkout.
     Pin,
+    /// Merge the configured upstream GPUIX and Zed branches into Photon branches.
+    Sync,
 }
 
 #[derive(Clone, Copy, Debug, clap::ValueEnum)]
@@ -165,6 +167,7 @@ pub fn run() -> Result<(), String> {
         Some(Command::Gpui { command }) => match command {
             GpuiCommand::Edit => commands::gpui::edit(&root, verbose),
             GpuiCommand::Pin => commands::gpui::pin(&root, verbose),
+            GpuiCommand::Sync => commands::gpui::sync(&root, verbose),
         },
         Some(Command::Test) => commands::tests::run(&root, verbose),
         Some(Command::Engine { command }) => match command {

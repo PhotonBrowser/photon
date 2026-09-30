@@ -16,7 +16,7 @@ Use the existing long-lived Photon branches for ordinary GPUI work. Do not make 
 
 - `vendor/gpuix/zed/`: `photon/live-image` tracks `PhotonBrowser/zed` and contains Photon GPUI changes.
 - `vendor/gpuix/`: `main` tracks `PhotonBrowser/gpuix` and contains GPUIX changes plus the tested Zed gitlink.
-- The Photon root pins a tested GPUIX commit; it should stay detached at that pin during normal builds.
+- Photon normally pins a tested GPUIX commit. Local edit mode uses both branches directly, so that pin does not need to move for every edit.
 
 After the first `./photon setup`, enter edit mode with one command:
 
@@ -24,16 +24,19 @@ After the first `./photon setup`, enter edit mode with one command:
 ./photon gpui edit
 ```
 
-Edit GPUI in `vendor/gpuix/zed/crates/gpui`, then commit it on the existing `photon/live-image` branch. The command refuses to switch if either repository has uncommitted source changes. After the GPUI commit, update GPUIX's nested pin on its existing `main` branch:
+Edit GPUI in `vendor/gpuix/zed/crates/gpui` and commit it on the existing `photon/live-image` branch. Builds use that branch directly; `./photon check` permits the expected root gitlink mismatch while edit mode is active. The command refuses to switch if either repository has uncommitted source changes.
+
+Sync both Photon branches with their configured upstreams using:
 
 ```bash
-git -C vendor/gpuix add zed
-git -C vendor/gpuix commit -m "Update Photon GPUI pin"
+./photon gpui sync
 ```
 
-If the change also modifies GPUIX, include those files in the same GPUIX commit. Run the checks required by the change, then push the Zed and GPUIX commits to their Photon-owned remotes. Only after the tested GPUIX commit is available from `PhotonBrowser/gpuix` should the root repository update and commit `vendor/gpuix` as described below. Run `./photon gpui pin` to return to the versions currently pinned by the root checkout; this preserves the commits on both long-lived branches.
+This merges `remorses/zed`'s `gpuix` branch (currently based at `ea042f2f045157ada1d0ad71009520931dcace83`) into `photon/live-image`, then merges `remorses/gpuix` `main` into Photon GPUIX `main`. It stages the resulting `zed` gitlink for review. Resolve any conflicts in place, then run the GPUIX checks before pushing. No per-change branches are created.
 
-The nested gitlinks are deliberate: Zed owns GPUI source, GPUIX owns its tested Zed revision, and Photon owns its tested GPUIX revision. Keep the work on these two persistent branches and move each pin forward only after its dependency commit is ready. Avoid running `./photon setup` while developing on these branches because recursive submodule initialization restores the revisions recorded by the parent checkout.
+For a shared Photon change, push the tested Zed and GPUIX commits to their Photon remotes, then advance the parent gitlinks once. Run `./photon gpui pin` to return to the revisions saved by the Photon root; commits on the two development branches remain intact.
+
+The nested gitlinks keep release builds reproducible: GPUIX records the tested Zed revision and Photon records the tested GPUIX revision. Day-to-day edit mode uses persistent branches directly, so pins move only when changes are ready to share. Avoid running `./photon setup` while editing; recursive submodule initialization restores revisions recorded by the parent checkout.
 
 ## Before syncing
 
@@ -94,7 +97,7 @@ The Photon root must only pin a merge commit that is present on the Photon Engin
 
 ## Sync upstream GPUIX into the Photon fork
 
-GPUIX's generic external custom-element API is maintained in `PhotonBrowser/gpuix`. Photon-specific elements and engine code stay in this repository. Merge upstream `main` into a review branch based on the Photon fork's `main`:
+GPUIX's generic external custom-element API is maintained in `PhotonBrowser/gpuix`. Photon-specific elements and engine code stay in this repository. For routine syncs, `./photon gpui sync` merges upstream `main` into the persistent Photon `main` branch. For a larger or riskier sync, use a separate review branch:
 
 ```bash
 cd vendor/gpuix
