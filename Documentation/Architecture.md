@@ -23,6 +23,7 @@ Engine/ (Photon Engine / Ladybird)
 
 - `ui/` contains the small React/TSX shell. It sets the initial URL and expresses layout; it has no engine or frame-buffer logic.
 - `crates/photon-core` owns framework-independent browser state and command rules. It does not depend on GPUI, GPUIX, or Ladybird types.
+- `crates/photon-omnibox` decides whether typed text is an address or a search query. It has no dependencies on the shell or the engine, and it is the only place those rules exist.
 - `crates/photon-gpui` owns the native web element, its GPUI presentation state, and the safe Rust-facing use of Photon Engine.
 - `crates/photon-native-addon` is the composition root. It exports GPUIX's N-API API and links Photon factory registration into the same addon.
 - `native/gpui` is the narrow C++ bridge to LibPhotonEmbedder. Engine implementation changes remain in `PhotonBrowser/photon-engine`.
@@ -41,5 +42,7 @@ The current frame path copies an owned BGRA bitmap into GPUI. It is a correct tr
 The single `PhotonWebViewElement` owns the current engine session and view for this one-window spike. The session pumps the embedder as part of GPUIX's yielding custom-element update task; it does not spin on the UI thread. Frame callbacks coalesce into one latest-frame slot. When the native element is removed, it shuts down and destroys the view before destroying the runtime.
 
 See [GPUIX integration](GPUIX.md) for the fork extension and addon loading model.
+
+See [Omnibox](Omnibox.md) for the address-versus-query rules and how the shell calls them.
 
 The Engine and GPUIX submodules point to Photon-maintained downstream repositories, not directly to their upstreams. Follow [Upstream maintenance](Upstream.md) to sync either upstream and update the tested commit pinned here.

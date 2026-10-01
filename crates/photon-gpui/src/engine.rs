@@ -1,11 +1,42 @@
 //! Photon Engine web surface registered with the GPUIX native renderer.
 
+#[cfg(target_os = "macos")]
+use gpui::AppContext;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::ffi::{CStr, CString, c_char, c_void};
 use std::ptr;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+#[cfg(target_os = "macos")]
+use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
+
+#[cfg(target_os = "macos")]
+fn external_image_lease_trace_enabled() -> bool {
+    std::env::var_os("EXTERNAL_IMAGE_LEASE_TRACE").is_some()
+}
+
+#[cfg(target_os = "macos")]
+fn trace_external_image_lease(args: std::fmt::Arguments<'_>) {
+    if !external_image_lease_trace_enabled() {
+        return;
+    }
+    static TRACE_EPOCH: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
+    let elapsed_ns = TRACE_EPOCH.get_or_init(Instant::now).elapsed().as_nanos();
+    // Format first so helper-process stderr cannot split an event's IDs and
+    // timestamp across the formatter's individual writes.
+    use std::io::Write;
+    let unix_ns = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let message = format!(
+        "[ExternalImageLease][Photon] process_elapsed_ns={elapsed_ns} unix_ns={unix_ns} thread={:?} {args}\n",
+        std::thread::current().id()
+    );
+    let _ = std::io::stderr().lock().write_all(message.as_bytes());
+}
 
 use gpui::{Bounds, Corners, LiveImage, Pixels, SharedString};
 use gpuix_native::{
@@ -22,6 +53,14 @@ mod embedder {
             error_capacity: usize,
         ) -> *mut c_void;
         pub fn photon_runtime_pump(runtime: *mut c_void);
+        #[cfg(target_os = "macos")]
+        pub fn photon_runtime_set_native_release_drain_callback(
+            runtime: *mut c_void,
+            callback_data: *mut c_void,
+            callback: Option<unsafe extern "C" fn(*mut c_void)>,
+        );
+        #[cfg(target_os = "macos")]
+        pub fn photon_runtime_schedule_native_release_drain(runtime: *mut c_void);
         pub fn photon_runtime_destroy(runtime: *mut c_void);
         pub fn photon_view_create(
             runtime: *mut c_void,
@@ -49,8 +88,24 @@ mod embedder {
             >,
             cursor_callback: Option<unsafe extern "C" fn(*mut c_void, i32)>,
             error_callback: Option<unsafe extern "C" fn(*mut c_void, *const c_char)>,
+            #[cfg(target_os = "macos")] native_metal_presentation: bool,
+            #[cfg(target_os = "macos")] native_backing_callback: Option<
+                unsafe extern "C" fn(*mut c_void, u64, u64, u32, u32, u32, u32) -> bool,
+            >,
+            #[cfg(target_os = "macos")] native_frame_callback: Option<
+                unsafe extern "C" fn(*mut c_void, u64, u64, u64, u64, i32, i32, f64),
+            >,
         ) -> *mut c_void;
         pub fn photon_view_resize(view: *mut c_void, width: i32, height: i32, dpr: f64);
+        #[cfg(target_os = "macos")]
+        pub fn photon_view_release_native_frame(
+            view: *mut c_void,
+            backing_id: u64,
+            generation: u64,
+            frame_id: u64,
+        );
+        #[cfg(target_os = "macos")]
+        pub fn photon_view_set_native_metal_presentation(view: *mut c_void, enabled: bool) -> bool;
         pub fn photon_view_navigate(view: *mut c_void, url: *const c_char);
         pub fn photon_view_set_focus(view: *mut c_void, focused: bool);
         pub fn photon_view_pointer(
@@ -108,6 +163,417 @@ struct CallbackState {
     reusable_pixels: Mutex<Vec<u8>>,
     latest_cursor: Mutex<Option<i32>>,
     metrics: Mutex<CallbackMetrics>,
+    #[cfg(target_os = "macos")]
+    native_presentation: Mutex<Option<Arc<MacNativePresentation>>>,
+    #[cfg(target_os = "macos")]
+    latest_native_frame: Mutex<Option<gpui::MacExternalImageFrame>>,
+    #[cfg(target_os = "macos")]
+    latest_native_order: Mutex<NativeFrameOrder>,
+    #[cfg(target_os = "macos")]
+    latest_native_ready_at: Mutex<Option<(u64, u64, Instant)>>,
+    #[cfg(target_os = "macos")]
+    wake_app: Mutex<Option<gpui::AsyncApp>>,
+    #[cfg(target_os = "macos")]
+    wake_view: Mutex<Option<gpui::WeakEntity<gpuix_native::GpuixView>>>,
+    #[cfg(target_os = "macos")]
+    wake_window: Mutex<Option<gpui::AnyWindowHandle>>,
+    #[cfg(target_os = "macos")]
+    wake_metrics: Arc<Mutex<WakeMetrics>>,
+    #[cfg(target_os = "macos")]
+    pump_active: AtomicBool,
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+struct NativeFrameOrder {
+    generation: u64,
+    frame_id: u64,
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Default)]
+struct WakeMetrics {
+    immediate: u64,
+    borrowed: u64,
+    other_fallback: u64,
+    timings_ms: Vec<(&'static str, f64)>,
+}
+
+#[cfg(target_os = "macos")]
+impl CallbackState {
+    fn request_gpui_wake(&self) -> bool {
+        self.request_gpui_wake_for_frame(0, Instant::now())
+    }
+
+    fn request_gpui_wake_for_frame(&self, frame_id: u64, ready_at: Instant) -> bool {
+        trace_external_image_lease(format_args!("frame_id={frame_id} state=WAKE_REQUESTED"));
+        if self.pump_active.load(Ordering::Acquire) {
+            trace_external_image_lease(format_args!(
+                "frame_id={frame_id} state=WAKE_QUEUED_DURING_ENGINE_PUMP"
+            ));
+        }
+        let app = self.wake_app.lock().unwrap().clone();
+        let view = self.wake_view.lock().unwrap().clone();
+        let window = *self.wake_window.lock().unwrap();
+        let wake_metrics = self.wake_metrics.clone();
+        match (app, view) {
+            (Some(mut app), Some(view)) => {
+                // Engine callbacks run on the owning foreground thread. Try
+                // the window's fallible update first so a ready frame can make
+                // this display opportunity. It refuses reentrant App borrows;
+                // callbacks during a draw take the queued path below instead.
+                if let Some(window) = window {
+                    let result = app.update_window(window, |_, window, cx| {
+                        let result = view.update(cx, |_, cx| cx.notify());
+                        window.refresh();
+                        if frame_id != 0 {
+                            let mut metrics = wake_metrics.lock().unwrap();
+                            metrics.immediate += 1;
+                            metrics.timings_ms.push((
+                                "frame ready to window invalidation",
+                                ready_at.elapsed().as_secs_f64() * 1000.0,
+                            ));
+                        }
+                        trace_external_image_lease(format_args!(
+                            "frame_id={frame_id} state=GPUI_WINDOW_REFRESH dispatch=immediate notify_result={result:?}"
+                        ));
+                    });
+                    if result.is_ok() {
+                        return true;
+                    }
+                    if let Err(error) = &result {
+                        let mut metrics = wake_metrics.lock().unwrap();
+                        if error.downcast_ref::<std::cell::BorrowMutError>().is_some() {
+                            metrics.borrowed += 1;
+                        } else {
+                            metrics.other_fallback += 1;
+                        }
+                    }
+                    trace_external_image_lease(format_args!(
+                        "frame_id={frame_id} state=WAKE_DEFERRED result={result:?}"
+                    ));
+                }
+                app.spawn(async move |app| {
+                    trace_external_image_lease(format_args!(
+                        "frame_id={frame_id} state=WAKE_DISPATCHED_TO_GPUI_THREAD"
+                    ));
+                    if let Some(window) = window {
+                        let result = app.update_window(window, |_, window, cx| {
+                            let result = view.update(cx, |_, cx| cx.notify());
+                            window.refresh();
+                            if frame_id != 0 {
+                                wake_metrics.lock().unwrap().timings_ms.push((
+                                    "frame ready to window invalidation",
+                                    ready_at.elapsed().as_secs_f64() * 1000.0,
+                                ));
+                            }
+                            trace_external_image_lease(format_args!(
+                                "frame_id={frame_id} state=GPUI_WINDOW_REFRESH dispatch=queued notify_result={result:?}"
+                            ));
+                        });
+                        trace_external_image_lease(format_args!(
+                            "frame_id={frame_id} state=WAKE_UPDATE_RETURN result={result:?}"
+                        ));
+                    } else {
+                        wake_metrics.lock().unwrap().other_fallback += 1;
+                        let result = view.update(app, |_, cx| cx.notify());
+                        trace_external_image_lease(format_args!(
+                            "frame_id={frame_id} state=WAKE_UPDATE_RETURN result={result:?}"
+                        ));
+                    }
+                })
+                .detach();
+                true
+            }
+            (Some(app), None) => {
+                app.spawn(async move |app| app.refresh()).detach();
+                true
+            }
+            (None, _) => {
+                trace_external_image_lease(format_args!(
+                    "frame_id={frame_id} state=WAKE_UNAVAILABLE reason=gpui_app_not_registered"
+                ));
+                false
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+struct NativeReleaseQueue {
+    pending: Mutex<Vec<(u64, u64, u64, Instant)>>,
+    runtime: AtomicPtr<c_void>,
+    drain_scheduled: AtomicBool,
+}
+
+#[cfg(target_os = "macos")]
+impl NativeReleaseQueue {
+    fn schedule(&self) {
+        if self.drain_scheduled.swap(true, Ordering::AcqRel) {
+            trace_external_image_lease(format_args!("state=RELEASE_WAKE_COALESCED"));
+            return;
+        }
+        let runtime = self.runtime.load(Ordering::Acquire);
+        if runtime.is_null() {
+            self.drain_scheduled.store(false, Ordering::Release);
+            trace_external_image_lease(format_args!(
+                "state=RELEASE_WAKE_SKIPPED reason=runtime_unavailable"
+            ));
+            return;
+        }
+        trace_external_image_lease(format_args!("state=RELEASE_OWNER_WAKE_SCHEDULED"));
+        unsafe { embedder::photon_runtime_schedule_native_release_drain(runtime) };
+    }
+}
+
+#[cfg(target_os = "macos")]
+struct MacNativePresentation {
+    channel: Arc<gpui_apple::presentation_xpc::MacPresentationEventChannel>,
+    channel_id: String,
+    consumer_event: Mutex<Option<metal::SharedEvent>>,
+    backings: Mutex<HashMap<(u64, u64), core_video::pixel_buffer::CVPixelBuffer>>,
+    release_queue: Arc<NativeReleaseQueue>,
+    outstanding_leases: Arc<(Mutex<usize>, Condvar)>,
+    view: AtomicPtr<c_void>,
+}
+
+#[cfg(target_os = "macos")]
+impl MacNativePresentation {
+    fn create() -> Result<Self, String> {
+        let service = std::env::var("PHOTON_PRESENTATION_XPC_SERVICE")
+            .map_err(|_| "PHOTON_PRESENTATION_XPC_SERVICE is not set".to_string())?;
+        let channel_id = std::env::var("PHOTON_PRESENTATION_CHANNEL_ID")
+            .map_err(|_| "PHOTON_PRESENTATION_CHANNEL_ID is not set".to_string())?;
+        let identity = gpui_apple::metal_renderer::MetalRenderer::device_identity();
+        let device = metal::Device::system_default()
+            .ok_or_else(|| "Metal has no system default device".to_string())?;
+        if identity.registry_id != device.registry_id() {
+            return Err(format!(
+                "GPUI device changed during presentation setup: renderer={} system={}",
+                identity.registry_id,
+                device.registry_id()
+            ));
+        }
+        let channel = Arc::new(
+            gpui_apple::presentation_xpc::MacPresentationEventChannel::connect(&service).map_err(
+                |error| format!("could not connect to presentation XPC service: {error:#}"),
+            )?,
+        );
+        if verbose() {
+            eprintln!(
+                "Photon presentation: native Metal\nEngine GPU: awaiting compositor event\nGPUI GPU: {}\nGPUI registry ID: {}\nBackings: persistent per generation\nCPU frame copies: 0",
+                identity.name, identity.registry_id
+            );
+        }
+        Ok(Self {
+            channel,
+            channel_id,
+            consumer_event: Mutex::new(None),
+            backings: Mutex::new(HashMap::new()),
+            release_queue: Arc::new(NativeReleaseQueue {
+                pending: Mutex::new(Vec::new()),
+                runtime: AtomicPtr::new(ptr::null_mut()),
+                drain_scheduled: AtomicBool::new(false),
+            }),
+            outstanding_leases: Arc::new((Mutex::new(0), Condvar::new())),
+            view: AtomicPtr::new(ptr::null_mut()),
+        })
+    }
+
+    fn activate(&self) -> Result<(), String> {
+        let device = metal::Device::system_default()
+            .ok_or_else(|| "Metal has no system default device".to_string())?;
+        let mut event = self.consumer_event.lock().unwrap();
+        if event.is_some() {
+            return Ok(());
+        }
+        let (imported, producer_registry_id) = self
+            .channel
+            .import_shared_event_with_identity(&self.channel_id, &device)
+            .map_err(|error| format!("could not import compositor shared event: {error:#}"))?;
+        if verbose() {
+            eprintln!(
+                "Engine compositor registry ID: {producer_registry_id}\nGPUI registry ID: {}\nMetal registry ID match: yes",
+                device.registry_id()
+            );
+        }
+        *event = Some(imported);
+        Ok(())
+    }
+
+    fn register_backing(
+        &self,
+        backing_id: u64,
+        generation: u64,
+        width: u32,
+        height: u32,
+        pixel_format: u32,
+        iosurface_port: u32,
+    ) -> Result<(), String> {
+        let descriptor = gpui::MacGpuBackingDescriptor {
+            backing_id,
+            generation,
+            width,
+            height,
+            pixel_format,
+            iosurface_port: unsafe {
+                gpui::MacIOSurfaceSendRight::from_owned_raw(iosurface_port as _)
+            },
+        };
+        self.channel
+            .register_iosurface_backing(&self.channel_id, &descriptor)
+            .map_err(|error| format!("could not register IOSurface backing: {error:#}"))?;
+        let imported = self
+            .channel
+            .import_iosurface_backing(&self.channel_id, backing_id, generation)
+            .map_err(|error| {
+                format!("could not retrieve registered IOSurface backing: {error:#}")
+            })?;
+        let pixel_buffer =
+            gpui_apple::metal_renderer::MetalRenderer::import_iosurface_backing(&imported)
+                .map_err(|error| format!("could not import Ladybird IOSurface: {error:#}"))?;
+        if pixel_buffer.get_width() != width as usize
+            || pixel_buffer.get_height() != height as usize
+        {
+            return Err(format!(
+                "registered IOSurface dimensions mismatch: expected {width}x{height}, got {}x{}",
+                pixel_buffer.get_width(),
+                pixel_buffer.get_height()
+            ));
+        }
+        self.backings
+            .lock()
+            .unwrap()
+            .insert((backing_id, generation), pixel_buffer);
+        trace_external_image_lease(format_args!(
+            "backing_id={backing_id} generation={generation} width={width} height={height} state=BACKING_IMPORTED"
+        ));
+        Ok(())
+    }
+
+    fn create_frame(
+        self: &Arc<Self>,
+        backing_id: u64,
+        generation: u64,
+        frame_id: u64,
+        signal_value: u64,
+        width: i32,
+        height: i32,
+    ) -> Result<gpui::MacExternalImageFrame, String> {
+        let image_buffer = self
+            .backings
+            .lock()
+            .unwrap()
+            .get(&(backing_id, generation))
+            .cloned()
+            .ok_or_else(|| "frame references an unregistered IOSurface backing".to_string())?;
+        if signal_value == 0 {
+            return Err("compositor frame has no Metal producer signal".to_string());
+        }
+        let consumer_event = self
+            .consumer_event
+            .lock()
+            .unwrap()
+            .as_ref()
+            .cloned()
+            .ok_or_else(|| "compositor shared event was not imported".to_string())?;
+        let iosurface_identity =
+            gpui_apple::metal_renderer::MetalRenderer::iosurface_identity(&image_buffer)
+                .map_err(|error| format!("could not identify imported IOSurface: {error:#}"))?;
+        let release_queue = Arc::clone(&self.release_queue);
+        let outstanding = self.outstanding_leases.clone();
+        *outstanding.0.lock().unwrap() += 1;
+        trace_external_image_lease(format_args!(
+            "backing_id={backing_id} generation={generation} frame_id={frame_id} signal_value={signal_value} state=FRAME_CREATED outstanding_leases={}",
+            *outstanding.0.lock().unwrap()
+        ));
+        Ok(gpui::MacExternalImageFrame::new_with_content_size(
+            backing_id,
+            generation,
+            frame_id,
+            iosurface_identity,
+            image_buffer.get_pixel_format(),
+            image_buffer,
+            gpui::size(gpui::DevicePixels(width), gpui::DevicePixels(height)),
+            consumer_event,
+            signal_value,
+            move || {
+                let mut pending = release_queue.pending.lock().unwrap();
+                pending.push((backing_id, generation, frame_id, Instant::now()));
+                trace_external_image_lease(format_args!(
+                    "backing_id={backing_id} generation={generation} frame_id={frame_id} state=LEASE_RELEASED->RELEASE_QUEUED pending_engine_releases={}",
+                    pending.len()
+                ));
+                drop(pending);
+                release_queue.schedule();
+                let mut count = outstanding.0.lock().unwrap();
+                *count = count
+                    .checked_sub(1)
+                    .expect("native frame lease released twice");
+                outstanding.1.notify_all();
+            },
+        ))
+    }
+
+    fn release_unsubmitted_frame(&self, backing_id: u64, generation: u64, frame_id: u64) {
+        self.release_queue.pending.lock().unwrap().push((
+            backing_id,
+            generation,
+            frame_id,
+            Instant::now(),
+        ));
+        self.release_queue.schedule();
+    }
+
+    fn wait_for_all_leases(&self) {
+        let mut count = self.outstanding_leases.0.lock().unwrap();
+        while *count != 0 {
+            count = self.outstanding_leases.1.wait(count).unwrap();
+        }
+    }
+
+    fn drain_engine_releases(&self) {
+        let view = self.view.load(Ordering::Acquire);
+        if view.is_null() {
+            trace_external_image_lease(format_args!(
+                "state=RELEASE_DRAIN_SKIPPED reason=view_null"
+            ));
+            return;
+        }
+        loop {
+            let releases = std::mem::take(&mut *self.release_queue.pending.lock().unwrap());
+            trace_external_image_lease(format_args!(
+                "state=OWNER_RELEASE_DRAIN queued={}",
+                releases.len()
+            ));
+            for (backing_id, generation, frame_id, queued_at) in releases {
+                trace_external_image_lease(format_args!(
+                    "backing_id={backing_id} generation={generation} frame_id={frame_id} state=RELEASE_SENT_TO_EMBEDDER queue_latency_us={}",
+                    queued_at.elapsed().as_micros()
+                ));
+                unsafe {
+                    embedder::photon_view_release_native_frame(
+                        view, backing_id, generation, frame_id,
+                    )
+                };
+            }
+            self.release_queue
+                .drain_scheduled
+                .store(false, Ordering::Release);
+            if self.release_queue.pending.lock().unwrap().is_empty()
+                || self
+                    .release_queue
+                    .drain_scheduled
+                    .swap(true, Ordering::AcqRel)
+            {
+                break;
+            }
+        }
+    }
+
+    fn set_runtime(&self, runtime: *mut c_void) {
+        self.release_queue.runtime.store(runtime, Ordering::Release);
+    }
 }
 
 #[derive(Default)]
@@ -121,9 +587,25 @@ struct CallbackMetrics {
     bytes_allocated: u64,
     native_frame_allocations: u64,
     native_bytes_allocated: u64,
+    wake_immediate: u64,
+    wake_borrowed: u64,
+    wake_other_fallback: u64,
 }
 
 impl CallbackMetrics {
+    #[cfg(target_os = "macos")]
+    fn record_native_received(&mut self, at: Instant) {
+        self.received += 1;
+        self.engine_completed += 1;
+        if let Some(previous) = self.last_received {
+            self.timings_ms.push((
+                "B callback interval",
+                at.duration_since(previous).as_secs_f64() * 1000.0,
+            ));
+        }
+        self.last_received = Some(at);
+    }
+
     fn record_received(&mut self, at: Instant, frame: &PresentedFrame) {
         self.received += 1;
         if let Some(previous) = self.last_received {
@@ -174,6 +656,9 @@ struct FrameDiagnostics {
     bytes_allocated: u64,
     native_frame_allocations: u64,
     native_bytes_allocated: u64,
+    wake_immediate: u64,
+    wake_borrowed: u64,
+    wake_other_fallback: u64,
     surface_vec_allocations: u64,
     surface_bytes_allocated: u64,
     pending_pipeline: Option<[f64; 6]>,
@@ -191,7 +676,7 @@ impl FrameDiagnostics {
         }
         let seconds = elapsed.as_secs_f64();
         eprintln!(
-            "Photon profile {width}x{height} DPR {dpr:.2}: FPS Engine={:.1} received={:.1} accepted={:.1} GPUI-presented={:.1}; frames Engine={} received={} accepted={} coalesced={} dropped={} redraws={} presented={} pumps={} RenderImage created={} dropped={} GPUI image uploads={} recreated={} callback Vec alloc={} bytes={} LiveImage Vec alloc={} bytes={} C++ frame Vec alloc={} bytes={} | {}",
+            "Photon profile {width}x{height} DPR {dpr:.2}: FPS Engine={:.1} received={:.1} accepted={:.1} GPUI-presented={:.1}; frames Engine={} received={} accepted={} coalesced={} dropped={} redraws={} presented={} pumps={} native window wakes immediate={} borrowed={} other fallback={} RenderImage created={} dropped={} GPUI image uploads={} recreated={} callback Vec alloc={} bytes={} LiveImage Vec alloc={} bytes={} C++ frame Vec alloc={} bytes={} | {}",
             self.engine_completed as f64 / seconds,
             self.received as f64 / seconds,
             self.accepted as f64 / seconds,
@@ -204,6 +689,9 @@ impl FrameDiagnostics {
             self.redraw_requested,
             self.presented,
             self.pump_count,
+            self.wake_immediate,
+            self.wake_borrowed,
+            self.wake_other_fallback,
             self.render_images_created,
             self.render_images_dropped,
             self.image_uploads,
@@ -241,10 +729,14 @@ fn summarize_timings(timings: &mut Vec<(&'static str, f64)>) -> String {
             .saturating_sub(1)
             .min(count - 1)]
         .1;
+        let p99 = values[((count as f64 * 0.99).ceil() as usize)
+            .saturating_sub(1)
+            .min(count - 1)]
+        .1;
         let p50 = values[count / 2].1;
         let max = values[count - 1].1;
         output.push(format!(
-            "{label}[n={count} avg={average:.2}ms p50={p50:.2}ms p95={p95:.2}ms max={max:.2}ms]"
+            "{label}[n={count} avg={average:.2}ms p50={p50:.2}ms p95={p95:.2}ms p99={p99:.2}ms max={max:.2}ms]"
         ));
         index = end;
     }
@@ -282,6 +774,47 @@ impl EngineSession {
             view: ptr::null_mut(),
             callbacks: Box::default(),
         };
+        #[cfg(target_os = "macos")]
+        let native_presentation = if std::env::var_os("PHOTON_PRESENTATION_XPC_SERVICE").is_some() {
+            match MacNativePresentation::create() {
+                Ok(presentation) => Some(Arc::new(presentation)),
+                Err(error) => {
+                    if verbose() {
+                        eprintln!("Photon presentation: CPU fallback — {error}");
+                    }
+                    None
+                }
+            }
+        } else {
+            if verbose() {
+                eprintln!(
+                    "Photon presentation: CPU fallback — presentation XPC service is not configured"
+                );
+            }
+            None
+        };
+        #[cfg(target_os = "macos")]
+        let () = {
+            *session.callbacks.native_presentation.lock().unwrap() = native_presentation.clone();
+        };
+        #[cfg(target_os = "macos")]
+        let view = unsafe {
+            embedder::photon_view_create(
+                runtime,
+                width,
+                height,
+                dpr,
+                (&mut *session.callbacks as *mut CallbackState).cast(),
+                Some(on_engine_state),
+                Some(on_engine_frame),
+                Some(on_engine_cursor),
+                Some(on_engine_error),
+                native_presentation.is_some(),
+                Some(on_engine_native_backing),
+                Some(on_engine_native_frame),
+            )
+        };
+        #[cfg(not(target_os = "macos"))]
         let view = unsafe {
             embedder::photon_view_create(
                 runtime,
@@ -301,12 +834,90 @@ impl EngineSession {
             return Err("Photon Engine could not create a webpage view".into());
         }
         session.view = view;
+        #[cfg(target_os = "macos")]
+        if let Some(native) = native_presentation {
+            native.view.store(view, Ordering::Release);
+            match native.activate() {
+                Ok(()) => {
+                    native.set_runtime(session.runtime);
+                    unsafe {
+                        embedder::photon_runtime_set_native_release_drain_callback(
+                            session.runtime,
+                            (&mut *session.callbacks as *mut CallbackState).cast(),
+                            Some(on_engine_native_release_drain),
+                        );
+                    }
+                    if !unsafe { embedder::photon_view_set_native_metal_presentation(view, true) } {
+                        unsafe {
+                            embedder::photon_runtime_set_native_release_drain_callback(
+                                session.runtime,
+                                ptr::null_mut(),
+                                None,
+                            );
+                        }
+                        native.set_runtime(ptr::null_mut());
+                        return Err(
+                            "Photon Engine rejected native Metal presentation enablement".into(),
+                        );
+                    }
+                }
+                Err(error) => {
+                    if verbose() {
+                        eprintln!("Photon presentation: CPU fallback — {error}");
+                    }
+                    unsafe { embedder::photon_view_set_native_metal_presentation(view, false) };
+                }
+            }
+        }
         Ok(session)
     }
 
     fn pump(&mut self) -> Option<PresentedFrame> {
+        #[cfg(target_os = "macos")]
+        trace_external_image_lease(format_args!("state=ENGINE_SESSION_PUMP_BEGIN"));
+        #[cfg(target_os = "macos")]
+        self.callbacks.pump_active.store(true, Ordering::Release);
         unsafe { embedder::photon_runtime_pump(self.runtime) };
+        #[cfg(target_os = "macos")]
+        self.callbacks.pump_active.store(false, Ordering::Release);
+        #[cfg(target_os = "macos")]
+        if let Some(native) = self.callbacks.native_presentation.lock().unwrap().clone() {
+            native.drain_engine_releases();
+        }
+        trace_external_image_lease(format_args!("state=ENGINE_SESSION_PUMP_END"));
         self.callbacks.latest_frame.lock().unwrap().take()
+    }
+
+    #[cfg(target_os = "macos")]
+    fn set_wake_app(&self, app: gpui::AsyncApp) {
+        *self.callbacks.wake_app.lock().unwrap() = Some(app);
+    }
+
+    #[cfg(target_os = "macos")]
+    fn set_wake_view(&self, view: gpui::WeakEntity<gpuix_native::GpuixView>) {
+        *self.callbacks.wake_view.lock().unwrap() = Some(view);
+    }
+
+    #[cfg(target_os = "macos")]
+    fn set_wake_window(&self, window: gpui::AnyWindowHandle) {
+        *self.callbacks.wake_window.lock().unwrap() = Some(window);
+    }
+
+    #[cfg(target_os = "macos")]
+    fn take_native_frame(&self) -> Option<gpui::MacExternalImageFrame> {
+        self.callbacks.latest_native_frame.lock().unwrap().take()
+    }
+
+    #[cfg(target_os = "macos")]
+    fn take_native_ready_at(&self, generation: u64, frame_id: u64) -> Option<Instant> {
+        self.callbacks
+            .latest_native_ready_at
+            .lock()
+            .unwrap()
+            .take()
+            .and_then(|(ready_generation, ready_frame_id, at)| {
+                (ready_generation == generation && ready_frame_id == frame_id).then_some(at)
+            })
     }
 
     fn recycle_pixels(&self, pixels: Vec<u8>) {
@@ -317,7 +928,16 @@ impl EngineSession {
     }
 
     fn take_metrics(&self) -> CallbackMetrics {
-        std::mem::take(&mut *self.callbacks.metrics.lock().unwrap())
+        let mut metrics = std::mem::take(&mut *self.callbacks.metrics.lock().unwrap());
+        #[cfg(target_os = "macos")]
+        {
+            let wakes = std::mem::take(&mut *self.callbacks.wake_metrics.lock().unwrap());
+            metrics.wake_immediate = wakes.immediate;
+            metrics.wake_borrowed = wakes.borrowed;
+            metrics.wake_other_fallback = wakes.other_fallback;
+            metrics.timings_ms.extend(wakes.timings_ms);
+        }
+        metrics
     }
 
     fn take_cursor(&self) -> Option<i32> {
@@ -328,7 +948,28 @@ impl EngineSession {
         unsafe { embedder::photon_view_resize(self.view, width, height, dpr) }
     }
 
-    fn navigate(&mut self, url: &str) -> Result<(), String> {
+    fn navigate(&mut self, input: &str) -> Result<(), String> {
+        // The shell hands over what a person typed, and deciding what that means
+        // happens here, once, on the Rust side of the boundary. The address field
+        // therefore cannot claim one destination while the engine opens another.
+        let url = match photon_omnibox::resolve(input) {
+            Ok(target) => target.url().to_owned(),
+            Err(error) => {
+                return Err(match error {
+                    photon_omnibox::OmniboxError::Empty => "nothing to open".to_owned(),
+                    photon_omnibox::OmniboxError::InvalidAddress => {
+                        "that address cannot be opened".to_owned()
+                    }
+                });
+            }
+        };
+        #[cfg(target_os = "macos")]
+        trace_external_image_lease(format_args!("state=SHELL_NAVIGATION_REQUESTED url={url}"));
+        // Log the resolved address, not the text that was typed: a query becomes a
+        // search URL here, and the URL is what has to be diagnosable later.
+        if verbose() {
+            eprintln!("Photon page: {url}");
+        }
         let url = CString::new(url).map_err(|_| "URL contains a NUL byte".to_string())?;
         unsafe { embedder::photon_view_navigate(self.view, url.as_ptr()) };
         Ok(())
@@ -341,10 +982,44 @@ unsafe extern "C" fn on_engine_cursor(context: *mut c_void, cursor: i32) {
     }
     let callbacks = unsafe { &*(context.cast::<CallbackState>()) };
     *callbacks.latest_cursor.lock().unwrap() = Some(cursor);
+    #[cfg(target_os = "macos")]
+    callbacks.request_gpui_wake();
+}
+
+#[cfg(target_os = "macos")]
+unsafe extern "C" fn on_engine_native_release_drain(context: *mut c_void) {
+    if context.is_null() {
+        return;
+    }
+    let callbacks = unsafe { &*(context.cast::<CallbackState>()) };
+    if let Some(native) = callbacks.native_presentation.lock().unwrap().clone() {
+        trace_external_image_lease(format_args!("state=OWNER_THREAD_RELEASE_DRAIN_CALLBACK"));
+        native.drain_engine_releases();
+    }
 }
 
 impl Drop for EngineSession {
     fn drop(&mut self) {
+        #[cfg(target_os = "macos")]
+        self.callbacks.wake_app.lock().unwrap().take();
+        #[cfg(target_os = "macos")]
+        self.callbacks.wake_window.lock().unwrap().take();
+        #[cfg(target_os = "macos")]
+        if let Some(native) = self.callbacks.native_presentation.lock().unwrap().clone() {
+            if let Some(frame) = self.callbacks.latest_native_frame.lock().unwrap().take() {
+                frame.release_unsubmitted();
+            }
+            native.wait_for_all_leases();
+            native.drain_engine_releases();
+            native.set_runtime(ptr::null_mut());
+            unsafe {
+                embedder::photon_runtime_set_native_release_drain_callback(
+                    self.runtime,
+                    ptr::null_mut(),
+                    None,
+                );
+            }
+        }
         unsafe {
             if !self.view.is_null() {
                 embedder::photon_view_shutdown(self.view);
@@ -434,6 +1109,158 @@ unsafe extern "C" fn on_engine_frame(
         callbacks.metrics.lock().unwrap().coalesced += 1;
         *callbacks.reusable_pixels.lock().unwrap() = replaced.pixels;
     }
+    #[cfg(target_os = "macos")]
+    callbacks.request_gpui_wake();
+}
+
+#[cfg(target_os = "macos")]
+unsafe extern "C" fn on_engine_native_backing(
+    context: *mut c_void,
+    backing_id: u64,
+    generation: u64,
+    width: u32,
+    height: u32,
+    pixel_format: u32,
+    iosurface_port: u32,
+) -> bool {
+    if context.is_null() {
+        return false;
+    }
+    let callbacks = unsafe { &*(context.cast::<CallbackState>()) };
+    let native = callbacks.native_presentation.lock().unwrap().clone();
+    let Some(native) = native else {
+        let _owned_right =
+            unsafe { gpui::MacIOSurfaceSendRight::from_owned_raw(iosurface_port as _) };
+        return false;
+    };
+    match native.register_backing(
+        backing_id,
+        generation,
+        width,
+        height,
+        pixel_format,
+        iosurface_port,
+    ) {
+        Ok(()) => {
+            if verbose() {
+                eprintln!(
+                    "Photon Metal backing registered: id={backing_id} generation={generation} size={width}x{height}"
+                );
+            }
+            true
+        }
+        Err(error) => {
+            eprintln!("Photon native Metal backing rejected: {error}");
+            false
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+unsafe extern "C" fn on_engine_native_frame(
+    context: *mut c_void,
+    backing_id: u64,
+    generation: u64,
+    frame_id: u64,
+    signal_value: u64,
+    width: i32,
+    height: i32,
+    _dpr: f64,
+) {
+    if context.is_null() {
+        return;
+    }
+    let ready_at = Instant::now();
+    let callbacks = unsafe { &*(context.cast::<CallbackState>()) };
+    trace_external_image_lease(format_args!(
+        "backing_id={backing_id} generation={generation} frame_id={frame_id} state=FRAME_RECEIVED"
+    ));
+    callbacks
+        .metrics
+        .lock()
+        .unwrap()
+        .record_native_received(ready_at);
+    let native = callbacks.native_presentation.lock().unwrap().clone();
+    let Some(native) = native else {
+        return;
+    };
+    let order = NativeFrameOrder {
+        generation,
+        frame_id,
+    };
+    let mut latest_order = callbacks.latest_native_order.lock().unwrap();
+    if order <= *latest_order {
+        trace_external_image_lease(format_args!(
+            "backing_id={backing_id} generation={generation} frame_id={frame_id} state=FRAME_REJECTED reason=out_of_order latest_generation={} latest_frame_id={}",
+            latest_order.generation, latest_order.frame_id
+        ));
+        drop(latest_order);
+        native.release_unsubmitted_frame(backing_id, generation, frame_id);
+        return;
+    }
+    *latest_order = order;
+    drop(latest_order);
+    let frame = match native.create_frame(
+        backing_id,
+        generation,
+        frame_id,
+        signal_value,
+        width,
+        height,
+    ) {
+        Ok(frame) => frame,
+        Err(error) => {
+            eprintln!("Photon native Metal frame rejected: {error}");
+            native.release_unsubmitted_frame(backing_id, generation, frame_id);
+            return;
+        }
+    };
+    trace_external_image_lease(format_args!(
+        "backing_id={backing_id} generation={generation} frame_id={frame_id} signal_value={signal_value} state=FRAME_READY_RECEIVED"
+    ));
+    let mut latest = callbacks.latest_native_frame.lock().unwrap();
+    let latest_order = callbacks.latest_native_order.lock().unwrap();
+    let pending_is_newer = latest.as_ref().is_some_and(|pending| {
+        NativeFrameOrder {
+            generation: pending.generation,
+            frame_id: pending.frame_id,
+        } >= order
+    });
+    if order < *latest_order || pending_is_newer {
+        trace_external_image_lease(format_args!(
+            "backing_id={backing_id} generation={generation} frame_id={frame_id} state=FRAME_REJECTED reason=superseded_during_import latest_generation={} latest_frame_id={}",
+            latest_order.generation, latest_order.frame_id
+        ));
+        drop(latest_order);
+        drop(latest);
+        frame.release_unsubmitted();
+        return;
+    }
+    if let Some(superseded) = latest.replace(frame) {
+        callbacks.metrics.lock().unwrap().coalesced += 1;
+        trace_external_image_lease(format_args!(
+            "backing_id={} generation={} frame_id={} state=SUPERSEDED_BEFORE_SUBMIT",
+            superseded.backing_id, superseded.generation, superseded.frame_id
+        ));
+        superseded.release_unsubmitted();
+        if verbose() {
+            eprintln!("Photon native Metal frame coalesced before GPUI submission");
+        }
+    }
+    *callbacks.latest_native_ready_at.lock().unwrap() = Some((generation, frame_id, ready_at));
+    drop(latest_order);
+    drop(latest);
+    let wake_requested = callbacks.request_gpui_wake_for_frame(frame_id, ready_at);
+    if verbose() {
+        eprintln!(
+            "[Photon] native frame ready id={frame_id} generation={generation}; GPUIX entity wake {}",
+            if wake_requested {
+                "requested"
+            } else {
+                "deferred to active render"
+            }
+        );
+    }
 }
 
 unsafe extern "C" fn on_engine_error(context: *mut c_void, message: *const c_char) {
@@ -450,13 +1277,20 @@ struct WebViewState {
     navigated_url: Option<String>,
     session: Option<EngineSession>,
     image: Option<Arc<LiveImage>>,
+    #[cfg(target_os = "macos")]
+    native_frame: Option<gpui::MacExternalImageFrame>,
+    #[cfg(target_os = "macos")]
+    last_accepted_native_order: NativeFrameOrder,
     cursor: gpui::CursorStyle,
-    // Latest GPUI layout viewport, used to defer initial navigation until the
-    // engine has received a usable size.
+    // Latest GPUI layout viewport, applied as soon as the element is painted.
     viewport: Option<(i32, i32, u32)>,
+    // Last viewport sent to Engine. Layout can change faster than the Engine
+    // pump, so only the newest size should cross the embedder boundary.
+    applied_viewport: Option<(i32, i32, u32)>,
     bounds_origin: Option<(f32, f32)>,
     focus_subscription: Option<gpui::Subscription>,
     blur_subscription: Option<gpui::Subscription>,
+    initial_focus_requested: bool,
     frame_dimensions: Option<(i32, i32)>,
     rejected_frame_dimensions: Option<(i32, i32)>,
     diagnostics: FrameDiagnostics,
@@ -475,8 +1309,22 @@ impl CustomElementFactory for PhotonWebViewFactory {
     }
 
     fn create(&self, _id: u64) -> Box<dyn CustomElement> {
+        // Start Ladybird while the initial GPUI tree is being assembled. The
+        // actual viewport is not available until paint, but creating the
+        // runtime and WebView here lets process startup overlap window setup.
+        let (session, creation_failed) = match EngineSession::create(1, 1, 1.0) {
+            Ok(session) => (Some(session), false),
+            Err(error) => {
+                eprintln!("Photon Engine startup failed: {error}");
+                (None, true)
+            }
+        };
         Box::new(PhotonWebViewElement {
-            state: Rc::new(RefCell::new(WebViewState::default())),
+            state: Rc::new(RefCell::new(WebViewState {
+                session,
+                creation_failed,
+                ..WebViewState::default()
+            })),
         })
     }
 }
@@ -497,6 +1345,23 @@ impl CustomElement for PhotonWebViewElement {
         cx: &mut gpui::Context<gpuix_native::GpuixView>,
     ) -> gpui::AnyElement {
         use gpui::prelude::*;
+
+        #[cfg(target_os = "macos")]
+        trace_external_image_lease(format_args!(
+            "state=PHOTON_WEBVIEW_RENDER element_id={}",
+            context.id()
+        ));
+
+        #[cfg(target_os = "macos")]
+        if let Some(session) = self.state.borrow().session.as_ref() {
+            session.set_wake_app(cx.to_async());
+            session.set_wake_view(cx.weak_entity());
+            session.set_wake_window(window.window_handle());
+        }
+        // Process one nonblocking batch during GPUI rendering. Core's macOS
+        // CFRunLoop sources wake this same thread for subsequent IPC, timers
+        // and notifier readiness, so an idle WebView does not need a poll task.
+        self.poll();
 
         let shared = self.state.clone();
         let focus_handle = context
@@ -520,6 +1385,8 @@ impl CustomElement for PhotonWebViewElement {
         }
         let state = self.state.borrow();
         let image = state.image.clone();
+        #[cfg(target_os = "macos")]
+        let native_frame = state.native_frame.clone();
         let cursor = state.cursor;
         let root_id = SharedString::from(format!("photon-webview-{}", context.id()));
         drop(state);
@@ -568,14 +1435,28 @@ impl CustomElement for PhotonWebViewElement {
         let wheel_state = shared.clone();
         let exit_state = shared.clone();
         let click_focus_handle = focus_handle.clone();
+        let initial_focus_state = shared.clone();
+        let initial_focus_handle = focus_handle.clone();
         let keydown_state = shared.clone();
         let keyup_state = shared.clone();
         let root = gpui::div()
-            .on_painted(move |bounds, window, _| {
+            .on_painted(move |bounds, window, app| {
                 // Create the engine view from the web surface's own painted
                 // bounds. Waiting for a child prepaint callback can leave the
                 // initial viewport unavailable until the first interaction.
                 apply_viewport(&shared, bounds, window.scale_factor());
+                let focus_on_open = {
+                    let mut state = initial_focus_state.borrow_mut();
+                    if state.initial_focus_requested {
+                        false
+                    } else {
+                        state.initial_focus_requested = true;
+                        true
+                    }
+                };
+                if focus_on_open {
+                    window.focus(&initial_focus_handle, app);
+                }
                 let keydown_state = keydown_state.clone();
                 let keyup_state = keyup_state.clone();
                 window.on_root_key_event(move |event: &gpui::KeyDownEvent, phase, _, _| {
@@ -692,6 +1573,67 @@ impl CustomElement for PhotonWebViewElement {
             .id(root_id)
             .size_full();
         let root = custom_element_surface(root, &context).child(gpui::div().absolute().size_full());
+        #[cfg(target_os = "macos")]
+        let root = if let Some(frame) = native_frame {
+            let corners = context.style().map_or_else(Corners::default, |style| {
+                let radius = style.border_radius.unwrap_or_default();
+                Corners {
+                    top_left: (style.border_top_left_radius.unwrap_or(radius) as f32).into(),
+                    top_right: (style.border_top_right_radius.unwrap_or(radius) as f32).into(),
+                    bottom_right: (style.border_bottom_right_radius.unwrap_or(radius) as f32)
+                        .into(),
+                    bottom_left: (style.border_bottom_left_radius.unwrap_or(radius) as f32).into(),
+                }
+            });
+            let surface = gpui::canvas(
+                |_, _, _| (),
+                move |bounds, _, window, _| {
+                    if verbose() {
+                        eprintln!(
+                            "[PhotonWebView] GPUI scene includes native frame id={} generation={} bounds={}x{}",
+                            frame.frame_id,
+                            frame.generation,
+                            bounds.size.width,
+                            bounds.size.height
+                        );
+                    }
+                    window.paint_external_surface(bounds, corners, frame.clone());
+                },
+            )
+            .absolute()
+            .size_full();
+            root.child(surface)
+        } else {
+            match image {
+                Some(image) => {
+                    let corners = context.style().map_or_else(Corners::default, |style| {
+                        let radius = style.border_radius.unwrap_or_default();
+                        Corners {
+                            top_left: (style.border_top_left_radius.unwrap_or(radius) as f32)
+                                .into(),
+                            top_right: (style.border_top_right_radius.unwrap_or(radius) as f32)
+                                .into(),
+                            bottom_right: (style.border_bottom_right_radius.unwrap_or(radius)
+                                as f32)
+                                .into(),
+                            bottom_left: (style.border_bottom_left_radius.unwrap_or(radius) as f32)
+                                .into(),
+                        }
+                    });
+                    let frame = gpui::canvas(
+                        |_, _, _| (),
+                        move |bounds, _, window, _| {
+                            let _ = window.paint_live_image(bounds, corners, image.clone());
+                        },
+                    )
+                    .absolute()
+                    .size_full();
+                    root.child(frame)
+                }
+                None => root,
+            }
+        };
+        #[cfg(not(target_os = "macos"))]
         let root = match image {
             Some(image) => {
                 let corners = context.style().map_or_else(Corners::default, |style| {
@@ -736,6 +1678,14 @@ impl CustomElement for PhotonWebViewElement {
 
     fn destroy(&mut self) {
         let mut state = self.state.borrow_mut();
+        #[cfg(target_os = "macos")]
+        if let Some(frame) = state.native_frame.take() {
+            if frame.is_submitted() {
+                frame.retire();
+            } else {
+                frame.release_unsubmitted();
+            }
+        }
         state.session.take();
         state.image.take();
     }
@@ -745,30 +1695,46 @@ impl CustomElement for PhotonWebViewElement {
     }
 
     fn needs_polling(&self) -> bool {
+        #[cfg(target_os = "macos")]
+        {
+            return false;
+        }
+        #[cfg(not(target_os = "macos"))]
         self.state.borrow().session.is_some()
     }
 
     fn poll(&mut self) -> bool {
         let mut state = self.state.borrow_mut();
+        let pending_viewport = state
+            .viewport
+            .filter(|viewport| state.applied_viewport != Some(*viewport));
+        if let Some((width, height, dpr_bits)) = pending_viewport {
+            if let Some(session) = state.session.as_mut() {
+                session.resize(width, height, f64::from(f32::from_bits(dpr_bits)));
+                state.applied_viewport = Some((width, height, dpr_bits));
+            }
+        }
         let url = state
             .viewport
-            .filter(|_| state.navigated_url.as_deref() != Some(state.url.as_str()))
+            .filter(|_| {
+                !is_initial_blank_url(state.url.as_str())
+                    && !state
+                        .navigated_url
+                        .as_deref()
+                        .is_some_and(|url| equivalent_urls(url, state.url.as_str()))
+            })
             .filter(|_| !state.url.is_empty())
             .map(|_| state.url.clone());
         if let Some(url) = url {
             let navigation = state.session.as_mut().map(|session| session.navigate(&url));
             match navigation {
                 Some(Ok(())) => {
-                    if verbose() {
-                        eprintln!("Photon page: {url}");
-                    }
                     state.navigated_url = Some(url);
                 }
                 Some(Err(error)) => eprintln!("Photon navigation failed: {error}"),
                 None => {}
             }
         }
-
         let Some(session) = state.session.as_mut() else {
             return false;
         };
@@ -789,6 +1755,9 @@ impl CustomElement for PhotonWebViewElement {
         state.diagnostics.bytes_allocated += metrics.bytes_allocated;
         state.diagnostics.native_frame_allocations += metrics.native_frame_allocations;
         state.diagnostics.native_bytes_allocated += metrics.native_bytes_allocated;
+        state.diagnostics.wake_immediate += metrics.wake_immediate;
+        state.diagnostics.wake_borrowed += metrics.wake_borrowed;
+        state.diagnostics.wake_other_fallback += metrics.wake_other_fallback;
         state.diagnostics.timings_ms.extend(metrics.timings_ms);
         let mut cursor_changed = false;
         if let Some(cursor) = cursor
@@ -796,6 +1765,117 @@ impl CustomElement for PhotonWebViewElement {
         {
             state.cursor = cursor;
             cursor_changed = true;
+        }
+        #[cfg(target_os = "macos")]
+        let native_frame = state
+            .session
+            .as_ref()
+            .and_then(EngineSession::take_native_frame);
+        #[cfg(target_os = "macos")]
+        if let Some(frame) = native_frame {
+            let frame_order = NativeFrameOrder {
+                generation: frame.generation,
+                frame_id: frame.frame_id,
+            };
+            if frame_order <= state.last_accepted_native_order {
+                trace_external_image_lease(format_args!(
+                    "backing_id={} generation={} frame_id={} state=FRAME_REJECTED reason=out_of_order_consume latest_generation={} latest_frame_id={}",
+                    frame.backing_id,
+                    frame.generation,
+                    frame.frame_id,
+                    state.last_accepted_native_order.generation,
+                    state.last_accepted_native_order.frame_id
+                ));
+                frame.release_unsubmitted();
+                return false;
+            }
+            state.last_accepted_native_order = frame_order;
+            if let Some(ready_at) = state
+                .session
+                .as_ref()
+                .and_then(|session| session.take_native_ready_at(frame.generation, frame.frame_id))
+            {
+                state.diagnostics.timings_ms.push((
+                    "frame ready to PhotonWebView consume",
+                    ready_at.elapsed().as_secs_f64() * 1000.0,
+                ));
+            }
+            trace_external_image_lease(format_args!(
+                "backing_id={} generation={} frame_id={} state=GPUIX_CONSUMED",
+                frame.backing_id, frame.generation, frame.frame_id
+            ));
+            if verbose() {
+                eprintln!(
+                    "[PhotonWebView] consuming native frame id={} generation={}",
+                    frame.frame_id, frame.generation
+                );
+            }
+            let dimensions = (frame.content_size.width.0, frame.content_size.height.0);
+            let expected_dimensions = state.viewport.map(|(width, height, dpr_bits)| {
+                let dpr = f64::from(f32::from_bits(dpr_bits));
+                (
+                    (f64::from(width) * dpr).round() as i32,
+                    (f64::from(height) * dpr).round() as i32,
+                )
+            });
+            if expected_dimensions != Some(dimensions) {
+                if verbose() {
+                    eprintln!(
+                        "Photon Metal frame is {}x{}; waiting for viewport {}x{}",
+                        dimensions.0,
+                        dimensions.1,
+                        expected_dimensions.map_or(0, |size| size.0),
+                        expected_dimensions.map_or(0, |size| size.1)
+                    );
+                }
+                frame.release_unsubmitted();
+                return false;
+            }
+            state.rejected_frame_dimensions = None;
+            if state.frame_dimensions != Some(dimensions) {
+                state.frame_dimensions = Some(dimensions);
+                if verbose() {
+                    eprintln!(
+                        "Photon native Metal frame dimensions: {}x{}",
+                        dimensions.0, dimensions.1
+                    );
+                }
+            }
+            if let Some(previous) = state.native_frame.replace(frame) {
+                trace_external_image_lease(format_args!(
+                    "backing_id={} generation={} frame_id={} state=RETIRED_BY_NEW_FRAME submitted={}",
+                    previous.backing_id,
+                    previous.generation,
+                    previous.frame_id,
+                    previous.is_submitted()
+                ));
+                if previous.is_submitted() {
+                    previous.retire();
+                } else {
+                    previous.release_unsubmitted();
+                }
+            }
+            state.diagnostics.accepted += 1;
+            state.diagnostics.redraw_requested += 1;
+            state.diagnostics.redraw_requested_at = Some(Instant::now());
+            if verbose() {
+                state.diagnostics.presented += 1;
+            }
+            if verbose() {
+                let (width, height, dpr) = profile_size(state.viewport, state.frame_dimensions);
+                state.diagnostics.report_if_due(width, height, dpr);
+            }
+            return true;
+        }
+        #[cfg(target_os = "macos")]
+        if frame.is_some()
+            && let Some(previous) = state.native_frame.take()
+        {
+            if previous.is_submitted() {
+                previous.retire();
+            } else {
+                previous.release_unsubmitted();
+            }
         }
         let Some(frame) = frame else {
             if verbose() {
@@ -1141,9 +2221,6 @@ fn apply_viewport(state: &Rc<RefCell<WebViewState>>, bounds: Bounds<Pixels>, sca
         state.bounds_origin = Some((f32::from(bounds.origin.x), f32::from(bounds.origin.y)));
         if state.viewport != Some(viewport) {
             state.viewport = Some(viewport);
-            if let Some(session) = state.session.as_mut() {
-                session.resize(logical_width, logical_height, f64::from(dpr));
-            }
             if verbose() {
                 eprintln!(
                     "PhotonWebView: logical={}x{} physical={}x{} dpr={dpr}",
@@ -1163,10 +2240,62 @@ fn apply_viewport(state: &Rc<RefCell<WebViewState>>, bounds: Bounds<Pixels>, sca
             }
         }
     }
+
+    // Prime the newly created view with the real layout before its first
+    // engine pump. Starting the initial navigation here lets loading begin in
+    // the window's first frame with the correct viewport already queued.
+    let mut state = state.borrow_mut();
+    if let Some(viewport) = state.viewport {
+        if state.applied_viewport.is_none()
+            && let Some(session) = state.session.as_mut()
+        {
+            session.resize(viewport.0, viewport.1, f64::from(dpr));
+            state.applied_viewport = Some(viewport);
+        }
+        let url = (state.navigated_url.as_deref() != Some(state.url.as_str())
+            && !state.url.is_empty()
+            && !is_initial_blank_url(&state.url)
+            && !state
+                .navigated_url
+                .as_deref()
+                .is_some_and(|url| equivalent_urls(url, state.url.as_str())))
+        .then(|| state.url.clone());
+        if let Some(url) = url
+            && let Some(session) = state.session.as_mut()
+        {
+            match session.navigate(&url) {
+                Ok(()) => {
+                    state.navigated_url = Some(url);
+                }
+                Err(error) => eprintln!("Photon navigation failed: {error}"),
+            }
+        }
+    }
 }
 
 fn verbose() -> bool {
     std::env::var_os("PHOTON_VERBOSE").is_some()
+}
+
+fn is_initial_blank_url(url: &str) -> bool {
+    url.eq_ignore_ascii_case("about:blank")
+}
+
+fn equivalent_urls(left: &str, right: &str) -> bool {
+    fn without_root_slash(url: &str) -> String {
+        let Some((scheme, rest)) = url.split_once("://") else {
+            return url.to_string();
+        };
+        let Some(authority) = rest.strip_suffix('/') else {
+            return url.to_string();
+        };
+        if authority.contains('/') {
+            return url.to_string();
+        }
+        format!("{scheme}://{authority}")
+    }
+
+    without_root_slash(left) == without_root_slash(right)
 }
 
 fn profile_size(viewport: Option<(i32, i32, u32)>, frame: Option<(i32, i32)>) -> (i32, i32, f64) {

@@ -1,6 +1,6 @@
 # PhotonWebView
 
-`<PhotonWebView url="https://example.com" />` is the only Photon-specific React component in this spike. Its wrapper maps directly to GPUIX's registered `photon-webview` host element. React controls its URL and style; native code owns the engine view and frame presentation.
+`<PhotonWebView url="https://example.com" />` is the only Photon-specific React component in this spike. Its wrapper maps directly to GPUIX's registered `photon-webview` host element. React controls its URL and style; native code owns the engine view and frame presentation. The `url` prop takes typed text as well as addresses: the element resolves it through the [omnibox rules](Omnibox.md) at the navigation boundary, so a query becomes a search in Rust and no detection logic lives in the shell.
 
 The view is created after the element has a non-zero GPUI layout size. It navigates once for the initial URL and only navigates again when a committed URL property changes. Layout bounds are converted from logical GPUI pixels to physical engine pixels using the current display scale factor. Resize calls are sent only when the resulting viewport changes.
 

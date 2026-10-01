@@ -14,6 +14,8 @@ Use `./photon run --ui` to work on the shell without building or starting Photon
 
 The first Engine build configures Ladybird's pinned dependencies under `build/` and compiles Photon Engine helper processes plus LibPhotonEmbedder. The Photon Rust addon is built from source and staged as `photon-native-addon.node`. `run` launches Bun's GPUIX development runtime with that addon selected explicitly.
 
+On macOS, a normal `./photon run` also registers a checkout-specific Metal presentation broker with the user's launchd session and passes its XPC service name to Photon and the Engine helpers. The broker executable and plist are staged in the user's temporary directory so launchd can load them. The broker is reused on later runs; no environment variable or manual `launchctl` command is needed. `./photon clean` stops that broker and removes its generated files. `PHOTON_PRESENTATION_XPC_SERVICE` remains available as an explicit service override for debugging.
+
 Incremental behavior:
 
 - A TSX-only edit is picked up by Bun hot reload and does not rebuild Engine or the Rust addon.

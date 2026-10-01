@@ -41,6 +41,21 @@ extern "C" void photon_runtime_pump(void *runtime) {
     static_cast<RuntimeHandle *>(runtime)->runtime->pump();
 }
 
+#if defined(__APPLE__)
+extern "C" void photon_runtime_set_native_release_drain_callback(
+    void *runtime, void *callback_data,
+    PhotonNativeReleaseDrainCallback callback) {
+  if (runtime)
+    static_cast<RuntimeHandle *>(runtime)->runtime->set_native_release_drain_callback(
+        callback_data, callback);
+}
+
+extern "C" void photon_runtime_schedule_native_release_drain(void *runtime) {
+  if (runtime)
+    static_cast<RuntimeHandle *>(runtime)->runtime->schedule_native_release_drain();
+}
+#endif
+
 extern "C" void photon_runtime_destroy(void *runtime) {
   delete static_cast<RuntimeHandle *>(runtime);
 }
@@ -50,7 +65,13 @@ extern "C" void *photon_view_create(void *runtime, int width, int height,
                                     PhotonStateCallback state_callback,
                                     PhotonFrameCallback frame_callback,
                                     PhotonCursorCallback cursor_callback,
-                                    PhotonErrorCallback error_callback) {
+                                    PhotonErrorCallback error_callback
+#if defined(__APPLE__)
+                                    , bool native_metal_presentation,
+                                    PhotonNativeBackingCallback native_backing_callback,
+                                    PhotonNativeFrameCallback native_frame_callback
+#endif
+                                    ) {
   if (!runtime)
     return nullptr;
 
@@ -71,6 +92,23 @@ extern "C" void *photon_view_create(void *runtime, int width, int height,
                          frame->copy_time_microseconds,
                          frame->paint_to_callback_microseconds);
       };
+#if defined(__APPLE__)
+  callbacks.native_metal_presentation = native_metal_presentation
+      && native_backing_callback && native_frame_callback;
+  if (callbacks.native_metal_presentation) {
+    callbacks.native_backing_registered = [=](Photon::NativeGpuBacking const &backing) {
+      return native_backing_callback(callback_data, backing.backing_id,
+                                     backing.generation, backing.width,
+                                     backing.height, backing.pixel_format,
+                                     backing.iosurface_mach_port);
+    };
+    callbacks.native_frame_ready = [=](Photon::NativeGpuFrame const &frame) {
+      native_frame_callback(callback_data, frame.backing_id, frame.generation,
+                            frame.frame_id, frame.signal_value, frame.width, frame.height,
+                            frame.device_pixel_ratio);
+    };
+  }
+#endif
   callbacks.cursor_changed = [=](Photon::Cursor cursor) {
     if (cursor_callback)
       cursor_callback(callback_data, static_cast<int>(cursor));
@@ -92,6 +130,25 @@ extern "C" void photon_view_resize(void *view, int width, int height,
   if (view)
     static_cast<ViewHandle *>(view)->view->resize(width, height, dpr);
 }
+
+#if defined(__APPLE__)
+extern "C" void photon_view_release_native_frame(void *view,
+                                                  uint64_t backing_id,
+                                                  uint64_t generation,
+                                                  uint64_t frame_id) {
+  if (view)
+    static_cast<ViewHandle *>(view)->view->release_native_frame(
+        backing_id, generation, frame_id);
+}
+
+extern "C" bool photon_view_set_native_metal_presentation(void *view,
+                                                            bool enabled) {
+  if (!view)
+    return false;
+  static_cast<ViewHandle *>(view)->view->set_native_metal_presentation(enabled);
+  return true;
+}
+#endif
 
 extern "C" void photon_view_navigate(void *view, char const *url) {
   if (view && url)
