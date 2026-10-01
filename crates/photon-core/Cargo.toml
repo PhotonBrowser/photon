@@ -8,4 +8,4 @@ license.workspace = true
 crate-type = ["staticlib"]
 
 [dependencies]
-url = "2"
+photon-omnibox = { path = "../photon-omnibox" }

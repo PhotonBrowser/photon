@@ -2389,6 +2389,8 @@ dependencies = [
  "itertools 0.14.0",
  "log",
  "lyon",
+ "mach2",
+ "metal",
  "num_cpus",
  "parking",
  "parking_lot",
@@ -2433,6 +2435,7 @@ dependencies = [
  "anyhow",
  "block",
  "cbindgen",
+ "cc",
  "cocoa 0.26.0",
  "collections",
  "core-foundation 0.10.1",
@@ -2442,7 +2445,9 @@ dependencies = [
  "foreign-types",
  "gpui",
  "image",
+ "io-surface",
  "log",
+ "mach2",
  "metal",
  "objc",
  "parking_lot",
@@ -4622,7 +4627,7 @@ dependencies = [
 name = "photon-core"
 version = "0.1.0"
 dependencies = [
- "url",
+ "photon-omnibox",
 ]
 
 [[package]]
@@ -4630,9 +4635,13 @@ name = "photon-gpui"
 version = "0.1.0"
 dependencies = [
  "cc",
+ "core-video",
  "gpui",
+ "gpui_apple",
  "gpui_platform",
  "gpuix-native",
+ "metal",
+ "photon-omnibox",
  "serde_json",
 ]
 
@@ -4645,6 +4654,13 @@ dependencies = [
  "napi-build",
  "napi-derive",
  "photon-gpui",
+]
+
+[[package]]
+name = "photon-omnibox"
+version = "0.1.0"
+dependencies = [
+ "url",
 ]
 
 [[package]]

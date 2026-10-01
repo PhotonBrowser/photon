@@ -35,6 +35,8 @@ fn check_inner(root: &Path, verbose: bool, engine_enabled: bool) -> Result<(), S
             "photon-gpui",
             "--package",
             "photon-native-addon",
+            "--package",
+            "photon-omnibox",
             "--",
             "--check",
         ],

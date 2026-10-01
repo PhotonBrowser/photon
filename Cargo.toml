@@ -5,6 +5,7 @@ members = [
     "crates/photon-core",
     "crates/photon-gpui",
     "crates/photon-native-addon",
+    "crates/photon-omnibox",
 ]
 exclude = ["Engine/Libraries/LibJS/Flap", "vendor/gpuix"]
 

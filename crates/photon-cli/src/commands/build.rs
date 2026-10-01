@@ -393,7 +393,6 @@ pub(crate) fn run(
     url: Option<&str>,
     force_cpu_painting: bool,
 ) -> Result<(), String> {
-    ensure_gpuix_js(root, verbose)?;
     ensure_ui_dependencies(root, verbose)?;
     build(root, release, verbose)?;
 
@@ -437,12 +436,29 @@ fn launch_ui(
         process.env("PHOTON_HELPER_DIRECTORY", helper_dir);
         if cfg!(target_os = "macos") {
             process.env("DYLD_LIBRARY_PATH", runtime_library_path(&engine));
+            #[cfg(target_os = "macos")]
+            {
+                let service = match std::env::var("PHOTON_PRESENTATION_XPC_SERVICE") {
+                    Ok(service) if !service.is_empty() => service,
+                    _ => super::presentation_broker::ensure(root, verbose)?,
+                };
+                process.env("PHOTON_PRESENTATION_XPC_SERVICE", service);
+                let session_id = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|duration| duration.as_nanos())
+                    .unwrap_or_default();
+                process.env(
+                    "PHOTON_PRESENTATION_CHANNEL_ID",
+                    format!("photon-{}-{session_id}", std::process::id()),
+                );
+            }
         } else if cfg!(target_os = "linux") {
             process.env("LD_LIBRARY_PATH", runtime_library_path(&engine));
         }
     }
     if verbose {
         process.env("PHOTON_VERBOSE", "1");
+        process.env("EXTERNAL_IMAGE_LEASE_TRACE", "1");
     }
     if let Some(url) = url {
         process.env("PHOTON_URL", url);
@@ -481,10 +497,8 @@ pub(crate) fn ensure_gpuix_js(root: &Path, verbose: bool) -> Result<(), String> 
         invoke("bun", &["install", "--frozen-lockfile"], &gpuix, verbose)?;
     }
     let native = gpuix.join("packages/native");
-    if !native.join("dist/host.d.ts").is_file() {
-        stage("Build GPUIX native JavaScript bindings");
-        invoke("bun", &["run", "build:js"], &native, verbose)?;
-    }
+    stage("Build GPUIX native JavaScript bindings");
+    invoke("bun", &["run", "build:js"], &native, verbose)?;
     Ok(())
 }
 
@@ -509,6 +523,10 @@ pub(crate) fn runtime_library_path(engine: &Path) -> String {
 }
 
 pub(crate) fn clean(root: &Path, scope: Option<&str>) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    if scope != Some("engine") {
+        super::presentation_broker::clean(root)?;
+    }
     let dirs: &[&str] = if scope == Some("engine") {
         &["engine-debug", "engine-release"]
     } else {

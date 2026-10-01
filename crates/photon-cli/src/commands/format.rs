@@ -15,6 +15,8 @@ pub(crate) fn format(root: &Path, verbose: bool) -> Result<(), String> {
             "photon-gpui",
             "--package",
             "photon-native-addon",
+            "--package",
+            "photon-omnibox",
         ],
         root,
         verbose,

@@ -2,7 +2,11 @@
 
 use std::ffi::{CStr, CString, c_char};
 use std::ptr;
-use url::Url;
+
+pub use photon_omnibox::{
+    OmniboxError, OmniboxTarget, SearchEngine, SearchEngineError, SearchEngines, UrlKind,
+    resolve as resolve_omnibox_input,
+};
 
 /// The single active view's persistent browser state.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -44,52 +48,18 @@ impl BrowserState {
     }
 }
 
-/// Normalizes an address without guessing a search provider.
+/// Resolves omnibox text into the address the engine loads.
+///
+/// Address-shaped text opens an address. Anything else is a search query, which
+/// becomes a URL on the default engine. The rules live in `photon-omnibox` so
+/// the address field, the engine adapter and any future surface cannot each
+/// invent their own.
 pub fn normalize_url(input: &str) -> Result<String, &'static str> {
-    let input = input.trim();
-    if input.is_empty() {
-        return Err("Address is empty");
+    match resolve_omnibox_input(input) {
+        Ok(target) => Ok(target.url().to_owned()),
+        Err(OmniboxError::Empty) => Err("Address is empty"),
+        Err(OmniboxError::InvalidAddress) => Err("Invalid address"),
     }
-
-    let candidate = if input.starts_with("localhost")
-        || input.starts_with("127.")
-        || input.starts_with("[::1]")
-        || looks_like_ip_with_port(input)
-    {
-        format!("http://{input}")
-    } else if has_explicit_scheme(input) {
-        input.to_owned()
-    } else {
-        format!("https://{input}")
-    };
-    let parsed = Url::parse(&candidate).map_err(|_| "Invalid address")?;
-    if matches!(parsed.scheme(), "http" | "https" | "ws" | "wss" | "ftp")
-        && parsed.host_str().is_none()
-    {
-        return Err("Address must include a host");
-    }
-    Ok(parsed.to_string())
-}
-
-fn looks_like_ip_with_port(input: &str) -> bool {
-    let Some((host, port)) = input.rsplit_once(':') else {
-        return false;
-    };
-    host.parse::<std::net::IpAddr>().is_ok() && port.parse::<u16>().is_ok()
-}
-
-fn has_explicit_scheme(input: &str) -> bool {
-    let Some((scheme, _)) = input.split_once(':') else {
-        return false;
-    };
-    let mut chars = scheme.chars();
-    chars
-        .next()
-        .is_some_and(|first| first.is_ascii_alphabetic())
-        && chars.all(|character| {
-            character.is_ascii_alphanumeric() || matches!(character, '+' | '-' | '.')
-        })
-        && !scheme.contains('.')
 }
 
 /// Opaque state allocation used by native shell adapters.
@@ -402,6 +372,18 @@ mod tests {
         assert_eq!(
             normalize_url("https://example.com/foo").unwrap(),
             "https://example.com/foo"
+        );
+    }
+
+    #[test]
+    fn searches_for_anything_that_is_not_an_address() {
+        assert_eq!(
+            normalize_url("how to bake bread").unwrap(),
+            "https://www.google.com/search?q=how%20to%20bake%20bread"
+        );
+        assert_eq!(
+            normalize_url("rust & golang").unwrap(),
+            "https://www.google.com/search?q=rust%20%26%20golang"
         );
     }
 
