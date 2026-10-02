@@ -1,6 +1,6 @@
 # Building Photon
 
-Photon's `./photon` script is the developer entry point. It requires Git, Rust/Cargo 1.85 or newer, a C++23-capable compiler, CMake 3.30 or newer, Ninja 1.10 or newer, Python 3, Bun, and the system development packages required by the pinned Engine. `./photon setup` initializes the pinned submodules recursively, configures remotes from `photon.toml`, fetches the configured Zed upstream branch, and installs the pinned JavaScript dependencies. It prepares the checkout; `./photon build` performs the first Engine and native addon build. See [Contributor setup](../CONTRIBUTOR_SETUP.md) for first checkout and recovery steps, and [Ladybird's build instructions](../Engine/Documentation/BuildInstructionsLadybird.md) for platform packages.
+Photon's `./photon` script is the developer entry point. It requires Git, Rust/Cargo 1.85 or newer, a C++23-capable compiler, CMake 3.30 or newer, Ninja 1.10 or newer, Python 3, and the platform packages required by the pinned Engine. Bun and a browser-based UI host are not used.
 
 ```bash
 ./photon setup
@@ -10,21 +10,10 @@ Photon's `./photon` script is the developer entry point. It requires Git, Rust/C
 ./photon run --verbose
 ```
 
-Use `./photon run --ui` to work on the shell without building or starting Photon Engine. This mode still checks TypeScript and Rust and builds the source GPUIX addon with the `engine` feature disabled. The `PhotonWebView` host element remains in the React tree and paints a plain white surface; it does not create a runtime or view, load a URL, link the Engine bridge, or use Engine helper processes. It launches the same GPUIX window and hot-reload runtime.
+`./photon run` builds the Engine and the direct GPUI-CE application, starts the Photon-owned macOS presentation broker, then opens the native window. Use `--url` to choose the initial page. `--shutdown-after-seconds N` runs for a fixed interval and then drains Metal work and frame leases; verbose mode prints the final submitted/completed/released/outstanding counts.
 
-The first Engine build configures Ladybird's pinned dependencies under `build/` and compiles Photon Engine helper processes plus LibPhotonEmbedder. The Photon Rust addon is built from source and staged as `photon-native-addon.node`. `run` launches Bun's GPUIX development runtime with that addon selected explicitly.
+The first Engine build configures Ladybird dependencies under `build/` and compiles Photon Engine helper processes plus LibPhotonEmbedder. The app remains Rust, with C++ limited to the narrow LibPhotonEmbedder bridge and required Apple XPC glue.
 
-On macOS, a normal `./photon run` also registers a checkout-specific Metal presentation broker with the user's launchd session and passes its XPC service name to Photon and the Engine helpers. The broker executable and plist are staged in the user's temporary directory so launchd can load them. The broker is reused on later runs; no environment variable or manual `launchctl` command is needed. `./photon clean` stops that broker and removes its generated files. `PHOTON_PRESENTATION_XPC_SERVICE` remains available as an explicit service override for debugging.
+Incremental builds use the Engine fingerprint to rebuild Ladybird only when Engine sources or configuration change. Rust app or GPUI-CE changes rebuild the application. Build products and downloaded dependencies stay under ignored build directories.
 
-Incremental behavior:
-
-- A TSX-only edit is picked up by Bun hot reload and does not rebuild Engine or the Rust addon.
-- A Photon Rust/native edit rebuilds the addon and does not rebuild Engine unless Engine sources or configuration changed.
-- A GPUIX submodule revision change rebuilds its Rust addon dependency.
-- An Engine source/revision/configuration change invalidates the Engine build fingerprint and rebuilds Engine.
-
-The UI-only run compiles the Rust shell addon but skips the Engine build entirely. A later normal `./photon run` still builds Engine as needed and rebuilds the addon with Engine support enabled.
-
-Use `./photon clean` to remove generated build trees. Build products, lock caches, and downloaded dependencies stay out of tracked source directories.
-
-To update Ladybird or GPUIX, first merge the upstream changes into Photon’s downstream dependency repository, test them there, then update Photon’s pinned submodule commit. See [Upstream maintenance](Upstream.md); do not advance dependencies with `git submodule update --remote` as part of an ordinary Photon build.
+Use `./photon clean` to remove generated build trees and stop the checkout-specific presentation broker. Use `./photon engine edit|pin|sync` and `./photon gpui edit|pin|sync` to maintain the two Photon-owned dependencies.

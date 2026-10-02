@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::support::{invoke, invoke_with_environment, with_progress};
+use crate::support::{invoke_with_environment, with_progress};
 
 pub(crate) fn run(root: &Path, verbose: bool) -> Result<(), String> {
     let engine_dir = root.join("build").join("engine-debug");
@@ -19,18 +19,5 @@ pub(crate) fn run(root: &Path, verbose: bool) -> Result<(), String> {
             &[(library_variable, library_path)],
         )
     })?;
-    with_progress("Test GPUIX external custom elements", !verbose, || {
-        invoke(
-            "cargo",
-            &[
-                "test",
-                "--manifest-path",
-                "vendor/gpuix/packages/native/Cargo.toml",
-                "--lib",
-                "extension_api_tests",
-            ],
-            root,
-            verbose,
-        )
-    })
+    Ok(())
 }

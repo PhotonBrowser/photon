@@ -18,8 +18,8 @@ fn main() {
     cc::Build::new()
         .cpp(true)
         .std("c++20")
-        .file(root.join("native/gpui/PhotonEmbedderBridge.cpp"))
-        .include(root.join("native/gpui"))
+        .file(root.join("native/embedder/PhotonEmbedderBridge.cpp"))
+        .include(root.join("native/embedder"))
         .include(root.join("Engine/Libraries/LibPhotonEmbedder/include"))
         .include(root.join("Engine/Libraries"))
         .include(if generated.join("LibPhotonEmbedder/Export.h").is_file() {
@@ -30,7 +30,8 @@ fn main() {
         .compile("photon_embedder_bridge_direct");
     println!(
         "cargo:rerun-if-changed={}",
-        root.join("native/gpui/PhotonEmbedderBridge.cpp").display()
+        root.join("native/embedder/PhotonEmbedderBridge.cpp")
+            .display()
     );
     println!(
         "cargo:rustc-link-search=native={}",

@@ -1,9 +1,6 @@
 [submodule "Engine"]
 	path = Engine
 	url = git@github.com:PhotonBrowser/photon-engine.git
-[submodule "vendor/gpuix"]
-	path = vendor/gpuix
-	url = git@github.com:PhotonBrowser/gpuix.git
 [submodule "vendor/gpui-ce"]
 	path = vendor/gpui-ce
 	url = git@github.com:PhotonBrowser/gpui-ce.git

@@ -1,30 +1,30 @@
 # Photon
 
-Photon is a native browser shell built with React/TSX, GPUIX and GPUI. Photon Engine provides the Ladybird-derived web platform and rendering engine.
+Photon is a native Rust browser shell around the Ladybird-derived Photon Engine. GPUI-CE owns the native window and samples real Engine IOSurfaces through Metal.
 
 ```text
-React / TSX (ui/)
-      ↓ GPUIX React reconciler
-Photon source-built N-API addon
-      ↓ GPUI native scene
-PhotonWebView (Rust)
-      ↓ LibPhotonEmbedder
-Photon Engine (Engine/ submodule)
-      ↓
-Ladybird
+Photon Rust application
+        ↓
+     GPUI-CE
+        ↓
+   PhotonWebView
+        ↓
+Photon presentation broker
+        ↓ IOSurface + MTLSharedEvent
+Ladybird / Skia
 ```
 
-The shell is intentionally minimal. React controls layout and properties; page frames stay in native code and are presented as GPUI images. There is no Qt application shell.
+The shell contains one native window and one web view. Browser state stays in Rust; page pixels and platform handles never enter a JavaScript runtime.
 
 ## Get started
 
 ```bash
-git clone --recurse-submodules git@github.com:PhotonBrowser/photon.git
+git clone --recurse-submodules https://github.com/PhotonBrowser/photon.git
 cd photon
 ./photon setup
 ./photon run
 ```
 
-For prerequisites and environment setup, see [Contributor setup](CONTRIBUTOR_SETUP.md). For everyday commands and build behavior, see [Building Photon](Documentation/Building.md). [Architecture](Documentation/Architecture.md), [GPUIX integration](Documentation/GPUIX.md), and [PhotonWebView](Documentation/WebView.md) describe the native data flow and presentation. The [upstream maintenance tutorial](Documentation/Upstream.md) explains how to bring Ladybird and GPUIX changes into Photon, resolve conflicts, and update the pinned submodules.
+See [Contributor setup](CONTRIBUTOR_SETUP.md), [Building Photon](Documentation/Building.md), [Architecture](Documentation/Architecture.md), [PhotonWebView](Documentation/WebView.md), and [upstream maintenance](Documentation/Upstream.md).
 
-Photon Engine remains a separate, actively maintained downstream of Ladybird in [PhotonBrowser/photon-engine](https://github.com/PhotonBrowser/photon-engine). GPUIX is maintained in [PhotonBrowser/gpuix](https://github.com/PhotonBrowser/gpuix), based on [remorses/gpuix](https://github.com/remorses/gpuix).
+Photon Engine is maintained in [PhotonBrowser/photon-engine](https://github.com/PhotonBrowser/photon-engine), downstream of Ladybird. Photon maintains its GPUI-CE fork at [PhotonBrowser/gpui-ce](https://github.com/PhotonBrowser/gpui-ce), upstream of [gpui-ce/gpui-ce](https://github.com/gpui-ce/gpui-ce).

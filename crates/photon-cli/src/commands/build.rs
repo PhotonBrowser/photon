@@ -14,62 +14,23 @@ pub(crate) fn build(root: &Path, release: bool, verbose: bool) -> Result<(), Str
 
     let started = Instant::now();
     engine_build(root, release, verbose)?;
-    build_native_addon(root, release, verbose, true)?;
+    build_app(root, release, verbose)?;
     println!("Build succeeded in {:.1}s", started.elapsed().as_secs_f64());
     Ok(())
 }
 
-fn build_native_addon(
-    root: &Path,
-    release: bool,
-    verbose: bool,
-    engine_enabled: bool,
-) -> Result<(), String> {
-    stage(if engine_enabled {
-        "Build source native addon"
+fn build_app(root: &Path, release: bool, verbose: bool) -> Result<(), String> {
+    stage("Build Photon GPUI-CE application");
+    let engine = root.join("build").join(if release {
+        "engine-release"
     } else {
-        "Build UI-only native addon"
+        "engine-debug"
     });
-    let mut rust_args = vec![
-        "build".to_owned(),
-        "-p".to_owned(),
-        "photon-native-addon".to_owned(),
-    ];
-    if !engine_enabled {
-        rust_args.push("--no-default-features".to_owned());
-    }
+    let mut args = vec!["build", "-p", "photon-app", "--bin", "photon-app-gpui-ce"];
     if release {
-        rust_args.push("--release".to_owned());
+        args.push("--release");
     }
-    let rust_refs: Vec<&str> = rust_args.iter().map(String::as_str).collect();
-    if engine_enabled {
-        let engine_dir = root.join("build").join(if release {
-            "engine-release"
-        } else {
-            "engine-debug"
-        });
-        invoke_cargo_with_engine(&rust_refs, root, &engine_dir, verbose)?;
-    } else {
-        invoke("cargo", &rust_refs, root, verbose)?;
-    }
-    let app_build = root
-        .join("build")
-        .join(if release { "app-release" } else { "app-debug" });
-    std::fs::create_dir_all(&app_build).map_err(|error| error.to_string())?;
-    let profile = if release { "release" } else { "debug" };
-    let addon = root.join("target").join(profile).join(format!(
-        "{}photon_native_addon{}",
-        std::env::consts::DLL_PREFIX,
-        std::env::consts::DLL_SUFFIX
-    ));
-    let staged_addon = app_build.join("photon-native-addon.node");
-    std::fs::copy(&addon, &staged_addon).map_err(|error| {
-        format!(
-            "could not stage source-built GPUIX addon {}: {error}",
-            addon.display()
-        )
-    })?;
-    Ok(())
+    invoke_cargo_with_engine(&args, root, &engine, verbose)
 }
 
 fn invoke_cargo_with_engine(
@@ -386,46 +347,23 @@ fn invoke_engine_configure(
     ))
 }
 
-pub(crate) fn run(
+pub(crate) fn run_direct(
     root: &Path,
     release: bool,
     verbose: bool,
     url: Option<&str>,
-    force_cpu_painting: bool,
-) -> Result<(), String> {
-    ensure_ui_dependencies(root, verbose)?;
-    build(root, release, verbose)?;
-
-    launch_ui(root, release, verbose, true, url, force_cpu_painting)
-}
-
-pub(crate) fn run_ui(root: &Path, release: bool, verbose: bool) -> Result<(), String> {
-    crate::commands::check::check_ui(root, verbose)?;
-    build_native_addon(root, release, verbose, false)?;
-    launch_ui(root, release, verbose, false, None, false)
-}
-
-pub(crate) fn run_gpui_ce(
-    root: &Path,
-    release: bool,
-    verbose: bool,
-    url: Option<&str>,
+    shutdown_after_seconds: Option<u64>,
 ) -> Result<(), String> {
     if !cfg!(target_os = "macos") {
         return Err("the direct GPUI-CE presentation path currently supports macOS only".into());
     }
-    engine_build(root, release, verbose)?;
+    build(root, release, verbose)?;
     let engine = root.join("build").join(if release {
         "engine-release"
     } else {
         "engine-debug"
     });
-    let mut args = vec!["build", "-p", "photon-app", "--bin", "photon-app-gpui-ce"];
-    if release {
-        args.push("--release");
-    }
-    invoke_cargo_with_engine(&args, root, &engine, verbose)?;
-    let service = super::presentation_broker::ensure_gpui_ce(root, verbose)?;
+    let service = super::presentation_broker::ensure(root, verbose)?;
     let app_build = root
         .join("build")
         .join(if release { "app-release" } else { "app-debug" });
@@ -462,6 +400,9 @@ pub(crate) fn run_gpui_ce(
     if let Some(url) = url {
         process.env("PHOTON_URL", url);
     }
+    if let Some(seconds) = shutdown_after_seconds {
+        process.env("PHOTON_SHUTDOWN_AFTER_SECONDS", seconds.to_string());
+    }
     let status = process
         .status()
         .map_err(|error| format!("cannot start direct GPUI-CE application: {error}"))?;
@@ -470,103 +411,6 @@ pub(crate) fn run_gpui_ce(
     } else {
         Err(format!("Photon GPUI-CE exited with {status}"))
     }
-}
-
-fn launch_ui(
-    root: &Path,
-    release: bool,
-    verbose: bool,
-    engine_enabled: bool,
-    url: Option<&str>,
-    force_cpu_painting: bool,
-) -> Result<(), String> {
-    let app_build = root
-        .join("build")
-        .join(if release { "app-release" } else { "app-debug" });
-    let addon_path = app_build.join("photon-native-addon.node");
-    let mut process = Command::new("bun");
-    process
-        .args(["--hot", "src/main.tsx"])
-        .current_dir(root.join("ui"))
-        .env("NAPI_RS_NATIVE_LIBRARY_PATH", addon_path);
-    if engine_enabled {
-        let engine = root.join("build").join(if release {
-            "engine-release"
-        } else {
-            "engine-debug"
-        });
-        let helper_dir = if cfg!(any(target_os = "macos", target_os = "windows")) {
-            app_build
-        } else {
-            engine.join("bin")
-        };
-        process.env("PHOTON_HELPER_DIRECTORY", helper_dir);
-        if cfg!(target_os = "macos") {
-            process.env("DYLD_LIBRARY_PATH", runtime_library_path(&engine));
-            #[cfg(target_os = "macos")]
-            {
-                let service = match std::env::var("PHOTON_PRESENTATION_XPC_SERVICE") {
-                    Ok(service) if !service.is_empty() => service,
-                    _ => super::presentation_broker::ensure(root, verbose)?,
-                };
-                process.env("PHOTON_PRESENTATION_XPC_SERVICE", service);
-                let session_id = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|duration| duration.as_nanos())
-                    .unwrap_or_default();
-                process.env(
-                    "PHOTON_PRESENTATION_CHANNEL_ID",
-                    format!("photon-{}-{session_id}", std::process::id()),
-                );
-            }
-        } else if cfg!(target_os = "linux") {
-            process.env("LD_LIBRARY_PATH", runtime_library_path(&engine));
-        }
-    }
-    if verbose {
-        process.env("PHOTON_VERBOSE", "1");
-        process.env("EXTERNAL_IMAGE_LEASE_TRACE", "1");
-    }
-    if let Some(url) = url {
-        process.env("PHOTON_URL", url);
-    }
-    if force_cpu_painting {
-        process.env("PHOTON_FORCE_CPU_PAINTING", "1");
-    }
-    let status = process
-        .status()
-        .map_err(|error| format!("cannot start GPUIX Bun runtime: {error}"))?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(format!("Photon exited with {status}"))
-    }
-}
-
-pub(crate) fn ensure_ui_dependencies(root: &Path, verbose: bool) -> Result<(), String> {
-    let ui = root.join("ui");
-    if ui.join("node_modules/@gpuix/react/package.json").is_file()
-        && ui.join("node_modules/@gpuix/native/package.json").is_file()
-        && ui
-            .join("node_modules/@gpuix/native/dist/host.d.ts")
-            .is_file()
-    {
-        return Ok(());
-    }
-    stage("Install pinned GPUIX React dependencies");
-    invoke("bun", &["install", "--exact"], &ui, verbose)
-}
-
-pub(crate) fn ensure_gpuix_js(root: &Path, verbose: bool) -> Result<(), String> {
-    let gpuix = root.join("vendor/gpuix");
-    if !gpuix.join("node_modules/typescript/bin/tsc").is_file() {
-        stage("Install pinned GPUIX development dependencies");
-        invoke("bun", &["install", "--frozen-lockfile"], &gpuix, verbose)?;
-    }
-    let native = gpuix.join("packages/native");
-    stage("Build GPUIX native JavaScript bindings");
-    invoke("bun", &["run", "build:js"], &native, verbose)?;
-    Ok(())
 }
 
 pub(crate) fn runtime_library_path(engine: &Path) -> String {

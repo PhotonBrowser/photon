@@ -3,15 +3,7 @@ use std::path::Path;
 use crate::support::{invoke, output, with_progress};
 
 pub(crate) fn check(root: &Path, verbose: bool) -> Result<(), String> {
-    check_with_engine(root, verbose, true)
-}
-
-pub(crate) fn check_ui(root: &Path, verbose: bool) -> Result<(), String> {
-    check_with_engine(root, verbose, false)
-}
-
-fn check_with_engine(root: &Path, verbose: bool, engine_enabled: bool) -> Result<(), String> {
-    match check_inner(root, verbose, engine_enabled) {
+    match check_inner(root, verbose) {
         Ok(()) => Ok(()),
         Err(error) => {
             print_fix_prompt(root, &error);
@@ -20,9 +12,7 @@ fn check_with_engine(root: &Path, verbose: bool, engine_enabled: bool) -> Result
     }
 }
 
-fn check_inner(root: &Path, verbose: bool, engine_enabled: bool) -> Result<(), String> {
-    crate::commands::build::ensure_gpuix_js(root, verbose)?;
-    crate::commands::build::ensure_ui_dependencies(root, verbose)?;
+fn check_inner(root: &Path, verbose: bool) -> Result<(), String> {
     invoke(
         "cargo",
         &[
@@ -32,9 +22,9 @@ fn check_inner(root: &Path, verbose: bool, engine_enabled: bool) -> Result<(), S
             "--package",
             "photon-core",
             "--package",
-            "photon-gpui",
+            "photon-app",
             "--package",
-            "photon-native-addon",
+            "photon-presentation-broker",
             "--package",
             "photon-omnibox",
             "--",
@@ -43,57 +33,41 @@ fn check_inner(root: &Path, verbose: bool, engine_enabled: bool) -> Result<(), S
         root,
         verbose,
     )?;
-    let mut cargo_args = vec!["check", "--workspace"];
-    if !engine_enabled {
-        cargo_args.push("--no-default-features");
-    }
+    let cargo_args = ["check", "--workspace"];
     with_progress("Check Rust workspace", !verbose, || {
         invoke("cargo", &cargo_args, root, verbose)
     })?;
-    let ui = root.join("ui");
-    invoke("bun", &["run", "lint"], &ui, verbose)?;
-    invoke("bun", &["run", "typecheck"], &ui, verbose)?;
-    if engine_enabled {
-        let submodule = output("git", &["submodule", "status", "Engine"], root)?;
-        if submodule.starts_with('-') {
+    let engine = output("git", &["submodule", "status", "Engine"], root)?;
+    if engine.starts_with('-') {
+        return Err(format!(
+            "Engine submodule is not initialized: {}. Run `./photon setup`.",
+            engine.trim()
+        ));
+    }
+    if engine.starts_with('+') {
+        let engine_branch = output("git", &["branch", "--show-current"], &root.join("Engine"))?;
+        if !crate::commands::engine::edit_mode(root) || engine_branch.trim() != "master" {
             return Err(format!(
-                "Engine submodule is not initialized: {}. Run `./photon setup`.",
-                submodule.trim()
+                "Engine pin differs from the checkout: {}. Run `./photon engine edit` to use Engine/master, or `./photon engine pin` to restore the saved pin.",
+                engine.trim()
             ));
         }
-        if submodule.starts_with('+') {
-            let engine_branch = output("git", &["branch", "--show-current"], &root.join("Engine"))?;
-            if !crate::commands::engine::edit_mode(root) || engine_branch.trim() != "master" {
-                return Err(format!(
-                    "Engine pin differs from the checkout: {}. Run `./photon engine edit` to use Engine/master, or `./photon engine pin` to restore the saved pin.",
-                    submodule.trim()
-                ));
-            }
-            println!("Using Engine/master development branch.");
-        }
+        println!("Using Engine/master development branch.");
     }
-    let gpuix = output("git", &["submodule", "status", "vendor/gpuix"], root)?;
-    if gpuix.starts_with('-') {
-        return Err(format!("GPUIX submodule mismatch: {}", gpuix.trim()));
+    let gpui_ce = output("git", &["submodule", "status", "vendor/gpui-ce"], root)?;
+    if gpui_ce.starts_with('-') {
+        return Err(format!("GPUI-CE submodule mismatch: {}", gpui_ce.trim()));
     }
-    if gpuix.starts_with('+') {
-        let gpuix_branch = output(
+    if gpui_ce.starts_with('+') {
+        let branch = output(
             "git",
             &["branch", "--show-current"],
-            &root.join("vendor/gpuix"),
+            &root.join("vendor/gpui-ce"),
         )?;
-        let zed_branch = output(
-            "git",
-            &["branch", "--show-current"],
-            &root.join("vendor/gpuix/zed"),
-        )?;
-        if !crate::commands::gpui::edit_mode(root)
-            || gpuix_branch.trim() != "main"
-            || zed_branch.trim() != "photon/live-image"
-        {
-            return Err(format!("GPUIX submodule mismatch: {}", gpuix.trim()));
+        if !crate::commands::gpui::edit_mode(root) || branch.trim() != "main" {
+            return Err(format!("GPUI-CE submodule mismatch: {}", gpui_ce.trim()));
         }
-        println!("Using GPUIX main and Photon Zed branches in local edit mode.");
+        println!("Using Photon GPUI-CE main development branch.");
     }
     println!("Architecture checks passed.");
     Ok(())

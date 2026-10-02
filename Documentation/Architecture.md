@@ -1,48 +1,37 @@
 # Architecture
 
-Photon separates browser state, native presentation, and the web engine:
-
 ```text
-ui/src/App.tsx
-    React composition and layout
+crates/photon-app
+    Photon Rust application and native GPUI-CE window
         ↓
-@gpuix/react reconciler
-        ↓
-Photon source-built N-API addon
-    GPUIX renderer and Photon factory registration
-        ↓
-crates/photon-gpui
-    PhotonWebViewElement and engine adapter
+    PhotonWebView
         ↓ narrow C ABI
-native/gpui + LibPhotonEmbedder
+native/embedder + LibPhotonEmbedder
         ↓
 Engine/ (Photon Engine / Ladybird)
+
+Engine IOSurface + MTLSharedEvent
+        ↓ XPC descriptor broker
+GPUI-CE external Metal surface
+        ↓
+native CAMetalLayer
 ```
 
 ## Ownership
 
-- `ui/` contains the small React/TSX shell. It sets the initial URL and expresses layout; it has no engine or frame-buffer logic.
-- `crates/photon-core` owns framework-independent browser state and command rules. It does not depend on GPUI, GPUIX, or Ladybird types.
-- `crates/photon-omnibox` decides whether typed text is an address or a search query. It has no dependencies on the shell or the engine, and it is the only place those rules exist.
-- `crates/photon-gpui` owns the native web element, its GPUI presentation state, and the safe Rust-facing use of Photon Engine.
-- `crates/photon-native-addon` is the composition root. It exports GPUIX's N-API API and links Photon factory registration into the same addon.
-- `native/gpui` is the narrow C++ bridge to LibPhotonEmbedder. Engine implementation changes remain in `PhotonBrowser/photon-engine`.
-- `vendor/gpuix` is the exact `PhotonBrowser/gpuix` git submodule revision shared by Rust and the `@gpuix/native` local package.
+- `crates/photon-core` contains framework-independent browser state and command rules. It does not depend on GPUI, GPUI-CE, or Ladybird types.
+- `crates/photon-omnibox` decides whether typed text is an address or a search query.
+- `crates/photon-app` owns the application, native window, `PhotonWebView`, presentation state, frame ordering, basic keyboard/pointer forwarding, and Engine release delivery. The current frame pump polls at 16 ms and remains a follow-up for event-driven invalidation.
+- `crates/photon-presentation-broker` and `native/presentation` own macOS XPC service startup and IOSurface/shared-event descriptor transport.
+- `native/embedder` is the narrow C++ bridge to LibPhotonEmbedder. Engine implementation changes remain in the Photon Engine submodule.
+- `vendor/gpui-ce` contains only generic external Metal surface rendering and platform capabilities. Browser and Ladybird lifecycle policy stays in Photon.
 
-## Frame and layout path
+## Frame and lifetime path
 
-`PresentedFrame` bytes remain native: Ladybird → LibPhotonEmbedder → Photon Rust → GPUI `RenderImage`. The React tree receives only element properties. Photon keeps the latest complete frame rather than queuing every frame.
+Ladybird's Skia compositor writes a leased IOSurface and signals an `MTLSharedEvent`. Photon receives the frame descriptor through its XPC broker, resolves the IOSurface once, and passes an external surface to GPUI-CE. The Metal renderer caches the texture by resource, generation, and actual IOSurface identity; it encodes the producer wait in the command buffer that samples the texture.
 
-The element measures its laid-out GPUI bounds and uses GPUI's scale factor to derive the engine's physical viewport. It resizes only when dimensions or scale change. The frame image remains in the GPUI scene, so normal scene clipping, transforms, and z-order apply.
+When a replacement surface's command buffer completes, Photon releases the retired Engine frame. On shutdown it stops new presentation, waits for tracked sampling command buffers, releases the current and queued leases, and asserts that outstanding leases are zero.
 
-The current frame path copies an owned BGRA bitmap into GPUI. It is a correct transitional CPU-backed presentation path, not zero-copy GPU sharing.
+Photon UI code never receives page pixel buffers. Normal rendering uses native Metal sampling with no CPU full-frame copies or GPUI image uploads. The app currently targets macOS for external IOSurface presentation.
 
-## Event processing and lifetime
-
-The single `PhotonWebViewElement` owns the current engine session and view for this one-window spike. The session pumps the embedder as part of GPUIX's yielding custom-element update task; it does not spin on the UI thread. Frame callbacks coalesce into one latest-frame slot. When the native element is removed, it shuts down and destroys the view before destroying the runtime.
-
-See [GPUIX integration](GPUIX.md) for the fork extension and addon loading model.
-
-See [Omnibox](Omnibox.md) for the address-versus-query rules and how the shell calls them.
-
-The Engine and GPUIX submodules point to Photon-maintained downstream repositories, not directly to their upstreams. Follow [Upstream maintenance](Upstream.md) to sync either upstream and update the tested commit pinned here.
+See [PhotonWebView](WebView.md), [native GPU presentation](NativeGpuPresentation.md), and [upstream maintenance](Upstream.md).

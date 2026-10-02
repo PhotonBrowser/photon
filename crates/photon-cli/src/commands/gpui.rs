@@ -2,118 +2,59 @@ use std::path::Path;
 
 use crate::support::{command, output};
 
-const GPUIX_PATH: &str = "vendor/gpuix";
-const ZED_PATH: &str = "vendor/gpuix/zed";
-const GPUIX_BRANCH: &str = "main";
-const ZED_BRANCH: &str = "photon/live-image";
+const GPUI_CE_PATH: &str = "vendor/gpui-ce";
+const GPUI_CE_BRANCH: &str = "main";
 
 pub(crate) fn edit(root: &Path, verbose: bool) -> Result<(), String> {
-    let gpuix = root.join(GPUIX_PATH);
-    let zed = root.join(ZED_PATH);
-    require_repository(&gpuix)?;
-    require_repository(&zed)?;
-    if output("git", &["branch", "--show-current"], &gpuix)?.trim() == GPUIX_BRANCH
-        && output("git", &["branch", "--show-current"], &zed)?.trim() == ZED_BRANCH
-    {
-        command(
-            "git",
-            &["config", "--local", "photon.gpuiEditMode", "true"],
-            root,
-            verbose,
-        )?;
-        return Ok(());
+    let gpui_ce = root.join(GPUI_CE_PATH);
+    require_repository(&gpui_ce)?;
+    if output("git", &["branch", "--show-current"], &gpui_ce)?.trim() != GPUI_CE_BRANCH {
+        require_clean_source(&gpui_ce)?;
+        switch_branch(&gpui_ce, GPUI_CE_BRANCH, verbose)?;
     }
-    require_clean_source(&gpuix, "GPUIX")?;
-    require_clean_source(&zed, "Zed")?;
-
-    switch_branch(&gpuix, GPUIX_BRANCH, verbose)?;
     command(
         "git",
-        &["submodule", "update", "--init", "--", "zed"],
-        &gpuix,
-        verbose,
-    )?;
-    switch_branch(&zed, ZED_BRANCH, verbose)?;
-    command(
-        "git",
-        &["config", "--local", "photon.gpuiEditMode", "true"],
+        &["config", "--local", "photon.gpuiCeEditMode", "true"],
         root,
         verbose,
     )?;
-
-    println!("GPUI edit mode: {GPUIX_PATH}/{GPUIX_BRANCH} and {ZED_PATH}/{ZED_BRANCH}.");
-    println!(
-        "Edit and commit GPUI under {ZED_PATH}/crates/gpui. Build and run against these branches without changing Photon’s saved pin."
-    );
-    println!("Run `./photon gpui pin` to return to this checkout's saved revisions.");
+    println!("GPUI-CE edit mode: {GPUI_CE_PATH}/{GPUI_CE_BRANCH}.");
     Ok(())
 }
 
 pub(crate) fn pin(root: &Path, verbose: bool) -> Result<(), String> {
-    let gpuix = root.join(GPUIX_PATH);
-    let zed = root.join(ZED_PATH);
-    require_repository(&gpuix)?;
-    require_repository(&zed)?;
-    require_clean_source(&gpuix, "GPUIX")?;
-    require_clean_source(&zed, "Zed")?;
-
-    let pinned_gpuix = output("git", &["rev-parse", "HEAD:vendor/gpuix"], root)?
+    let gpui_ce = root.join(GPUI_CE_PATH);
+    require_repository(&gpui_ce)?;
+    require_clean_source(&gpui_ce)?;
+    let pinned = output("git", &["rev-parse", "HEAD:vendor/gpui-ce"], root)?
         .trim()
         .to_owned();
-    command(
-        "git",
-        &["checkout", "--detach", &pinned_gpuix],
-        &gpuix,
-        verbose,
-    )?;
-    command(
-        "git",
-        &["submodule", "update", "--init", "--", "zed"],
-        &gpuix,
-        verbose,
-    )?;
+    command("git", &["checkout", "--detach", &pinned], &gpui_ce, verbose)?;
     unset_edit_mode(root, verbose)?;
-    println!("GPUIX and Zed are back at the revisions pinned by this Photon checkout.");
+    println!("GPUI-CE is back at the revision pinned by this Photon checkout.");
     Ok(())
 }
 
 pub(crate) fn sync(root: &Path, verbose: bool) -> Result<(), String> {
-    let gpuix = root.join(GPUIX_PATH);
-    let zed = root.join(ZED_PATH);
-    require_repository(&gpuix)?;
-    require_repository(&zed)?;
-    require_branch(&gpuix, GPUIX_BRANCH)?;
-    require_branch(&zed, ZED_BRANCH)?;
-    require_clean_source(&gpuix, "GPUIX")?;
-    require_clean_source(&zed, "Zed")?;
-
-    command(
-        "git",
-        &["fetch", "upstream", "gpuix:refs/remotes/upstream/gpuix"],
-        &zed,
-        verbose,
-    )?;
-    command("git", &["merge", "--no-edit", "FETCH_HEAD"], &zed, verbose)?;
+    let gpui_ce = root.join(GPUI_CE_PATH);
+    require_repository(&gpui_ce)?;
+    require_branch(&gpui_ce, GPUI_CE_BRANCH)?;
+    require_clean_source(&gpui_ce)?;
     command(
         "git",
         &["fetch", "upstream", "main:refs/remotes/upstream/main"],
-        &gpuix,
+        &gpui_ce,
         verbose,
     )?;
     command(
         "git",
         &["merge", "--no-edit", "FETCH_HEAD"],
-        &gpuix,
+        &gpui_ce,
         verbose,
     )?;
-    command("git", &["add", "zed"], &gpuix, verbose)?;
-
-    println!("Merged upstream Zed and GPUIX into the persistent Photon branches.");
+    println!("Merged upstream GPUI-CE main into the persistent Photon branch.");
     println!(
-        "Review `git -C {GPUIX_PATH} diff --cached --submodule=log`, then commit the updated Zed pointer."
-    );
-    println!(
-        "Run the GPUIX checks before pushing either branch. The Photon root pin stays unchanged."
+        "Run `cargo check -p gpui_ce_apple` and `cargo test -p gpui_ce_apple` before pushing."
     );
     Ok(())
 }
@@ -129,18 +70,19 @@ fn require_repository(path: &Path) -> Result<(), String> {
     }
 }
 
-fn require_clean_source(repository: &Path, name: &str) -> Result<(), String> {
+fn require_clean_source(repository: &Path) -> Result<(), String> {
     let status = output(
         "git",
         &["status", "--porcelain", "--ignore-submodules=all"],
         repository,
     )?;
     if status.trim().is_empty() {
-        return Ok(());
+        Ok(())
+    } else {
+        Err(format!(
+            "GPUI-CE has uncommitted changes; commit or save them before switching revisions"
+        ))
     }
-    Err(format!(
-        "{name} has uncommitted source changes; commit or save them before switching GPUI revisions"
-    ))
 }
 
 fn require_branch(repository: &Path, expected: &str) -> Result<(), String> {
@@ -164,7 +106,7 @@ pub(crate) fn edit_mode(root: &Path) -> bool {
             "--local",
             "--bool",
             "--get",
-            "photon.gpuiEditMode",
+            "photon.gpuiCeEditMode",
         ],
         root,
     )
@@ -175,7 +117,7 @@ fn unset_edit_mode(root: &Path, verbose: bool) -> Result<(), String> {
     if edit_mode(root) {
         command(
             "git",
-            &["config", "--local", "--unset-all", "photon.gpuiEditMode"],
+            &["config", "--local", "--unset-all", "photon.gpuiCeEditMode"],
             root,
             verbose,
         )?;
@@ -186,25 +128,24 @@ fn unset_edit_mode(root: &Path, verbose: bool) -> Result<(), String> {
 fn switch_branch(repository: &Path, branch: &str, verbose: bool) -> Result<(), String> {
     let local_ref = format!("refs/heads/{branch}");
     let remote_ref = format!("refs/remotes/origin/{branch}");
-    let local_exists = output(
+    if output(
         "git",
         &["show-ref", "--verify", "--quiet", &local_ref],
         repository,
     )
-    .is_ok();
-    if local_exists {
+    .is_ok()
+    {
         return command("git", &["switch", branch], repository, verbose);
     }
-
-    let remote_exists = output(
+    if output(
         "git",
         &["show-ref", "--verify", "--quiet", &remote_ref],
         repository,
     )
-    .is_ok();
-    if !remote_exists {
+    .is_err()
+    {
         return Err(format!(
-            "branch origin/{branch} is not available in {}; fetch origin before entering GPUI edit mode",
+            "branch origin/{branch} is not available in {}; fetch origin first",
             repository.display()
         ));
     }

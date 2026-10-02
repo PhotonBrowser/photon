@@ -11,7 +11,6 @@ pub(crate) fn setup(root: &Path, _verbose: bool) -> Result<(), String> {
     .map_err(|error| format!("Cargo workspace metadata is unavailable: {error}"))?;
     println!("IDE setup ready:");
     println!("  Rust    {}", root.join("Cargo.toml").display());
-    println!("  TSX     {}", root.join("ui/tsconfig.json").display());
     Ok(())
 }
 
@@ -26,13 +25,5 @@ pub(crate) fn doctor(root: &Path) {
     println!(
         "  Rust workspace {}",
         if rust { "ready" } else { "unavailable" }
-    );
-    println!(
-        "  TSX config      {}",
-        if root.join("ui/tsconfig.json").is_file() {
-            "ready"
-        } else {
-            "missing"
-        }
     );
 }

@@ -17,8 +17,11 @@ the embedding application can release its own resource lease on its own
 thread. The GPUI API contains no browser, Ladybird, or Photon lifecycle types.
 
 The surface element also carries rounded corner radii through GPUI's shared
-surface shader. Photon keeps XPC presentation, frame ordering, generations,
-retirement, release forwarding, Engine thread affinity, and browser input in
-Photon. This API is an initial port and remains under validation; do not remove
-the old GPUIX/Zed implementation until direct GPUI-CE presentation has passed
-the full migration gate in `GPUI-Migration-Audit.md`.
+surface shader. GPUI-CE exposes submission and GPU-completion callbacks;
+Photon uses them to track command buffers and return presentation leases only
+after the GPU has finished sampling the surface.
+
+Photon owns XPC presentation, frame ordering, generations, retirement, release
+forwarding, Engine thread affinity, browser input, and application startup.
+`./photon run` is the direct GPUI-CE application route. Runtime proof and
+remaining validation gates are recorded in `GPUI-Migration-Audit.md`.

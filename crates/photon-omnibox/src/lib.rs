@@ -2,8 +2,8 @@
 //!
 //! The omnibox receives text and has to answer one question before anything
 //! loads it: is this an address to open, or a query to hand to a search
-//! engine? That answer belongs in one framework-independent place, so the React
-//! tree and the engine adapter cannot disagree about it and so any future
+//! engine? That answer belongs in one framework-independent place, so the native
+//! shell and the engine adapter cannot disagree about it and so any future
 //! surface that accepts typed text can ask the same question.
 //!
 //! The rules follow what a person expects from a browser address bar:

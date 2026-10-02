@@ -12,11 +12,9 @@ pub(crate) fn format(root: &Path, verbose: bool) -> Result<(), String> {
             "--package",
             "photon-core",
             "--package",
-            "photon-gpui",
             "photon-app",
-            "photon-presentation-broker",
             "--package",
-            "photon-native-addon",
+            "photon-presentation-broker",
             "--package",
             "photon-omnibox",
         ],
@@ -28,13 +26,13 @@ pub(crate) fn format(root: &Path, verbose: bool) -> Result<(), String> {
             "clang-format",
             &[
                 "-i",
-                "native/gpui/PhotonEmbedderBridge.h",
-                "native/gpui/PhotonEmbedderBridge.cpp",
+                "native/embedder/PhotonEmbedderBridge.h",
+                "native/embedder/PhotonEmbedderBridge.cpp",
+                "native/presentation/PhotonPresentationXpc.m",
             ],
             root,
             verbose,
         )?;
     }
-    invoke("bun", &["run", "format"], &root.join("ui"), verbose)?;
     Ok(())
 }

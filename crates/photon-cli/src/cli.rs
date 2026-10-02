@@ -35,42 +35,30 @@ struct GlobalOptions {
 enum Command {
     /// Check prerequisites and initialize configured pinned repositories.
     Setup,
-    /// Report toolchain, GPUIX, Engine, and build environment details.
+    /// Report toolchain, GPUI-CE, Engine, and build environment details.
     Doctor,
-    /// Report Rust and TypeScript editor metadata.
+    /// Report Rust editor metadata.
     Ide {
         #[command(subcommand)]
         command: IdeCommand,
     },
-    /// Run checks, then build Photon Engine and the GPUIX addon.
+    /// Run checks, then build Photon Engine and the GPUI-CE application.
     Build {
         /// Build with optimizations.
         #[arg(long)]
         release: bool,
     },
-    /// Build Photon and launch it.
+    /// Build Photon Engine and launch the direct GPUI-CE application.
     Run {
         /// Build with optimizations.
         #[arg(long)]
         release: bool,
-        /// Build and launch the GPUIX shell without Photon Engine.
-        #[arg(long)]
-        ui: bool,
         /// Navigate the PhotonWebView to this URL after launch.
         #[arg(long)]
         url: Option<String>,
-        /// Force Ladybird's CPU painting path for comparison.
+        /// Quit after this many seconds (for shutdown and lease-drain verification).
         #[arg(long)]
-        force_cpu_painting: bool,
-    },
-    /// Build Photon Engine and run the temporary direct GPUI-CE presentation path.
-    RunGpuiCe {
-        /// Build with optimizations.
-        #[arg(long)]
-        release: bool,
-        /// Navigate the PhotonWebView to this URL after launch.
-        #[arg(long)]
-        url: Option<String>,
+        shutdown_after_seconds: Option<u64>,
     },
     /// Remove generated build directories.
     Clean {
@@ -78,13 +66,13 @@ enum Command {
         #[arg(value_enum)]
         scope: Option<CleanScope>,
     },
-    /// Check Rust formatting, compilation, TypeScript, and architecture rules.
+    /// Check Rust formatting, compilation, and architecture rules.
     Check,
     /// Print a copyable AI prompt for fixing a check failure.
     FixPrompt,
-    /// Format Photon-owned Rust, C++, and TypeScript files.
+    /// Format Photon-owned Rust and C++ files.
     Format,
-    /// Switch between pinned GPUI dependencies and persistent edit branches.
+    /// Switch between pinned GPUI-CE and its persistent edit branch.
     Gpui {
         #[command(subcommand)]
         command: GpuiCommand,
@@ -106,11 +94,11 @@ enum IdeCommand {
 
 #[derive(Debug, Subcommand)]
 enum GpuiCommand {
-    /// Switch GPUIX and Zed to their persistent Photon development branches.
+    /// Switch GPUI-CE to its persistent Photon development branch.
     Edit,
-    /// Return GPUIX and Zed to the revisions pinned by this Photon checkout.
+    /// Return GPUI-CE to the revision pinned by this Photon checkout.
     Pin,
-    /// Merge the configured upstream GPUIX and Zed branches into Photon branches.
+    /// Merge the configured upstream GPUI-CE branch into the Photon branch.
     Sync,
 }
 
@@ -152,19 +140,15 @@ pub fn run() -> Result<(), String> {
         Some(Command::Build { release }) => commands::build::build(&root, release, verbose),
         Some(Command::Run {
             release,
-            ui,
             url,
-            force_cpu_painting,
-        }) => {
-            if ui {
-                commands::build::run_ui(&root, release, verbose)
-            } else {
-                commands::build::run(&root, release, verbose, url.as_deref(), force_cpu_painting)
-            }
-        }
-        Some(Command::RunGpuiCe { release, url }) => {
-            commands::build::run_gpui_ce(&root, release, verbose, url.as_deref())
-        }
+            shutdown_after_seconds,
+        }) => commands::build::run_direct(
+            &root,
+            release,
+            verbose,
+            url.as_deref(),
+            shutdown_after_seconds,
+        ),
         Some(Command::Clean { scope }) => {
             let scope = scope.map(|scope| match scope {
                 CleanScope::Engine => "engine",

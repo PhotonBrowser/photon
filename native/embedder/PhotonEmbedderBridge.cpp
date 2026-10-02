@@ -41,21 +41,6 @@ extern "C" void photon_runtime_pump(void *runtime) {
     static_cast<RuntimeHandle *>(runtime)->runtime->pump();
 }
 
-#if defined(__APPLE__)
-extern "C" void photon_runtime_set_native_release_drain_callback(
-    void *runtime, void *callback_data,
-    PhotonNativeReleaseDrainCallback callback) {
-  if (runtime)
-    static_cast<RuntimeHandle *>(runtime)->runtime->set_native_release_drain_callback(
-        callback_data, callback);
-}
-
-extern "C" void photon_runtime_schedule_native_release_drain(void *runtime) {
-  if (runtime)
-    static_cast<RuntimeHandle *>(runtime)->runtime->schedule_native_release_drain();
-}
-#endif
-
 extern "C" void photon_runtime_destroy(void *runtime) {
   delete static_cast<RuntimeHandle *>(runtime);
 }

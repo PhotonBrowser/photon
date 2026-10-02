@@ -46,7 +46,7 @@ Enter.
 
 ## Who calls it
 
-- `crates/photon-gpui` calls `photon_omnibox::resolve` in
+- `crates/photon-app` calls `photon_omnibox::resolve` in
   `EngineSession::navigate`, the one place the shell asks the engine to open
   something. The `<photon-webview url="…">` prop therefore takes typed text, and
   the field and the engine cannot disagree about what Enter opened.
@@ -54,8 +54,6 @@ Enter.
   resolution onto the engine navigation target. `normalize_url` is the same call
   with the error flattened to the strings the C ABI reports.
 
-The address field (`ui/src/browser/BrowserChrome.tsx`) keeps the typed text: a
-rejected input stays visible so it can be corrected, and the rejection is logged
-by the shell (`Photon navigation failed: …`). There is deliberately no JS-side
-copy of the rules, so the field cannot show the resolved URL until engine state
-flows back to the shell.
+The native shell owns the address entry and keeps typed text when a navigation
+is rejected, so it can be corrected. There is no second UI-side copy of the
+resolution rules.

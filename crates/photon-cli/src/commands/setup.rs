@@ -43,7 +43,6 @@ pub(crate) fn setup(root: &Path, verbose: bool) -> Result<(), String> {
     for (tool, minimum) in [("cmake", (3, 30)), ("ninja", (1, 10)), ("rustc", (1, 85))] {
         require_tool_version(tool, minimum, root)?;
     }
-    require_tool("bun")?;
     if !root.join("Engine/CMakeLists.txt").is_file() {
         return Err(
             "Engine submodule is missing; run git submodule update --init --recursive".into(),
@@ -97,10 +96,8 @@ pub(crate) fn setup(root: &Path, verbose: bool) -> Result<(), String> {
         std::fs::create_dir_all(root.join(path)).map_err(|e| e.to_string())?;
     }
     crate::commands::ide::setup(root, verbose)?;
-    crate::commands::build::ensure_gpuix_js(root, verbose)?;
-    crate::commands::build::ensure_ui_dependencies(root, verbose)?;
     println!(
-        "Setup ready. Existing dependency worktrees were preserved; Engine and GPUI development branches are active."
+        "Setup ready. Existing dependency worktrees were preserved; Engine and GPUI-CE development branches are active."
     );
     println!("The first engine build prepares Ladybird's pinned dependencies under build/.");
     Ok(())
@@ -270,7 +267,6 @@ pub(crate) fn doctor(root: &Path) -> Result<(), String> {
         ("Cargo", vec!["cargo", "--version"]),
         ("CMake", vec!["cmake", "--version"]),
         ("Ninja", vec!["ninja", "--version"]),
-        ("Bun", vec!["bun", "--version"]),
     ] {
         let line = run_tool(args[0], &args[1..], root).unwrap_or_else(|_| "not found".into());
         println!("  {name:10} {}", line.lines().next().unwrap_or("unknown"));
@@ -342,6 +338,16 @@ pub(crate) fn doctor(root: &Path) -> Result<(), String> {
             }
         );
     }
+    println!(
+        "  GPUI-CE    {}",
+        output(
+            "git",
+            &["rev-parse", "--short", "HEAD"],
+            &root.join("vendor/gpui-ce")
+        )
+        .unwrap_or_else(|_| "missing".into())
+        .trim()
+    );
     crate::commands::ide::doctor(root);
     Ok(())
 }
@@ -355,18 +361,18 @@ mod tests {
         let config: SetupConfig = toml::from_str(
             r#"
                 [[submodules]]
-                path = "vendor/gpuix"
+                path = "vendor/gpui-ce"
                 recursive = true
 
                 [[repositories]]
-                path = "vendor/gpuix/zed"
+                path = "vendor/gpui-ce"
                 [[repositories.remotes]]
                 name = "origin"
                 url = "https://example.com/fork.git"
                 [[repositories.remotes]]
                 name = "upstream"
                 url = "https://example.com/upstream.git"
-                fetch_branches = ["gpuix"]
+                fetch_branches = ["main"]
             "#,
         )
         .unwrap();
@@ -374,14 +380,14 @@ mod tests {
         config.validate().unwrap();
         assert!(config.submodules[0].recursive);
         assert_eq!(config.repositories[0].remotes.len(), 2);
-        assert_eq!(config.repositories[0].remotes[1].fetch_branches, ["gpuix"]);
+        assert_eq!(config.repositories[0].remotes[1].fetch_branches, ["main"]);
     }
 
     #[test]
     fn setup_config_rejects_paths_that_escape_the_repository() {
         assert!(validate_relative_path("../outside", true).is_err());
         assert!(validate_relative_path("/outside", true).is_err());
-        assert!(validate_relative_path("vendor/gpuix", false).is_ok());
+        assert!(validate_relative_path("vendor/gpui-ce", false).is_ok());
         assert!(validate_relative_path(".", true).is_ok());
         assert!(validate_relative_path(".", false).is_err());
     }

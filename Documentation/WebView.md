@@ -1,11 +1,9 @@
 # PhotonWebView
 
-`<PhotonWebView url="https://example.com" />` is the only Photon-specific React component in this spike. Its wrapper maps directly to GPUIX's registered `photon-webview` host element. React controls its URL and style; native code owns the engine view and frame presentation. The `url` prop takes typed text as well as addresses: the element resolves it through the [omnibox rules](Omnibox.md) at the navigation boundary, so a query becomes a search in Rust and no detection logic lives in the shell.
+`PhotonWebView` is the shell's only page element. It owns one Photon Engine view and its native presentation session. Startup text is resolved by the Rust [omnibox rules](Omnibox.md); no JavaScript or N-API UI runtime participates.
 
-The view is created after the element has a non-zero GPUI layout size. It navigates once for the initial URL and only navigates again when a committed URL property changes. Layout bounds are converted from logical GPUI pixels to physical engine pixels using the current display scale factor. Resize calls are sent only when the resulting viewport changes.
+The element converts its GPUI-CE layout bounds and scale factor to the Engine viewport, resizing only when the physical dimensions or display scale change. Engine callbacks replace a single latest-frame slot so stale frames do not queue up. GPUI-CE keyboard, mouse-button, pointer-move, and wheel events are forwarded through the narrow embedder API; interactive behavior still needs hands-on validation.
 
-LibPhotonEmbedder delivers an owned `PresentedFrame` in BGRA format. The frame callback replaces the previous pending frame; the next native update converts the latest frame to GPUI `RenderImage`. Page bytes do not cross JavaScript or N-API. This CPU-backed image path is intentional for the spike and does not claim zero-copy presentation.
+On macOS the Engine publishes IOSurface-backed BGRA frames with producer `MTLSharedEvent` values. Photon imports and caches each backing, draws it through GPUI-CE's generic external Metal surface, and releases old Engine leases only after GPU completion. During shutdown Photon disables new publications, waits for in-flight sampling command buffers, drains all leases, and reports/asserts zero outstanding frames.
 
-The image is painted as part of the GPUI element. `borderRadius` and `overflow: hidden` are implemented by GPUI's scene clipping around the image, rather than a child OS window or a bitmap mask. Parent layout padding controls the outer inset.
-
-A short yielding GPUIX update interval pumps LibPhotonEmbedder while the element is mounted. This keeps engine IPC callbacks responsive without a busy loop. Element removal shuts down the view and runtime in order.
+The minimal shell has no tabs, address bar, toolbar, menus, or browser chrome. Window styling and the 4 logical pixel WebView inset are separate follow-up work.
