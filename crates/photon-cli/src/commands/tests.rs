@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::support::{invoke_with_environment, with_progress};
+use crate::support::{invoke_with_environment, success, with_progress};
 
 pub(crate) fn run(root: &Path, verbose: bool) -> Result<(), String> {
     let engine_dir = root.join("build").join("engine-debug");
@@ -19,5 +19,6 @@ pub(crate) fn run(root: &Path, verbose: bool) -> Result<(), String> {
             &[(library_variable, library_path)],
         )
     })?;
+    success("Rust workspace tests passed");
     Ok(())
 }

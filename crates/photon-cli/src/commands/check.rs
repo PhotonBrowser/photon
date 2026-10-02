@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::support::{invoke, output, with_progress};
+use crate::support::{invoke, output, stage, success, with_progress};
 
 pub(crate) fn check(root: &Path, verbose: bool) -> Result<(), String> {
     match check_inner(root, verbose) {
@@ -13,6 +13,7 @@ pub(crate) fn check(root: &Path, verbose: bool) -> Result<(), String> {
 }
 
 fn check_inner(root: &Path, verbose: bool) -> Result<(), String> {
+    stage("Check Rust formatting");
     invoke(
         "cargo",
         &[
@@ -69,7 +70,7 @@ fn check_inner(root: &Path, verbose: bool) -> Result<(), String> {
         }
         println!("Using Photon GPUI-CE main development branch.");
     }
-    println!("Architecture checks passed.");
+    success("Formatting, workspace, and architecture checks passed");
     Ok(())
 }
 

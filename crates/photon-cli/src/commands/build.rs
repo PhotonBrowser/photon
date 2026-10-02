@@ -6,16 +6,18 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use crate::support::{invoke, output, path, require_tool_version, stage, with_progress};
+use crate::support::{
+    diagnostics, invoke, output, path, require_tool_version, stage, success, with_progress,
+};
 
 pub(crate) fn build(root: &Path, release: bool, verbose: bool) -> Result<(), String> {
-    stage("Run checks before building");
-    crate::commands::check::check(root, verbose)?;
-
     let started = Instant::now();
     engine_build(root, release, verbose)?;
     build_app(root, release, verbose)?;
-    println!("Build succeeded in {:.1}s", started.elapsed().as_secs_f64());
+    success(&format!(
+        "Build completed in {:.1}s",
+        started.elapsed().as_secs_f64()
+    ));
     Ok(())
 }
 
@@ -64,18 +66,10 @@ fn invoke_cargo_with_engine(
     if result.status.success() {
         return Ok(());
     }
-    let stderr = String::from_utf8_lossy(&result.stderr);
     Err(format!(
-        "cargo failed: {}",
-        stderr
-            .lines()
-            .rev()
-            .take(10)
-            .collect::<Vec<_>>()
-            .into_iter()
-            .rev()
-            .collect::<Vec<_>>()
-            .join("\n")
+        "cargo failed ({}): {}",
+        result.status,
+        diagnostics(&result.stdout, &result.stderr, 12)
     ))
 }
 
@@ -113,9 +107,7 @@ pub(crate) fn engine_build(root: &Path, release: bool, verbose: bool) -> Result<
     if std::fs::read_to_string(&fingerprint_path).ok().as_deref() == Some(fingerprint.as_str())
         && required_outputs.iter().all(|output| output.exists())
     {
-        if verbose {
-            println!("Photon Engine is up to date.");
-        }
+        success("Photon Engine is up to date");
         return Ok(());
     }
     if !fingerprint_path.exists()
@@ -125,9 +117,7 @@ pub(crate) fn engine_build(root: &Path, release: bool, verbose: bool) -> Result<
         std::fs::write(&fingerprint_path, &fingerprint).map_err(|error| {
             format!("could not record Photon Engine build fingerprint: {error}")
         })?;
-        if verbose {
-            println!("Photon Engine outputs are current; recorded build fingerprint.");
-        }
+        success("Photon Engine outputs are current");
         return Ok(());
     }
 
@@ -332,18 +322,10 @@ fn invoke_engine_configure(
     if result.status.success() {
         return Ok(());
     }
-    let stderr = String::from_utf8_lossy(&result.stderr);
     Err(format!(
-        "CMake configure failed: {}",
-        stderr
-            .lines()
-            .rev()
-            .take(10)
-            .collect::<Vec<_>>()
-            .into_iter()
-            .rev()
-            .collect::<Vec<_>>()
-            .join("\n")
+        "CMake configure failed ({}): {}",
+        result.status,
+        diagnostics(&result.stdout, &result.stderr, 12)
     ))
 }
 
@@ -456,9 +438,11 @@ pub(crate) fn clean(root: &Path, scope: Option<&str>) -> Result<(), String> {
             std::fs::remove_dir_all(path).map_err(|e| e.to_string())?;
         }
     }
-    let helper_dir = root.join("build/bin");
-    if helper_dir.exists() {
-        std::fs::remove_dir_all(helper_dir).map_err(|e| e.to_string())?;
+    if scope != Some("engine") {
+        let helper_dir = root.join("build/bin");
+        if helper_dir.exists() {
+            std::fs::remove_dir_all(helper_dir).map_err(|e| e.to_string())?;
+        }
     }
     println!("Generated build trees removed.");
     Ok(())

@@ -16,6 +16,13 @@ pub(crate) fn stage(text: &str) {
     );
 }
 
+pub(crate) fn success(text: &str) {
+    println!(
+        "{} {text}",
+        "✓".if_supports_color(Stream::Stdout, |symbol| format!("{}", symbol.green()))
+    );
+}
+
 pub(crate) fn with_progress<T>(
     message: &str,
     enabled: bool,
@@ -107,7 +114,11 @@ pub(crate) fn output(program: &str, args: &[&str], cwd: &Path) -> Result<String,
         .output()
         .map_err(|e| format!("cannot run {program}: {e}"))?;
     if !result.status.success() {
-        return Err(String::from_utf8_lossy(&result.stderr).trim().to_owned());
+        let diagnostics = diagnostics(&result.stdout, &result.stderr, 12);
+        return Err(format!(
+            "{program} failed ({}): {diagnostics}",
+            result.status
+        ));
     }
     Ok(String::from_utf8_lossy(&result.stdout).into_owned())
 }
@@ -159,17 +170,40 @@ pub(crate) fn invoke_with_environment(
     if result.status.success() {
         return Ok(());
     }
-    let stderr = String::from_utf8_lossy(&result.stderr);
     Err(format!(
-        "{program} failed: {}",
-        stderr
-            .lines()
-            .rev()
-            .take(8)
-            .collect::<Vec<_>>()
-            .into_iter()
-            .rev()
-            .collect::<Vec<_>>()
-            .join("\n")
+        "{program} failed ({}): {}",
+        result.status,
+        diagnostics(&result.stdout, &result.stderr, 12)
     ))
+}
+
+pub(crate) fn diagnostics(stdout: &[u8], stderr: &[u8], limit: usize) -> String {
+    let stderr = String::from_utf8_lossy(stderr);
+    let stdout = String::from_utf8_lossy(stdout);
+    let source = if stderr.trim().is_empty() {
+        &stdout
+    } else {
+        &stderr
+    };
+    let lines: Vec<_> = source
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .collect();
+    if lines.is_empty() {
+        return "no diagnostics were produced".into();
+    }
+    let start = lines.len().saturating_sub(limit);
+    let mut tail = lines[start..].join("\n");
+    if let Some(first_error) = lines[..start]
+        .iter()
+        .position(|line| line.starts_with("error") || line.starts_with("Error"))
+    {
+        let context_end = (first_error + 5).min(start);
+        let context = lines[first_error..context_end].join("\n");
+        tail = format!("{context}\n…\n{tail}");
+    }
+    if start > 0 {
+        tail = format!("… {start} earlier lines omitted\n{tail}");
+    }
+    tail
 }

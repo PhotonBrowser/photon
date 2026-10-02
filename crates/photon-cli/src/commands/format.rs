@@ -1,8 +1,9 @@
 use std::path::Path;
 
-use crate::support::{invoke, output};
+use crate::support::{invoke, output, stage, success};
 
 pub(crate) fn format(root: &Path, verbose: bool) -> Result<(), String> {
+    stage("Format Photon Rust sources");
     invoke(
         "cargo",
         &[
@@ -22,6 +23,7 @@ pub(crate) fn format(root: &Path, verbose: bool) -> Result<(), String> {
         verbose,
     )?;
     if output("clang-format", &["--version"], root).is_ok() {
+        stage("Format native bridge sources");
         invoke(
             "clang-format",
             &[
@@ -34,5 +36,6 @@ pub(crate) fn format(root: &Path, verbose: bool) -> Result<(), String> {
             verbose,
         )?;
     }
+    success("Formatting complete");
     Ok(())
 }
