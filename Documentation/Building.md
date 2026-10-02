@@ -16,4 +16,4 @@ The first Engine build configures Ladybird dependencies under `build/` and compi
 
 Incremental builds use the Engine fingerprint to rebuild Ladybird only when Engine sources or configuration change. Rust app or GPUI-CE changes rebuild the application. Build products and downloaded dependencies stay under ignored build directories.
 
-Use `./photon clean` to remove generated build trees and stop the checkout-specific presentation broker. Use `./photon engine edit|pin|sync` and `./photon gpui edit|pin|sync` to maintain the two Photon-owned dependencies.
+Use `./photon clean` to remove generated build trees and stop the checkout-specific presentation broker. `./photon setup` selects the persistent Engine and GPUI-CE development branches; `./photon sync --check` previews ahead/behind counts and conflicts, and `./photon sync` merges both upstreams. The `engine sync` and `gpui sync` subcommands work on one dependency and also accept `--check`. After testing and pushing dependency commits, `./photon pin` records their current commit IDs in Photon. See [Upstream maintenance](Upstream.md) for the distinction between local branches and recorded pins.
