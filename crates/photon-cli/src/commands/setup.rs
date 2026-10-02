@@ -80,10 +80,32 @@ pub(crate) fn setup(root: &Path, verbose: bool) -> Result<(), String> {
                 let mut args = vec!["remote", "set-branches", remote.name.as_str()];
                 args.extend(remote.fetch_branches.iter().map(String::as_str));
                 command("git", &args, &path, verbose)?;
-
-                let mut args = vec!["fetch", "--prune", "--no-tags", remote.name.as_str()];
-                args.extend(remote.fetch_branches.iter().map(String::as_str));
-                command("git", &args, &path, verbose)?;
+                if remote.name == "origin" {
+                    for branch in &remote.fetch_branches {
+                        let local_ref = format!("refs/heads/{branch}");
+                        let tracking_ref = format!("refs/remotes/origin/{branch}");
+                        if output(
+                            "git",
+                            &["show-ref", "--verify", "--quiet", &local_ref],
+                            &path,
+                        )
+                        .is_err()
+                            && output(
+                                "git",
+                                &["show-ref", "--verify", "--quiet", &tracking_ref],
+                                &path,
+                            )
+                            .is_err()
+                        {
+                            command(
+                                "git",
+                                &["fetch", "--no-tags", "origin", branch],
+                                &path,
+                                verbose,
+                            )?;
+                        }
+                    }
+                }
             }
         }
         for branch in &repository.untrack_branches {

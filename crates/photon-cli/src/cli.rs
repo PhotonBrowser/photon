@@ -42,7 +42,7 @@ enum Command {
         #[command(subcommand)]
         command: IdeCommand,
     },
-    /// Run checks, then build Photon Engine and the GPUI-CE application.
+    /// Build Photon Engine and the GPUI-CE application.
     Build {
         /// Build with optimizations.
         #[arg(long)]
@@ -72,6 +72,14 @@ enum Command {
     FixPrompt,
     /// Format Photon-owned Rust and C++ files.
     Format,
+    /// Verify and commit the current dependency branch tips as Photon pins.
+    Pin,
+    /// Merge Ladybird and GPUI-CE upstream changes into the Photon branches.
+    Sync {
+        /// Fetch and preview commit counts and merge conflicts without merging.
+        #[arg(long)]
+        check: bool,
+    },
     /// Switch between pinned GPUI-CE and its persistent edit branch.
     Gpui {
         #[command(subcommand)]
@@ -99,7 +107,11 @@ enum GpuiCommand {
     /// Return GPUI-CE to the revision pinned by this Photon checkout.
     Pin,
     /// Merge the configured upstream GPUI-CE branch into the Photon branch.
-    Sync,
+    Sync {
+        /// Fetch and preview commit counts and merge conflicts without merging.
+        #[arg(long)]
+        check: bool,
+    },
 }
 
 #[derive(Clone, Copy, Debug, clap::ValueEnum)]
@@ -122,7 +134,11 @@ enum EngineCommand {
         release: bool,
     },
     /// Fetch and merge upstream/master into the Engine checkout.
-    Sync,
+    Sync {
+        /// Fetch and preview commit counts and merge conflicts without merging.
+        #[arg(long)]
+        check: bool,
+    },
 }
 
 pub fn run() -> Result<(), String> {
@@ -164,10 +180,26 @@ pub fn run() -> Result<(), String> {
             Ok(())
         }
         Some(Command::Format) => commands::format::format(&root, verbose),
+        Some(Command::Pin) => commands::pin::pin(&root, verbose),
+        Some(Command::Sync { check }) => {
+            if check {
+                commands::engine::check_upstream(&root, verbose)?;
+                commands::gpui::check_upstream(&root, verbose)
+            } else {
+                commands::engine::engine(&root, Some("sync"), false, verbose)?;
+                commands::gpui::sync(&root, verbose)
+            }
+        }
         Some(Command::Gpui { command }) => match command {
             GpuiCommand::Edit => commands::gpui::edit(&root, verbose),
             GpuiCommand::Pin => commands::gpui::pin(&root, verbose),
-            GpuiCommand::Sync => commands::gpui::sync(&root, verbose),
+            GpuiCommand::Sync { check } => {
+                if check {
+                    commands::gpui::check_upstream(&root, verbose)
+                } else {
+                    commands::gpui::sync(&root, verbose)
+                }
+            }
         },
         Some(Command::Test) => commands::tests::run(&root, verbose),
         Some(Command::Engine { command }) => match command {
@@ -179,8 +211,12 @@ pub fn run() -> Result<(), String> {
             }
             Some(EngineCommand::Edit) => commands::engine::edit(&root, verbose),
             Some(EngineCommand::Pin) => commands::engine::pin(&root, verbose),
-            Some(EngineCommand::Sync) => {
-                commands::engine::engine(&root, Some("sync"), false, verbose)
+            Some(EngineCommand::Sync { check }) => {
+                if check {
+                    commands::engine::check_upstream(&root, verbose)
+                } else {
+                    commands::engine::engine(&root, Some("sync"), false, verbose)
+                }
             }
         },
     }

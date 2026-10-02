@@ -4,7 +4,9 @@ pub(super) mod engine;
 pub(super) mod format;
 pub(super) mod gpui;
 pub(super) mod ide;
+pub(super) mod pin;
 #[cfg(target_os = "macos")]
 pub(super) mod presentation_broker;
 pub(super) mod setup;
+pub(super) mod sync;
 pub(super) mod tests;

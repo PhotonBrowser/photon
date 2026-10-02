@@ -2,10 +2,15 @@ use std::path::Path;
 
 use crate::commands::build::engine_build;
 use crate::support::{command, output};
-use std::process::{Command, Stdio};
 
 const ENGINE_PATH: &str = "Engine";
 const ENGINE_BRANCH: &str = "master";
+
+pub(crate) fn check_upstream(root: &Path, verbose: bool) -> Result<(), String> {
+    let engine = root.join(ENGINE_PATH);
+    require_repository(&engine)?;
+    crate::commands::sync::check_upstream(&engine, "Engine", ENGINE_BRANCH, verbose)
+}
 
 pub(crate) fn edit(root: &Path, verbose: bool) -> Result<(), String> {
     let engine = root.join(ENGINE_PATH);
@@ -87,67 +92,16 @@ pub(crate) fn engine(
         }
         "build" => engine_build(root, release, verbose),
         "sync" => {
-            let branch = output("git", &["branch", "--show-current"], &engine)?;
-            if branch.trim() != ENGINE_BRANCH {
-                return Err(format!(
-                    "Engine is on branch {:?}; run `./photon engine edit` before syncing",
-                    branch.trim()
-                ));
-            }
             ensure_no_engine_build(root)?;
+            edit(root, verbose)?;
             if !output("git", &["status", "--porcelain"], &engine)?
                 .trim()
                 .is_empty()
             {
                 return Err("Engine working tree must be clean before sync".into());
             }
-            command("git", &["fetch", "upstream"], &engine, true)?;
-            let behind = output(
-                "git",
-                &["rev-list", "--count", "HEAD..upstream/master"],
-                &engine,
-            )?;
-            if behind.trim() == "0" {
-                println!("Engine is already up to date with upstream/master.");
-                return Ok(());
-            }
-            let current = output("git", &["rev-parse", "--short", "HEAD"], &engine)?;
-            let target = output("git", &["rev-parse", "--short", "upstream/master"], &engine)?;
-            println!("Merging Engine {current:.7} with upstream/master {target:.7}");
-            let merge = Command::new("git")
-                .args(["merge", "--no-edit", "upstream/master"])
-                .current_dir(&engine)
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .output()
-                .map_err(|error| format!("cannot run git merge: {error}"))?;
-            if !merge.status.success() {
-                let conflicts =
-                    output("git", &["diff", "--name-only", "--diff-filter=U"], &engine)?;
-                if conflicts.trim().is_empty() {
-                    return Err(format!(
-                        "git merge failed:\n{}{}",
-                        String::from_utf8_lossy(&merge.stdout),
-                        String::from_utf8_lossy(&merge.stderr)
-                    ));
-                }
-                let combined = output("git", &["diff", "--cc"], &engine).unwrap_or_default();
-                let paths = conflicts.lines().collect::<Vec<_>>().join("\n");
-                let diagnostics = format!(
-                    "Upstream merge is paused with conflicts. Resolve these paths, then stage them and run `git commit` to complete the merge.\n\nConflicting paths:\n{paths}\n\nCombined conflict hunks:\n{combined}\n\nGit output:\n{}{}",
-                    String::from_utf8_lossy(&merge.stdout),
-                    String::from_utf8_lossy(&merge.stderr)
-                );
-                println!("{diagnostics}");
-                crate::commands::check::print_fix_prompt(
-                    root,
-                    &format!(
-                        "Resolve the in-progress Ladybird upstream merge in the Engine checkout. Preserve Photon-specific changes and follow the repository instructions. Resolve only the listed conflict paths, stage the resolutions, and complete the merge commit. Do not abort the merge.\n\n{diagnostics}"
-                    ),
-                );
-                return Err("upstream merge has conflicts; an AI repair prompt was printed".into());
-            }
-            println!("Sync complete. Update and commit the Engine submodule pointer in photon.");
+            crate::commands::sync::merge_upstream(&engine, "Engine", ENGINE_BRANCH, verbose)?;
+            println!("Push the tested Engine branch, then run `./photon pin`.");
             Ok(())
         }
         _ => Err("usage: ./photon engine [status|edit|pin|build|sync]".into()),

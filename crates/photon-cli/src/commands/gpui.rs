@@ -5,6 +5,12 @@ use crate::support::{command, output};
 const GPUI_CE_PATH: &str = "vendor/gpui-ce";
 const GPUI_CE_BRANCH: &str = "main";
 
+pub(crate) fn check_upstream(root: &Path, verbose: bool) -> Result<(), String> {
+    let gpui_ce = root.join(GPUI_CE_PATH);
+    require_repository(&gpui_ce)?;
+    crate::commands::sync::check_upstream(&gpui_ce, "GPUI-CE", GPUI_CE_BRANCH, verbose)
+}
+
 pub(crate) fn edit(root: &Path, verbose: bool) -> Result<(), String> {
     let gpui_ce = root.join(GPUI_CE_PATH);
     require_repository(&gpui_ce)?;
@@ -38,23 +44,11 @@ pub(crate) fn pin(root: &Path, verbose: bool) -> Result<(), String> {
 pub(crate) fn sync(root: &Path, verbose: bool) -> Result<(), String> {
     let gpui_ce = root.join(GPUI_CE_PATH);
     require_repository(&gpui_ce)?;
-    require_branch(&gpui_ce, GPUI_CE_BRANCH)?;
+    edit(root, verbose)?;
     require_clean_source(&gpui_ce)?;
-    command(
-        "git",
-        &["fetch", "upstream", "main:refs/remotes/upstream/main"],
-        &gpui_ce,
-        verbose,
-    )?;
-    command(
-        "git",
-        &["merge", "--no-edit", "FETCH_HEAD"],
-        &gpui_ce,
-        verbose,
-    )?;
-    println!("Merged upstream GPUI-CE main into the persistent Photon branch.");
+    crate::commands::sync::merge_upstream(&gpui_ce, "GPUI-CE", GPUI_CE_BRANCH, verbose)?;
     println!(
-        "Run `cargo check -p gpui_ce_apple` and `cargo test -p gpui_ce_apple` before pushing."
+        "Run `cargo check -p gpui_ce_apple` and `cargo test -p gpui_ce_apple`, push the branch, then run `./photon pin`."
     );
     Ok(())
 }
@@ -81,19 +75,6 @@ fn require_clean_source(repository: &Path) -> Result<(), String> {
     } else {
         Err(format!(
             "GPUI-CE has uncommitted changes; commit or save them before switching revisions"
-        ))
-    }
-}
-
-fn require_branch(repository: &Path, expected: &str) -> Result<(), String> {
-    let current = output("git", &["branch", "--show-current"], repository)?;
-    if current.trim() == expected {
-        Ok(())
-    } else {
-        Err(format!(
-            "{} is on branch {:?}; run `./photon gpui edit` first to use {expected}",
-            repository.display(),
-            current.trim()
         ))
     }
 }
