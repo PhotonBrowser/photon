@@ -63,8 +63,9 @@ pub(crate) fn pin(root: &Path, verbose: bool) -> Result<(), String> {
         crate::commands::build::engine_build(root, false, verbose)?;
     }
     if changed.contains(&"vendor/gpui-ce") {
-        command("cargo", &["check", "-p", "gpui_ce_apple"], root, verbose)?;
-        command("cargo", &["test", "-p", "gpui_ce_apple"], root, verbose)?;
+        let gpui_ce = root.join("vendor/gpui-ce");
+        command("cargo", &["check", "-p", "gpui_ce_apple"], &gpui_ce, verbose)?;
+        command("cargo", &["test", "-p", "gpui_ce_apple"], &gpui_ce, verbose)?;
     }
     crate::commands::check::check(root, verbose)?;
     crate::commands::tests::run(root, verbose)?;
