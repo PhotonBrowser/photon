@@ -6,11 +6,12 @@ mod presentation_xpc;
 use anyhow::Context as _;
 use core_video::pixel_buffer::CVPixelBuffer;
 use gpui::{
-    App, Bounds, Context, Entity, ExternalMetalSurface, ExternalSurfaceDescriptor,
-    ExternalTextureIdentity, FocusHandle, KeyDownEvent, KeyUpEvent, MetalSharedEventWait,
-    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Render, ScrollDelta,
-    ScrollWheelEvent, Subscription, SurfaceSource, TouchPhase, Window, WindowBounds, WindowOptions,
-    div, prelude::*, px, size, surface,
+    App, AsyncApp, Bounds, Context, Entity, ExternalMetalSurface, ExternalSurfaceDescriptor,
+    ExternalTextureIdentity, FocusHandle, InteractiveElement, KeyDownEvent, KeyUpEvent,
+    MacosWindowBackground, MetalSharedEventWait, MouseButton, MouseDownEvent, MouseMoveEvent,
+    MouseUpEvent, ObjectFit, QuitMode, Render, ScrollDelta, ScrollWheelEvent, Subscription,
+    SurfaceSource, TitlebarOptions, TouchPhase, WeakEntity, Window, WindowBounds, WindowOptions,
+    div, point, prelude::*, px, size, surface,
 };
 use gpui_platform::application;
 use io_surface::IOSurface;
@@ -21,10 +22,14 @@ use std::{
     ffi::{CStr, CString, c_char, c_void},
     sync::{
         Arc, Condvar, Mutex,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicPtr, Ordering},
     },
     time::Duration,
 };
+
+const TITLEBAR_HEIGHT: f32 = 30.0;
+const WEBVIEW_INSET: f32 = 4.0;
+const WEBVIEW_CORNER_RADIUS: f32 = 12.0;
 
 mod embedder {
     use super::{c_char, c_void};
@@ -34,7 +39,12 @@ mod embedder {
             error: *mut c_char,
             capacity: usize,
         ) -> *mut c_void;
-        pub fn photon_runtime_pump(runtime: *mut c_void);
+        pub fn photon_runtime_set_native_release_drain_callback(
+            runtime: *mut c_void,
+            context: *mut c_void,
+            callback: Option<unsafe extern "C" fn(*mut c_void)>,
+        );
+        pub fn photon_runtime_schedule_native_release_drain(runtime: *mut c_void);
         pub fn photon_runtime_destroy(runtime: *mut c_void);
         pub fn photon_view_create(
             runtime: *mut c_void,
@@ -136,18 +146,33 @@ struct Release {
 
 #[derive(Default)]
 struct LeaseLedger {
-    submitted: HashSet<FrameKey>,
+    received: HashSet<FrameKey>,
+    accepted: HashSet<FrameKey>,
+    presented: HashSet<FrameKey>,
     completed: HashSet<FrameKey>,
     released: HashSet<FrameKey>,
     pending: Vec<Release>,
 }
 
 impl LeaseLedger {
-    fn submit(&mut self, key: FrameKey) {
+    fn receive(&mut self, key: FrameKey) {
         assert!(
-            self.submitted.insert(key),
+            self.received.insert(key),
             "duplicate native frame lease {key:?}"
         );
+    }
+
+    fn accept(&mut self, key: FrameKey) {
+        assert!(self.received.contains(&key));
+        assert!(
+            self.accepted.insert(key),
+            "duplicate accepted frame {key:?}"
+        );
+    }
+
+    fn present(&mut self, key: FrameKey) {
+        assert!(self.accepted.contains(&key));
+        self.presented.insert(key);
     }
 
     fn complete(&mut self, key: FrameKey) {
@@ -171,45 +196,70 @@ impl LeaseLedger {
         );
     }
 
-    fn counts(&self) -> (usize, usize, usize, usize) {
-        let outstanding = self.submitted.difference(&self.released).count();
-        (
-            self.submitted.len(),
-            self.completed.len(),
-            self.released.len(),
-            outstanding,
-        )
+    fn counts(&self) -> LeaseCounts {
+        LeaseCounts {
+            received: self.received.len(),
+            accepted: self.accepted.len(),
+            presented: self.presented.len(),
+            completed: self.completed.len(),
+            released: self.released.len(),
+            outstanding: self.received.difference(&self.released).count(),
+        }
     }
+}
+
+struct LeaseCounts {
+    received: usize,
+    accepted: usize,
+    presented: usize,
+    completed: usize,
+    released: usize,
+    outstanding: usize,
 }
 
 #[derive(Default)]
 struct GpuActivity {
-    in_flight: Mutex<usize>,
+    progress: Mutex<GpuProgress>,
     idle: Condvar,
+}
+
+#[derive(Default)]
+struct GpuProgress {
+    in_flight: usize,
+    submitted: usize,
+    completed: usize,
 }
 
 impl GpuActivity {
     fn submitted(&self) {
-        *self.in_flight.lock().unwrap() += 1;
+        let mut progress = self.progress.lock().unwrap();
+        progress.in_flight += 1;
+        progress.submitted += 1;
     }
 
     fn completed(&self) {
-        let mut in_flight = self.in_flight.lock().unwrap();
+        let mut progress = self.progress.lock().unwrap();
         assert!(
-            *in_flight > 0,
+            progress.in_flight > 0,
             "Metal completion without a matching submission"
         );
-        *in_flight -= 1;
-        if *in_flight == 0 {
+        progress.in_flight -= 1;
+        progress.completed += 1;
+        if progress.in_flight == 0 {
             self.idle.notify_all();
         }
     }
 
     fn wait_until_idle(&self) {
-        let mut in_flight = self.in_flight.lock().unwrap();
-        while *in_flight != 0 {
-            in_flight = self.idle.wait(in_flight).unwrap();
+        let mut progress = self.progress.lock().unwrap();
+        while progress.in_flight != 0 {
+            progress = self.idle.wait(progress).unwrap();
         }
+    }
+
+    fn counts(&self) -> (usize, usize, usize) {
+        let progress = self.progress.lock().unwrap();
+        (progress.submitted, progress.completed, progress.in_flight)
     }
 }
 
@@ -233,6 +283,7 @@ struct PresentationRuntime {
     latest_order: Mutex<(u64, u64)>,
     leases: Arc<Mutex<LeaseLedger>>,
     gpu_activity: Arc<GpuActivity>,
+    release_scheduler: Arc<AtomicPtr<c_void>>,
     accepting_frames: AtomicBool,
 }
 
@@ -252,6 +303,7 @@ impl PresentationRuntime {
             latest_order: Mutex::new((0, 0)),
             leases,
             gpu_activity,
+            release_scheduler: Arc::new(AtomicPtr::new(std::ptr::null_mut())),
             accepting_frames: AtomicBool::new(true),
         })
     }
@@ -277,6 +329,13 @@ impl PresentationRuntime {
                 "frame={} gen={} release=queued reason=shutdown-before-present",
                 ready.key.frame, ready.key.generation
             ));
+        }
+    }
+
+    fn schedule_release_drain(&self) {
+        let runtime = self.release_scheduler.load(Ordering::Acquire);
+        if !runtime.is_null() {
+            unsafe { embedder::photon_runtime_schedule_native_release_drain(runtime) };
         }
     }
 
@@ -355,7 +414,7 @@ impl PresentationRuntime {
             generation,
             frame,
         };
-        self.leases.lock().unwrap().submit(key);
+        self.leases.lock().unwrap().receive(key);
         if !self.accepting_frames.load(Ordering::Acquire) {
             self.leases.lock().unwrap().complete(key);
             trace(format_args!(
@@ -374,6 +433,7 @@ impl PresentationRuntime {
         }
         *latest_order = order;
         drop(latest_order);
+        self.leases.lock().unwrap().accept(key);
         let ready = FrameReady {
             key: FrameKey {
                 backing,
@@ -432,10 +492,12 @@ impl PresentationRuntime {
         }
         let leases = self.leases.clone();
         let gpu_activity = self.gpu_activity.clone();
+        let presented_leases = self.leases.clone();
         let key = ready.key;
         let image = backing.image.clone();
         let releases_after_completion = Arc::new(Mutex::new(Vec::<Release>::new()));
         let completion_releases = releases_after_completion.clone();
+        let release_scheduler = self.release_scheduler.clone();
         let surface = ExternalMetalSurface::new(
             ExternalSurfaceDescriptor {
                 identity: ExternalTextureIdentity {
@@ -443,9 +505,16 @@ impl PresentationRuntime {
                     generation: key.generation,
                     iosurface_id: backing.iosurface_id,
                 },
+                // Keep the pooled IOSurface dimensions stable for texture
+                // caching and layout, and pass the current frame's visible
+                // content size separately for sampling.
                 size: size(
-                    gpui::DevicePixels(backing.image.get_width() as i32),
-                    gpui::DevicePixels(backing.image.get_height() as i32),
+                    gpui::DevicePixels(image.get_width() as i32),
+                    gpui::DevicePixels(image.get_height() as i32),
+                ),
+                visible_size: size(
+                    gpui::DevicePixels(ready.width.min(image.get_width() as i32)),
+                    gpui::DevicePixels(ready.height.min(image.get_height() as i32)),
                 ),
                 pixel_format: image.get_pixel_format(),
             },
@@ -456,7 +525,10 @@ impl PresentationRuntime {
             }),
             {
                 let gpu_activity = gpu_activity.clone();
-                move || gpu_activity.submitted()
+                move || {
+                    presented_leases.lock().unwrap().present(key);
+                    gpu_activity.submitted();
+                }
             },
             move || {
                 gpu_activity.completed();
@@ -471,6 +543,10 @@ impl PresentationRuntime {
                         "frame={} gen={} release=queued after-present={}",
                         release.key.frame, release.key.generation, key.frame
                     ));
+                }
+                let runtime = release_scheduler.load(Ordering::Acquire);
+                if !runtime.is_null() {
+                    unsafe { embedder::photon_runtime_schedule_native_release_drain(runtime) };
                 }
             },
         );
@@ -493,8 +569,62 @@ impl Drop for MachPortGuard {
     }
 }
 
+#[derive(Clone)]
+struct UiWake {
+    app: AsyncApp,
+    webview: WeakEntity<PhotonWebView>,
+}
+
 struct CallbackState {
     presentation: Arc<PresentationRuntime>,
+    leases: Arc<Mutex<LeaseLedger>>,
+    engine_view: AtomicPtr<c_void>,
+    ui_wake: Mutex<Option<UiWake>>,
+}
+
+impl CallbackState {
+    fn set_ui_wake(&self, wake: UiWake) {
+        *self.ui_wake.lock().unwrap() = Some(wake);
+        self.request_redraw();
+    }
+
+    fn request_redraw(&self) {
+        let Some(wake) = self.ui_wake.lock().unwrap().clone() else {
+            return;
+        };
+        wake.app
+            .spawn(async move |cx| {
+                let Some(webview) = wake.webview.upgrade() else {
+                    return;
+                };
+                webview.update(cx, |view, cx| view.present_latest(cx));
+                cx.refresh();
+            })
+            .detach();
+    }
+}
+
+fn deliver_pending_releases(callbacks: &CallbackState) {
+    let view = callbacks.engine_view.load(Ordering::Acquire);
+    if view.is_null() {
+        return;
+    }
+    let pending = callbacks.leases.lock().unwrap().take_pending();
+    for release in pending {
+        unsafe {
+            embedder::photon_view_release_native_frame(
+                view,
+                release.key.backing,
+                release.key.generation,
+                release.key.frame,
+            );
+        }
+        trace(format_args!(
+            "FrameReleased frame={} gen={} delivered-to-engine",
+            release.key.frame, release.key.generation
+        ));
+        callbacks.leases.lock().unwrap().release(release.key);
+    }
 }
 
 struct EngineSession {
@@ -535,8 +665,14 @@ impl EngineSession {
             "Photon Engine runtime failed: {}",
             unsafe { CStr::from_ptr(error.as_ptr()) }.to_string_lossy()
         );
+        presentation
+            .release_scheduler
+            .store(runtime, Ordering::Release);
         let mut callbacks = Box::new(CallbackState {
             presentation: presentation.clone(),
+            leases: leases.clone(),
+            engine_view: AtomicPtr::new(std::ptr::null_mut()),
+            ui_wake: Mutex::new(None),
         });
         let view = unsafe {
             embedder::photon_view_create(
@@ -555,8 +691,19 @@ impl EngineSession {
             )
         };
         if view.is_null() {
+            presentation
+                .release_scheduler
+                .store(std::ptr::null_mut(), Ordering::Release);
             unsafe { embedder::photon_runtime_destroy(runtime) };
             anyhow::bail!("Photon Engine could not create a webpage view");
+        }
+        callbacks.engine_view.store(view, Ordering::Release);
+        unsafe {
+            embedder::photon_runtime_set_native_release_drain_callback(
+                runtime,
+                (&mut *callbacks as *mut CallbackState).cast(),
+                Some(on_native_release_drain),
+            );
         }
         let session = Self {
             runtime,
@@ -591,10 +738,8 @@ impl EngineSession {
         Ok(session)
     }
 
-    fn pump(&mut self) -> Option<PresentedSurface> {
-        unsafe { embedder::photon_runtime_pump(self.runtime) };
-        self.drain_releases();
-        self.callbacks.presentation.take_surface()
+    fn set_ui_wake(&self, wake: UiWake) {
+        self.callbacks.set_ui_wake(wake);
     }
 
     fn resize(&mut self, width: i32, height: i32, dpr: f64) {
@@ -657,22 +802,7 @@ impl EngineSession {
     }
 
     fn drain_releases(&mut self) {
-        let pending = self.leases.lock().unwrap().take_pending();
-        for release in pending {
-            unsafe {
-                embedder::photon_view_release_native_frame(
-                    self.view,
-                    release.key.backing,
-                    release.key.generation,
-                    release.key.frame,
-                )
-            };
-            trace(format_args!(
-                "FrameReleased frame={} gen={} delivered-to-engine",
-                release.key.frame, release.key.generation
-            ));
-            self.leases.lock().unwrap().release(release.key);
-        }
+        deliver_pending_releases(&self.callbacks);
     }
 
     fn begin_shutdown(&mut self, final_surface_releases: Arc<Mutex<Vec<Release>>>) {
@@ -701,24 +831,49 @@ impl EngineSession {
         }
         self.presentation.stop_accepting_frames();
         self.drain_releases();
-        let (submitted, completed, released, outstanding) = self.leases.lock().unwrap().counts();
+        let leases = self.leases.lock().unwrap().counts();
+        let (gpu_submitted, gpu_completed, gpu_in_flight) = self.gpu_activity.counts();
         trace(format_args!(
-            "shutdown accounting submitted={submitted} completed={completed} released={released} outstanding={outstanding} gpu-in-flight=0"
+            "shutdown accounting received={} accepted={} presented={} lease-completed={} released={} outstanding={} gpu-submitted={gpu_submitted} gpu-completed={gpu_completed} gpu-in-flight={gpu_in_flight}",
+            leases.received,
+            leases.accepted,
+            leases.presented,
+            leases.completed,
+            leases.released,
+            leases.outstanding,
         ));
         assert_eq!(
-            outstanding, 0,
+            leases.outstanding, 0,
             "native presentation leases remain at shutdown"
         );
         assert_eq!(
-            submitted, completed,
+            leases.received, leases.completed,
             "native presentation leases did not complete"
         );
         assert_eq!(
-            completed, released,
+            leases.completed, leases.released,
             "completed native presentation leases were not released"
         );
+        assert_eq!(
+            gpu_submitted, gpu_completed,
+            "Metal command buffers did not all complete"
+        );
+        assert_eq!(gpu_in_flight, 0);
+        self.presentation
+            .release_scheduler
+            .store(std::ptr::null_mut(), Ordering::Release);
         unsafe {
+            if !self.runtime.is_null() {
+                embedder::photon_runtime_set_native_release_drain_callback(
+                    self.runtime,
+                    std::ptr::null_mut(),
+                    None,
+                );
+            }
             if !self.view.is_null() {
+                self.callbacks
+                    .engine_view
+                    .store(std::ptr::null_mut(), Ordering::Release);
                 embedder::photon_view_shutdown(self.view);
                 embedder::photon_view_destroy(self.view);
                 self.view = std::ptr::null_mut();
@@ -744,15 +899,22 @@ impl Drop for EngineSession {
 unsafe extern "C" fn on_engine_state(
     _: *mut c_void,
     url: *const c_char,
-    _: *const c_char,
+    title: *const c_char,
     loading: bool,
     _: bool,
     _: bool,
 ) {
     if !loading && !url.is_null() {
+        let title = if title.is_null() {
+            "<null>".to_owned()
+        } else {
+            unsafe { CStr::from_ptr(title) }
+                .to_string_lossy()
+                .into_owned()
+        };
         trace(format_args!(
-            "page-state url={}",
-            unsafe { CStr::from_ptr(url) }.to_string_lossy()
+            "page-state url={} title={title}",
+            unsafe { CStr::from_ptr(url) }.to_string_lossy(),
         ));
     }
 }
@@ -824,6 +986,17 @@ unsafe extern "C" fn on_engine_native_frame(
     unsafe { &*(context.cast::<CallbackState>()) }
         .presentation
         .receive_frame(backing, generation, frame, signal, width, height);
+    let callbacks = unsafe { &*(context.cast::<CallbackState>()) };
+    callbacks.presentation.schedule_release_drain();
+    callbacks.request_redraw();
+}
+
+unsafe extern "C" fn on_native_release_drain(context: *mut c_void) {
+    if context.is_null() {
+        return;
+    }
+    let callbacks = unsafe { &*(context.cast::<CallbackState>()) };
+    deliver_pending_releases(callbacks);
 }
 
 struct PhotonWebView {
@@ -841,12 +1014,28 @@ impl Drop for PhotonWebView {
 }
 
 impl PhotonWebView {
+    fn present_latest(&mut self, cx: &mut Context<Self>) {
+        self.session.drain_releases();
+        let Some(presented) = self.session.presentation.take_surface() else {
+            return;
+        };
+        if let Some(retired) = self.external.take() {
+            let pending = std::mem::take(&mut *retired.releases_after_completion.lock().unwrap());
+            let mut next_releases = presented.releases_after_completion.lock().unwrap();
+            next_releases.push(Release { key: retired.key });
+            next_releases.extend(pending);
+        }
+        self.external = Some(presented);
+        cx.notify();
+    }
+
     fn handle_mouse_up(&mut self, event: &MouseUpEvent) {
         let (button, _) = mouse_button(event.button);
+        let (x, y) = web_content_position(event.position);
         self.session.send_pointer(
             3,
-            f64::from(f32::from(event.position.x)),
-            f64::from(f32::from(event.position.y)),
+            x,
+            y,
             button,
             0,
             event.modifiers.shift,
@@ -879,6 +1068,23 @@ impl PhotonWebView {
         self.session.begin_shutdown(final_releases);
     }
 
+    fn update_viewport(&mut self, width: f32, height: f32, scale: f32) {
+        let width = width.round() as i32;
+        let height = height.round() as i32;
+        let viewport = (width, height, scale.to_bits());
+        if self.last_viewport == Some(viewport) || width <= 0 || height <= 0 {
+            return;
+        }
+
+        self.session.resize(width, height, f64::from(scale));
+        trace(format_args!(
+            "viewport logical={width}x{height} dpr={scale:.2} physical={}x{}",
+            (width as f32 * scale).round() as i32,
+            (height as f32 * scale).round() as i32,
+        ));
+        self.last_viewport = Some(viewport);
+    }
+
     fn new(cx: &mut Context<Self>) -> anyhow::Result<Self> {
         let width = 1200;
         let height = 760;
@@ -893,28 +1099,32 @@ impl PhotonWebView {
 }
 
 impl Render for PhotonWebView {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let bounds = window.bounds();
-        let scale = window.scale_factor();
-        let width = (f32::from(bounds.size.width) * scale).round() as i32;
-        let height = (f32::from(bounds.size.height) * scale).round() as i32;
-        let dpr_bits = scale.to_bits();
-        let viewport = (width, height, dpr_bits);
-        if self.last_viewport != Some(viewport) && width > 0 && height > 0 {
-            self.session.resize(width, height, f64::from(scale));
-            self.last_viewport = Some(viewport);
-        }
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let mut webview = div()
             .size_full()
+            .id("photon-webview-viewport")
+            .on_prepaint(
+                cx.listener(|this, event: &gpui::InteractivityPrepaint, window, _| {
+                    // Resize from the laid-out WebView bounds, not the native window
+                    // bounds minus assumed titlebar/padding values. During live resize,
+                    // those assumptions can differ by a frame and offset the page.
+                    this.update_viewport(
+                        f32::from(event.bounds.size.width),
+                        f32::from(event.bounds.size.height),
+                        window.scale_factor(),
+                    );
+                }),
+            )
             .track_focus(&self.focus_handle)
             .on_any_mouse_down(cx.listener(|this, event: &MouseDownEvent, window, cx| {
                 window.focus(&this.focus_handle, cx);
                 this.session.set_focus(true);
                 let (button, buttons) = mouse_button(event.button);
+                let (x, y) = web_content_position(event.position);
                 this.session.send_pointer(
                     2,
-                    f64::from(f32::from(event.position.x)),
-                    f64::from(f32::from(event.position.y)),
+                    x,
+                    y,
                     button,
                     buttons,
                     event.modifiers.shift,
@@ -949,10 +1159,11 @@ impl Render for PhotonWebView {
                 cx.listener(|this, event: &MouseUpEvent, _, _| this.handle_mouse_up(event)),
             )
             .on_mouse_move(cx.listener(|this, event: &MouseMoveEvent, _, _| {
+                let (x, y) = web_content_position(event.position);
                 this.session.send_pointer(
                     0,
-                    f64::from(f32::from(event.position.x)),
-                    f64::from(f32::from(event.position.y)),
+                    x,
+                    y,
                     0,
                     event
                         .pressed_button
@@ -970,6 +1181,7 @@ impl Render for PhotonWebView {
                 );
             }))
             .on_scroll_wheel(cx.listener(|this, event: &ScrollWheelEvent, _, _| {
+                let (x, y) = web_content_position(event.position);
                 let (delta, precise) = match event.delta {
                     ScrollDelta::Pixels(delta) => (
                         (f64::from(f32::from(delta.x)), f64::from(f32::from(delta.y))),
@@ -980,14 +1192,17 @@ impl Render for PhotonWebView {
                         false,
                     ),
                 };
+                // Normalize AppKit/GPUI's sign to the Engine's wheel-delta convention,
+                // matching the pixel-delta conversion in the existing Qt shell.
+                let delta = (-delta.0, -delta.1);
                 let phase = match event.touch_phase {
                     TouchPhase::Started | TouchPhase::Moved => 1,
                     TouchPhase::Ended | TouchPhase::Cancelled => 3,
                 };
                 this.session.send_pointer(
                     4,
-                    f64::from(f32::from(event.position.x)),
-                    f64::from(f32::from(event.position.y)),
+                    x,
+                    y,
                     0,
                     0,
                     event.modifiers.shift,
@@ -1027,11 +1242,24 @@ impl Render for PhotonWebView {
             }));
         if let Some(presented) = self.external.as_ref() {
             webview = webview.child(
-                surface(SurfaceSource::ExternalMetal(presented.surface.clone())).size_full(),
+                surface(SurfaceSource::ExternalMetal(presented.surface.clone()))
+                    .size_full()
+                    .object_fit(ObjectFit::Fill)
+                    // GPUI's ancestor overflow mask clips to a rectangle. Keep
+                    // PhotonWebView itself square and round only its rendered
+                    // surface so the padded parent wrapper's radius is visible.
+                    .rounded(px(WEBVIEW_CORNER_RADIUS)),
             );
         }
         webview
     }
+}
+
+fn web_content_position(position: gpui::Point<gpui::Pixels>) -> (f64, f64) {
+    (
+        f64::from((f32::from(position.x) - WEBVIEW_INSET).max(0.0)),
+        f64::from((f32::from(position.y) - TITLEBAR_HEIGHT - WEBVIEW_INSET).max(0.0)),
+    )
 }
 
 fn mouse_button(button: MouseButton) -> (i32, u8) {
@@ -1083,13 +1311,32 @@ struct BrowserWindow {
     webview: Entity<PhotonWebView>,
 }
 impl Render for BrowserWindow {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        div().size_full().child(self.webview.clone())
+    fn render(&mut self, window: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        let colors = gpui::colors::Colors::for_appearance(window);
+        div()
+            .flex()
+            .flex_col()
+            .size_full()
+            .child(div().w_full().h(px(TITLEBAR_HEIGHT)).flex_shrink_0())
+            .child(
+                div()
+                    .flex_1()
+                    .w_full()
+                    .p(px(WEBVIEW_INSET))
+                    .bg(colors.container)
+                    .overflow_hidden()
+                    .rounded(px(WEBVIEW_CORNER_RADIUS))
+                    .child(self.webview.clone()),
+            )
     }
 }
 
 pub fn run() {
     application().run(|cx: &mut App| {
+        // GPUI keeps macOS apps alive after their last window closes by default. Photon
+        // has one browser window and owns an Engine runtime, so closing it must quit the
+        // app and run the registered Engine/GPU shutdown path.
+        cx.set_quit_mode(QuitMode::LastWindowClosed);
         let webview = cx.new(|cx| {
             let mut webview = PhotonWebView::new(cx)
                 .unwrap_or_else(|error| panic!("could not start direct PhotonWebView: {error:#}"));
@@ -1104,6 +1351,11 @@ pub fn run() {
             ));
             webview
         });
+        let wake = UiWake {
+            app: cx.to_async(),
+            webview: webview.downgrade(),
+        };
+        let _ = webview.update(cx, |view, _| view.session.set_ui_wake(wake));
         let window_size = size(px(1200.0), px(760.0));
         let bounds = Bounds::centered(None, window_size, cx);
         if let Ok(seconds) = std::env::var("PHOTON_SHUTDOWN_AFTER_SECONDS")
@@ -1117,40 +1369,20 @@ pub fn run() {
             })
             .detach();
         }
-        let webview_for_pump = webview.clone();
-        cx.spawn(async move |cx| {
-            loop {
-                cx.background_executor()
-                    .timer(Duration::from_millis(16))
-                    .await;
-                let _ = webview_for_pump.update(cx, |view, cx| {
-                    let next = view.session.pump();
-                    let has_next = next.is_some();
-                    if let Some(presented) = next {
-                        if let Some(retired) = view.external.take() {
-                            let pending = std::mem::take(
-                                &mut *retired.releases_after_completion.lock().unwrap(),
-                            );
-                            let mut next_releases =
-                                presented.releases_after_completion.lock().unwrap();
-                            next_releases.push(Release { key: retired.key });
-                            next_releases.extend(pending);
-                        }
-                        view.external = Some(presented);
-                    }
-                    if has_next {
-                        cx.notify();
-                    }
-                });
-            }
-        })
-        .detach();
         cx.open_window(
-            WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(bounds)),
-                ..Default::default()
+            WindowOptions::new()
+                .window_bounds(Some(WindowBounds::Windowed(bounds)))
+                .titlebar(Some(
+                    TitlebarOptions::default()
+                        .appears_transparent(true)
+                        .traffic_light_position(point(px(12.0), px(8.0))),
+                ))
+                // Blur the native window backing beneath the page surface.
+                .macos_window_background(MacosWindowBackground::Blurred),
+            |window, cx| {
+                window.set_window_title("Photon");
+                cx.new(|_| BrowserWindow { webview })
             },
-            |_, cx| cx.new(|_| BrowserWindow { webview }),
         )
         .expect("open GPUI-CE Photon window");
     });

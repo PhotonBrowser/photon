@@ -13,6 +13,7 @@ using PhotonStateCallback = void (*)(void *, char const *, char const *, bool,
 using PhotonErrorCallback = void (*)(void *, char const *);
 using PhotonCursorCallback = void (*)(void *, int);
 #if defined(__APPLE__)
+using PhotonNativeReleaseDrainCallback = void (*)(void*);
 using PhotonNativeBackingCallback = bool (*)(void *, uint64_t, uint64_t, uint32_t,
                                              uint32_t, uint32_t, uint32_t);
 using PhotonNativeFrameCallback = void (*)(void *, uint64_t, uint64_t, uint64_t,
@@ -21,8 +22,11 @@ using PhotonNativeFrameCallback = void (*)(void *, uint64_t, uint64_t, uint64_t,
 
 void *photon_runtime_create(char const *helper_directory, char *error,
                             size_t error_capacity);
-void photon_runtime_pump(void *runtime);
 #if defined(__APPLE__)
+void photon_runtime_set_native_release_drain_callback(
+    void *runtime, void *callback_data,
+    PhotonNativeReleaseDrainCallback callback);
+void photon_runtime_schedule_native_release_drain(void *runtime);
 #endif
 void photon_runtime_destroy(void *runtime);
 void *photon_view_create(void *runtime, int width, int height, double dpr,

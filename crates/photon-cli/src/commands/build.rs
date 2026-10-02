@@ -20,13 +20,13 @@ pub(crate) fn build(root: &Path, release: bool, verbose: bool) -> Result<(), Str
 }
 
 fn build_app(root: &Path, release: bool, verbose: bool) -> Result<(), String> {
-    stage("Build Photon GPUI-CE application");
+    stage("Build Photon application");
     let engine = root.join("build").join(if release {
         "engine-release"
     } else {
         "engine-debug"
     });
-    let mut args = vec!["build", "-p", "photon-app", "--bin", "photon-app-gpui-ce"];
+    let mut args = vec!["build", "-p", "photon-app", "--bin", "Photon"];
     if release {
         args.push("--release");
     }
@@ -375,7 +375,7 @@ pub(crate) fn run_direct(
     let executable = root
         .join("target")
         .join(if release { "release" } else { "debug" })
-        .join("photon-app-gpui-ce");
+        .join("Photon");
     let mut process = Command::new(executable);
     process
         .current_dir(root)

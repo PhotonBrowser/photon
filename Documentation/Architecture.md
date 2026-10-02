@@ -21,7 +21,7 @@ native CAMetalLayer
 
 - `crates/photon-core` contains framework-independent browser state and command rules. It does not depend on GPUI, GPUI-CE, or Ladybird types.
 - `crates/photon-omnibox` decides whether typed text is an address or a search query.
-- `crates/photon-app` owns the application, native window, `PhotonWebView`, presentation state, frame ordering, basic keyboard/pointer forwarding, and Engine release delivery. The current frame pump polls at 16 ms and remains a follow-up for event-driven invalidation.
+- `crates/photon-app` owns the application, native window, `PhotonWebView`, presentation state, frame ordering, keyboard/pointer forwarding, and Engine release delivery. Engine readiness uses Ladybird's Core CFRunLoop integration to schedule GPUI updates; Metal completion signals the native release-drain source.
 - `crates/photon-presentation-broker` and `native/presentation` own macOS XPC service startup and IOSurface/shared-event descriptor transport.
 - `native/embedder` is the narrow C++ bridge to LibPhotonEmbedder. Engine implementation changes remain in the Photon Engine submodule.
 - `vendor/gpui-ce` contains only generic external Metal surface rendering and platform capabilities. Browser and Ladybird lifecycle policy stays in Photon.

@@ -6,7 +6,7 @@ license.workspace = true
 build = "build.rs"
 
 [[bin]]
-name = "photon-app-gpui-ce"
+name = "Photon"
 path = "src/main.rs"
 
 [dependencies]

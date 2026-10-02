@@ -42,8 +42,10 @@ benchmark. Continue to keep the verbose diagnostics available for longer runs.
 - Measure CPU copies, image uploads, and IOSurface imports over a sustained
   run; expected counts are zero CPU full-frame copies, zero GPUI image uploads,
   and no per-frame IOSurface imports after cache warmup.
-- Replace the periodic application pump with event-driven invalidation where
-  the native integration permits it.
+
+The 16 ms polling task has been removed. Ladybird's existing Core CFRunLoop
+integration dispatches Engine readiness, frame callbacks enqueue a GPUI entity
+update, and GPU completions signal the native release-drain source.
 
 Native titlebar styling, transparency, blur, and WebView insets are deferred
 until these runtime gates are complete.
