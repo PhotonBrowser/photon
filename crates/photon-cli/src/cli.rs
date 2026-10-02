@@ -63,6 +63,15 @@ enum Command {
         #[arg(long)]
         force_cpu_painting: bool,
     },
+    /// Build Photon Engine and run the temporary direct GPUI-CE presentation path.
+    RunGpuiCe {
+        /// Build with optimizations.
+        #[arg(long)]
+        release: bool,
+        /// Navigate the PhotonWebView to this URL after launch.
+        #[arg(long)]
+        url: Option<String>,
+    },
     /// Remove generated build directories.
     Clean {
         /// Remove only Engine build directories.
@@ -152,6 +161,9 @@ pub fn run() -> Result<(), String> {
             } else {
                 commands::build::run(&root, release, verbose, url.as_deref(), force_cpu_painting)
             }
+        }
+        Some(Command::RunGpuiCe { release, url }) => {
+            commands::build::run_gpui_ce(&root, release, verbose, url.as_deref())
         }
         Some(Command::Clean { scope }) => {
             let scope = scope.map(|scope| match scope {

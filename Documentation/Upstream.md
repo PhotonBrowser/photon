@@ -1,12 +1,22 @@
 # Upstream maintenance tutorial
 
-Photon pins exact commits of two Photon-maintained downstream repositories. GPUIX also pins the Photon Zed fork as a nested submodule. `photon.toml` configures which root submodules `./photon setup` initializes and the Git remotes it ensures in each checkout. Git still owns the pinned commits and clone URLs in `.gitmodules`; setup never advances a submodule to a branch tip.
+Photon pins exact commits of its Photon Engine, GPUIX (during migration), and GPUI-CE downstream repositories. GPUIX currently pins the Photon Zed fork as a nested submodule; the direct GPUI-CE migration removes that tree after the native surface path is proven. `photon.toml` configures root submodules and Git remotes. Git owns pinned commits and clone URLs in `.gitmodules`; setup never advances a submodule to a branch tip.
 
 | Dependency | Photon remote (`origin`) | Upstream remote/reference | Photon branch |
 | --- | --- | --- | --- |
 | `Engine/` | `PhotonBrowser/photon-engine` | `LadybirdBrowser/ladybird` (`master`) | `master` |
 | `vendor/gpuix/` | `PhotonBrowser/gpuix` | `remorses/gpuix` (`main`) | `main` |
 | `vendor/gpuix/zed/` (nested) | `PhotonBrowser/zed` | `remorses/zed` (`gpuix`, [`ea042f2`](https://github.com/remorses/zed/tree/ea042f2f045157ada1d0ad71009520931dcace83)) | `photon/live-image` |
+| `vendor/gpui-ce/` | `PhotonBrowser/gpui-ce` | `gpui-ce/gpui-ce` (`main`) | `main` |
+
+The GPUI-CE fork is a standalone Photon-owned submodule at `vendor/gpui-ce/`.
+Its `origin` is `PhotonBrowser/gpui-ce`; its `upstream` is
+`https://github.com/gpui-ce/gpui-ce`. Port generic renderer capabilities on
+the persistent `main` branch, keeping Photon browser semantics in the Photon
+workspace. Sync by fetching both remotes, fast-forwarding from `origin/main`,
+then merging `upstream/main` and resolving each conflict deliberately. Run
+focused GPUI-CE checks and Photon checks before pushing the fork or changing
+the root gitlink. Do not use `git submodule update --remote` to select a pin.
 
 The root repository records the tested Engine and GPUIX commits as submodule gitlinks. GPUIX records its tested Zed commit in its own nested gitlink. `photon.toml` limits Zed's `upstream` fetch to the `gpuix` branch, currently at `ea042f2`; setup does not fetch or track `remorses/zed` `main`. The Photon Zed branch is based on that upstream commit. Merge upstream changes into each Photon-owned repository first, then update the gitlink that owns that dependency. This keeps Photon-specific changes in their respective downstreams and lets each layer pin tested revisions.
 

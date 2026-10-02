@@ -4,10 +4,12 @@ members = [
     "crates/photon-cli",
     "crates/photon-core",
     "crates/photon-gpui",
+    "crates/photon-app",
+    "crates/photon-presentation-broker",
     "crates/photon-native-addon",
     "crates/photon-omnibox",
 ]
-exclude = ["Engine/Libraries/LibJS/Flap", "vendor/gpuix"]
+exclude = ["Engine/Libraries/LibJS/Flap", "vendor/gpuix", "vendor/gpui-ce"]
 
 [workspace.package]
 edition = "2024"

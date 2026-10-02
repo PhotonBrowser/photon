@@ -8,6 +8,9 @@ recursive = true
 path = "vendor/gpuix"
 recursive = true
 
+[[submodules]]
+path = "vendor/gpui-ce"
+
 # Setup ensures these Git remotes exist with the configured URLs.
 [[repositories]]
 path = "."
@@ -39,6 +42,19 @@ fetch_branches = ["main"]
 [[repositories.remotes]]
 name = "upstream"
 url = "git@github.com:remorses/gpuix.git"
+
+[[repositories]]
+path = "vendor/gpui-ce"
+
+[[repositories.remotes]]
+name = "origin"
+url = "git@github.com:PhotonBrowser/gpui-ce.git"
+fetch_branches = ["main"]
+
+[[repositories.remotes]]
+name = "upstream"
+url = "https://github.com/gpui-ce/gpui-ce.git"
+fetch_branches = ["main"]
 
 [[repositories]]
 path = "vendor/gpuix/zed"

@@ -88,6 +88,71 @@ pub(super) fn ensure(root: &Path, verbose: bool) -> Result<String, String> {
     Ok(service)
 }
 
+/// Starts the Photon-owned broker used by the direct GPUI-CE application.
+pub(super) fn ensure_gpui_ce(root: &Path, verbose: bool) -> Result<String, String> {
+    let root = root.canonicalize().map_err(|error| error.to_string())?;
+    let (_, domain, _) = service_location(&root)?;
+    let uid = output("id", &["-u"], &root)?.trim().to_owned();
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in root.as_os_str().as_encoded_bytes() {
+        hash = (hash ^ u64::from(*byte)).wrapping_mul(0x100000001b3);
+    }
+    let service = format!("org.photonbrowser.photon.presentation.u{uid}.h{hash:016x}.gpui-ce");
+    let target = format!("{domain}/{service}");
+    if service_is_registered(&target) {
+        return Ok(service);
+    }
+    stage("Build Photon presentation broker");
+    invoke(
+        "cargo",
+        &["build", "-p", "photon-presentation-broker"],
+        &root,
+        verbose,
+    )?;
+    let built_executable = root.join("target/debug/photon-presentation-broker");
+    if !built_executable.is_file() {
+        return Err(format!(
+            "Photon presentation broker was not built at {}",
+            built_executable.display()
+        ));
+    }
+    let directory = std::env::temp_dir().join(format!("photon-presentation-{service}"));
+    std::fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
+    let executable = directory.join("presentation_broker");
+    std::fs::copy(&built_executable, &executable).map_err(|error| error.to_string())?;
+    let plist = directory.join(format!("{service}.plist"));
+    let stderr = directory.join(format!("{service}.err"));
+    let plist_text = format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+         <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n\
+         <plist version=\"1.0\"><dict><key>Label</key><string>{service}</string>\n\
+         <key>ProgramArguments</key><array><string>{}</string><string>{service}</string></array>\n\
+         <key>MachServices</key><dict><key>{service}</key><true/><key>{service}.iosurface</key><true/></dict>\n\
+         <key>RunAtLoad</key><true/><key>StandardErrorPath</key><string>{}</string></dict></plist>\n",
+        xml_escape(&executable.to_string_lossy()),
+        xml_escape(&stderr.to_string_lossy())
+    );
+    std::fs::write(&plist, plist_text).map_err(|error| error.to_string())?;
+    stage("Start Photon presentation broker");
+    let result = Command::new("launchctl")
+        .args(["bootstrap", &domain])
+        .arg(&plist)
+        .output()
+        .map_err(|error| error.to_string())?;
+    if !result.status.success() && !service_is_registered(&target) {
+        return Err(format!(
+            "could not start Photon presentation broker: {}",
+            String::from_utf8_lossy(&result.stderr).trim()
+        ));
+    }
+    if !service_is_registered(&target) {
+        return Err(format!(
+            "Photon presentation broker {service} is missing from {domain}"
+        ));
+    }
+    Ok(service)
+}
+
 pub(super) fn clean(root: &Path) -> Result<(), String> {
     let root = root.canonicalize().map_err(|error| error.to_string())?;
     let (service, _, target) = service_location(&root)?;

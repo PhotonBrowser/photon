@@ -13,6 +13,8 @@ pub(crate) fn format(root: &Path, verbose: bool) -> Result<(), String> {
             "photon-core",
             "--package",
             "photon-gpui",
+            "photon-app",
+            "photon-presentation-broker",
             "--package",
             "photon-native-addon",
             "--package",

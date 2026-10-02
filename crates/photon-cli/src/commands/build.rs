@@ -405,6 +405,73 @@ pub(crate) fn run_ui(root: &Path, release: bool, verbose: bool) -> Result<(), St
     launch_ui(root, release, verbose, false, None, false)
 }
 
+pub(crate) fn run_gpui_ce(
+    root: &Path,
+    release: bool,
+    verbose: bool,
+    url: Option<&str>,
+) -> Result<(), String> {
+    if !cfg!(target_os = "macos") {
+        return Err("the direct GPUI-CE presentation path currently supports macOS only".into());
+    }
+    engine_build(root, release, verbose)?;
+    let engine = root.join("build").join(if release {
+        "engine-release"
+    } else {
+        "engine-debug"
+    });
+    let mut args = vec!["build", "-p", "photon-app", "--bin", "photon-app-gpui-ce"];
+    if release {
+        args.push("--release");
+    }
+    invoke_cargo_with_engine(&args, root, &engine, verbose)?;
+    let service = super::presentation_broker::ensure_gpui_ce(root, verbose)?;
+    let app_build = root
+        .join("build")
+        .join(if release { "app-release" } else { "app-debug" });
+    let helper_dir = if cfg!(any(target_os = "macos", target_os = "windows")) {
+        app_build
+    } else {
+        engine.join("bin")
+    };
+    let executable = root
+        .join("target")
+        .join(if release { "release" } else { "debug" })
+        .join("photon-app-gpui-ce");
+    let mut process = Command::new(executable);
+    process
+        .current_dir(root)
+        .env("PHOTON_HELPER_DIRECTORY", helper_dir)
+        .env("PHOTON_PRESENTATION_XPC_SERVICE", service)
+        .env(
+            "PHOTON_PRESENTATION_CHANNEL_ID",
+            format!(
+                "photon-gpui-ce-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_nanos()
+            ),
+        )
+        .env("DYLD_LIBRARY_PATH", runtime_library_path(&engine));
+    if verbose {
+        process.env("PHOTON_VERBOSE", "1");
+        process.env("GPUI_EXTERNAL_SURFACE_TRACE", "1");
+    }
+    if let Some(url) = url {
+        process.env("PHOTON_URL", url);
+    }
+    let status = process
+        .status()
+        .map_err(|error| format!("cannot start direct GPUI-CE application: {error}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("Photon GPUI-CE exited with {status}"))
+    }
+}
+
 fn launch_ui(
     root: &Path,
     release: bool,
