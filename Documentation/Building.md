@@ -12,6 +12,8 @@ Photon's `./photon` script is the developer entry point. It requires Git, Rust/C
 
 `./photon run` builds the Engine and the direct GPUI-CE application, starts the Photon-owned macOS presentation broker, then opens the native window. Use `--url` to choose the initial page. `--shutdown-after-seconds N` runs for a fixed interval and then drains Metal work and frame leases; verbose mode prints the final submitted/completed/released/outstanding counts.
 
+On macOS, set `PHOTON_WINDOW_BACKGROUND=opaque`, `blurred`, or `liquid-glass` before launching Photon. The default is `blurred`. Liquid Glass uses AppKit's regular glass effect on macOS 26 and later and falls back to the blurred material on older versions. AppKit controls the effect's blur strength; neither native material exposes a supported blur-radius setting.
+
 The first Engine build configures Ladybird dependencies under `build/` and compiles Photon Engine helper processes plus LibPhotonEmbedder. The app remains Rust, with C++ limited to the narrow LibPhotonEmbedder bridge and required Apple XPC glue.
 
 Incremental builds use the Engine fingerprint to rebuild Ladybird only when Engine sources or configuration change. Rust app or GPUI-CE changes rebuild the application. Build products and downloaded dependencies stay under ignored build directories.
