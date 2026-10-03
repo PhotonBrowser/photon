@@ -9,6 +9,20 @@ pub(super) const TITLEBAR_HEIGHT: f32 = 30.0;
 pub(super) const WEBVIEW_INSET: f32 = 4.0;
 pub(super) const WEBVIEW_CORNER_RADIUS: f32 = 12.0;
 
+/// Select with PHOTON_WINDOW_BACKGROUND=opaque|blurred|liquid-glass.
+/// The system controls the strength of both native materials.
+fn background_for(value: Option<&str>) -> MacosWindowBackground {
+    match value {
+        Some("opaque") => MacosWindowBackground::Opaque,
+        Some("liquid-glass") => MacosWindowBackground::LiquidGlass,
+        _ => MacosWindowBackground::Blurred,
+    }
+}
+
+fn background() -> MacosWindowBackground {
+    background_for(std::env::var("PHOTON_WINDOW_BACKGROUND").ok().as_deref())
+}
+
 const INITIAL_WIDTH: f32 = 1200.0;
 const INITIAL_HEIGHT: f32 = 760.0;
 
@@ -22,5 +36,27 @@ pub(super) fn options(cx: &App) -> WindowOptions {
                 .appears_transparent(true)
                 .traffic_light_position(point(px(12.0), px(10.0))),
         ))
-        .macos_window_background(MacosWindowBackground::Blurred)
+        .macos_window_background(background())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn selects_native_window_background() {
+        assert_eq!(
+            background_for(Some("opaque")),
+            MacosWindowBackground::Opaque
+        );
+        assert_eq!(
+            background_for(Some("blurred")),
+            MacosWindowBackground::Blurred
+        );
+        assert_eq!(
+            background_for(Some("liquid-glass")),
+            MacosWindowBackground::LiquidGlass
+        );
+        assert_eq!(background_for(None), MacosWindowBackground::Blurred);
+    }
 }
