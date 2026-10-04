@@ -422,7 +422,7 @@ impl PresentationRuntime {
                 pixel_format: image.get_pixel_format(),
             },
             image,
-            Some(MetalSharedEventWait {
+            (ready.signal != 0).then_some(MetalSharedEventWait {
                 event,
                 value: ready.signal,
             }),

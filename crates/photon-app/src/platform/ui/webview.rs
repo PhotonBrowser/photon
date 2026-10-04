@@ -3,6 +3,7 @@
 use super::super::engine::EngineSession;
 use super::super::presentation::{PresentedSurface, Release};
 use super::super::window_settings::{TITLEBAR_HEIGHT, WEBVIEW_CORNER_RADIUS, WEBVIEW_INSET};
+use super::theme::colors;
 use gpui::{
     Context, FocusHandle, InteractiveElement, KeyDownEvent, KeyUpEvent, MouseButton,
     MouseDownEvent, MouseMoveEvent, MouseUpEvent, ObjectFit, Render, ScrollDelta, ScrollWheelEvent,
@@ -119,6 +120,8 @@ impl Render for PhotonWebView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let mut webview = div()
             .size_full()
+            .rounded(px(WEBVIEW_CORNER_RADIUS))
+            .bg(gpui::rgb(colors::PAGE_BACKGROUND))
             .id("photon-webview-viewport")
             .on_prepaint(
                 cx.listener(|this, event: &gpui::InteractivityPrepaint, window, _| {
@@ -262,9 +265,6 @@ impl Render for PhotonWebView {
                 surface(SurfaceSource::ExternalMetal(presented.surface.clone()))
                     .size_full()
                     .object_fit(ObjectFit::Fill)
-                    // GPUI's ancestor overflow mask clips to a rectangle. Keep
-                    // PhotonWebView itself square and round only its rendered
-                    // surface so the padded parent wrapper's radius is visible.
                     .rounded(px(WEBVIEW_CORNER_RADIUS)),
             );
         }

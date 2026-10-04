@@ -5,9 +5,10 @@ use gpui::{
     size,
 };
 
-pub(super) const TITLEBAR_HEIGHT: f32 = 30.0;
-pub(super) const WEBVIEW_INSET: f32 = 4.0;
-pub(super) const WEBVIEW_CORNER_RADIUS: f32 = 12.0;
+pub(super) const TITLEBAR_HEIGHT: f32 = crate::platform::ui::theme::metrics::TITLEBAR_HEIGHT;
+pub(super) const WEBVIEW_INSET: f32 = crate::platform::ui::theme::metrics::PAGE_INSET;
+pub(super) const WEBVIEW_CORNER_RADIUS: f32 =
+    crate::platform::ui::theme::metrics::WEBVIEW_CORNER_RADIUS;
 
 /// Select with PHOTON_WINDOW_BACKGROUND=opaque|blurred|liquid-glass.
 /// The system controls the strength of both native materials.

@@ -6,26 +6,30 @@ use std::time::Duration;
 
 use super::super::engine::UiWake;
 use super::super::window_settings;
-use super::super::window_settings::{TITLEBAR_HEIGHT, WEBVIEW_CORNER_RADIUS, WEBVIEW_INSET};
 use super::PhotonWebView;
+use super::theme::metrics;
 
 struct BrowserWindow {
     webview: Entity<PhotonWebView>,
 }
+
 impl Render for BrowserWindow {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         div()
             .flex()
             .flex_col()
             .size_full()
-            .child(div().w_full().h(px(TITLEBAR_HEIGHT)).flex_shrink_0())
+            .child(
+                div()
+                    .w_full()
+                    .h(px(metrics::TITLEBAR_HEIGHT))
+                    .flex_shrink_0(),
+            )
             .child(
                 div()
                     .flex_1()
                     .w_full()
-                    .p(px(WEBVIEW_INSET))
-                    .overflow_hidden()
-                    .rounded(px(WEBVIEW_CORNER_RADIUS))
+                    .p(px(metrics::PAGE_INSET))
                     .child(self.webview.clone()),
             )
     }

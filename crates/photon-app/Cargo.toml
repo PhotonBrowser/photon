@@ -10,7 +10,7 @@ name = "Photon"
 path = "src/main.rs"
 
 [dependencies]
-gpui = { package = "gpui-ce", path = "../../vendor/gpui-ce/crates/gpui", default-features = false, features = ["font-kit"] }
+gpui = { package = "gpui-ce", path = "../../vendor/gpui-ce/crates/gpui", default-features = false }
 gpui_platform = { package = "gpui_ce_platform", path = "../../vendor/gpui-ce/crates/gpui_platform" }
 gpui_apple = { package = "gpui_ce_apple", path = "../../vendor/gpui-ce/crates/gpui_apple" }
 photon-omnibox = { path = "../photon-omnibox" }
