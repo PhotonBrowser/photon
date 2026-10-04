@@ -1,6 +1,9 @@
 //! GPUI window bootstrap and top-level browser layout.
 
-use gpui::{App, Context, Entity, QuitMode, Render, Window, div, prelude::*, px};
+use gpui::{
+    Animation, AnimationExt, App, Context, Entity, QuitMode, Render, Transformation, Window, div,
+    prelude::*, px, radians, rgb, svg,
+};
 use gpui_platform::application;
 use std::time::Duration;
 
@@ -14,7 +17,8 @@ struct BrowserWindow {
 }
 
 impl Render for BrowserWindow {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let loading = self.webview.read(cx).loading;
         div()
             .flex()
             .flex_col()
@@ -23,7 +27,22 @@ impl Render for BrowserWindow {
                 div()
                     .w_full()
                     .h(px(metrics::TITLEBAR_HEIGHT))
-                    .flex_shrink_0(),
+                    .flex_shrink_0()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .when(loading, |titlebar| {
+                        titlebar.child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(6.0))
+                                .text_size(px(11.0))
+                                .text_color(rgb(0x5f6b76))
+                                .child(loading_spinner())
+                                .child("Loading"),
+                        )
+                    }),
             )
             .child(
                 div()
@@ -33,6 +52,25 @@ impl Render for BrowserWindow {
                     .child(self.webview.clone()),
             )
     }
+}
+
+fn loading_spinner() -> impl IntoElement {
+    svg()
+        .data(
+            br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9" fill="none" stroke="#477d99" stroke-width="3" stroke-linecap="round"/></svg>"##,
+        )
+        .size(px(14.0))
+        .with_animation(
+            "page-loading-spinner",
+            Animation::new(Duration::from_millis(900))
+                .repeat_synced()
+                .with_max_fps(30.0),
+            |spinner, phase| {
+                spinner.with_transformation(Transformation::rotate(radians(
+                    phase * std::f32::consts::TAU,
+                )))
+            },
+        )
 }
 
 pub fn run() {

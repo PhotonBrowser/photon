@@ -1,5 +1,7 @@
 # Native GPU presentation
 
+**Status: working on macOS.** Example.com has been displayed through the GPUI-CE Metal and IOSurface path, with GPU command buffers completing and no CPU page-pixel copies. An intermittent blank launch was also observed during development; that startup issue is not considered resolved by this successful render.
+
 On macOS, the Photon Engine compositor paints Skia output into BGRA IOSurface-backed frame stores. Photon receives each frame's backing identity, generation, frame ID and producer `MTLSharedEvent` value over its native presentation broker. The Engine and GPUI-CE Metal devices are checked for matching registry IDs.
 
 Photon resolves and caches the IOSurface once per backing. GPUI-CE caches the imported Metal texture by resource ID, generation and actual IOSurface ID. It encodes the producer event wait in the same command buffer that samples the texture, draws directly to the native layer, and reports both submission and completion to Photon. There are no CPU page-pixel copies or GPUI image uploads in this path.

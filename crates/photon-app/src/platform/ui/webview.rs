@@ -15,6 +15,7 @@ use super::super::trace;
 
 pub(in crate::platform) struct PhotonWebView {
     pub(super) external: Option<PresentedSurface>,
+    pub(in crate::platform) loading: bool,
     pub(super) session: EngineSession,
     pub(super) focus_handle: FocusHandle,
     pub(super) last_viewport: Option<(i32, i32, u32)>,
@@ -108,6 +109,7 @@ impl PhotonWebView {
         let height = 760;
         Ok(Self {
             external: None,
+            loading: false,
             session: EngineSession::create(width, height, 1.0)?,
             focus_handle: cx.focus_handle(),
             last_viewport: None,

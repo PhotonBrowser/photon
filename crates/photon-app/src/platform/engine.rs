@@ -48,6 +48,26 @@ impl CallbackState {
             })
             .detach();
     }
+
+    fn set_page_loading(&self, loading: bool) {
+        let Some(wake) = self.ui_wake.lock().unwrap().clone() else {
+            return;
+        };
+        wake.app
+            .spawn(async move |cx| {
+                let Some(webview) = wake.webview.upgrade() else {
+                    return;
+                };
+                webview.update(cx, |view, cx| {
+                    if view.loading != loading {
+                        view.loading = loading;
+                        cx.notify();
+                    }
+                });
+                cx.refresh();
+            })
+            .detach();
+    }
 }
 
 fn deliver_pending_releases(callbacks: &CallbackState) {
@@ -354,13 +374,17 @@ impl Drop for EngineSession {
 }
 
 unsafe extern "C" fn on_engine_state(
-    _: *mut c_void,
+    context: *mut c_void,
     url: *const c_char,
     title: *const c_char,
     loading: bool,
     _: bool,
     _: bool,
 ) {
+    if !context.is_null() {
+        let callbacks = unsafe { &*context.cast::<CallbackState>() };
+        callbacks.set_page_loading(loading);
+    }
     if !loading && !url.is_null() {
         let title = if title.is_null() {
             "<null>".to_owned()
