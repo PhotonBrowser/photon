@@ -10,8 +10,11 @@ use gpui::{
     Subscription, SurfaceSource, Window, div, prelude::*, px, surface,
 };
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::super::trace;
+
+static MOUSE_MOVE_TRACE_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 pub(in crate::platform) struct PhotonWebView {
     pub(super) external: Option<PresentedSurface>,
@@ -149,16 +152,27 @@ impl Render for PhotonWebView {
                     .ok();
             })
             .on_mouse_move_all(move |event, phase, hitbox, _window, app| {
-                if phase != gpui::DispatchPhase::Bubble {
+                // Forward pointer motion during capture so child elements in the
+                // external surface cannot stop propagation before the page sees it.
+                if phase != gpui::DispatchPhase::Capture {
                     return;
+                }
+                let move_count = MOUSE_MOVE_TRACE_COUNT.fetch_add(1, Ordering::Relaxed);
+                let inside_viewport = hitbox.contains(&event.position);
+                if move_count < 5 || move_count.is_multiple_of(60) {
+                    trace(format_args!(
+                        "mouse-move #{move_count} phase={phase:?} position=({}, {}) inside={inside_viewport} bounds={:?}",
+                        f32::from(event.position.x),
+                        f32::from(event.position.y),
+                        hitbox.bounds,
+                    ));
                 }
                 weak_this
                     .update(app, |this, _cx| {
-                        this.input.mouse_move(
-                            &mut this.session,
-                            event,
-                            hitbox.contains(&event.position),
-                        );
+                        if move_count < 5 || move_count.is_multiple_of(60) {
+                            trace(format_args!("mouse-move dispatch #{move_count} inside={inside_viewport}"));
+                        }
+                        this.input.mouse_move(&mut this.session, event, inside_viewport);
                     })
                     .ok();
             })
