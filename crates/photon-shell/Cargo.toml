@@ -1,0 +1,24 @@
+[package]
+name = "photon-shell"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+build = "build.rs"
+
+[dependencies]
+gpui = { package = "gpui-ce", path = "../../vendor/gpui-ce/crates/gpui", default-features = false }
+gpui_platform = { package = "gpui_ce_platform", path = "../../vendor/gpui-ce/crates/gpui_platform" }
+gpui_apple = { package = "gpui_ce_apple", path = "../../vendor/gpui-ce/crates/gpui_apple" }
+photon-omnibox = { path = "../photon-omnibox" }
+anyhow = "1"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-video = "0.5.2"
+foreign-types = "0.5"
+io-surface = "0.16.1"
+mach2 = "0.5"
+metal = "0.33"
+objc = "0.2"
+
+[build-dependencies]
+cc = "1"

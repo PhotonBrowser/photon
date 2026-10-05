@@ -58,7 +58,7 @@ impl Channel {
         &self,
         channel: &str,
         device: &DeviceRef,
-    ) -> Result<(SharedEvent, u64)> {
+    ) -> Result<Option<(SharedEvent, u64)>> {
         let channel = CString::new(channel).context("channel ID contains NUL")?;
         let mut registry_id = 0;
         let handle = NonNull::new(unsafe {
@@ -67,8 +67,10 @@ impl Channel {
                 channel.as_ptr(),
                 &mut registry_id,
             )
-        })
-        .context("broker has no producer shared event")?;
+        });
+        let Some(handle) = handle else {
+            return Ok(None);
+        };
         let _guard = ObjectGuard(handle);
         ensure!(
             registry_id == device.registry_id(),
@@ -81,7 +83,7 @@ impl Channel {
             !event.is_null(),
             "could not import producer shared event into GPUI device"
         );
-        Ok((unsafe { SharedEvent::from_ptr(event) }, registry_id))
+        Ok(Some((unsafe { SharedEvent::from_ptr(event) }, registry_id)))
     }
 
     pub fn register_backing(

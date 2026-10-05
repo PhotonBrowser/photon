@@ -4,6 +4,7 @@ members = [
     "crates/photon-cli",
     "crates/photon-core",
     "crates/photon-app",
+    "crates/photon-shell",
     "crates/photon-presentation-broker",
     "crates/photon-omnibox",
 ]

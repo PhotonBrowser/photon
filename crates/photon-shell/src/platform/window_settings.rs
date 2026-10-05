@@ -5,8 +5,6 @@ use gpui::{
     size,
 };
 
-pub(super) const TITLEBAR_HEIGHT: f32 = crate::platform::ui::theme::metrics::TITLEBAR_HEIGHT;
-pub(super) const WEBVIEW_INSET: f32 = crate::platform::ui::theme::metrics::PAGE_INSET;
 pub(super) const WEBVIEW_CORNER_RADIUS: f32 =
     crate::platform::ui::theme::metrics::WEBVIEW_CORNER_RADIUS;
 

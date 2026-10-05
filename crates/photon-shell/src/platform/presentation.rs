@@ -213,14 +213,19 @@ impl PresentationRuntime {
 
     pub(super) fn activate(&self) -> anyhow::Result<()> {
         let device = gpui_apple::metal_renderer::MetalRenderer::selected_device();
-        let (event, engine_registry_id) = self
-            .channel
-            .import_shared_event(&self.channel_id, &device)?;
-        *self.consumer_event.lock().unwrap() = Some(event);
-        trace(format_args!(
-            "Metal registry ID match=yes engine={engine_registry_id} gpui_ce={}",
-            device.registry_id()
-        ));
+        match self.channel.import_shared_event(&self.channel_id, &device) {
+            Ok(Some((event, engine_registry_id))) => {
+                *self.consumer_event.lock().unwrap() = Some(event);
+                trace(format_args!(
+                    "Metal registry ID match=yes engine={engine_registry_id} gpui_ce={}",
+                    device.registry_id()
+                ));
+            }
+            Ok(None) => trace(format_args!(
+                "producer shared event unavailable; engine will publish frames after GPU completion"
+            )),
+            Err(error) => return Err(error),
+        }
         Ok(())
     }
 
@@ -378,15 +383,18 @@ impl PresentationRuntime {
             ));
             return None;
         }
-        let Some(event) = self.consumer_event.lock().unwrap().as_ref().cloned() else {
+        let event = self.consumer_event.lock().unwrap().as_ref().cloned();
+        if ready.signal != 0 && event.is_none() {
             self.leases.lock().unwrap().complete(ready.key);
             trace(format_args!(
                 "frame={} gen={} release=queued reason=missing-consumer-event",
                 ready.key.frame, ready.key.generation
             ));
             return None;
-        };
-        if std::env::var_os("PHOTON_VERBOSE").is_some() {
+        }
+        if std::env::var_os("PHOTON_VERBOSE").is_some()
+            && let Some(event) = event.as_ref()
+        {
             let producer_signaled = event.signaled_value();
             trace(format_args!(
                 "frame={} gen={} producer-event signaled={} required={}",
@@ -422,10 +430,14 @@ impl PresentationRuntime {
                 pixel_format: image.get_pixel_format(),
             },
             image,
-            (ready.signal != 0).then_some(MetalSharedEventWait {
-                event,
-                value: ready.signal,
-            }),
+            if ready.signal == 0 {
+                None
+            } else {
+                event.map(|event| MetalSharedEventWait {
+                    event,
+                    value: ready.signal,
+                })
+            },
             {
                 let gpu_activity = gpu_activity.clone();
                 move || {

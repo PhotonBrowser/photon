@@ -1,5 +1,6 @@
 //! GPUI views and window composition.
 
+mod input;
 pub(super) mod theme;
 mod webview;
 mod window;

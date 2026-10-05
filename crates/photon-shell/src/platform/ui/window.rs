@@ -1,8 +1,8 @@
 //! GPUI window bootstrap and top-level browser layout.
 
 use gpui::{
-    Animation, AnimationExt, App, Context, Entity, QuitMode, Render, Transformation, Window, div,
-    prelude::*, px, radians, rgb, svg,
+    Animation, AnimationExt, App, Context, Entity, QuitMode, Render, Subscription, Transformation,
+    Window, div, prelude::*, px, radians, rgb, svg,
 };
 use gpui_platform::application;
 use std::time::Duration;
@@ -14,6 +14,7 @@ use super::theme::metrics;
 
 struct BrowserWindow {
     webview: Entity<PhotonWebView>,
+    _activation_subscription: Option<Subscription>,
 }
 
 impl Render for BrowserWindow {
@@ -113,7 +114,23 @@ pub fn run() {
         cx.activate(true);
         cx.open_window(window_settings::options(cx), |window, cx| {
             window.set_window_title("Photon");
-            cx.new(|_| BrowserWindow { webview })
+            let active = window.is_window_active();
+            let _ = webview.update(cx, |view, _| view.session.set_focus(active));
+            cx.new(|cx| {
+                let activation_subscription = cx.observe_window_activation(
+                    window,
+                    |this: &mut BrowserWindow, window: &mut Window, cx: &mut Context<BrowserWindow>| {
+                        let active = window.is_window_active();
+                        let _ = this
+                            .webview
+                            .update(cx, |view, _| view.session.set_focus(active));
+                    },
+                );
+                BrowserWindow {
+                    webview,
+                    _activation_subscription: Some(activation_subscription),
+                }
+            })
         })
         .expect("open GPUI-CE Photon window");
     });

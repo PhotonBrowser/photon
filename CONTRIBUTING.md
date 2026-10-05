@@ -12,7 +12,7 @@ Run `./photon setup` after cloning. Use the repository entry point for everyday 
 
 Pass `--verbose` to `check`, `build`, or `run` to see underlying tool output. Keep generated output under `build/` and `target/`.
 
-The native Rust application uses GPUI-CE, and framework-independent browser state belongs in `crates/photon-core`. Engine behavior belongs in the separate `PhotonBrowser/photon-engine` repository, pinned at `Engine/` as a submodule.
+The runnable `crates/photon-app` package delegates to the `crates/photon-shell` library, which owns GPUI-CE and Photon-specific native shell integration. Framework-independent browser state belongs in `crates/photon-core`. Engine behavior belongs in the separate `PhotonBrowser/photon-engine` repository, pinned at `Engine/` as a submodule.
 
 `vendor/gpui-ce` is the pinned `PhotonBrowser/gpui-ce` submodule. Keep generic framework changes there and Photon-specific behavior in this repository.
 

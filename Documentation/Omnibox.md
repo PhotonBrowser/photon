@@ -46,7 +46,7 @@ Enter.
 
 ## Who calls it
 
-- `crates/photon-app` calls `photon_omnibox::resolve` in
+- `crates/photon-shell` calls `photon_omnibox::resolve` in
   `EngineSession::navigate`, the one place the shell asks the engine to open
   something. The `<photon-webview url="…">` prop therefore takes typed text, and
   the field and the engine cannot disagree about what Enter opened.
