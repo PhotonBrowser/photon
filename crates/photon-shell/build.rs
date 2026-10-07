@@ -28,11 +28,14 @@ fn main() {
             out.join("include")
         })
         .compile("photon_embedder_bridge_direct");
-    println!(
-        "cargo:rerun-if-changed={}",
-        root.join("native/embedder/PhotonEmbedderBridge.cpp")
-            .display()
-    );
+    for source in [
+        "native/embedder/PhotonEmbedderBridge.cpp",
+        "native/embedder/PhotonEmbedderBridge.h",
+        "native/embedder/ReducedMotionObserver.mm",
+        "native/presentation/PhotonPresentationXpc.m",
+    ] {
+        println!("cargo:rerun-if-changed={}", root.join(source).display());
+    }
     println!(
         "cargo:rustc-link-search=native={}",
         engine_build.join("lib64").display()
@@ -46,11 +49,18 @@ fn main() {
     println!("cargo:rustc-link-lib=dylib=lagom-photonembedder");
     if cfg!(target_os = "macos") {
         cc::Build::new()
+            .cpp(true)
+            .file(root.join("native/embedder/ReducedMotionObserver.mm"))
+            .flag("-fobjc-arc")
+            .flag("-fblocks")
+            .include(root.join("native/embedder"))
+            .compile("photon_reduced_motion_observer");
+        cc::Build::new()
             .file(root.join("native/presentation/PhotonPresentationXpc.m"))
             .flag("-fobjc-arc")
             .flag("-fblocks")
             .compile("photon_presentation_xpc_direct");
-        for framework in ["Foundation", "Metal", "CoreFoundation"] {
+        for framework in ["AppKit", "Foundation", "Metal", "CoreFoundation"] {
             println!("cargo:rustc-link-lib=framework={framework}");
         }
     }

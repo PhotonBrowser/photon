@@ -13,6 +13,7 @@ using PhotonStateCallback = void (*)(void *, char const *, char const *, bool,
 using PhotonErrorCallback = void (*)(void *, char const *);
 using PhotonCursorCallback = void (*)(void *, int);
 #if defined(__APPLE__)
+using PhotonReducedMotionChangedCallback = void (*)(void *, bool);
 using PhotonNativeReleaseDrainCallback = void (*)(void*);
 using PhotonNativeBackingCallback = bool (*)(void *, uint64_t, uint64_t, uint32_t,
                                              uint32_t, uint32_t, uint32_t);
@@ -49,6 +50,8 @@ bool photon_view_set_native_metal_presentation(void *view, bool enabled);
 #endif
 void photon_view_navigate(void *view, char const *url);
 void photon_view_set_focus(void *view, bool focused);
+void photon_runtime_set_system_reduced_motion_preference(void *runtime,
+                                                         bool reduce_motion);
 void photon_view_pointer(void *view, int kind, double x, double y, int button,
                          uint8_t buttons, bool shift, bool control, bool alt,
                          bool meta, double wheel_x, double wheel_y,
@@ -58,4 +61,9 @@ void photon_view_key(void *view, uint16_t key, bool pressed,
                      bool meta, bool repeat, bool insert_text);
 void photon_view_shutdown(void *view);
 void photon_view_destroy(void *view);
+#if defined(__APPLE__)
+void *photon_reduced_motion_observer_create(
+    void *callback_data, PhotonReducedMotionChangedCallback callback);
+void photon_reduced_motion_observer_destroy(void *observer);
+#endif
 }

@@ -51,6 +51,10 @@ pub(super) mod embedder {
         ) -> *mut c_void;
         pub fn photon_view_resize(view: *mut c_void, width: i32, height: i32, dpr: f64);
         pub fn photon_view_set_focus(view: *mut c_void, focused: bool);
+        pub fn photon_runtime_set_system_reduced_motion_preference(
+            runtime: *mut c_void,
+            reduce_motion: bool,
+        );
         pub fn photon_view_pointer(
             view: *mut c_void,
             kind: i32,
@@ -87,6 +91,11 @@ pub(super) mod embedder {
             frame: u64,
         );
         pub fn photon_view_set_native_metal_presentation(view: *mut c_void, enabled: bool) -> bool;
+        pub fn photon_reduced_motion_observer_create(
+            callback_data: *mut c_void,
+            callback: Option<unsafe extern "C" fn(*mut c_void, bool)>,
+        ) -> *mut c_void;
+        pub fn photon_reduced_motion_observer_destroy(observer: *mut c_void);
         pub fn photon_view_navigate(view: *mut c_void, url: *const c_char);
         pub fn photon_view_shutdown(view: *mut c_void);
         pub fn photon_view_destroy(view: *mut c_void);

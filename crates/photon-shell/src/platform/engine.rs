@@ -96,6 +96,7 @@ fn deliver_pending_releases(callbacks: &CallbackState) {
 pub(super) struct EngineSession {
     runtime: *mut c_void,
     view: *mut c_void,
+    reduced_motion_observer: *mut c_void,
     startup_url: Option<CString>,
     callbacks: Box<CallbackState>,
     pub(super) presentation: Arc<PresentationRuntime>,
@@ -171,6 +172,12 @@ impl EngineSession {
             anyhow::bail!("Photon Engine could not create a webpage view");
         }
         callbacks.engine_view.store(view, Ordering::Release);
+        let reduced_motion_observer = unsafe {
+            embedder::photon_reduced_motion_observer_create(
+                runtime,
+                Some(on_system_reduced_motion_changed),
+            )
+        };
         unsafe {
             embedder::photon_runtime_set_native_release_drain_callback(
                 runtime,
@@ -181,6 +188,7 @@ impl EngineSession {
         let session = Self {
             runtime,
             view,
+            reduced_motion_observer,
             startup_url: Some(startup_url),
             callbacks,
             presentation: presentation.clone(),
@@ -340,6 +348,10 @@ impl EngineSession {
             .release_scheduler
             .store(std::ptr::null_mut(), Ordering::Release);
         unsafe {
+            if !self.reduced_motion_observer.is_null() {
+                embedder::photon_reduced_motion_observer_destroy(self.reduced_motion_observer);
+                self.reduced_motion_observer = std::ptr::null_mut();
+            }
             if !self.runtime.is_null() {
                 embedder::photon_runtime_set_native_release_drain_callback(
                     self.runtime,
@@ -361,6 +373,14 @@ impl EngineSession {
             }
         }
         self.finished = true;
+    }
+}
+
+unsafe extern "C" fn on_system_reduced_motion_changed(runtime: *mut c_void, reduce_motion: bool) {
+    if !runtime.is_null() {
+        unsafe {
+            embedder::photon_runtime_set_system_reduced_motion_preference(runtime, reduce_motion)
+        };
     }
 }
 

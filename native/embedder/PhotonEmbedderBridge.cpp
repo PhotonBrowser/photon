@@ -155,6 +155,14 @@ extern "C" void photon_view_set_focus(void *view, bool focused) {
     static_cast<ViewHandle *>(view)->view->set_focus(focused);
 }
 
+extern "C" void
+photon_runtime_set_system_reduced_motion_preference(void *runtime,
+                                                    bool reduce_motion) {
+  if (runtime)
+    static_cast<RuntimeHandle *>(runtime)
+        ->runtime->set_system_reduced_motion_preference(reduce_motion);
+}
+
 extern "C" void photon_view_pointer(void *view, int kind, double x, double y,
                                     int button, uint8_t buttons, bool shift,
                                     bool control, bool alt, bool meta,
