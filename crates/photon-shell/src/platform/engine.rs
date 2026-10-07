@@ -1,7 +1,7 @@
 //! Engine runtime, its C callbacks, and input forwarding.
 
 use anyhow::Context as _;
-use gpui::{AsyncApp, WeakEntity};
+use gpui::{AsyncApp, Context, WeakEntity};
 use mach2::port::mach_port_t;
 use std::{
     ffi::{CStr, CString, c_char, c_void},
@@ -35,21 +35,27 @@ impl CallbackState {
     }
 
     fn request_redraw(&self) {
-        let Some(wake) = self.ui_wake.lock().unwrap().clone() else {
-            return;
-        };
-        wake.app
-            .spawn(async move |cx| {
-                let Some(webview) = wake.webview.upgrade() else {
-                    return;
-                };
-                webview.update(cx, |view, cx| view.present_latest(cx));
-                cx.refresh();
-            })
-            .detach();
+        self.update_webview(|view, cx| view.present_latest(cx));
     }
 
-    fn set_page_loading(&self, loading: bool) {
+    fn set_page_state(&self, url: Option<String>, loading: bool) {
+        self.update_webview(move |view, cx| {
+            let url_changed = url.as_ref().is_some_and(|url| *url != view.url);
+            if url_changed || view.loading != loading {
+                if let Some(url) = url {
+                    view.url = url;
+                }
+                view.loading = loading;
+                cx.notify();
+            }
+        });
+    }
+
+    /// Runs `update` on the UI thread against the live WebView, then refreshes the window.
+    fn update_webview(
+        &self,
+        update: impl FnOnce(&mut PhotonWebView, &mut Context<PhotonWebView>) + 'static,
+    ) {
         let Some(wake) = self.ui_wake.lock().unwrap().clone() else {
             return;
         };
@@ -58,12 +64,7 @@ impl CallbackState {
                 let Some(webview) = wake.webview.upgrade() else {
                     return;
                 };
-                webview.update(cx, |view, cx| {
-                    if view.loading != loading {
-                        view.loading = loading;
-                        cx.notify();
-                    }
-                });
+                webview.update(cx, update);
                 cx.refresh();
             })
             .detach();
@@ -110,11 +111,7 @@ pub(super) struct EngineSession {
 impl EngineSession {
     pub(super) fn create(width: i32, height: i32, dpr: f64) -> anyhow::Result<Self> {
         let url = std::env::var("PHOTON_URL").unwrap_or_else(|_| "https://example.com/".into());
-        let url = photon_omnibox::resolve(&url)
-            .map_err(|error| anyhow::anyhow!("invalid startup URL: {error:?}"))?
-            .url()
-            .to_owned();
-        let startup_url = CString::new(url)?;
+        let startup_url = resolve_address(&url).context("invalid startup URL")?;
         let helper = std::env::var("PHOTON_HELPER_DIRECTORY")
             .context("PHOTON_HELPER_DIRECTORY is not set")?;
         let helper = CString::new(helper)?;
@@ -213,14 +210,21 @@ impl EngineSession {
     }
 
     pub(super) fn navigate_startup(&mut self) {
-        let Some(url) = self.startup_url.take() else {
-            return;
-        };
+        if let Some(url) = self.startup_url.take() {
+            self.load(&url);
+        }
+    }
+
+    /// Opens typed omnibox text as an address or a search.
+    pub(super) fn navigate(&mut self, input: &str) -> anyhow::Result<()> {
+        let url = resolve_address(input)?;
+        self.load(&url);
+        Ok(())
+    }
+
+    fn load(&mut self, url: &CStr) {
         unsafe { embedder::photon_view_navigate(self.view, url.as_ptr()) };
-        trace(format_args!(
-            "Engine session startup navigation; URL={}",
-            url.to_string_lossy()
-        ));
+        trace(format_args!("Engine navigation; URL={}", url.to_string_lossy()));
     }
 
     pub(super) fn set_ui_wake(&self, wake: UiWake) {
@@ -384,6 +388,12 @@ unsafe extern "C" fn on_system_reduced_motion_changed(runtime: *mut c_void, redu
     }
 }
 
+fn resolve_address(input: &str) -> anyhow::Result<CString> {
+    let target = photon_omnibox::resolve(input)
+        .map_err(|error| anyhow::anyhow!("cannot open {input:?}: {error:?}"))?;
+    Ok(CString::new(target.url())?)
+}
+
 impl Drop for EngineSession {
     fn drop(&mut self) {
         if !self.finished {
@@ -401,22 +411,19 @@ unsafe extern "C" fn on_engine_state(
     _: bool,
     _: bool,
 ) {
+    let url = (!url.is_null())
+        .then(|| unsafe { CStr::from_ptr(url) }.to_string_lossy().into_owned());
+    if !loading && let Some(url) = url.as_deref() {
+        let title = if title.is_null() {
+            "<null>".into()
+        } else {
+            unsafe { CStr::from_ptr(title) }.to_string_lossy()
+        };
+        trace(format_args!("page-state url={url} title={title}"));
+    }
     if !context.is_null() {
         let callbacks = unsafe { &*context.cast::<CallbackState>() };
-        callbacks.set_page_loading(loading);
-    }
-    if !loading && !url.is_null() {
-        let title = if title.is_null() {
-            "<null>".to_owned()
-        } else {
-            unsafe { CStr::from_ptr(title) }
-                .to_string_lossy()
-                .into_owned()
-        };
-        trace(format_args!(
-            "page-state url={} title={title}",
-            unsafe { CStr::from_ptr(url) }.to_string_lossy(),
-        ));
+        callbacks.set_page_state(url, loading);
     }
 }
 unsafe extern "C" fn on_engine_frame(

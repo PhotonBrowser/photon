@@ -2,9 +2,8 @@
 
 use super::super::engine::EngineSession;
 use super::super::presentation::{PresentedSurface, Release};
-use super::super::window_settings::WEBVIEW_CORNER_RADIUS;
 use super::input::WebViewInput;
-use super::theme::colors;
+use super::theme::{colors, metrics::WEBVIEW_CORNER_RADIUS};
 use gpui::{
     Context, FocusHandle, InteractiveElement, KeyDownEvent, KeyUpEvent, ObjectFit, Render,
     Subscription, SurfaceSource, Window, div, prelude::*, px, surface,
@@ -18,12 +17,14 @@ static MOUSE_MOVE_TRACE_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 pub(in crate::platform) struct PhotonWebView {
     pub(super) external: Option<PresentedSurface>,
+    pub(in crate::platform) url: String,
     pub(in crate::platform) loading: bool,
     pub(super) session: EngineSession,
     pub(super) focus_handle: FocusHandle,
     pub(super) last_viewport: Option<(i32, i32, u32)>,
     input: WebViewInput,
     pub(super) _quit_subscription: Option<Subscription>,
+    focus_subscriptions: Vec<Subscription>,
 }
 
 impl Drop for PhotonWebView {
@@ -92,13 +93,36 @@ impl PhotonWebView {
         let height = 760;
         Ok(Self {
             external: None,
+            url: String::new(),
             loading: false,
             session: EngineSession::create(width, height, 1.0)?,
             focus_handle: cx.focus_handle(),
             last_viewport: None,
             input: WebViewInput::default(),
             _quit_subscription: None,
+            focus_subscriptions: Vec::new(),
         })
+    }
+
+    /// Keeps Engine page focus in step with GPUI focus and window activation.
+    pub(super) fn track_engine_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.focus_subscriptions = vec![
+            cx.on_focus(&self.focus_handle, window, |this, window, _| {
+                this.sync_engine_focus(window)
+            }),
+            cx.on_blur(&self.focus_handle, window, |this, window, _| {
+                this.sync_engine_focus(window)
+            }),
+            cx.observe_window_activation(window, |this, window, _| {
+                this.sync_engine_focus(window)
+            }),
+        ];
+        self.sync_engine_focus(window);
+    }
+
+    fn sync_engine_focus(&mut self, window: &Window) {
+        self.session
+            .set_focus(window.is_window_active() && self.focus_handle.is_focused(window));
     }
 }
 
@@ -136,7 +160,6 @@ impl Render for PhotonWebView {
                 weak_mouse_down
                     .update(app, |this, cx| {
                         window.focus(&this.focus_handle, cx);
-                        this.session.set_focus(true);
                         this.input.mouse_down(&mut this.session, event);
                     })
                     .ok();

@@ -2138,6 +2138,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "gpui_ce_elements"
+version = "0.1.0"
+dependencies = [
+ "gpui-ce",
+ "palette",
+ "smallvec",
+ "unicode-segmentation",
+]
+
+[[package]]
 name = "gpui_ce_linux"
 version = "0.1.0"
 dependencies = [
@@ -4212,6 +4222,7 @@ dependencies = [
  "foreign-types",
  "gpui-ce",
  "gpui_ce_apple",
+ "gpui_ce_elements",
  "gpui_ce_platform",
  "io-surface",
  "mach2",

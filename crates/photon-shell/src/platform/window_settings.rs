@@ -5,8 +5,7 @@ use gpui::{
     size,
 };
 
-pub(super) const WEBVIEW_CORNER_RADIUS: f32 =
-    crate::platform::ui::theme::metrics::WEBVIEW_CORNER_RADIUS;
+use crate::platform::ui::theme::metrics;
 
 /// Select with PHOTON_WINDOW_BACKGROUND=opaque|blurred|liquid-glass.
 /// The system controls the strength of both native materials.
@@ -33,7 +32,10 @@ pub(super) fn options(cx: &App) -> WindowOptions {
         .titlebar(Some(
             TitlebarOptions::default()
                 .appears_transparent(true)
-                .traffic_light_position(point(px(12.0), px(10.0))),
+                .traffic_light_position(point(
+                    px(metrics::WINDOW_CONTROLS_ORIGIN.0),
+                    px(metrics::WINDOW_CONTROLS_ORIGIN.1),
+                )),
         ))
         .macos_window_background(background())
 }

@@ -9,6 +9,7 @@ build = "build.rs"
 gpui = { package = "gpui-ce", path = "../../vendor/gpui-ce/crates/gpui", default-features = false }
 gpui_platform = { package = "gpui_ce_platform", path = "../../vendor/gpui-ce/crates/gpui_platform" }
 gpui_apple = { package = "gpui_ce_apple", path = "../../vendor/gpui-ce/crates/gpui_apple" }
+gpui_elements = { package = "gpui_ce_elements", path = "../../vendor/gpui-ce/crates/gpui_elements" }
 photon-omnibox = { path = "../photon-omnibox" }
 anyhow = "1"
 
