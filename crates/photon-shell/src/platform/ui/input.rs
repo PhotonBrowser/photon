@@ -140,8 +140,9 @@ impl WebViewInput {
             keyboard_key(&event.keystroke.key, event.keystroke.key_char.as_deref());
         let modifiers = event.keystroke.modifiers;
         let insert_text = code_point != 0 && !modifiers.control && !modifiers.platform;
+        let should_consume = insert_text || event.keystroke.key_char.is_none();
         session.send_key(key, true, code_point, modifiers, event.is_held, insert_text);
-        insert_text
+        should_consume
     }
 
     pub(super) fn key_up(&mut self, session: &mut EngineSession, event: &KeyUpEvent) {

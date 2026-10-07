@@ -183,11 +183,11 @@ impl Render for PhotonWebView {
                 this.input.scroll(&mut this.session, event);
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                let insert_text = this.input.key_down(&mut this.session, event);
-                // The native AppKit input context can replay printable keys through
-                // doCommandBySelector. The browser owns page keystrokes, so consume
-                // printable input here after forwarding it once to the engine.
-                if insert_text {
+                let should_consume = this.input.key_down(&mut this.session, event);
+                // AppKit routes printable input and non-character commands through its input
+                // context. Consume them after forwarding so commands such as Backspace are
+                // not replayed.
+                if should_consume {
                     cx.stop_propagation();
                 }
             }))
