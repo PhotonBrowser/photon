@@ -38,6 +38,9 @@ pub(super) fn options(cx: &App) -> WindowOptions {
                 )),
         ))
         .macos_window_background(background())
+        // The titlebar hosts interactive UI, so the shell moves the window itself
+        // from empty titlebar space instead of letting AppKit drag from anywhere in it.
+        .app_owns_titlebar_drag(true)
 }
 
 #[cfg(test)]

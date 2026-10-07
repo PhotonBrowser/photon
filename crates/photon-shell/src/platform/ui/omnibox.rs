@@ -1,7 +1,7 @@
 //! The titlebar omnibox: shows the page address and opens typed addresses or searches.
 
 use gpui::{
-    Context, Entity, Focusable, Render, Subscription, Window, div, prelude::*, px, rgb,
+    Context, Entity, Focusable, MouseButton, Render, Subscription, Window, div, prelude::*, px, rgb,
     rgb_to_hsla, rgba,
 };
 use gpui_elements::editable_text::{
@@ -115,6 +115,15 @@ impl Render for Omnibox {
             .bg(rgba(field))
             .text_size(px(13.0))
             .text_color(rgb(palette.text))
+            // Clicks on the field's padding or icon edit the address rather than
+            // falling through to the titlebar and moving the window.
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, window, cx| {
+                    cx.stop_propagation();
+                    window.focus(&this.input.focus_handle(cx), cx);
+                }),
+            )
             .capture_action(cx.listener(Self::submit))
             .capture_action(cx.listener(Self::cancel))
             .child(if loading {
