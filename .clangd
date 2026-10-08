@@ -1,0 +1,9 @@
+If:
+  PathMatch: native/embedder/PhotonEmbedderBridge\.(cpp|h)
+CompileFlags:
+  Compiler: clang++
+  Add:
+    - -std=c++20
+    - -I../../Engine/Libraries/LibPhotonEmbedder/include
+    - -I../../Engine/Libraries
+    - -I../../build/engine-debug/Libraries
