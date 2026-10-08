@@ -14,7 +14,7 @@ use std::{
     ffi::c_void,
     sync::{
         Arc, Condvar, Mutex,
-        atomic::{AtomicBool, AtomicPtr, Ordering},
+        atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering},
     },
 };
 
@@ -166,15 +166,48 @@ impl GpuActivity {
     }
 }
 
+/// How a presented frame is being read by GPUI-CE command buffers.
+#[derive(Default)]
+pub(super) struct Sampling {
+    in_flight: AtomicUsize,
+    /// Set once a command buffer sampling a newer frame has been submitted, so
+    /// no command buffer submitted afterwards samples this one.
+    superseded: AtomicBool,
+}
+
+/// A frame no longer displayed, released to Engine once nothing samples it.
+pub(super) struct RetiredSurface {
+    pub(super) key: FrameKey,
+    sampling: Arc<Sampling>,
+}
+
 pub(super) struct PresentedSurface {
     pub(super) surface: ExternalMetalSurface,
     pub(super) key: FrameKey,
-    pub(super) releases_after_completion: Arc<Mutex<Vec<Release>>>,
+    sampling: Arc<Sampling>,
+    /// Frames this one replaced; they are superseded when it is first submitted.
+    pub(super) retired_until_submitted: Arc<Mutex<Vec<RetiredSurface>>>,
+}
+
+impl PresentedSurface {
+    pub(super) fn retire(&self) -> RetiredSurface {
+        RetiredSurface {
+            key: self.key,
+            sampling: self.sampling.clone(),
+        }
+    }
 }
 
 pub(super) struct Backing {
     image: CVPixelBuffer,
     iosurface_id: u32,
+}
+
+fn schedule_release_drain(release_scheduler: &AtomicPtr<c_void>) {
+    let runtime = release_scheduler.load(Ordering::Acquire);
+    if !runtime.is_null() {
+        unsafe { embedder::photon_runtime_schedule_native_release_drain(runtime) };
+    }
 }
 
 pub(super) struct PresentationRuntime {
@@ -241,10 +274,7 @@ impl PresentationRuntime {
     }
 
     pub(super) fn schedule_release_drain(&self) {
-        let runtime = self.release_scheduler.load(Ordering::Acquire);
-        if !runtime.is_null() {
-            unsafe { embedder::photon_runtime_schedule_native_release_drain(runtime) };
-        }
+        schedule_release_drain(&self.release_scheduler);
     }
 
     pub(super) fn register_backing(
@@ -406,9 +436,13 @@ impl PresentationRuntime {
         let presented_leases = self.leases.clone();
         let key = ready.key;
         let image = backing.image.clone();
-        let releases_after_completion = Arc::new(Mutex::new(Vec::<Release>::new()));
-        let completion_releases = releases_after_completion.clone();
+        let sampling = Arc::new(Sampling::default());
+        let retired_until_submitted = Arc::new(Mutex::new(Vec::<RetiredSurface>::new()));
+        let submitted_retirements = retired_until_submitted.clone();
+        let submitted_sampling = sampling.clone();
+        let completed_sampling = sampling.clone();
         let release_scheduler = self.release_scheduler.clone();
+        let submitted_release_scheduler = self.release_scheduler.clone();
         let surface = ExternalMetalSurface::new(
             ExternalSurfaceDescriptor {
                 identity: ExternalTextureIdentity {
@@ -440,9 +474,31 @@ impl PresentationRuntime {
             },
             {
                 let gpu_activity = gpu_activity.clone();
+                let leases = leases.clone();
+                // Command buffers on one queue are submitted in order, so once this
+                // frame is submitted, no later command buffer samples the frames it
+                // replaced. Each is released when its own last sampling completes,
+                // without waiting for this frame's GPU work.
                 move || {
                     presented_leases.lock().unwrap().present(key);
                     gpu_activity.submitted();
+                    submitted_sampling.in_flight.fetch_add(1, Ordering::SeqCst);
+                    let retired = std::mem::take(&mut *submitted_retirements.lock().unwrap());
+                    let mut released_any = false;
+                    for retired in retired {
+                        retired.sampling.superseded.store(true, Ordering::SeqCst);
+                        if retired.sampling.in_flight.load(Ordering::SeqCst) == 0 {
+                            leases.lock().unwrap().complete(retired.key);
+                            released_any = true;
+                            trace(format_args!(
+                                "frame={} gen={} release=queued superseded-by={}",
+                                retired.key.frame, retired.key.generation, key.frame
+                            ));
+                        }
+                    }
+                    if released_any {
+                        schedule_release_drain(&submitted_release_scheduler);
+                    }
                 }
             },
             move || {
@@ -451,17 +507,17 @@ impl PresentationRuntime {
                     "frame={} gen={} command-buffer=completed",
                     key.frame, key.generation
                 ));
-                let retired = std::mem::take(&mut *completion_releases.lock().unwrap());
-                for release in retired {
-                    leases.lock().unwrap().complete(release.key);
+                // The ledger ignores a second completion if the submit side also saw
+                // this frame idle after superseding it.
+                if completed_sampling.in_flight.fetch_sub(1, Ordering::SeqCst) == 1
+                    && completed_sampling.superseded.load(Ordering::SeqCst)
+                {
+                    leases.lock().unwrap().complete(key);
                     trace(format_args!(
-                        "frame={} gen={} release=queued after-present={}",
-                        release.key.frame, release.key.generation, key.frame
+                        "frame={} gen={} release=queued after-last-sampling",
+                        key.frame, key.generation
                     ));
-                }
-                let runtime = release_scheduler.load(Ordering::Acquire);
-                if !runtime.is_null() {
-                    unsafe { embedder::photon_runtime_schedule_native_release_drain(runtime) };
+                    schedule_release_drain(&release_scheduler);
                 }
             },
         );
@@ -472,7 +528,8 @@ impl PresentationRuntime {
         Some(PresentedSurface {
             surface,
             key,
-            releases_after_completion,
+            sampling,
+            retired_until_submitted,
         })
     }
 }

@@ -15,7 +15,9 @@ use std::{
     time::Instant,
 };
 
-use super::presentation::{GpuActivity, LeaseLedger, MachPortGuard, PresentationRuntime, Release};
+use super::presentation::{
+    GpuActivity, LeaseLedger, MachPortGuard, PresentationRuntime, RetiredSurface,
+};
 use super::ui::PhotonWebView;
 use super::{ffi::embedder, trace};
 
@@ -279,7 +281,8 @@ pub(super) struct EngineSession {
     pub(super) presentation: Arc<PresentationRuntime>,
     leases: Arc<Mutex<LeaseLedger>>,
     pub(super) gpu_activity: Arc<GpuActivity>,
-    final_surface_releases: Option<Arc<Mutex<Vec<Release>>>>,
+    final_surface_releases: Option<Arc<Mutex<Vec<RetiredSurface>>>>,
+    display: Option<u64>,
     pub(super) shutdown_started: bool,
     finished: bool,
 }
@@ -358,6 +361,7 @@ impl EngineSession {
             leases,
             gpu_activity,
             final_surface_releases: None,
+            display: None,
             shutdown_started: false,
             finished: false,
         };
@@ -431,6 +435,24 @@ impl EngineSession {
         unsafe { embedder::photon_view_set_visible(self.view, visible) }
     }
 
+    /// Re-reads the display's refresh rate the next time the view is laid out.
+    pub(super) fn forget_display(&mut self) {
+        self.display = None;
+    }
+
+    /// Paces Engine rendering to the display that shows this view.
+    pub(super) fn set_display(&mut self, display: u64) {
+        if self.display == Some(display) {
+            return;
+        }
+        self.display = Some(display);
+        let refresh_rate = super::display::refresh_rate(display);
+        trace(format_args!(
+            "display={display} refresh-rate={refresh_rate:.2}Hz"
+        ));
+        unsafe { embedder::photon_view_set_display_metadata(self.view, display, refresh_rate) }
+    }
+
     pub(super) fn set_diagnostics_enabled(&mut self, enabled: bool) {
         self.callbacks.set_diagnostics_enabled(enabled);
         unsafe { embedder::photon_view_set_performance_monitor_enabled(self.view, enabled) }
@@ -497,7 +519,10 @@ impl EngineSession {
         deliver_pending_releases(&self.callbacks);
     }
 
-    pub(super) fn begin_shutdown(&mut self, final_surface_releases: Arc<Mutex<Vec<Release>>>) {
+    pub(super) fn begin_shutdown(
+        &mut self,
+        final_surface_releases: Arc<Mutex<Vec<RetiredSurface>>>,
+    ) {
         if self.shutdown_started {
             return;
         }

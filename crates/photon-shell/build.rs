@@ -32,6 +32,7 @@ fn main() {
         "native/embedder/PhotonEmbedderBridge.cpp",
         "native/embedder/PhotonEmbedderBridge.h",
         "native/embedder/ReducedMotionObserver.mm",
+        "native/embedder/WindowObserver.mm",
         "native/presentation/PhotonPresentationXpc.m",
     ] {
         println!("cargo:rerun-if-changed={}", root.join(source).display());
@@ -51,6 +52,7 @@ fn main() {
         cc::Build::new()
             .cpp(true)
             .file(root.join("native/embedder/ReducedMotionObserver.mm"))
+            .file(root.join("native/embedder/WindowObserver.mm"))
             .flag("-fobjc-arc")
             .flag("-fblocks")
             .include(root.join("native/embedder"))

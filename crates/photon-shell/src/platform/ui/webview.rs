@@ -1,7 +1,7 @@
 //! The page surface and browser input forwarding.
 
 use super::super::engine::{EngineRuntime, EngineSession};
-use super::super::presentation::{PresentedSurface, Release};
+use super::super::presentation::PresentedSurface;
 use super::debug_overlay::debug_overlay;
 use super::input::WebViewInput;
 use super::theme::{Palette, ThemePreference, metrics::WEBVIEW_CORNER_RADIUS};
@@ -46,11 +46,11 @@ impl PhotonWebView {
         let Some(presented) = self.session.presentation.take_surface() else {
             return;
         };
-        if let Some(retired) = self.external.take() {
-            let pending = std::mem::take(&mut *retired.releases_after_completion.lock().unwrap());
-            let mut next_releases = presented.releases_after_completion.lock().unwrap();
-            next_releases.push(Release { key: retired.key });
-            next_releases.extend(pending);
+        if let Some(replaced) = self.external.take() {
+            let pending = std::mem::take(&mut *replaced.retired_until_submitted.lock().unwrap());
+            let mut retired = presented.retired_until_submitted.lock().unwrap();
+            retired.push(replaced.retire());
+            retired.extend(pending);
         }
         self.external = Some(presented);
         cx.notify();
@@ -61,10 +61,10 @@ impl PhotonWebView {
             return;
         }
         let final_releases = if let Some(presented) = self.external.as_ref() {
-            let releases = presented.releases_after_completion.clone();
+            let releases = presented.retired_until_submitted.clone();
             let mut pending = releases.lock().unwrap();
-            if !pending.iter().any(|release| release.key == presented.key) {
-                pending.push(Release { key: presented.key });
+            if !pending.iter().any(|retired| retired.key == presented.key) {
+                pending.push(presented.retire());
             }
             drop(pending);
             releases
@@ -186,7 +186,7 @@ impl Render for PhotonWebView {
             .relative()
             .id("photon-webview-viewport")
             .on_prepaint(
-                cx.listener(|this, event: &gpui::InteractivityPrepaint, window, _| {
+                cx.listener(|this, event: &gpui::InteractivityPrepaint, window, cx| {
                     // Resize from the laid-out WebView bounds, not the native window
                     // bounds minus assumed titlebar/padding values. During live resize,
                     // those assumptions can differ by a frame and offset the page.
@@ -199,6 +199,11 @@ impl Render for PhotonWebView {
                         f32::from(event.bounds.size.height),
                         window.scale_factor(),
                     );
+                    // Follow the window across displays so Engine paces to the
+                    // one it is on rather than a 60 Hz default.
+                    if let Some(display) = window.display(cx) {
+                        this.session.set_display(display.id().into());
+                    }
                 }),
             )
             .track_focus(&self.focus_handle)

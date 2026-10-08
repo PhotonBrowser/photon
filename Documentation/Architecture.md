@@ -59,6 +59,8 @@ crates/
 │           ├── ffi.rs                # Rust declarations for the native C ABI
 │           ├── engine.rs             # Engine runtime/session, callbacks, input forwarding
 │           ├── presentation.rs       # IOSurface frames, GPU completion, lease tracking
+│           ├── display.rs            # Display refresh rate for Engine frame pacing
+│           ├── window_observer.rs    # Window occlusion and display-change notifications
 │           ├── presentation_xpc.rs   # XPC broker client and descriptor transport
 │           └── ui/
 │               ├── window.rs         # Top-level window layout and app bootstrap
@@ -103,6 +105,7 @@ crates/
 | Keyboard, pointer, or scroll forwarding | [`platform/ui/input.rs`](../crates/photon-shell/src/platform/ui/input.rs) |
 | Engine session or callback behavior | [`platform/engine.rs`](../crates/photon-shell/src/platform/engine.rs) |
 | Frame acceptance, presentation order, or release lifetime | [`platform/presentation.rs`](../crates/photon-shell/src/platform/presentation.rs) |
+| Engine frame pacing to the display, or pausing Engine while the window is occluded | [`platform/display.rs`](../crates/photon-shell/src/platform/display.rs), [`platform/window_observer.rs`](../crates/photon-shell/src/platform/window_observer.rs), then [`platform/ui/window.rs`](../crates/photon-shell/src/platform/ui/window.rs) |
 | Rust declarations for native embedder functions | [`platform/ffi.rs`](../crates/photon-shell/src/platform/ffi.rs) and [`native/embedder/PhotonEmbedderBridge.h`](../native/embedder/PhotonEmbedderBridge.h) |
 | Browser state and command rules | [`photon-core/src/state.rs`](../crates/photon-core/src/state.rs) |
 | C API exposed to the native bridge | [`photon-core/src/api.rs`](../crates/photon-core/src/api.rs) |

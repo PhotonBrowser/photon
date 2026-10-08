@@ -26,6 +26,9 @@ struct PhotonPerformanceStats {
 using PhotonPerformanceCallback = void (*)(void *, PhotonPerformanceStats const *);
 #if defined(__APPLE__)
 using PhotonReducedMotionChangedCallback = void (*)(void *, bool);
+// Called with whether the window is visible and whether its display or the
+// display's parameters (such as refresh rate) may have changed.
+using PhotonWindowChangedCallback = void (*)(void *, bool, bool);
 using PhotonNativeReleaseDrainCallback = void (*)(void*);
 using PhotonNativeBackingCallback = bool (*)(void *, uint64_t, uint64_t, uint32_t,
                                              uint32_t, uint32_t, uint32_t);
@@ -59,6 +62,8 @@ void *photon_view_create(void *runtime, int width, int height, double dpr,
 void photon_view_resize(void *view, int width, int height, double dpr);
 void photon_view_set_performance_monitor_enabled(void *view, bool enabled);
 void photon_view_set_visible(void *view, bool visible);
+void photon_view_set_display_metadata(void *view, uint64_t display_id,
+                                      double refresh_rate);
 #if defined(__APPLE__)
 void photon_view_release_native_frame(void *view, uint64_t backing_id,
                                       uint64_t generation, uint64_t frame_id);
@@ -85,5 +90,8 @@ void photon_view_destroy(void *view);
 void *photon_reduced_motion_observer_create(
     void *callback_data, PhotonReducedMotionChangedCallback callback);
 void photon_reduced_motion_observer_destroy(void *observer);
+void *photon_window_observer_create(void *ns_view, void *callback_data,
+                                    PhotonWindowChangedCallback callback);
+void photon_window_observer_destroy(void *observer);
 #endif
 }

@@ -13,6 +13,8 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use super::super::engine::{EngineRuntime, UiWake};
+use super::super::trace;
+use super::super::window_observer::WindowObserver;
 use super::super::window_settings;
 use super::PhotonWebView;
 use super::crash_alert::crash_alert;
@@ -34,7 +36,11 @@ struct BrowserWindow {
     runtime: Rc<EngineRuntime>,
     theme: ThemePreference,
     open_menu: Option<OpenMenu>,
+    /// Whether any part of the window is on screen. Engine renders the active
+    /// tab only while it is, since GPUI-CE stops drawing an occluded window.
+    window_visible: bool,
     _appearance_subscription: Subscription,
+    _window_observer: Option<WindowObserver>,
 }
 
 #[derive(Clone, Copy)]
@@ -46,6 +52,25 @@ enum OpenMenu {
 impl BrowserWindow {
     fn active_webview(&self) -> Entity<PhotonWebView> {
         self.tabs[self.active_tab].clone()
+    }
+
+    fn window_changed(&mut self, visible: bool, display_changed: bool, cx: &mut Context<Self>) {
+        trace(format_args!(
+            "window visible={visible} display-changed={display_changed}"
+        ));
+        if self.window_visible != visible {
+            self.window_visible = visible;
+            self.active_webview()
+                .update(cx, |view, _| view.session.set_visible(visible));
+        }
+        if display_changed {
+            for tab in self.tabs.clone() {
+                tab.update(cx, |view, cx| {
+                    view.session.forget_display();
+                    cx.notify();
+                });
+            }
+        }
     }
 
     fn set_theme(&mut self, appearance: WindowAppearance, cx: &mut Context<Self>) {
@@ -80,8 +105,9 @@ impl BrowserWindow {
         }
         let webview = self.tabs[index].clone();
         let is_blank_tab = webview.read(cx).is_blank_tab();
+        let window_visible = self.window_visible;
         webview.update(cx, |view, cx| {
-            view.session.set_visible(true);
+            view.session.set_visible(window_visible);
             if focus_contents && !is_blank_tab {
                 window.focus(&view.focus_handle, cx);
             }
@@ -565,6 +591,18 @@ fn open_browser_window(
         cx.new(move |cx| {
             let appearance_subscription =
                 cx.observe_window_appearance(window, |_, _, cx| cx.notify());
+            let this = cx.entity().downgrade();
+            let app = cx.to_async();
+            let window_observer = WindowObserver::new(window, move |visible, display_changed| {
+                let this = this.clone();
+                app.spawn(async move |cx| {
+                    this.update(cx, |this: &mut BrowserWindow, cx| {
+                        this.window_changed(visible, display_changed, cx)
+                    })
+                        .ok();
+                })
+                .detach();
+            });
             BrowserWindow {
                 tabs: vec![webview],
                 tab_focus_handles: vec![cx.focus_handle().tab_stop(true)],
@@ -573,7 +611,9 @@ fn open_browser_window(
                 runtime,
                 theme,
                 open_menu: None,
+                window_visible: true,
                 _appearance_subscription: appearance_subscription,
+                _window_observer: window_observer,
             }
         })
     })?;

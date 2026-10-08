@@ -4230,6 +4230,7 @@ dependencies = [
  "objc",
  "photon-core",
  "photon-shortcuts",
+ "raw-window-handle",
 ]
 
 [[package]]

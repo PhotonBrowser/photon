@@ -158,6 +158,14 @@ extern "C" void photon_view_set_visible(void *view, bool visible) {
     static_cast<ViewHandle *>(view)->view->set_visible(visible);
 }
 
+extern "C" void photon_view_set_display_metadata(void *view,
+                                                 uint64_t display_id,
+                                                 double refresh_rate) {
+  if (view)
+    static_cast<ViewHandle *>(view)->view->set_display_metadata(display_id,
+                                                                refresh_rate);
+}
+
 #if defined(__APPLE__)
 extern "C" void photon_view_release_native_frame(void *view,
                                                   uint64_t backing_id,

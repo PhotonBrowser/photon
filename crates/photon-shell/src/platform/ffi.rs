@@ -69,6 +69,11 @@ pub(super) mod embedder {
         pub fn photon_view_resize(view: *mut c_void, width: i32, height: i32, dpr: f64);
         pub fn photon_view_set_performance_monitor_enabled(view: *mut c_void, enabled: bool);
         pub fn photon_view_set_visible(view: *mut c_void, visible: bool);
+        pub fn photon_view_set_display_metadata(
+            view: *mut c_void,
+            display_id: u64,
+            refresh_rate: f64,
+        );
         pub fn photon_view_set_focus(view: *mut c_void, focused: bool);
         pub fn photon_runtime_set_system_reduced_motion_preference(
             runtime: *mut c_void,
@@ -115,6 +120,12 @@ pub(super) mod embedder {
             callback: Option<unsafe extern "C" fn(*mut c_void, bool)>,
         ) -> *mut c_void;
         pub fn photon_reduced_motion_observer_destroy(observer: *mut c_void);
+        pub fn photon_window_observer_create(
+            ns_view: *mut c_void,
+            callback_data: *mut c_void,
+            callback: Option<unsafe extern "C" fn(*mut c_void, bool, bool)>,
+        ) -> *mut c_void;
+        pub fn photon_window_observer_destroy(observer: *mut c_void);
         pub fn photon_view_navigate(view: *mut c_void, url: *const c_char);
         pub fn photon_view_reload(view: *mut c_void);
         pub fn photon_view_stop_loading(view: *mut c_void);
