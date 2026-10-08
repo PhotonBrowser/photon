@@ -7,3 +7,22 @@ CompileFlags:
     - -I../../Engine/Libraries/LibPhotonEmbedder/include
     - -I../../Engine/Libraries
     - -I../../build/engine-debug/Libraries
+---
+If:
+  PathMatch: native/.*\.mm
+CompileFlags:
+  Compiler: clang++
+  Add:
+    - -xobjective-c++
+    - -std=c++20
+    - -fobjc-arc
+    - -fblocks
+---
+If:
+  PathMatch: native/.*\.m
+CompileFlags:
+  Compiler: clang
+  Add:
+    - -xobjective-c
+    - -fobjc-arc
+    - -fblocks
