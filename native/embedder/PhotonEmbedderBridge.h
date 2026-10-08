@@ -11,7 +11,19 @@ using PhotonFrameCallback = void (*)(void *, int, int, size_t, double,
 using PhotonStateCallback = void (*)(void *, char const *, char const *, bool,
                                      bool, bool);
 using PhotonErrorCallback = void (*)(void *, char const *);
+using PhotonCrashCallback = void (*)(void *, char const *);
 using PhotonCursorCallback = void (*)(void *, int);
+struct PhotonPerformanceStats {
+  bool has_cpu_percent;
+  double cpu_percent;
+  bool has_memory_bytes;
+  uint64_t memory_bytes;
+  uint64_t download_bytes_per_second;
+  uint64_t upload_bytes_per_second;
+  bool has_frames_per_second;
+  double frames_per_second;
+};
+using PhotonPerformanceCallback = void (*)(void *, PhotonPerformanceStats const *);
 #if defined(__APPLE__)
 using PhotonReducedMotionChangedCallback = void (*)(void *, bool);
 using PhotonNativeReleaseDrainCallback = void (*)(void*);
@@ -35,7 +47,9 @@ void *photon_view_create(void *runtime, int width, int height, double dpr,
                          PhotonStateCallback state_callback,
                          PhotonFrameCallback frame_callback,
                          PhotonCursorCallback cursor_callback,
-                         PhotonErrorCallback error_callback
+                         PhotonErrorCallback error_callback,
+                         PhotonCrashCallback crash_callback,
+                         PhotonPerformanceCallback performance_callback
 #if defined(__APPLE__)
                          , bool native_metal_presentation,
                          PhotonNativeBackingCallback native_backing_callback,
@@ -43,12 +57,18 @@ void *photon_view_create(void *runtime, int width, int height, double dpr,
 #endif
                          );
 void photon_view_resize(void *view, int width, int height, double dpr);
+void photon_view_set_performance_monitor_enabled(void *view, bool enabled);
+void photon_view_set_visible(void *view, bool visible);
 #if defined(__APPLE__)
 void photon_view_release_native_frame(void *view, uint64_t backing_id,
                                       uint64_t generation, uint64_t frame_id);
 bool photon_view_set_native_metal_presentation(void *view, bool enabled);
 #endif
 void photon_view_navigate(void *view, char const *url);
+void photon_view_reload(void *view);
+void photon_view_stop_loading(void *view);
+void photon_view_go_back(void *view);
+void photon_view_go_forward(void *view);
 void photon_view_set_focus(void *view, bool focused);
 void photon_runtime_set_system_reduced_motion_preference(void *runtime,
                                                          bool reduce_motion);

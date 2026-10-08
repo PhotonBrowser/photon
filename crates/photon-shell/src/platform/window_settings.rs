@@ -24,7 +24,7 @@ fn background() -> MacosWindowBackground {
 const INITIAL_WIDTH: f32 = 1200.0;
 const INITIAL_HEIGHT: f32 = 760.0;
 
-/// Builds the one Photon browser window's initial size, titlebar, and native backing.
+/// Builds a Photon browser window's initial size, titlebar, and native backing.
 pub(super) fn options(cx: &App) -> WindowOptions {
     let bounds = Bounds::centered(None, size(px(INITIAL_WIDTH), px(INITIAL_HEIGHT)), cx);
     WindowOptions::new()

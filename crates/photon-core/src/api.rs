@@ -294,11 +294,15 @@ pub unsafe extern "C" fn photon_browser_command(
         1 => BrowserCommand::Reload,
         2 => BrowserCommand::Back,
         3 => BrowserCommand::Forward,
+        4 => BrowserCommand::StopLoading,
         _ => return false,
     };
     matches!(
         command,
-        BrowserCommand::Reload | BrowserCommand::Back | BrowserCommand::Forward
+        BrowserCommand::Reload
+            | BrowserCommand::StopLoading
+            | BrowserCommand::Back
+            | BrowserCommand::Forward
     )
 }
 

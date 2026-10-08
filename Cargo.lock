@@ -4228,7 +4228,15 @@ dependencies = [
  "mach2",
  "metal",
  "objc",
- "photon-omnibox",
+ "photon-core",
+ "photon-shortcuts",
+]
+
+[[package]]
+name = "photon-shortcuts"
+version = "0.1.0"
+dependencies = [
+ "gpui-ce",
 ]
 
 [[package]]

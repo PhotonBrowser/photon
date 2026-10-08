@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [lib]
-crate-type = ["staticlib"]
+crate-type = ["rlib", "staticlib"]
 
 [dependencies]
 photon-omnibox = { path = "../photon-omnibox" }

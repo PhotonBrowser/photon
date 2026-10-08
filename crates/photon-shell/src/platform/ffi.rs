@@ -2,6 +2,19 @@
 
 pub(super) mod embedder {
     use std::ffi::{c_char, c_void};
+
+    #[repr(C)]
+    pub(crate) struct PerformanceStats {
+        pub has_cpu_percent: bool,
+        pub cpu_percent: f64,
+        pub has_memory_bytes: bool,
+        pub memory_bytes: u64,
+        pub download_bytes_per_second: u64,
+        pub upload_bytes_per_second: u64,
+        pub has_frames_per_second: bool,
+        pub frames_per_second: f64,
+    }
+
     unsafe extern "C" {
         pub fn photon_runtime_create(
             helper_directory: *const c_char,
@@ -41,6 +54,10 @@ pub(super) mod embedder {
             >,
             cursor_callback: Option<unsafe extern "C" fn(*mut c_void, i32)>,
             error_callback: Option<unsafe extern "C" fn(*mut c_void, *const c_char)>,
+            crash_callback: Option<unsafe extern "C" fn(*mut c_void, *const c_char)>,
+            performance_callback: Option<
+                unsafe extern "C" fn(*mut c_void, *const PerformanceStats),
+            >,
             native_metal: bool,
             backing_callback: Option<
                 unsafe extern "C" fn(*mut c_void, u64, u64, u32, u32, u32, u32) -> bool,
@@ -50,6 +67,8 @@ pub(super) mod embedder {
             >,
         ) -> *mut c_void;
         pub fn photon_view_resize(view: *mut c_void, width: i32, height: i32, dpr: f64);
+        pub fn photon_view_set_performance_monitor_enabled(view: *mut c_void, enabled: bool);
+        pub fn photon_view_set_visible(view: *mut c_void, visible: bool);
         pub fn photon_view_set_focus(view: *mut c_void, focused: bool);
         pub fn photon_runtime_set_system_reduced_motion_preference(
             runtime: *mut c_void,
@@ -97,6 +116,10 @@ pub(super) mod embedder {
         ) -> *mut c_void;
         pub fn photon_reduced_motion_observer_destroy(observer: *mut c_void);
         pub fn photon_view_navigate(view: *mut c_void, url: *const c_char);
+        pub fn photon_view_reload(view: *mut c_void);
+        pub fn photon_view_stop_loading(view: *mut c_void);
+        pub fn photon_view_go_back(view: *mut c_void);
+        pub fn photon_view_go_forward(view: *mut c_void);
         pub fn photon_view_shutdown(view: *mut c_void);
         pub fn photon_view_destroy(view: *mut c_void);
     }

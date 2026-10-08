@@ -1,15 +1,18 @@
 //! The page surface and browser input forwarding.
 
-use super::super::engine::EngineSession;
+use super::super::engine::{EngineRuntime, EngineSession};
 use super::super::presentation::{PresentedSurface, Release};
+use super::debug_overlay::debug_overlay;
 use super::input::WebViewInput;
-use super::theme::{colors, metrics::WEBVIEW_CORNER_RADIUS};
+use super::theme::{Palette, ThemePreference, metrics::WEBVIEW_CORNER_RADIUS};
 use gpui::{
     Context, FocusHandle, InteractiveElement, KeyDownEvent, KeyUpEvent, ObjectFit, Render,
     Subscription, SurfaceSource, Window, div, prelude::*, px, surface,
 };
-use std::sync::{Arc, Mutex};
+use photon_core::{BrowserDiagnostics, BrowserState};
+use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
 use super::super::trace;
 
@@ -17,8 +20,12 @@ static MOUSE_MOVE_TRACE_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 pub(in crate::platform) struct PhotonWebView {
     pub(super) external: Option<PresentedSurface>,
-    pub(in crate::platform) url: String,
-    pub(in crate::platform) loading: bool,
+    pub(in crate::platform) state: BrowserState,
+    pub(in crate::platform) diagnostics: BrowserDiagnostics,
+    pub(in crate::platform) debug_info_enabled: bool,
+    pub(in crate::platform) crash_alert: bool,
+    pub(super) theme: ThemePreference,
+    is_blank_tab: bool,
     pub(super) session: EngineSession,
     pub(super) focus_handle: FocusHandle,
     pub(super) last_viewport: Option<(i32, i32, u32)>,
@@ -88,14 +95,24 @@ impl PhotonWebView {
         self.session.navigate_startup();
     }
 
-    pub(super) fn new(cx: &mut Context<Self>) -> anyhow::Result<Self> {
+    pub(super) fn new(
+        cx: &mut Context<Self>,
+        runtime: Rc<EngineRuntime>,
+        theme: ThemePreference,
+        startup_address: Option<&str>,
+        is_blank_tab: bool,
+    ) -> anyhow::Result<Self> {
         let width = 1200;
         let height = 760;
         Ok(Self {
             external: None,
-            url: String::new(),
-            loading: false,
-            session: EngineSession::create(width, height, 1.0)?,
+            state: BrowserState::default(),
+            diagnostics: BrowserDiagnostics::default(),
+            debug_info_enabled: false,
+            crash_alert: false,
+            theme,
+            is_blank_tab,
+            session: EngineSession::create(runtime, width, height, 1.0, startup_address)?,
             focus_handle: cx.focus_handle(),
             last_viewport: None,
             input: WebViewInput::default(),
@@ -113,9 +130,8 @@ impl PhotonWebView {
             cx.on_blur(&self.focus_handle, window, |this, window, _| {
                 this.sync_engine_focus(window)
             }),
-            cx.observe_window_activation(window, |this, window, _| {
-                this.sync_engine_focus(window)
-            }),
+            cx.observe_window_activation(window, |this, window, _| this.sync_engine_focus(window)),
+            cx.observe_window_appearance(window, |_, _, cx| cx.notify()),
         ];
         self.sync_engine_focus(window);
     }
@@ -124,17 +140,50 @@ impl PhotonWebView {
         self.session
             .set_focus(window.is_window_active() && self.focus_handle.is_focused(window));
     }
+
+    pub(super) fn set_debug_info_enabled(&mut self, enabled: bool) {
+        self.debug_info_enabled = enabled;
+        self.session.set_diagnostics_enabled(enabled);
+    }
+
+    pub(in crate::platform) fn handle_engine_crash(&mut self) -> anyhow::Result<()> {
+        self.crash_alert = true;
+        self.session.execute(photon_core::BrowserCommand::Reload)
+    }
+
+    pub(super) fn is_blank_tab(&self) -> bool {
+        self.is_blank_tab
+    }
+
+    pub(super) fn omnibox_url(&self) -> String {
+        if self.is_blank_tab {
+            String::new()
+        } else {
+            self.state.url.clone()
+        }
+    }
+
+    pub(super) fn navigate(&mut self, input: &str, cx: &mut Context<Self>) -> anyhow::Result<()> {
+        self.session.navigate(input)?;
+        self.crash_alert = false;
+        if self.is_blank_tab {
+            self.is_blank_tab = false;
+            cx.notify();
+        }
+        Ok(())
+    }
 }
 
 impl Render for PhotonWebView {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let appearance = self.theme.appearance(window.appearance());
+        let palette = Palette::for_appearance(appearance);
         let weak_this = cx.entity().downgrade();
         let weak_mouse_down = weak_this.clone();
         let weak_mouse_up = weak_this.clone();
         let mut webview = div()
             .size_full()
-            .rounded(px(WEBVIEW_CORNER_RADIUS))
-            .bg(gpui::rgb(colors::PAGE_BACKGROUND))
+            .relative()
             .id("photon-webview-viewport")
             .on_prepaint(
                 cx.listener(|this, event: &gpui::InteractivityPrepaint, window, _| {
@@ -217,13 +266,23 @@ impl Render for PhotonWebView {
             .on_key_up(cx.listener(|this, event: &KeyUpEvent, _, _| {
                 this.input.key_up(&mut this.session, event);
             }));
-        if let Some(presented) = self.external.as_ref() {
+        if !self.is_blank_tab {
+            webview = webview
+                .rounded(px(WEBVIEW_CORNER_RADIUS))
+                .bg(gpui::rgb(palette.page_background));
+        }
+        if !self.is_blank_tab
+            && let Some(presented) = self.external.as_ref()
+        {
             webview = webview.child(
                 surface(SurfaceSource::ExternalMetal(presented.surface.clone()))
                     .size_full()
                     .object_fit(ObjectFit::Fill)
                     .rounded(px(WEBVIEW_CORNER_RADIUS)),
             );
+        }
+        if self.debug_info_enabled {
+            webview = webview.child(debug_overlay(&self.diagnostics, palette));
         }
         webview
     }

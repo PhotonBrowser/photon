@@ -60,7 +60,9 @@ extern "C" void *photon_view_create(void *runtime, int width, int height,
                                     PhotonStateCallback state_callback,
                                     PhotonFrameCallback frame_callback,
                                     PhotonCursorCallback cursor_callback,
-                                    PhotonErrorCallback error_callback
+                                    PhotonErrorCallback error_callback,
+                                    PhotonCrashCallback crash_callback,
+                                    PhotonPerformanceCallback performance_callback
 #if defined(__APPLE__)
                                     , bool native_metal_presentation,
                                     PhotonNativeBackingCallback native_backing_callback,
@@ -87,6 +89,21 @@ extern "C" void *photon_view_create(void *runtime, int width, int height,
                          frame->copy_time_microseconds,
                          frame->paint_to_callback_microseconds);
       };
+  callbacks.performance_stats_changed = [=](Photon::PerformanceStats const& stats) {
+    if (!performance_callback)
+      return;
+    PhotonPerformanceStats snapshot {
+        stats.has_cpu_percent,
+        stats.cpu_percent,
+        stats.has_memory_bytes,
+        stats.memory_bytes,
+        stats.download_bytes_per_second,
+        stats.upload_bytes_per_second,
+        stats.has_frames_per_second,
+        stats.frames_per_second,
+    };
+    performance_callback(callback_data, &snapshot);
+  };
 #if defined(__APPLE__)
   callbacks.native_metal_presentation = native_metal_presentation
       && native_backing_callback && native_frame_callback;
@@ -112,6 +129,10 @@ extern "C" void *photon_view_create(void *runtime, int width, int height,
     if (error_callback)
       error_callback(callback_data, message.c_str());
   };
+  callbacks.crashed = [=](std::string const &url) {
+    if (crash_callback)
+      crash_callback(callback_data, url.c_str());
+  };
 
   auto view = static_cast<RuntimeHandle *>(runtime)->runtime->create_view(
       width, height, dpr, std::move(callbacks));
@@ -124,6 +145,17 @@ extern "C" void photon_view_resize(void *view, int width, int height,
                                    double dpr) {
   if (view)
     static_cast<ViewHandle *>(view)->view->resize(width, height, dpr);
+}
+
+extern "C" void photon_view_set_performance_monitor_enabled(void *view,
+                                                              bool enabled) {
+  if (view)
+    static_cast<ViewHandle *>(view)->view->set_performance_monitor_enabled(enabled);
+}
+
+extern "C" void photon_view_set_visible(void *view, bool visible) {
+  if (view)
+    static_cast<ViewHandle *>(view)->view->set_visible(visible);
 }
 
 #if defined(__APPLE__)
@@ -148,6 +180,26 @@ extern "C" bool photon_view_set_native_metal_presentation(void *view,
 extern "C" void photon_view_navigate(void *view, char const *url) {
   if (view && url)
     static_cast<ViewHandle *>(view)->view->navigate(url);
+}
+
+extern "C" void photon_view_reload(void *view) {
+  if (view)
+    static_cast<ViewHandle *>(view)->view->reload();
+}
+
+extern "C" void photon_view_stop_loading(void *view) {
+  if (view)
+    static_cast<ViewHandle *>(view)->view->stop_loading();
+}
+
+extern "C" void photon_view_go_back(void *view) {
+  if (view)
+    static_cast<ViewHandle *>(view)->view->go_back();
+}
+
+extern "C" void photon_view_go_forward(void *view) {
+  if (view)
+    static_cast<ViewHandle *>(view)->view->go_forward();
 }
 
 extern "C" void photon_view_set_focus(void *view, bool focused) {

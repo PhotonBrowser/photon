@@ -7,6 +7,7 @@ members = [
     "crates/photon-shell",
     "crates/photon-presentation-broker",
     "crates/photon-omnibox",
+    "crates/photon-shortcuts",
 ]
 exclude = ["Engine/Libraries/LibJS/Flap", "vendor/gpui-ce"]
 

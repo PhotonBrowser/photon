@@ -18,8 +18,32 @@ pub struct BrowserState {
 pub enum BrowserCommand {
     Navigate(String),
     Reload,
+    StopLoading,
     Back,
     Forward,
+    NewTab,
+    NewWindow,
+    ToggleDebugInfo,
+}
+
+impl BrowserCommand {
+    /// Builds a navigation command from the same address-or-search rules used by the omnibox.
+    pub fn from_omnibox_input(input: &str) -> Result<Self, OmniboxError> {
+        resolve_omnibox_input(input).map(|target| Self::Navigate(target.url().to_owned()))
+    }
+}
+
+/// Performance values exposed by the engine adapter without UI or engine types.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct BrowserDiagnostics {
+    pub frames_per_second: Option<f64>,
+    pub cpu_percent: Option<f64>,
+    pub memory_bytes: Option<u64>,
+    pub download_bytes_per_second: u64,
+    pub upload_bytes_per_second: u64,
+    pub input_to_frame_latency_ms: Option<f64>,
+    pub last_frame_interval_ms: Option<f64>,
+    pub longest_frame_gap_ms: Option<f64>,
 }
 
 /// State delivered by the engine adapter.
