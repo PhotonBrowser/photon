@@ -58,12 +58,21 @@ crates/
 ├── photon-app/                       # Runnable Photon entry point
 ├── photon-shell/                     # GPUI-CE shell and native Engine adapter
 │   └── src/platform/
-│       ├── engine.rs                 # Engine session, callbacks, input forwarding
+│       ├── engine/                   # Engine runtime and per-tab sessions
+│       │   └── callbacks.rs          # Engine C callbacks and the state they update
 │       ├── presentation.rs           # IOSurface frames, leases, GPU completion
 │       ├── window_settings.rs        # Native window options and material choice
 │       └── ui/
-│           ├── window.rs             # App bootstrap and top-level window behavior
+│           ├── window/               # Browser window: layout, commands, rendering
+│           │   ├── app.rs            # App startup and the first window
+│           │   ├── tabs.rs           # Tab lifecycle and the tab strip
+│           │   ├── menu.rs           # Browser menu and theme choice
+│           │   ├── actions.rs        # Keyboard shortcuts
+│           │   └── alerts.rs         # Crash alerts and JavaScript dialogs
 │           ├── webview.rs            # Page surface composition
+│           ├── js_dialog.rs          # JavaScript alert, confirm and prompt
+│           ├── modal.rs              # Reusable centered modal
+│           ├── button.rs             # Shared text buttons
 │           ├── input.rs              # Keyboard, pointer, and scroll forwarding
 │           ├── theme.rs              # Appearance and semantic color tokens
 │           └── metrics.rs            # Shared UI dimensions and typography
@@ -103,13 +112,14 @@ owned by the shell; the presentation XPC implementation lives inside
 | GPUI-CE native window size, titlebar, traffic lights, blur | [`platform/window_settings.rs`](../crates/photon-shell/src/platform/window_settings.rs) and [`ui/metrics.rs`](../crates/photon-shell/src/platform/ui/metrics.rs) |
 | Shell colors, appearance, or theme mapping | [`ui/theme.rs`](../crates/photon-shell/src/platform/ui/theme.rs) |
 | Shared layout, spacing, corner radii, or type sizes | [`ui/metrics.rs`](../crates/photon-shell/src/platform/ui/metrics.rs) |
-| Window layout or app startup | [`ui/window.rs`](../crates/photon-shell/src/platform/ui/window.rs) |
+| Window layout or app startup | [`ui/window/`](../crates/photon-shell/src/platform/ui/window/mod.rs) |
+| Dialogs, modals, and buttons | [`ui/js_dialog.rs`](../crates/photon-shell/src/platform/ui/js_dialog.rs), [`ui/modal.rs`](../crates/photon-shell/src/platform/ui/modal.rs), [`ui/button.rs`](../crates/photon-shell/src/platform/ui/button.rs), and [`photon-core/src/dialogs.rs`](../crates/photon-core/src/dialogs.rs) |
 | Page surface composition | [`ui/webview.rs`](../crates/photon-shell/src/platform/ui/webview.rs) |
 | Keyboard, pointer, or scroll forwarding | [`ui/input.rs`](../crates/photon-shell/src/platform/ui/input.rs) |
-| Engine session or callback behavior | [`platform/engine.rs`](../crates/photon-shell/src/platform/engine.rs) |
+| Engine session or callback behavior | [`platform/engine/`](../crates/photon-shell/src/platform/engine/mod.rs) |
 | Frame acceptance, presentation order, or release lifetime | [`platform/presentation.rs`](../crates/photon-shell/src/platform/presentation.rs) |
 | XPC messages, descriptor transport, or broker connection | [`photon-presentation-ipc`](../crates/photon-presentation-ipc/src/lib.rs) |
-| Engine frame pacing or pausing Engine while the window is occluded | [`platform/display.rs`](../crates/photon-shell/src/platform/display.rs), [`platform/window_observer.rs`](../crates/photon-shell/src/platform/window_observer.rs), then [`ui/window.rs`](../crates/photon-shell/src/platform/ui/window.rs) |
+| Engine frame pacing or pausing Engine while the window is occluded | [`platform/display.rs`](../crates/photon-shell/src/platform/display.rs), [`platform/window_observer.rs`](../crates/photon-shell/src/platform/window_observer.rs), then [`ui/window/`](../crates/photon-shell/src/platform/ui/window/mod.rs) |
 | Rust declarations for native embedder functions | [`platform/ffi.rs`](../crates/photon-shell/src/platform/ffi.rs) and [`PhotonEmbedderBridge.h`](../native/embedder/PhotonEmbedderBridge.h) |
 | Browser state and command rules | [`photon-core/src/state.rs`](../crates/photon-core/src/state.rs) |
 | C ABI exposed to native callers | [`photon-ffi/include/photon_ffi.h`](../crates/photon-ffi/include/photon_ffi.h) and [`photon-ffi/src/api.rs`](../crates/photon-ffi/src/api.rs) |

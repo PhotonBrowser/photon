@@ -11,6 +11,7 @@ What the Photon shell does today and what comes next. Engine performance work is
 - [x] Engine stops rendering while the window is occluded or the tab is hidden
 - [x] Keyboard, pointer, scroll and cursor forwarding to the page; page focus follows window focus
 - [x] Crash recovery: a crashed page process restarts and offers to reload the page
+- [x] JavaScript `alert`, `confirm` and `prompt` as a window modal; dialogs are dismissed and held off while the browser navigates away
 - [x] Pages follow the shell theme through `prefers-color-scheme`
 - [x] Multiple windows
 
@@ -45,7 +46,6 @@ What the Photon shell does today and what comes next. Engine performance work is
 
 In order of priority.
 
-- [ ] JavaScript `alert`, `confirm` and `prompt` dialogs (Engine embedder API, then a shell dialog)
 - [ ] Find in page (⌘F)
 - [ ] Tab strip interactions: middle-click to close, right-click menu (close others, duplicate), drag to reorder
 - [ ] Omnibox suggestions: "Search for" and "Go to" rows while typing
