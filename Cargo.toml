@@ -6,6 +6,7 @@ members = [
     "crates/photon-ffi",
     "crates/photon-app",
     "crates/photon-shell",
+    "crates/photon-performance",
     "crates/photon-presentation-broker",
     "crates/photon-presentation-ipc",
     "crates/photon-omnibox",

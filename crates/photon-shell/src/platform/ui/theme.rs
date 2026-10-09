@@ -5,6 +5,7 @@
 //! the shell needs a different role mapping.
 
 use gpui::{ColorExt, Rgba, WindowAppearance, colors::Colors};
+use photon_performance::PerformancePalette;
 use std::{cell::Cell, rc::Rc, sync::OnceLock};
 
 mod opacity {
@@ -14,7 +15,7 @@ mod opacity {
     pub(super) const FOCUSED_FIELD: f32 = 0.08;
     pub(super) const TAB_HOVER: f32 = 0.08;
     pub(super) const CONTROL_HOVER: f32 = 0.12;
-    pub(super) const DIAGNOSTICS_SURFACE: f32 = 0.95;
+    pub(super) const PERFORMANCE_SURFACE: f32 = 0.95;
     pub(super) const MENU_BORDER: f32 = 0.55;
     pub(super) const MENU_HOVER: f32 = 0.12;
 }
@@ -48,9 +49,7 @@ pub(super) struct ThemeColors {
     pub tab_active_surface: u32,
     pub tab_hover_surface: u32,
     pub control_hover_surface: u32,
-    pub diagnostics_surface: u32,
-    pub diagnostics_text: u32,
-    pub diagnostics_secondary_text: u32,
+    pub performance_palette: PerformancePalette,
     pub menu_surface: u32,
     pub menu_border: u32,
     pub menu_hover: u32,
@@ -93,11 +92,11 @@ impl ThemeColors {
             tab_active_surface: to_rgba_token(colors.container),
             tab_hover_surface: to_rgba_token(colors.selected.opacity(opacity::TAB_HOVER)),
             control_hover_surface: to_rgba_token(colors.text.opacity(opacity::CONTROL_HOVER)),
-            diagnostics_surface: to_rgba_token(
-                colors.container.opacity(opacity::DIAGNOSTICS_SURFACE),
-            ),
-            diagnostics_text: to_rgb_token(colors.text),
-            diagnostics_secondary_text: to_rgb_token(text_secondary),
+            performance_palette: PerformancePalette {
+                surface: to_rgba_token(colors.container.opacity(opacity::PERFORMANCE_SURFACE)),
+                text: to_rgb_token(colors.text),
+                secondary_text: to_rgb_token(text_secondary),
+            },
             menu_surface: to_rgba_token(colors.container),
             menu_border: to_rgba_token(colors.border.opacity(opacity::MENU_BORDER)),
             menu_hover: to_rgba_token(colors.selected.opacity(opacity::MENU_HOVER)),

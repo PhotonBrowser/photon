@@ -227,13 +227,6 @@ impl BrowserWindow {
                     super::super::trace(format_args!("new window: {error:#}"));
                 }
             }
-            BrowserCommand::ToggleDebugInfo => {
-                let webview = self.active_webview();
-                webview.update(cx, |view, cx| {
-                    view.set_debug_info_enabled(!view.debug_info_enabled);
-                    cx.notify();
-                });
-            }
             command => {
                 let dismiss_crash_alert = matches!(&command, BrowserCommand::Reload);
                 let webview = self.active_webview();
@@ -249,6 +242,16 @@ impl BrowserWindow {
                 }
             }
         }
+        cx.notify();
+    }
+
+    fn toggle_performance_overlay(&mut self, cx: &mut Context<Self>) {
+        self.open_menu = None;
+        let webview = self.active_webview();
+        webview.update(cx, |view, cx| {
+            view.set_performance_overlay_enabled(!view.performance_overlay_enabled);
+            cx.notify();
+        });
         cx.notify();
     }
 
@@ -358,7 +361,8 @@ impl BrowserWindow {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + 'static {
-        let debug_info_enabled = self.active_webview().read(cx).debug_info_enabled;
+        let performance_overlay_enabled =
+            self.active_webview().read(cx).performance_overlay_enabled;
         let is_dark = matches!(
             appearance,
             WindowAppearance::Dark | WindowAppearance::VibrantDark
@@ -392,10 +396,10 @@ impl BrowserWindow {
                 "menu-debug-info",
                 "Debug info",
                 2,
-                debug_info_enabled,
-                Box::new(cx.listener(|this, _, window, cx| {
+                performance_overlay_enabled,
+                Box::new(cx.listener(|this, _, _, cx| {
                     cx.stop_propagation();
-                    this.dispatch_command(BrowserCommand::ToggleDebugInfo, window, cx);
+                    this.toggle_performance_overlay(cx);
                 })),
                 palette,
             ))

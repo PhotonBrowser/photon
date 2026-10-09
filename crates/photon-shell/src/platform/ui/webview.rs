@@ -2,7 +2,6 @@
 
 use super::super::engine::{EngineRuntime, EngineSession};
 use super::super::presentation::PresentedSurface;
-use super::debug_overlay::debug_overlay;
 use super::input::WebViewInput;
 use super::{
     metrics::WEBVIEW_CORNER_RADIUS,
@@ -12,7 +11,8 @@ use gpui::{
     Context, EventEmitter, FocusHandle, InteractiveElement, KeyDownEvent, KeyUpEvent, ObjectFit,
     Render, Subscription, SurfaceSource, Window, div, prelude::*, px, surface,
 };
-use photon_core::{BrowserDiagnostics, BrowserState};
+use photon_core::BrowserState;
+use photon_performance::{PerformanceDiagnostics, performance_overlay};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -24,8 +24,8 @@ static MOUSE_MOVE_TRACE_COUNT: AtomicUsize = AtomicUsize::new(0);
 pub(in crate::platform) struct PhotonWebView {
     pub(super) external: Option<PresentedSurface>,
     pub(in crate::platform) state: BrowserState,
-    pub(in crate::platform) diagnostics: BrowserDiagnostics,
-    pub(in crate::platform) debug_info_enabled: bool,
+    pub(in crate::platform) diagnostics: PerformanceDiagnostics,
+    pub(in crate::platform) performance_overlay_enabled: bool,
     pub(in crate::platform) crash_alert: bool,
     pub(super) theme: ThemePreference,
     is_blank_tab: bool,
@@ -126,8 +126,8 @@ impl PhotonWebView {
         Ok(Self {
             external: None,
             state: BrowserState::default(),
-            diagnostics: BrowserDiagnostics::default(),
-            debug_info_enabled: false,
+            diagnostics: PerformanceDiagnostics::default(),
+            performance_overlay_enabled: false,
             crash_alert: false,
             theme,
             is_blank_tab,
@@ -160,8 +160,8 @@ impl PhotonWebView {
             .set_focus(window.is_window_active() && self.focus_handle.is_focused(window));
     }
 
-    pub(super) fn set_debug_info_enabled(&mut self, enabled: bool) {
-        self.debug_info_enabled = enabled;
+    pub(super) fn set_performance_overlay_enabled(&mut self, enabled: bool) {
+        self.performance_overlay_enabled = enabled;
         self.session.set_diagnostics_enabled(enabled);
     }
 
@@ -305,8 +305,11 @@ impl Render for PhotonWebView {
                     .rounded(px(WEBVIEW_CORNER_RADIUS)),
             );
         }
-        if self.debug_info_enabled {
-            webview = webview.child(debug_overlay(&self.diagnostics, palette));
+        if self.performance_overlay_enabled {
+            webview = webview.child(performance_overlay(
+                &self.diagnostics,
+                palette.performance_palette,
+            ));
         }
         webview
     }

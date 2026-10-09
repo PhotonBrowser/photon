@@ -4,11 +4,13 @@
   or useful consumer. Keep tightly coupled implementation modules together.
 - `photon-core` contains browser state and rules without UI, native, or Engine
   types. `photon-omnibox` owns address and search resolution.
+  `photon-performance` owns performance diagnostics, accumulation, formatting,
+  and its GPUI overlay.
 - `photon-ffi` is the Rust exported C ABI. Confine raw pointers and C string
   conversion to this crate.
-- `photon-shell` owns GPUI views, the Engine adapter, platform integration, and
-  presentation lifecycle. The shell's views stay in the shell because they
-  share window and Engine session state.
+- `photon-shell` owns window-bound GPUI views, the Engine adapter, platform
+  integration, and presentation lifecycle. Its performance model and overlay
+  live in `photon-performance`.
 - `photon-presentation-ipc` owns the XPC protocol, client channel, native
   descriptor transport, and service entry point. `photon-presentation-broker`
   only provides the service executable.

@@ -4,6 +4,7 @@
 photon-app
     └── photon-shell
         ├── GPUI-CE window and Photon browser UI
+        ├── photon-performance diagnostics and overlay
         ├── Photon Engine session adapter
         │       ↓ narrow native embedder API
         │   Photon Engine / Ladybird
@@ -23,18 +24,22 @@ API; it is not part of the desktop shell's internal state path.
 ## Ownership
 
 - `crates/photon-core` contains framework-independent browser state, commands,
-  diagnostics, and address normalization. It has no GPUI, GPUI-CE, native, or
-  Ladybird types.
+  and address normalization. It has no GPUI, GPUI-CE, native, or Ladybird
+  types.
 - `crates/photon-omnibox` owns address-versus-search classification and search
   engine data. Core and the shell use the same rules.
 - `crates/photon-ffi` adapts the safe core model to the exported
   `photon_browser_*` C ABI. It owns pointer validation, C strings, and ABI
   state, and builds as both an `rlib` and a static library.
 - `crates/photon-app` is the runnable entry point. `crates/photon-shell` owns
-  the native window, GPUI views, `PhotonWebView`, Engine session, presentation
-  state, frame ordering, browser input, and shutdown lifecycle. Its visual
-  components depend on the Engine and window lifecycle, so they remain modules
-  inside the shell rather than a separate UI crate.
+  the native window, window-bound GPUI views, `PhotonWebView`, Engine session,
+  presentation state, frame ordering, browser input, and shutdown lifecycle.
+  The performance diagnostics model and GPUI overlay live in
+  `crates/photon-performance`; the shell supplies Engine samples and theme
+  colors.
+- `crates/photon-performance` owns performance snapshots, monitor state, timing
+  accumulation, value formatting, and the GPUI debug overlay. It has no Engine
+  IPC, native embedder, or window-lifecycle dependencies.
 - `crates/photon-shortcuts` owns browser-level GPUI actions and default key
   bindings.
 - `crates/photon-presentation-ipc` owns the macOS XPC protocol, Rust client
@@ -62,6 +67,7 @@ crates/
 │           ├── input.rs              # Keyboard, pointer, and scroll forwarding
 │           ├── theme.rs              # Appearance and semantic color tokens
 │           └── metrics.rs            # Shared UI dimensions and typography
+├── photon-performance/               # Performance diagnostics model and overlay
 ├── photon-core/                      # Framework-independent browser model
 ├── photon-omnibox/                   # Search engines and address resolution
 ├── photon-ffi/                       # Exported C API and static library
@@ -74,8 +80,9 @@ crates/
 | Package | Owns | Depends on |
 | --- | --- | --- |
 | `photon-app` | Runnable Photon entry point | `photon-shell` |
-| `photon-shell` | GPUI-CE window, Engine session adapter, native presentation lifecycle, browser input | GPUI-CE, `photon-core`, `photon-shortcuts`, `photon-presentation-ipc`, native embedder bridge |
-| `photon-core` | Browser state, commands, diagnostics, shared address normalization | `photon-omnibox` |
+| `photon-shell` | Window-bound GPUI views, Engine session adapter, native presentation lifecycle, browser input | GPUI-CE, `photon-core`, `photon-performance`, `photon-shortcuts`, `photon-presentation-ipc`, native embedder bridge |
+| `photon-performance` | Performance snapshots, monitor state, timing accumulation, formatting, GPUI overlay | GPUI-CE |
+| `photon-core` | Browser state, commands, shared address normalization | `photon-omnibox` |
 | `photon-omnibox` | Search engine list and address/query resolution | URL parsing library |
 | `photon-ffi` | `photon_browser_*` C ABI and static library | `photon-core` |
 | `photon-shortcuts` | Browser actions and default key bindings | GPUI-CE |
@@ -92,6 +99,7 @@ owned by the shell; the presentation XPC implementation lives inside
 
 | Change | Start here |
 | --- | --- |
+| Performance diagnostics or overlay | [`photon-performance`](../crates/photon-performance/src/lib.rs) and the Engine adapter |
 | GPUI-CE native window size, titlebar, traffic lights, blur | [`platform/window_settings.rs`](../crates/photon-shell/src/platform/window_settings.rs) and [`ui/metrics.rs`](../crates/photon-shell/src/platform/ui/metrics.rs) |
 | Shell colors, appearance, or theme mapping | [`ui/theme.rs`](../crates/photon-shell/src/platform/ui/theme.rs) |
 | Shared layout, spacing, corner radii, or type sizes | [`ui/metrics.rs`](../crates/photon-shell/src/platform/ui/metrics.rs) |

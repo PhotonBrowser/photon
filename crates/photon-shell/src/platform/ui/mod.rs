@@ -1,7 +1,6 @@
 //! GPUI views and window composition.
 
 mod crash_alert;
-mod debug_overlay;
 mod icons;
 mod input;
 mod layout;

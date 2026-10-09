@@ -59,13 +59,3 @@ pub(super) const OMNIBOX_ICON_SIZE: f32 = 13.0;
 
 pub(super) const PAGE_INSET: f32 = 4.0;
 pub(super) const WEBVIEW_CORNER_RADIUS: f32 = 12.0;
-
-pub(super) const DEBUG_OVERLAY_INSET: f32 = 12.0;
-pub(super) const DEBUG_OVERLAY_GAP: f32 = 2.0;
-pub(super) const DEBUG_OVERLAY_MIN_WIDTH: f32 = 236.0;
-pub(super) const DEBUG_OVERLAY_HORIZONTAL_PADDING: f32 = 8.0;
-pub(super) const DEBUG_OVERLAY_VERTICAL_PADDING: f32 = 6.0;
-pub(super) const DEBUG_OVERLAY_FONT_SIZE: f32 = 11.0;
-pub(super) const DEBUG_OVERLAY_NOTE_FONT_SIZE: f32 = 10.0;
-pub(super) const DEBUG_OVERLAY_FONT_FAMILY: &str = "monospace";
-pub(super) const DEBUG_OVERLAY_ROW_GAP: f32 = 12.0;

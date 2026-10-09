@@ -4213,6 +4213,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "photon-performance"
+version = "0.1.0"
+dependencies = [
+ "gpui-ce",
+]
+
+[[package]]
 name = "photon-presentation-broker"
 version = "0.1.0"
 dependencies = [
@@ -4248,6 +4255,7 @@ dependencies = [
  "metal",
  "objc",
  "photon-core",
+ "photon-performance",
  "photon-presentation-ipc",
  "photon-shortcuts",
  "raw-window-handle",

@@ -3,16 +3,15 @@
 use anyhow::Context as _;
 use gpui::{AsyncApp, Context, WeakEntity};
 use mach2::port::mach_port_t;
-use photon_core::{BrowserCommand, BrowserDiagnostics, BrowserState, EngineEvent};
+use photon_core::{BrowserCommand, BrowserState, EngineEvent};
+use photon_performance::{EnginePerformanceStats, PerformanceMonitor};
 use std::{
-    collections::VecDeque,
     ffi::{CStr, CString, c_char, c_void},
     rc::Rc,
     sync::{
         Arc, Mutex, Weak,
         atomic::{AtomicPtr, Ordering},
     },
-    time::Instant,
 };
 
 use super::presentation::{
@@ -32,16 +31,7 @@ struct CallbackState {
     leases: Arc<Mutex<LeaseLedger>>,
     engine_view: AtomicPtr<c_void>,
     ui_wake: Mutex<Option<UiWake>>,
-    diagnostics: Mutex<DiagnosticAccumulator>,
-    diagnostics_enabled: std::sync::atomic::AtomicBool,
-}
-
-#[derive(Default)]
-struct DiagnosticAccumulator {
-    snapshot: BrowserDiagnostics,
-    last_input_at: Option<Instant>,
-    last_frame_at: Option<Instant>,
-    frame_gaps: VecDeque<(Instant, f64)>,
+    performance: PerformanceMonitor,
 }
 
 struct RuntimeCallbacks {
@@ -61,10 +51,7 @@ impl CallbackState {
     }
 
     fn request_redraw(&self) {
-        let diagnostics = self
-            .diagnostics_enabled
-            .load(Ordering::Acquire)
-            .then(|| self.diagnostics.lock().unwrap().snapshot.clone());
+        let diagnostics = self.performance.snapshot_if_enabled();
         self.update_webview(move |view, cx| {
             view.present_latest(cx);
             if let Some(diagnostics) = diagnostics
@@ -102,88 +89,44 @@ impl CallbackState {
     }
 
     fn mark_input(&self) {
-        if !self.diagnostics_enabled.load(Ordering::Acquire) {
-            return;
-        }
-        self.diagnostics.lock().unwrap().last_input_at = Some(Instant::now());
+        self.performance.mark_input();
     }
 
     /// Tracks frame gaps and input latency, which only the diagnostics
     /// overlay shows, so frames skip this while it is hidden.
     fn record_frame(&self) {
-        if !self.diagnostics_enabled.load(Ordering::Acquire) {
-            return;
-        }
-        let now = Instant::now();
-        {
-            let mut diagnostics = self.diagnostics.lock().unwrap();
-            if let Some(previous) = diagnostics.last_frame_at {
-                let interval_ms = now.duration_since(previous).as_secs_f64() * 1000.0;
-                diagnostics.snapshot.last_frame_interval_ms = Some(interval_ms);
-                while diagnostics
-                    .frame_gaps
-                    .front()
-                    .is_some_and(|(at, _)| now.duration_since(*at).as_secs_f64() > 10.0)
-                {
-                    diagnostics.frame_gaps.pop_front();
-                }
-                if interval_ms <= 10_000.0 {
-                    diagnostics.frame_gaps.push_back((now, interval_ms));
-                }
-                diagnostics.snapshot.longest_frame_gap_ms = diagnostics
-                    .frame_gaps
-                    .iter()
-                    .map(|(_, gap)| *gap)
-                    .max_by(f64::total_cmp);
-            }
-            diagnostics.last_frame_at = Some(now);
-            if let Some(input_at) = diagnostics.last_input_at.take() {
-                diagnostics.snapshot.input_to_frame_latency_ms =
-                    Some(now.duration_since(input_at).as_secs_f64() * 1000.0);
-            }
-        }
+        self.performance.record_frame();
     }
 
     fn set_engine_diagnostics(&self, stats: &embedder::PerformanceStats) {
-        {
-            let mut diagnostics = self.diagnostics.lock().unwrap();
-            diagnostics.snapshot.cpu_percent = stats.has_cpu_percent.then_some(stats.cpu_percent);
-            diagnostics.snapshot.memory_bytes =
-                stats.has_memory_bytes.then_some(stats.memory_bytes);
-            diagnostics.snapshot.managed_heap_bytes = stats
+        self.performance.set_engine_stats(EnginePerformanceStats {
+            cpu_percent: stats.has_cpu_percent.then_some(stats.cpu_percent),
+            memory_bytes: stats.has_memory_bytes.then_some(stats.memory_bytes),
+            managed_heap_bytes: stats
                 .has_managed_heap_bytes
-                .then_some(stats.managed_heap_bytes);
-            diagnostics.snapshot.download_bytes_per_second = stats.download_bytes_per_second;
-            diagnostics.snapshot.upload_bytes_per_second = stats.upload_bytes_per_second;
-            diagnostics.snapshot.frames_per_second = stats
+                .then_some(stats.managed_heap_bytes),
+            download_bytes_per_second: stats.download_bytes_per_second,
+            upload_bytes_per_second: stats.upload_bytes_per_second,
+            frames_per_second: stats
                 .has_frames_per_second
-                .then_some(stats.frames_per_second);
-        }
-        if self.diagnostics_enabled.load(Ordering::Acquire) {
+                .then_some(stats.frames_per_second),
+        });
+        if self.performance.is_enabled() {
             self.publish_diagnostics();
         }
     }
 
     fn set_diagnostics_enabled(&self, enabled: bool) {
-        if enabled {
-            // Frames were not tracked while hidden; start a fresh history so
-            // the first interval does not span the hidden period.
-            let mut diagnostics = self.diagnostics.lock().unwrap();
-            diagnostics.last_frame_at = None;
-            diagnostics.last_input_at = None;
-            diagnostics.frame_gaps.clear();
-            diagnostics.snapshot.last_frame_interval_ms = None;
-            diagnostics.snapshot.longest_frame_gap_ms = None;
-            diagnostics.snapshot.input_to_frame_latency_ms = None;
-        }
-        self.diagnostics_enabled.store(enabled, Ordering::Release);
+        // Frames were not tracked while hidden; starting enabled resets the
+        // interval so it does not span the hidden period.
+        self.performance.set_enabled(enabled);
         if enabled {
             self.publish_diagnostics();
         }
     }
 
     fn publish_diagnostics(&self) {
-        let snapshot = self.diagnostics.lock().unwrap().snapshot.clone();
+        let snapshot = self.performance.snapshot();
         self.update_webview(move |view, cx| {
             if view.diagnostics != snapshot {
                 view.diagnostics = snapshot;
@@ -341,8 +284,7 @@ impl EngineSession {
             leases: leases.clone(),
             engine_view: AtomicPtr::new(std::ptr::null_mut()),
             ui_wake: Mutex::new(None),
-            diagnostics: Mutex::new(DiagnosticAccumulator::default()),
-            diagnostics_enabled: std::sync::atomic::AtomicBool::new(false),
+            performance: PerformanceMonitor::default(),
         });
         runtime
             .callbacks
@@ -425,9 +367,7 @@ impl EngineSession {
             BrowserCommand::StopLoading => unsafe { embedder::photon_view_stop_loading(self.view) },
             BrowserCommand::Back => unsafe { embedder::photon_view_go_back(self.view) },
             BrowserCommand::Forward => unsafe { embedder::photon_view_go_forward(self.view) },
-            BrowserCommand::NewTab
-            | BrowserCommand::NewWindow
-            | BrowserCommand::ToggleDebugInfo => {
+            BrowserCommand::NewTab | BrowserCommand::NewWindow => {
                 anyhow::bail!("browser-level command sent to a page session")
             }
         }
