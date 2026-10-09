@@ -43,8 +43,13 @@ impl ThemePreference {
         self.0.get().unwrap_or(system_appearance)
     }
 
-    pub(super) fn set(&self, appearance: WindowAppearance) {
-        self.0.set(Some(appearance));
+    /// The chosen appearance, or `None` to follow the system.
+    pub(super) fn get(&self) -> Option<WindowAppearance> {
+        self.0.get()
+    }
+
+    pub(super) fn set(&self, appearance: Option<WindowAppearance>) {
+        self.0.set(appearance);
     }
 }
 

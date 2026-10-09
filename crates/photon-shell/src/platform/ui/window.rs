@@ -185,9 +185,10 @@ impl BrowserWindow {
         }
     }
 
-    fn set_theme(&mut self, appearance: WindowAppearance, cx: &mut Context<Self>) {
+    /// Applies a light or dark theme, or follows the system for `None`.
+    fn set_theme(&mut self, appearance: Option<WindowAppearance>, cx: &mut Context<Self>) {
         self.theme.set(appearance);
-        cx.set_window_appearance(Some(appearance));
+        cx.set_window_appearance(appearance);
 
         for tab in self.tabs.clone() {
             let _ = tab.update(cx, |_, cx| cx.notify());
@@ -517,18 +518,26 @@ impl BrowserWindow {
 
     fn browser_menu(
         &self,
-        appearance: WindowAppearance,
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + 'static {
         let performance_overlay_enabled =
             self.active_webview().read(cx).performance_overlay_enabled;
-        let is_dark = matches!(
-            appearance,
-            WindowAppearance::Dark | WindowAppearance::VibrantDark
-        );
-        let light_appearance = WindowAppearance::Light;
-        let dark_appearance = WindowAppearance::Dark;
+        let theme = self.theme.get();
+        let theme_radio = |id, label, tab_index, appearance: Option<WindowAppearance>| {
+            menu_radio(
+                id,
+                label,
+                tab_index,
+                theme == appearance,
+                Box::new(cx.listener(move |this: &mut Self, _, _, cx| {
+                    cx.stop_propagation();
+                    this.open_menu = None;
+                    this.set_theme(appearance, cx);
+                })),
+                palette,
+            )
+        };
 
         let content = v_stack()
             .gap(px(metrics::MENU_ITEM_GAP))
@@ -565,29 +574,18 @@ impl BrowserWindow {
             ))
             .child(menu_separator(palette))
             .child(menu_section("Theme", palette))
-            .child(menu_radio(
+            .child(theme_radio("menu-theme-system", "System", 3, None))
+            .child(theme_radio(
                 "menu-theme-light",
                 "Light",
-                3,
-                !is_dark,
-                Box::new(cx.listener(move |this, _, _, cx| {
-                    cx.stop_propagation();
-                    this.open_menu = None;
-                    this.set_theme(light_appearance, cx);
-                })),
-                palette,
+                4,
+                Some(WindowAppearance::Light),
             ))
-            .child(menu_radio(
+            .child(theme_radio(
                 "menu-theme-dark",
                 "Dark",
-                4,
-                is_dark,
-                Box::new(cx.listener(move |this, _, _, cx| {
-                    cx.stop_propagation();
-                    this.open_menu = None;
-                    this.set_theme(dark_appearance, cx);
-                })),
-                palette,
+                5,
+                Some(WindowAppearance::Dark),
             ));
 
         menu_surface(content, palette)
@@ -746,7 +744,7 @@ impl Render for BrowserWindow {
                         cx.notify();
                     }),
                 );
-            let menu = self.browser_menu(appearance, palette, cx);
+            let menu = self.browser_menu(palette, cx);
             let (anchor, position) = match open_menu {
                 OpenMenu::Context(position) => (Anchor::TopLeft, position),
                 OpenMenu::Toolbar(position) => (Anchor::TopRight, position),
