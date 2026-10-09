@@ -20,6 +20,20 @@ mod opacity {
     pub(super) const MENU_HOVER: f32 = 0.12;
 }
 
+/// GPUI-CE's palettes have no error role, so the shell uses the macOS system
+/// red for each appearance.
+mod error {
+    use gpui::{Rgba, rgb};
+
+    pub(super) fn light() -> Rgba {
+        rgb(0xff3b30)
+    }
+
+    pub(super) fn dark() -> Rgba {
+        rgb(0xff453a)
+    }
+}
+
 /// The app's explicit theme preference. `None` follows the system appearance.
 #[derive(Clone, Default)]
 pub(super) struct ThemePreference(Rc<Cell<Option<WindowAppearance>>>);
@@ -46,6 +60,7 @@ pub(super) struct ThemeColors {
     pub selection: u32,
     pub field: u32,
     pub field_focused: u32,
+    pub field_error_border: u32,
     pub tab_active_surface: u32,
     pub tab_hover_surface: u32,
     pub control_hover_surface: u32,
@@ -63,15 +78,15 @@ impl ThemeColors {
 
         match appearance {
             WindowAppearance::Dark | WindowAppearance::VibrantDark => {
-                *DARK.get_or_init(|| Self::from_gpui(Colors::dark()))
+                *DARK.get_or_init(|| Self::from_gpui(Colors::dark(), error::dark()))
             }
             WindowAppearance::Light | WindowAppearance::VibrantLight => {
-                *LIGHT.get_or_init(|| Self::from_gpui(Colors::light()))
+                *LIGHT.get_or_init(|| Self::from_gpui(Colors::light(), error::light()))
             }
         }
     }
 
-    fn from_gpui(colors: Colors) -> Self {
+    fn from_gpui(colors: Colors, error: Rgba) -> Self {
         let text_secondary = mix_colors(colors.text, colors.background, opacity::TEXT_SECONDARY);
         let text_disabled = mix_colors(colors.text, colors.background, opacity::TEXT_DISABLED);
 
@@ -89,6 +104,7 @@ impl ThemeColors {
                 colors.container,
                 opacity::FOCUSED_FIELD,
             )),
+            field_error_border: to_rgba_token(error),
             tab_active_surface: to_rgba_token(colors.container),
             tab_hover_surface: to_rgba_token(colors.selected.opacity(opacity::TAB_HOVER)),
             control_hover_surface: to_rgba_token(colors.text.opacity(opacity::CONTROL_HOVER)),

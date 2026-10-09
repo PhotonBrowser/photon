@@ -3,5 +3,5 @@
 mod actions;
 mod bindings;
 
-pub use actions::{CloseTab, NewTab};
+pub use actions::*;
 pub use bindings::browser_shortcuts;

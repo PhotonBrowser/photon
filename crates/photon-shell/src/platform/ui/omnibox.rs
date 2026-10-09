@@ -10,22 +10,19 @@ use gpui::{
     rgb_to_hsla, rgba,
 };
 use gpui_elements::editable_text::{
-    EditableTextState, StringStorage,
+    EditableTextState, StringStorage, TextChanged,
     actions::{Enter, Escape},
     text_input,
 };
 
-gpui::actions!(
-    photon,
-    [
-        /// Move keyboard focus to the omnibox and select its contents.
-        FocusOmnibox
-    ]
-);
+const INVALID_ADDRESS_DESCRIPTION: &str = "This address can't be opened";
 
 pub(super) struct Omnibox {
     input: Entity<EditableTextState>,
     webview: Entity<PhotonWebView>,
+    /// The submitted text cannot be opened. Cleared by the next edit.
+    invalid: bool,
+    _input_subscription: Subscription,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -48,9 +45,17 @@ impl Omnibox {
             cx.on_blur(&input_focus, window, |this, _, cx| this.show_page_url(cx)),
             cx.observe_window_appearance(window, |_, _, cx| cx.notify()),
         ];
+        let input_subscription = cx.subscribe(&input, |this, _, _: &TextChanged, cx| {
+            if this.invalid {
+                this.invalid = false;
+                cx.notify();
+            }
+        });
         let omnibox = Self {
             input,
             webview,
+            invalid: false,
+            _input_subscription: input_subscription,
             _subscriptions: subscriptions,
         };
         omnibox.show_page_url(cx);
@@ -103,9 +108,17 @@ impl Omnibox {
     fn submit(&mut self, _: &Enter, window: &mut Window, cx: &mut Context<Self>) {
         cx.stop_propagation();
         let text = self.input.read(cx).as_str().to_owned();
+        if text.trim().is_empty() {
+            return;
+        }
         match self.webview.update(cx, |view, cx| view.navigate(&text, cx)) {
             Ok(()) => self.return_to_page(window, cx),
-            Err(error) => trace(format_args!("omnibox: {error:#}")),
+            Err(error) => {
+                // Keep the text for correction and say why nothing opened.
+                trace(format_args!("omnibox: {error:#}"));
+                self.invalid = true;
+                cx.notify();
+            }
         }
     }
 
@@ -131,7 +144,8 @@ impl Render for Omnibox {
             palette.field
         };
         let input_focus = self.input.focus_handle(cx).tab_index(3).tab_stop(true);
-        h_stack()
+        let mut field_box = h_stack()
+            .id("titlebar-omnibox")
             .items_center()
             .gap(px(metrics::OMNIBOX_GAP))
             .flex_1()
@@ -140,6 +154,12 @@ impl Render for Omnibox {
             .px(px(metrics::OMNIBOX_HORIZONTAL_PADDING))
             .rounded(px(metrics::OMNIBOX_RADIUS))
             .bg(rgba(field))
+            .border_1()
+            .border_color(if self.invalid {
+                rgb_to_hsla(rgba(palette.field_error_border))
+            } else {
+                gpui::transparent_black()
+            })
             .text_size(px(metrics::OMNIBOX_FONT_SIZE))
             .text_color(rgb(palette.text_primary))
             // Clicks on the field's padding or icon edit the address rather than
@@ -170,6 +190,10 @@ impl Render for Omnibox {
                     .min_w_0()
                     .whitespace_nowrap()
                     .overflow_x_scroll(),
-            )
+            );
+        if self.invalid {
+            field_box = field_box.aria_description(INVALID_ADDRESS_DESCRIPTION);
+        }
+        field_box
     }
 }

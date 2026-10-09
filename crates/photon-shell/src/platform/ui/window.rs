@@ -1,14 +1,18 @@
 //! GPUI window bootstrap and top-level browser layout.
 
 use gpui::{
-    Anchor, AnyElement, App, ClickEvent, Context, Entity, FocusHandle, KeyBinding, KeyDownEvent,
-    MouseButton, MouseDownEvent, Point, QuitMode, Render, StyleRefinement, Subscription,
-    WeakEntity, Window, WindowAppearance, anchored, div, point, prelude::*, px,
+    Anchor, AnyElement, App, ClickEvent, Context, Entity, FocusHandle, KeyDownEvent, MouseButton,
+    MouseDownEvent, Point, QuitMode, Render, StyleRefinement, Subscription, WeakEntity, Window,
+    WindowAppearance, anchored, div, point, prelude::*, px,
 };
 use gpui_elements::editable_text::actions::{DEFAULT_INPUT_CONTEXT, default_bindings};
 use gpui_platform::application;
 use photon_core::BrowserCommand;
-use photon_shortcuts::{CloseTab, NewTab, browser_shortcuts};
+use photon_shortcuts::{
+    CloseTab, FocusOmnibox, GoBack, GoForward, NewTab, NewWindow, Reload, ReopenClosedTab,
+    SelectLastTab, SelectNextTab, SelectPreviousTab, SelectTab1, SelectTab2, SelectTab3,
+    SelectTab4, SelectTab5, SelectTab6, SelectTab7, SelectTab8, StopLoading, browser_shortcuts,
+};
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -21,7 +25,7 @@ use super::layout::v_stack;
 use super::menu::{
     menu_action, menu_checkbox, menu_radio, menu_section, menu_separator, menu_surface,
 };
-use super::omnibox::{FocusOmnibox, Omnibox};
+use super::omnibox::Omnibox;
 use super::tabs::{TabItem, tab_strip};
 use super::titlebar::titlebar;
 use super::toolbar::{ClickHandler, address_toolbar as build_address_toolbar};
@@ -43,6 +47,8 @@ struct BrowserWindow {
     runtime: Rc<EngineRuntime>,
     theme: ThemePreference,
     open_menu: Option<OpenMenu>,
+    /// Pages of closed tabs, most recent last, for reopening.
+    closed_tabs: Vec<ClosedTab>,
     /// Whether any part of the window is on screen. Engine renders the active
     /// tab only while it is, since GPUI-CE stops drawing an occluded window.
     window_visible: bool,
@@ -65,6 +71,14 @@ impl Render for BrowserChrome {
             .unwrap_or_else(|_| div().into_any_element())
     }
 }
+
+struct ClosedTab {
+    index: usize,
+    url: String,
+}
+
+/// How many closed tabs a window remembers.
+const CLOSED_TAB_LIMIT: usize = 25;
 
 #[derive(Clone, Copy)]
 enum OpenMenu {
@@ -165,13 +179,46 @@ impl BrowserWindow {
     }
 
     fn open_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let webview = create_webview(cx, self.runtime.clone(), self.theme.clone(), None, true);
-        let index = self.tabs.len();
+        self.insert_tab(self.tabs.len(), None, window, cx);
+    }
+
+    fn insert_tab(
+        &mut self,
+        index: usize,
+        address: Option<&str>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let webview = create_webview(
+            cx,
+            self.runtime.clone(),
+            self.theme.clone(),
+            address,
+            address.is_none(),
+        );
+        let index = index.min(self.tabs.len());
         self.tab_subscriptions
-            .push(Self::subscribe_to_tab(&webview, cx));
-        self.tabs.push(webview);
+            .insert(index, Self::subscribe_to_tab(&webview, cx));
+        self.tabs.insert(index, webview);
         self.tab_focus_handles
-            .push(cx.focus_handle().tab_stop(false));
+            .insert(index, cx.focus_handle().tab_stop(false));
+        if index <= self.active_tab && self.tabs.len() > 1 {
+            // Keep `active_tab` naming the same page until the switch below.
+            self.active_tab += 1;
+        }
+        self.activate_tab(index, true, window, cx);
+    }
+
+    fn reopen_closed_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(closed) = self.closed_tabs.pop() {
+            self.insert_tab(closed.index, Some(&closed.url), window, cx);
+        }
+    }
+
+    /// Activates the tab `offset` places from the active one, wrapping at the ends.
+    fn select_relative_tab(&mut self, offset: isize, window: &mut Window, cx: &mut Context<Self>) {
+        let count = self.tabs.len() as isize;
+        let index = (self.active_tab as isize + offset).rem_euclid(count) as usize;
         self.activate_tab(index, true, window, cx);
     }
 
@@ -189,6 +236,14 @@ impl BrowserWindow {
         if self.tabs.len() == 1 {
             window.remove_window();
             return;
+        }
+
+        let url = removed.read(cx).state.url.clone();
+        if !url.is_empty() && url != "about:blank" {
+            if self.closed_tabs.len() == CLOSED_TAB_LIMIT {
+                self.closed_tabs.remove(0);
+            }
+            self.closed_tabs.push(ClosedTab { index, url });
         }
 
         let was_active = index == self.active_tab;
@@ -483,9 +538,61 @@ impl Render for BrowserWindow {
             .on_action(cx.listener(|this, _: &NewTab, window, cx| {
                 this.dispatch_command(BrowserCommand::NewTab, window, cx);
             }))
+            .on_action(cx.listener(|this, _: &NewWindow, window, cx| {
+                this.dispatch_command(BrowserCommand::NewWindow, window, cx);
+            }))
             .on_action(cx.listener(|this, _: &CloseTab, window, cx| {
                 this.open_menu = None;
                 this.close_tab(this.active_tab, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ReopenClosedTab, window, cx| {
+                this.open_menu = None;
+                this.reopen_closed_tab(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &SelectNextTab, window, cx| {
+                this.select_relative_tab(1, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &SelectPreviousTab, window, cx| {
+                this.select_relative_tab(-1, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &SelectTab1, window, cx| {
+                this.activate_tab(0, true, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &SelectTab2, window, cx| {
+                this.activate_tab(1, true, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &SelectTab3, window, cx| {
+                this.activate_tab(2, true, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &SelectTab4, window, cx| {
+                this.activate_tab(3, true, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &SelectTab5, window, cx| {
+                this.activate_tab(4, true, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &SelectTab6, window, cx| {
+                this.activate_tab(5, true, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &SelectTab7, window, cx| {
+                this.activate_tab(6, true, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &SelectTab8, window, cx| {
+                this.activate_tab(7, true, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &SelectLastTab, window, cx| {
+                this.activate_tab(this.tabs.len() - 1, true, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &Reload, window, cx| {
+                this.dispatch_command(BrowserCommand::Reload, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &StopLoading, window, cx| {
+                this.dispatch_command(BrowserCommand::StopLoading, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &GoBack, window, cx| {
+                this.dispatch_command(BrowserCommand::Back, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &GoForward, window, cx| {
+                this.dispatch_command(BrowserCommand::Forward, window, cx);
             }))
             .child(
                 self.chrome.clone().cached(
@@ -588,8 +695,7 @@ pub fn run() {
         // app and run the registered Engine/GPU shutdown path.
         cx.set_quit_mode(QuitMode::LastWindowClosed);
         cx.bind_keys(default_bindings().as_keybindings(Some(DEFAULT_INPUT_CONTEXT)));
-        cx.bind_keys([KeyBinding::new("secondary-l", FocusOmnibox, None)]);
-        // Keep browser tab actions and their default bindings in the shortcuts crate.
+        // Keep browser actions and their default bindings in the shortcuts crate.
         cx.bind_keys(browser_shortcuts());
         let runtime = Rc::new(
             EngineRuntime::create()
@@ -667,6 +773,7 @@ fn open_browser_window(
                 runtime,
                 theme,
                 open_menu: None,
+                closed_tabs: Vec::new(),
                 window_visible: true,
                 _appearance_subscription: appearance_subscription,
                 _chrome_subscription: chrome_subscription,
