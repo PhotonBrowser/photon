@@ -39,6 +39,7 @@ self-scrolling page, or `https://en.wikipedia.org/wiki/Web_browser`. Rates on a
 
 - Confirm 120 fps on the 120 Hz 4K display.
 - Scrolling a full-screen 4K page at 120 Hz: extrapolated compositor GPU time is about 7.7 ms (p50) and 12 ms (p90) against an 8.3 ms budget. Caching rasterized scroll content (tiles or layers) instead of repainting the viewport each frame would remove most of it.
+- First paint of heavy pages: on Google search results the Compositor's Skia flush took 461, 195 and 191 ms for the first frames, then spiked to 21–84 ms (34 fps, frame interval p95 100 ms). Cache hits rule out shader compilation; see [section 9](CompositorPerformance.md#9-slow-first-paint-on-heavy-pages--open).
 - Send the two Ladybird fixes upstream: branches `libweb-video-paint-facts-repaint` and `libweb-svg-image-load-frame-requests` on `TheoSlater/ladybird`.
 
 ## Engine and GPUI-CE commits

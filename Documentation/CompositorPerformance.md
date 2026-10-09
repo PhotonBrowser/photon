@@ -107,6 +107,18 @@ Each scroll frame re-rasterizes the whole viewport, so GPU time scales with pixe
 
 20 launches (12 with a local page, 8 with Wikipedia) all presented frames.
 
+## 9. Slow first paint on heavy pages — open
+
+A verbose run (`./photon run --verbose`) searching Google on a 60 Hz display, 2026-10-09. While the results page first painted, the Compositor's Skia flush was very slow:
+
+| | Value |
+|---|---|
+| First frames' Skia flush | 461.01, 195.06 and 191.14 ms |
+| Later flush spikes | 21–84 ms |
+| Compositor over that window | 34.3 fps; frame interval p50 16.7 ms, p95 100 ms, max 217 ms |
+
+The Ganesh persistent cache reported hits throughout, so this is not one-time shader compilation; it is the cost of drawing the page. The shell side of the same run was healthy: every Engine frame was drawn and its backing released in order, and repeated draws of one frame came from the tab loading spinner. This is the first-load stutter on heavy pages, and needs an Engine compositor investigation (what the slow flushes draw, and whether rasterization can be split across frames or cached).
+
 ## Commits
 
 - Engine `864c2a0892` LibPhotonEmbedder: Accept display metadata from the embedder
@@ -140,3 +152,4 @@ Each scroll frame re-rasterizes the whole viewport, so GPU time scales with pixe
 - [ ] Cache rasterized scroll content so 4K scrolling fits the 120 Hz GPU budget
 - [x] Profile scrolling (section 7)
 - [x] Chase the intermittent blank launch (not reproduced, section 8)
+- [ ] Profile the slow Skia flushes on first paint of heavy pages (section 9)
