@@ -4,7 +4,7 @@
 use gpui::{Div, MouseButton, prelude::*, px};
 
 use super::layout::h_stack;
-use super::theme::metrics;
+use super::metrics;
 
 /// Interactive titlebar content must stop left mouse-down propagation, so only
 /// clicks on empty space reach the titlebar and move or zoom the window.

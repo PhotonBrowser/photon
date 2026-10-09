@@ -3,11 +3,11 @@
 use gpui::{MouseButton, Role, div, prelude::*, px, rgb, rgba};
 
 use super::layout::{h_stack, v_stack};
-use super::theme::{Palette, metrics};
 use super::toolbar::ClickHandler;
+use super::{metrics, theme::ThemeColors};
 
 pub(super) fn crash_alert(
-    palette: Palette,
+    palette: ThemeColors,
     on_reload: ClickHandler,
     on_dismiss: ClickHandler,
 ) -> impl IntoElement {
@@ -23,11 +23,11 @@ pub(super) fn crash_alert(
         .max_w(px(metrics::CRASH_ALERT_MAX_WIDTH))
         .gap(px(metrics::CRASH_ALERT_GAP))
         .p(px(metrics::CRASH_ALERT_PADDING))
-        .rounded(px(metrics::MENU_RADIUS))
+        .rounded(px(metrics::SURFACE_RADIUS))
         .border_1()
-        .border_color(rgba(palette.context_menu_border))
-        .bg(rgba(palette.context_menu_surface))
-        .text_color(rgb(palette.text))
+        .border_color(rgba(palette.menu_border))
+        .bg(rgba(palette.menu_surface))
+        .text_color(rgb(palette.text_primary))
         .child(
             div()
                 .text_size(px(metrics::CRASH_ALERT_TITLE_SIZE))
@@ -36,7 +36,7 @@ pub(super) fn crash_alert(
         .child(
             div()
                 .text_size(px(metrics::MENU_FONT_SIZE))
-                .text_color(rgb(palette.text_muted))
+                .text_color(rgb(palette.text_secondary))
                 .child("Photon restarted the page process and tried to reload this page."),
         )
         .child(
@@ -65,7 +65,7 @@ fn alert_button(
     id: &'static str,
     label: &'static str,
     primary: bool,
-    palette: Palette,
+    palette: ThemeColors,
     on_click: ClickHandler,
 ) -> impl IntoElement {
     let mut button = h_stack()
@@ -87,11 +87,11 @@ fn alert_button(
     if primary {
         button = button
             .bg(rgba(palette.selection))
-            .text_color(rgb(palette.text));
+            .text_color(rgb(palette.text_primary));
     } else {
         button = button
-            .text_color(rgb(palette.text_muted))
-            .hover(|style| style.bg(rgba(palette.context_menu_hover)));
+            .text_color(rgb(palette.text_secondary))
+            .hover(|style| style.bg(rgba(palette.menu_hover)));
     }
 
     button

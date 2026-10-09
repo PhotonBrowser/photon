@@ -4,7 +4,7 @@ use super::super::trace;
 use super::PhotonWebView;
 use super::icons::search_icon_sized;
 use super::layout::h_stack;
-use super::theme::{Palette, metrics};
+use super::{metrics, theme::ThemeColors};
 use gpui::{
     Context, Entity, Focusable, MouseButton, Render, Subscription, Window, prelude::*, px, rgb,
     rgb_to_hsla, rgba,
@@ -119,7 +119,7 @@ impl Omnibox {
 impl Render for Omnibox {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let appearance = self.webview.read(cx).theme.appearance(window.appearance());
-        let palette = Palette::for_appearance(appearance);
+        let palette = ThemeColors::for_appearance(appearance);
         let editing = self.is_editing(window, cx);
         let field = if editing {
             palette.field_focused
@@ -137,7 +137,7 @@ impl Render for Omnibox {
             .rounded(px(metrics::OMNIBOX_RADIUS))
             .bg(rgba(field))
             .text_size(px(metrics::OMNIBOX_FONT_SIZE))
-            .text_color(rgb(palette.text))
+            .text_color(rgb(palette.text_primary))
             // Clicks on the field's padding or icon edit the address rather than
             // falling through to the titlebar and moving the window.
             .on_mouse_down(
@@ -150,7 +150,7 @@ impl Render for Omnibox {
             .capture_action(cx.listener(Self::submit))
             .capture_action(cx.listener(Self::cancel))
             .child(search_icon_sized(
-                palette.text,
+                palette.text_primary,
                 metrics::OMNIBOX_ICON_SIZE,
             ))
             .child(
@@ -158,7 +158,7 @@ impl Render for Omnibox {
                     .state(self.input.downgrade())
                     .track_focus(&input_focus)
                     .placeholder("Search or enter address")
-                    .placeholder_color(rgb(palette.text))
+                    .placeholder_color(rgb(palette.text_primary))
                     .caret_color(rgb_to_hsla(rgb(palette.accent)))
                     .selection_color(rgb_to_hsla(rgba(palette.selection)))
                     .caret_blink_interval_500ms()

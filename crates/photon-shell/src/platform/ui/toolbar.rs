@@ -4,7 +4,7 @@ use gpui::{App, ClickEvent, MouseButton, Role, Window, prelude::*, px, rgb, rgba
 
 use super::icons::{back_icon, close_icon, forward_icon, more_icon, reload_icon};
 use super::layout::h_stack;
-use super::theme::{Palette, metrics};
+use super::{metrics, theme::ThemeColors};
 
 pub(super) type ClickHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
 
@@ -15,7 +15,7 @@ pub(super) fn address_toolbar(
     can_reload: bool,
     loading: bool,
     menu_open: bool,
-    palette: Palette,
+    palette: ThemeColors,
     on_back: ClickHandler,
     on_forward: ClickHandler,
     on_reload: ClickHandler,
@@ -33,7 +33,7 @@ pub(super) fn address_toolbar(
             "Go back",
             0,
             can_go_back,
-            back_icon(palette.text_muted, metrics::TOOLBAR_ICON_SIZE),
+            back_icon(palette.text_secondary, metrics::TOOLBAR_ICON_SIZE),
             palette,
             on_back,
         ))
@@ -42,7 +42,7 @@ pub(super) fn address_toolbar(
             "Go forward",
             1,
             can_go_forward,
-            forward_icon(palette.text_muted, metrics::TOOLBAR_ICON_SIZE),
+            forward_icon(palette.text_secondary, metrics::TOOLBAR_ICON_SIZE),
             palette,
             on_forward,
         ))
@@ -56,9 +56,9 @@ pub(super) fn address_toolbar(
             2,
             can_reload || loading,
             if loading {
-                close_icon(palette.text_muted, metrics::TOOLBAR_ICON_SIZE).into_any_element()
+                close_icon(palette.text_secondary, metrics::TOOLBAR_ICON_SIZE).into_any_element()
             } else {
-                reload_icon(palette.text_muted, metrics::TOOLBAR_ICON_SIZE).into_any_element()
+                reload_icon(palette.text_secondary, metrics::TOOLBAR_ICON_SIZE).into_any_element()
             },
             palette,
             on_reload,
@@ -67,7 +67,7 @@ pub(super) fn address_toolbar(
         .child(menu_button(menu_open, palette, on_menu))
 }
 
-fn menu_button(menu_open: bool, palette: Palette, on_click: ClickHandler) -> impl IntoElement {
+fn menu_button(menu_open: bool, palette: ThemeColors, on_click: ClickHandler) -> impl IntoElement {
     let mut button = h_stack()
         .id("toolbar-menu")
         .role(Role::Button)
@@ -83,16 +83,16 @@ fn menu_button(menu_open: bool, palette: Palette, on_click: ClickHandler) -> imp
         .items_center()
         .justify_center()
         .size(px(metrics::TOOLBAR_BUTTON_SIZE))
-        .rounded(px(metrics::TAB_RADIUS))
-        .text_color(rgb(palette.text))
+        .rounded(px(metrics::CONTROL_RADIUS))
+        .text_color(rgb(palette.text_primary))
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .on_click(on_click)
-        .child(more_icon(palette.text, metrics::TOOLBAR_ICON_SIZE));
+        .child(more_icon(palette.text_primary, metrics::TOOLBAR_ICON_SIZE));
 
     button = if menu_open {
-        button.bg(rgba(palette.tab_control_hover))
+        button.bg(rgba(palette.control_hover_surface))
     } else {
-        button.hover(|style| style.bg(rgba(palette.tab_control_hover)))
+        button.hover(|style| style.bg(rgba(palette.control_hover_surface)))
     };
 
     button
@@ -104,7 +104,7 @@ fn navigation_button(
     tab_index: isize,
     enabled: bool,
     icon: impl IntoElement,
-    palette: Palette,
+    palette: ThemeColors,
     on_click: ClickHandler,
 ) -> impl IntoElement {
     let mut button = h_stack()
@@ -117,9 +117,9 @@ fn navigation_button(
         .items_center()
         .justify_center()
         .size(px(metrics::TOOLBAR_BUTTON_SIZE))
-        .rounded(px(metrics::TAB_RADIUS))
+        .rounded(px(metrics::CONTROL_RADIUS))
         .text_color(rgb(if enabled {
-            palette.text_muted
+            palette.text_secondary
         } else {
             palette.text_disabled
         }))
@@ -128,7 +128,7 @@ fn navigation_button(
     if enabled {
         button = button
             .tab_index(tab_index)
-            .hover(|style| style.bg(rgba(palette.tab_control_hover)))
+            .hover(|style| style.bg(rgba(palette.control_hover_surface)))
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_click(on_click);
     }

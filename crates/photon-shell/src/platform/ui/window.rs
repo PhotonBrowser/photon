@@ -24,9 +24,12 @@ use super::menu::{
 };
 use super::omnibox::{FocusOmnibox, Omnibox};
 use super::tabs::{TabItem, tab_strip};
-use super::theme::{Palette, ThemePreference, metrics};
 use super::titlebar::titlebar;
 use super::toolbar::{ClickHandler, address_toolbar as build_address_toolbar};
+use super::{
+    metrics,
+    theme::{ThemeColors, ThemePreference},
+};
 
 struct BrowserWindow {
     tabs: Vec<Entity<PhotonWebView>>,
@@ -213,7 +216,7 @@ impl BrowserWindow {
     }
 
     fn tab_strip(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let palette = Palette::for_appearance(self.theme.appearance(window.appearance()));
+        let palette = ThemeColors::for_appearance(self.theme.appearance(window.appearance()));
         let tabs = self
             .tabs
             .iter()
@@ -273,7 +276,7 @@ impl BrowserWindow {
     }
 
     fn address_toolbar(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let palette = Palette::for_appearance(self.theme.appearance(window.appearance()));
+        let palette = ThemeColors::for_appearance(self.theme.appearance(window.appearance()));
         let state = self.active_webview().read(cx).state.clone();
         let can_reload = !state.url.is_empty() && state.url != "about:blank";
         let loading = state.loading;
@@ -315,7 +318,7 @@ impl BrowserWindow {
     fn browser_menu(
         &self,
         appearance: WindowAppearance,
-        palette: Palette,
+        palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + 'static {
         let debug_info_enabled = self.active_webview().read(cx).debug_info_enabled;
@@ -393,12 +396,12 @@ impl BrowserWindow {
 impl Render for BrowserWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let appearance = self.theme.appearance(window.appearance());
-        let palette = Palette::for_appearance(appearance);
+        let palette = ThemeColors::for_appearance(appearance);
         let mut root = v_stack()
             .size_full()
             .relative()
             .bg(gpui::rgba(palette.window_tint))
-            .text_color(gpui::rgb(palette.text))
+            .text_color(gpui::rgb(palette.text_primary))
             .on_mouse_down(
                 MouseButton::Right,
                 cx.listener(|this, event: &MouseDownEvent, _, cx| {
@@ -482,7 +485,7 @@ impl Render for BrowserWindow {
         }
         if let Some(open_menu) = self.open_menu {
             let appearance = self.theme.appearance(window.appearance());
-            let palette = Palette::for_appearance(appearance);
+            let palette = ThemeColors::for_appearance(appearance);
             let backdrop = div()
                 .absolute()
                 .inset_0()
@@ -599,7 +602,7 @@ fn open_browser_window(
                     this.update(cx, |this: &mut BrowserWindow, cx| {
                         this.window_changed(visible, display_changed, cx)
                     })
-                        .ok();
+                    .ok();
                 })
                 .detach();
             });

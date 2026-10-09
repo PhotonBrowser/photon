@@ -5,7 +5,7 @@ use gpui::{
     size,
 };
 
-use crate::platform::ui::theme::metrics;
+use crate::platform::ui::metrics;
 
 /// Select with PHOTON_WINDOW_BACKGROUND=opaque|blurred|liquid-glass.
 /// The system controls the strength of both native materials.
@@ -21,12 +21,16 @@ fn background() -> MacosWindowBackground {
     background_for(std::env::var("PHOTON_WINDOW_BACKGROUND").ok().as_deref())
 }
 
-const INITIAL_WIDTH: f32 = 1200.0;
-const INITIAL_HEIGHT: f32 = 760.0;
-
 /// Builds a Photon browser window's initial size, titlebar, and native backing.
 pub(super) fn options(cx: &App) -> WindowOptions {
-    let bounds = Bounds::centered(None, size(px(INITIAL_WIDTH), px(INITIAL_HEIGHT)), cx);
+    let bounds = Bounds::centered(
+        None,
+        size(
+            px(metrics::INITIAL_WINDOW_WIDTH),
+            px(metrics::INITIAL_WINDOW_HEIGHT),
+        ),
+        cx,
+    );
     WindowOptions::new()
         .window_bounds(Some(WindowBounds::Windowed(bounds)))
         .titlebar(Some(

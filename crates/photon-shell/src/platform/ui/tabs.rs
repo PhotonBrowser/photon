@@ -7,7 +7,7 @@ use gpui::{
 
 use super::icons::{add_icon, close_icon};
 use super::layout::h_stack;
-use super::theme::{Palette, metrics};
+use super::{metrics, theme::ThemeColors};
 
 type ClickHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
 
@@ -24,7 +24,7 @@ pub(super) struct TabItem {
 pub(super) fn tab_strip(
     tabs: Vec<TabItem>,
     on_new_tab: ClickHandler,
-    palette: Palette,
+    palette: ThemeColors,
 ) -> impl IntoElement {
     let tab_count = tabs.len();
     let mut tab_list = h_stack()
@@ -67,7 +67,7 @@ fn browser_tab(
     position: usize,
     tab_count: usize,
     focus_index: isize,
-    palette: Palette,
+    palette: ThemeColors,
 ) -> impl IntoElement {
     let close_label = format!("Close {}", tab.label);
     let close_id = format!("{}-close", tab.id);
@@ -88,12 +88,12 @@ fn browser_tab(
         .gap(px(metrics::TAB_CLOSE_GAP))
         .h(px(metrics::TAB_HEIGHT))
         .px(px(metrics::TAB_HORIZONTAL_PADDING))
-        .rounded(px(metrics::TAB_RADIUS))
+        .rounded(px(metrics::CONTROL_RADIUS))
         .text_size(px(metrics::TAB_FONT_SIZE))
         .text_color(rgb(if tab.active {
-            palette.text
+            palette.text_primary
         } else {
-            palette.text_muted
+            palette.text_secondary
         }))
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .on_click(tab.on_select)
@@ -121,7 +121,7 @@ fn close_tab_button(
     label: String,
     on_click: ClickHandler,
     focus_index: isize,
-    palette: Palette,
+    palette: ThemeColors,
 ) -> impl IntoElement {
     h_stack()
         .id(id)
@@ -133,18 +133,18 @@ fn close_tab_button(
         .items_center()
         .justify_center()
         .size(px(metrics::TAB_CLOSE_BUTTON_SIZE))
-        .rounded(px(metrics::TAB_RADIUS))
-        .text_color(rgb(palette.text_muted))
-        .hover(|style| style.bg(rgba(palette.tab_control_hover)))
+        .rounded(px(metrics::CONTROL_RADIUS))
+        .text_color(rgb(palette.text_secondary))
+        .hover(|style| style.bg(rgba(palette.control_hover_surface)))
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .on_click(on_click)
-        .child(close_icon(palette.text_muted, metrics::TAB_ICON_SIZE))
+        .child(close_icon(palette.text_secondary, metrics::TAB_ICON_SIZE))
 }
 
 fn new_tab_button(
     on_click: ClickHandler,
     focus_index: isize,
-    palette: Palette,
+    palette: ThemeColors,
 ) -> impl IntoElement {
     h_stack()
         .id("browser-new-tab")
@@ -156,10 +156,10 @@ fn new_tab_button(
         .items_center()
         .justify_center()
         .size(px(metrics::TAB_HEIGHT))
-        .rounded(px(metrics::TAB_RADIUS))
-        .text_color(rgb(palette.text_muted))
-        .hover(|style| style.bg(rgba(palette.tab_control_hover)))
+        .rounded(px(metrics::CONTROL_RADIUS))
+        .text_color(rgb(palette.text_secondary))
+        .hover(|style| style.bg(rgba(palette.control_hover_surface)))
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .on_click(on_click)
-        .child(add_icon(palette.text_muted, metrics::TAB_ICON_SIZE))
+        .child(add_icon(palette.text_secondary, metrics::TAB_ICON_SIZE))
 }

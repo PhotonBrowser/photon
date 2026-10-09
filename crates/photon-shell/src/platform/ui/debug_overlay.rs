@@ -4,23 +4,23 @@ use gpui::{div, prelude::*, px, rgb, rgba};
 use photon_core::BrowserDiagnostics;
 
 use super::layout::{h_stack, v_stack};
-use super::theme::Palette;
+use super::{metrics, theme::ThemeColors};
 
 pub(super) fn debug_overlay(
     diagnostics: &BrowserDiagnostics,
-    palette: Palette,
+    palette: ThemeColors,
 ) -> impl IntoElement {
     v_stack()
         .absolute()
-        .right(px(12.0))
-        .bottom(px(12.0))
-        .gap(px(2.0))
-        .min_w(px(236.0))
-        .px(px(8.0))
-        .py(px(6.0))
+        .right(px(metrics::DEBUG_OVERLAY_INSET))
+        .bottom(px(metrics::DEBUG_OVERLAY_INSET))
+        .gap(px(metrics::DEBUG_OVERLAY_GAP))
+        .min_w(px(metrics::DEBUG_OVERLAY_MIN_WIDTH))
+        .px(px(metrics::DEBUG_OVERLAY_HORIZONTAL_PADDING))
+        .py(px(metrics::DEBUG_OVERLAY_VERTICAL_PADDING))
         .bg(rgba(palette.diagnostics_surface))
-        .text_size(px(11.0))
-        .font_family("monospace")
+        .text_size(px(metrics::DEBUG_OVERLAY_FONT_SIZE))
+        .font_family(metrics::DEBUG_OVERLAY_FONT_FAMILY)
         .text_color(rgb(palette.diagnostics_text))
         .child(row(
             "Engine FPS",
@@ -61,20 +61,20 @@ pub(super) fn debug_overlay(
         .child(row("Main-thread task", "not attributed".into(), palette))
         .child(
             div()
-                .text_size(px(10.0))
-                .text_color(rgb(palette.diagnostics_muted))
+                .text_size(px(metrics::DEBUG_OVERLAY_NOTE_FONT_SIZE))
+                .text_color(rgb(palette.diagnostics_secondary_text))
                 .child("Frame gaps are a stall proxy; JS/layout attribution is unavailable."),
         )
 }
 
-fn row(label: &str, value: String, palette: Palette) -> impl IntoElement {
+fn row(label: &str, value: String, palette: ThemeColors) -> impl IntoElement {
     h_stack()
         .items_center()
         .justify_between()
-        .gap(px(12.0))
+        .gap(px(metrics::DEBUG_OVERLAY_ROW_GAP))
         .child(
             div()
-                .text_color(rgb(palette.diagnostics_muted))
+                .text_color(rgb(palette.diagnostics_secondary_text))
                 .child(label.to_owned()),
         )
         .child(value)

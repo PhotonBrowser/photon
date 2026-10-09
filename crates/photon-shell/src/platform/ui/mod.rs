@@ -6,6 +6,7 @@ mod icons;
 mod input;
 mod layout;
 mod menu;
+pub(super) mod metrics;
 mod omnibox;
 mod tabs;
 pub(super) mod theme;
