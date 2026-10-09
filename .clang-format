@@ -1,0 +1,37 @@
+# Photon's native glue follows Ladybird's style, so it reads like the Engine code it sits next to.
+# Keep in step with Engine/.clang-format; Ladybird's linter uses clang-format 21.
+---
+AlignEscapedNewlines: Left
+AlignTrailingComments:
+    Kind: Always
+    OverEmptyLines: 0
+BasedOnStyle: WebKit
+BraceWrapping:
+    AfterFunction: true
+BreakBeforeBraces: Custom
+BreakBeforeInheritanceComma: true
+BreakConstructorInitializers: BeforeComma
+IndentPPDirectives: AfterHash
+IndentRequiresClause: false
+InsertNewlineAtEOF: true
+LineEnding: LF
+NamespaceIndentation: None
+QualifierAlignment: Right
+RemoveSemicolon: true
+RequiresClausePosition: WithFollowing
+RequiresExpressionIndentation: OuterScope
+SpaceAfterTemplateKeyword: false
+WrapNamespaceBodyWithEmptyLines: Always
+
+---
+Language: ObjC
+BinPackParameters: false
+BraceWrapping:
+    AfterObjCDeclaration: true
+ObjCBinPackProtocolList: Never
+ObjCBlockIndentWidth: 4
+ObjCBreakBeforeNestedBlockParam: true
+ObjCSpaceAfterProperty: true
+ObjCSpaceBeforeProtocolList: true
+
+...
