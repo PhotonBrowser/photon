@@ -9,262 +9,286 @@
 namespace {
 
 struct RuntimeHandle {
-  std::unique_ptr<Photon::Runtime> runtime;
+    std::unique_ptr<Photon::Runtime> runtime;
 };
 
 struct ViewHandle {
-  std::unique_ptr<Photon::View> view;
+    std::unique_ptr<Photon::View> view;
 };
 
-void copy_error(char *destination, size_t capacity,
-                std::string const &message) {
-  if (destination && capacity > 0)
-    std::snprintf(destination, capacity, "%s", message.c_str());
+void copy_error(char* destination, size_t capacity,
+    std::string const& message)
+{
+    if (destination && capacity > 0)
+        std::snprintf(destination, capacity, "%s", message.c_str());
 }
 
 } // namespace
 
-extern "C" void *photon_runtime_create(char const *helper_directory,
-                                       char *error, size_t error_capacity) {
-  std::string message;
-  auto runtime = Photon::Runtime::create(
-      helper_directory ? helper_directory : "", message);
-  if (!runtime) {
-    copy_error(error, error_capacity, message);
-    return nullptr;
-  }
-  return new RuntimeHandle{std::move(runtime)};
+extern "C" void* photon_runtime_create(char const* helper_directory,
+    char* error, size_t error_capacity)
+{
+    std::string message;
+    auto runtime = Photon::Runtime::create(
+        helper_directory ? helper_directory : "", message);
+    if (!runtime) {
+        copy_error(error, error_capacity, message);
+        return nullptr;
+    }
+    return new RuntimeHandle { std::move(runtime) };
 }
 
 #if defined(__APPLE__)
 extern "C" void photon_runtime_set_native_release_drain_callback(
-    void *runtime, void *callback_data,
-    PhotonNativeReleaseDrainCallback callback) {
-  if (runtime)
-    static_cast<RuntimeHandle *>(runtime)->runtime->set_native_release_drain_callback(
-        callback_data, callback);
+    void* runtime, void* callback_data,
+    PhotonNativeReleaseDrainCallback callback)
+{
+    if (runtime)
+        static_cast<RuntimeHandle*>(runtime)->runtime->set_native_release_drain_callback(
+            callback_data, callback);
 }
 
-extern "C" void photon_runtime_schedule_native_release_drain(void *runtime) {
-  if (runtime)
-    static_cast<RuntimeHandle *>(runtime)->runtime->schedule_native_release_drain();
+extern "C" void photon_runtime_schedule_native_release_drain(void* runtime)
+{
+    if (runtime)
+        static_cast<RuntimeHandle*>(runtime)->runtime->schedule_native_release_drain();
 }
 #endif
 
-extern "C" void photon_runtime_destroy(void *runtime) {
-  delete static_cast<RuntimeHandle *>(runtime);
+extern "C" void photon_runtime_destroy(void* runtime)
+{
+    delete static_cast<RuntimeHandle*>(runtime);
 }
 
-extern "C" void *photon_view_create(void *runtime, int width, int height,
-                                    double dpr, void *callback_data,
-                                    PhotonStateCallback state_callback,
-                                    PhotonFrameCallback frame_callback,
-                                    PhotonCursorCallback cursor_callback,
-                                    PhotonErrorCallback error_callback,
-                                    PhotonCrashCallback crash_callback,
-                                    PhotonPerformanceCallback performance_callback
+extern "C" void* photon_view_create(void* runtime, int width, int height,
+    double dpr, void* callback_data,
+    PhotonStateCallback state_callback,
+    PhotonFrameCallback frame_callback,
+    PhotonCursorCallback cursor_callback,
+    PhotonErrorCallback error_callback,
+    PhotonCrashCallback crash_callback,
+    PhotonPerformanceCallback performance_callback
 #if defined(__APPLE__)
-                                    , bool native_metal_presentation,
-                                    PhotonNativeBackingCallback native_backing_callback,
-                                    PhotonNativeFrameCallback native_frame_callback
+    ,
+    bool native_metal_presentation,
+    PhotonNativeBackingCallback native_backing_callback,
+    PhotonNativeFrameCallback native_frame_callback
 #endif
-                                    ) {
-  if (!runtime)
-    return nullptr;
+)
+{
+    if (!runtime)
+        return nullptr;
 
-  Photon::ViewCallbacks callbacks;
-  callbacks.state_changed = [=](Photon::ViewState const &state) {
-    if (state_callback)
-      state_callback(callback_data, state.url.c_str(), state.title.c_str(),
-                     state.loading, state.can_go_back, state.can_go_forward);
-  };
-  callbacks.frame_ready =
-      [=](std::shared_ptr<Photon::PresentedFrame const> frame) {
-        if (frame_callback && frame)
-          frame_callback(callback_data, frame->width, frame->height,
-                         frame->stride, frame->device_pixel_ratio,
-                         frame->pixels.data(), frame->pixels.size(),
-                         frame->engine_paint_interval_microseconds,
-                         frame->bitmap_acquisition_microseconds,
-                         frame->copy_time_microseconds,
-                         frame->paint_to_callback_microseconds);
-      };
-  callbacks.performance_stats_changed = [=](Photon::PerformanceStats const& stats) {
-    if (!performance_callback)
-      return;
-    PhotonPerformanceStats snapshot {
-        stats.has_cpu_percent,
-        stats.cpu_percent,
-        stats.has_memory_bytes,
-        stats.memory_bytes,
-        stats.has_managed_heap_bytes,
-        stats.managed_heap_bytes,
-        stats.download_bytes_per_second,
-        stats.upload_bytes_per_second,
-        stats.has_frames_per_second,
-        stats.frames_per_second,
+    Photon::ViewCallbacks callbacks;
+    callbacks.state_changed = [=](Photon::ViewState const& state) {
+        if (state_callback)
+            state_callback(callback_data, state.url.c_str(), state.title.c_str(),
+                state.loading, state.can_go_back, state.can_go_forward);
     };
-    performance_callback(callback_data, &snapshot);
-  };
+    callbacks.frame_ready =
+        [=](std::shared_ptr<Photon::PresentedFrame const> frame) {
+            if (frame_callback && frame)
+                frame_callback(callback_data, frame->width, frame->height,
+                    frame->stride, frame->device_pixel_ratio,
+                    frame->pixels.data(), frame->pixels.size(),
+                    frame->engine_paint_interval_microseconds,
+                    frame->bitmap_acquisition_microseconds,
+                    frame->copy_time_microseconds,
+                    frame->paint_to_callback_microseconds);
+        };
+    callbacks.performance_stats_changed = [=](Photon::PerformanceStats const& stats) {
+        if (!performance_callback)
+            return;
+        PhotonPerformanceStats snapshot {
+            stats.has_cpu_percent,
+            stats.cpu_percent,
+            stats.has_memory_bytes,
+            stats.memory_bytes,
+            stats.has_managed_heap_bytes,
+            stats.managed_heap_bytes,
+            stats.download_bytes_per_second,
+            stats.upload_bytes_per_second,
+            stats.has_frames_per_second,
+            stats.frames_per_second,
+        };
+        performance_callback(callback_data, &snapshot);
+    };
 #if defined(__APPLE__)
-  callbacks.native_metal_presentation = native_metal_presentation
-      && native_backing_callback && native_frame_callback;
-  if (callbacks.native_metal_presentation) {
-    callbacks.native_backing_registered = [=](Photon::NativeGpuBacking const &backing) {
-      return native_backing_callback(callback_data, backing.backing_id,
-                                     backing.generation, backing.width,
-                                     backing.height, backing.pixel_format,
-                                     backing.iosurface_mach_port);
-    };
-    callbacks.native_frame_ready = [=](Photon::NativeGpuFrame const &frame) {
-      native_frame_callback(callback_data, frame.backing_id, frame.generation,
-                            frame.frame_id, frame.signal_value, frame.width, frame.height,
-                            frame.device_pixel_ratio);
-    };
-  }
+    callbacks.native_metal_presentation = native_metal_presentation
+        && native_backing_callback && native_frame_callback;
+    if (callbacks.native_metal_presentation) {
+        callbacks.native_backing_registered = [=](Photon::NativeGpuBacking const& backing) {
+            return native_backing_callback(callback_data, backing.backing_id,
+                backing.generation, backing.width,
+                backing.height, backing.pixel_format,
+                backing.iosurface_mach_port);
+        };
+        callbacks.native_frame_ready = [=](Photon::NativeGpuFrame const& frame) {
+            native_frame_callback(callback_data, frame.backing_id, frame.generation,
+                frame.frame_id, frame.signal_value, frame.width, frame.height,
+                frame.device_pixel_ratio);
+        };
+    }
 #endif
-  callbacks.cursor_changed = [=](Photon::Cursor cursor) {
-    if (cursor_callback)
-      cursor_callback(callback_data, static_cast<int>(cursor));
-  };
-  callbacks.failed = [=](std::string const &message) {
-    if (error_callback)
-      error_callback(callback_data, message.c_str());
-  };
-  callbacks.crashed = [=](std::string const &url) {
-    if (crash_callback)
-      crash_callback(callback_data, url.c_str());
-  };
+    callbacks.cursor_changed = [=](Photon::Cursor cursor) {
+        if (cursor_callback)
+            cursor_callback(callback_data, static_cast<int>(cursor));
+    };
+    callbacks.failed = [=](std::string const& message) {
+        if (error_callback)
+            error_callback(callback_data, message.c_str());
+    };
+    callbacks.crashed = [=](std::string const& url) {
+        if (crash_callback)
+            crash_callback(callback_data, url.c_str());
+    };
 
-  auto view = static_cast<RuntimeHandle *>(runtime)->runtime->create_view(
-      width, height, dpr, std::move(callbacks));
-  if (!view)
-    return nullptr;
-  return new ViewHandle{std::move(view)};
+    auto view = static_cast<RuntimeHandle*>(runtime)->runtime->create_view(
+        width, height, dpr, std::move(callbacks));
+    if (!view)
+        return nullptr;
+    return new ViewHandle { std::move(view) };
 }
 
-extern "C" void photon_view_resize(void *view, int width, int height,
-                                   double dpr) {
-  if (view)
-    static_cast<ViewHandle *>(view)->view->resize(width, height, dpr);
+extern "C" void photon_view_resize(void* view, int width, int height,
+    double dpr)
+{
+    if (view)
+        static_cast<ViewHandle*>(view)->view->resize(width, height, dpr);
 }
 
-extern "C" void photon_view_set_performance_monitor_enabled(void *view,
-                                                              bool enabled) {
-  if (view)
-    static_cast<ViewHandle *>(view)->view->set_performance_monitor_enabled(enabled);
+extern "C" void photon_view_set_performance_monitor_enabled(void* view,
+    bool enabled)
+{
+    if (view)
+        static_cast<ViewHandle*>(view)->view->set_performance_monitor_enabled(enabled);
 }
 
-extern "C" void photon_view_set_visible(void *view, bool visible) {
-  if (view)
-    static_cast<ViewHandle *>(view)->view->set_visible(visible);
+extern "C" void photon_view_set_visible(void* view, bool visible)
+{
+    if (view)
+        static_cast<ViewHandle*>(view)->view->set_visible(visible);
 }
 
-extern "C" void photon_view_set_display_metadata(void *view,
-                                                 uint64_t display_id,
-                                                 double refresh_rate) {
-  if (view)
-    static_cast<ViewHandle *>(view)->view->set_display_metadata(display_id,
-                                                                refresh_rate);
+extern "C" void photon_view_set_display_metadata(void* view,
+    uint64_t display_id,
+    double refresh_rate)
+{
+    if (view)
+        static_cast<ViewHandle*>(view)->view->set_display_metadata(display_id,
+            refresh_rate);
 }
 
 #if defined(__APPLE__)
-extern "C" void photon_view_release_native_frame(void *view,
-                                                  uint64_t backing_id,
-                                                  uint64_t generation,
-                                                  uint64_t frame_id) {
-  if (view)
-    static_cast<ViewHandle *>(view)->view->release_native_frame(
-        backing_id, generation, frame_id);
+extern "C" void photon_view_release_native_frame(void* view,
+    uint64_t backing_id,
+    uint64_t generation,
+    uint64_t frame_id)
+{
+    if (view)
+        static_cast<ViewHandle*>(view)->view->release_native_frame(
+            backing_id, generation, frame_id);
 }
 
-extern "C" bool photon_view_set_native_metal_presentation(void *view,
-                                                            bool enabled) {
-  if (!view)
-    return false;
-  static_cast<ViewHandle *>(view)->view->set_native_metal_presentation(enabled);
-  return true;
+extern "C" bool photon_view_set_native_metal_presentation(void* view,
+    bool enabled)
+{
+    if (!view)
+        return false;
+    static_cast<ViewHandle*>(view)->view->set_native_metal_presentation(enabled);
+    return true;
 }
 #endif
 
-extern "C" void photon_view_navigate(void *view, char const *url) {
-  if (view && url)
-    static_cast<ViewHandle *>(view)->view->navigate(url);
+extern "C" void photon_view_navigate(void* view, char const* url)
+{
+    if (view && url)
+        static_cast<ViewHandle*>(view)->view->navigate(url);
 }
 
-extern "C" void photon_view_reload(void *view) {
-  if (view)
-    static_cast<ViewHandle *>(view)->view->reload();
+extern "C" void photon_view_reload(void* view)
+{
+    if (view)
+        static_cast<ViewHandle*>(view)->view->reload();
 }
 
-extern "C" void photon_view_stop_loading(void *view) {
-  if (view)
-    static_cast<ViewHandle *>(view)->view->stop_loading();
+extern "C" void photon_view_stop_loading(void* view)
+{
+    if (view)
+        static_cast<ViewHandle*>(view)->view->stop_loading();
 }
 
-extern "C" void photon_view_go_back(void *view) {
-  if (view)
-    static_cast<ViewHandle *>(view)->view->go_back();
+extern "C" void photon_view_go_back(void* view)
+{
+    if (view)
+        static_cast<ViewHandle*>(view)->view->go_back();
 }
 
-extern "C" void photon_view_go_forward(void *view) {
-  if (view)
-    static_cast<ViewHandle *>(view)->view->go_forward();
+extern "C" void photon_view_go_forward(void* view)
+{
+    if (view)
+        static_cast<ViewHandle*>(view)->view->go_forward();
 }
 
-extern "C" void photon_view_set_focus(void *view, bool focused) {
-  if (view)
-    static_cast<ViewHandle *>(view)->view->set_focus(focused);
+extern "C" void photon_view_set_focus(void* view, bool focused)
+{
+    if (view)
+        static_cast<ViewHandle*>(view)->view->set_focus(focused);
 }
 
 extern "C" void
-photon_runtime_set_system_reduced_motion_preference(void *runtime,
-                                                    bool reduce_motion) {
-  if (runtime)
-    static_cast<RuntimeHandle *>(runtime)
-        ->runtime->set_system_reduced_motion_preference(reduce_motion);
+photon_runtime_set_system_reduced_motion_preference(void* runtime,
+    bool reduce_motion)
+{
+    if (runtime)
+        static_cast<RuntimeHandle*>(runtime)
+            ->runtime->set_system_reduced_motion_preference(reduce_motion);
 }
 
-extern "C" void photon_view_pointer(void *view, int kind, double x, double y,
-                                    int button, uint8_t buttons, bool shift,
-                                    bool control, bool alt, bool meta,
-                                    double wheel_x, double wheel_y,
-                                    bool precise, int phase, int clicks) {
-  if (!view)
-    return;
-  Photon::PointerEvent event;
-  event.type = static_cast<Photon::PointerType>(kind);
-  event.x = x;
-  event.y = y;
-  event.button = static_cast<Photon::PointerButton>(button);
-  event.buttons = buttons;
-  event.shift = shift;
-  event.control = control;
-  event.alt = alt;
-  event.meta = meta;
-  event.wheel_x = wheel_x;
-  event.wheel_y = wheel_y;
-  event.precise_wheel = precise;
-  event.scroll_phase = static_cast<Photon::ScrollPhase>(phase);
-  event.click_count = clicks;
-  static_cast<ViewHandle *>(view)->view->send_pointer_event(event);
+extern "C" void photon_view_pointer(void* view, int kind, double x, double y,
+    int button, uint8_t buttons, bool shift,
+    bool control, bool alt, bool meta,
+    double wheel_x, double wheel_y,
+    bool precise, int phase, int clicks)
+{
+    if (!view)
+        return;
+    Photon::PointerEvent event;
+    event.type = static_cast<Photon::PointerType>(kind);
+    event.x = x;
+    event.y = y;
+    event.button = static_cast<Photon::PointerButton>(button);
+    event.buttons = buttons;
+    event.shift = shift;
+    event.control = control;
+    event.alt = alt;
+    event.meta = meta;
+    event.wheel_x = wheel_x;
+    event.wheel_y = wheel_y;
+    event.precise_wheel = precise;
+    event.scroll_phase = static_cast<Photon::ScrollPhase>(phase);
+    event.click_count = clicks;
+    static_cast<ViewHandle*>(view)->view->send_pointer_event(event);
 }
 
-extern "C" void photon_view_key(void *view, uint16_t key, bool pressed,
-                                uint32_t code_point, bool shift, bool control,
-                                bool alt, bool meta, bool repeat,
-                                bool insert_text) {
-  if (view)
-    static_cast<ViewHandle *>(view)->view->send_key_event(
-        static_cast<Photon::Key>(key), pressed, code_point, shift, control, alt,
-        meta, repeat, insert_text);
+extern "C" void photon_view_key(void* view, uint16_t key, bool pressed,
+    uint32_t code_point, bool shift, bool control,
+    bool alt, bool meta, bool repeat,
+    bool insert_text)
+{
+    if (view)
+        static_cast<ViewHandle*>(view)->view->send_key_event(
+            static_cast<Photon::Key>(key), pressed, code_point, shift, control, alt,
+            meta, repeat, insert_text);
 }
 
-extern "C" void photon_view_shutdown(void *view) {
-  if (view)
-    static_cast<ViewHandle *>(view)->view->shutdown();
+extern "C" void photon_view_shutdown(void* view)
+{
+    if (view)
+        static_cast<ViewHandle*>(view)->view->shutdown();
 }
 
-extern "C" void photon_view_destroy(void *view) {
-  delete static_cast<ViewHandle *>(view);
+extern "C" void photon_view_destroy(void* view)
+{
+    delete static_cast<ViewHandle*>(view);
 }
