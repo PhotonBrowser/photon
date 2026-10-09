@@ -1,126 +1,136 @@
 # Architecture
 
 ```text
-crates/photon-app
-    Photon Rust application and native GPUI-CE window
-        ↓
-    PhotonWebView
-        ↓ narrow C ABI
-native/embedder + LibPhotonEmbedder
-        ↓
-Engine/ (Photon Engine / Ladybird)
+photon-app
+    └── photon-shell
+        ├── GPUI-CE window and Photon browser UI
+        ├── Photon Engine session adapter
+        │       ↓ narrow native embedder API
+        │   Photon Engine / Ladybird
+        └── native presentation lifecycle
+                ↓ uses
+            photon-presentation-ipc ←── photon-presentation-broker
+                ↓ XPC descriptors
+            IOSurface + MTLSharedEvent → GPUI-CE external Metal surface
 
-Engine IOSurface + MTLSharedEvent
-        ↓ XPC descriptor broker
-GPUI-CE external Metal surface
-        ↓
-native CAMetalLayer
+photon-ffi ── photon-core ── photon-omnibox
 ```
+
+The desktop app uses the framework-independent Rust browser model directly.
+`photon-ffi` is the separate static library for native callers that need the C
+API; it is not part of the desktop shell's internal state path.
 
 ## Ownership
 
-- `crates/photon-core` contains framework-independent browser state and command rules. It does not depend on GPUI, GPUI-CE, or Ladybird types.
-- `crates/photon-omnibox` decides whether typed text is an address or a search query.
-- `crates/photon-app` is the runnable entry point. `crates/photon-shell` owns the native window, `PhotonWebView`, presentation state, frame ordering, keyboard/pointer forwarding, and Engine release delivery. Engine readiness uses Ladybird's Core CFRunLoop integration to schedule GPUI updates; Metal completion signals the native release-drain source.
-- `crates/photon-presentation-broker` and `native/presentation` own macOS XPC service startup and IOSurface/shared-event descriptor transport.
-- `native/embedder` is the narrow C++ bridge to LibPhotonEmbedder. Engine implementation changes remain in the Photon Engine submodule.
-- `vendor/gpui-ce` contains only generic external Metal surface rendering and platform capabilities. Browser and Ladybird lifecycle policy stays in Photon.
+- `crates/photon-core` contains framework-independent browser state, commands,
+  diagnostics, and address normalization. It has no GPUI, GPUI-CE, native, or
+  Ladybird types.
+- `crates/photon-omnibox` owns address-versus-search classification and search
+  engine data. Core and the shell use the same rules.
+- `crates/photon-ffi` adapts the safe core model to the exported
+  `photon_browser_*` C ABI. It owns pointer validation, C strings, and ABI
+  state, and builds as both an `rlib` and a static library.
+- `crates/photon-app` is the runnable entry point. `crates/photon-shell` owns
+  the native window, GPUI views, `PhotonWebView`, Engine session, presentation
+  state, frame ordering, browser input, and shutdown lifecycle. Its visual
+  components depend on the Engine and window lifecycle, so they remain modules
+  inside the shell rather than a separate UI crate.
+- `crates/photon-shortcuts` owns browser-level GPUI actions and default key
+  bindings.
+- `crates/photon-presentation-ipc` owns the macOS XPC protocol, Rust client
+  channel, native descriptor transport, and service entry point. The separate
+  `crates/photon-presentation-broker` package is the small service executable.
+- `native/embedder` is the narrow C++ bridge to LibPhotonEmbedder. Engine
+  implementation changes belong in the Photon Engine submodule.
+- `vendor/gpui-ce` contains generic external Metal surface rendering and
+  platform capabilities. Browser and Ladybird lifecycle policy stays in
+  Photon.
 
 ## Rust package map
-
-Photon's Rust workspace is split by ownership and dependency direction. These
-six packages are the Photon-owned boundaries that currently have independent
-responsibilities; keep new packages focused on a real reusable or separately
-launched component rather than mirroring every Engine subsystem.
-
-```text
-photon-cli                     developer and runtime commands
-photon-app ────────────────── photon-shell
-                                 ├── GPUI-CE shell + native/embedder + Engine/
-                                 └── photon-omnibox
-photon-core ───────────────── photon-omnibox
-photon-presentation-broker ─── native/presentation
-```
-
-`Engine/` and `vendor/gpui-ce/` are separately maintained submodules, not
-Photon workspace packages. `native/embedder` and `native/presentation` are
-small native build targets owned by their Rust shell/service packages.
-
-## Crate and module map
 
 ```text
 crates/
 ├── photon-app/                       # Runnable Photon entry point
-│   └── src/main.rs                   # Launches photon-shell
 ├── photon-shell/                     # GPUI-CE shell and native Engine adapter
 │   └── src/platform/
-│           ├── mod.rs                # macOS shell module wiring and trace helper
-│           ├── window_settings.rs    # GPUI window size, titlebar, blur, insets, radii
-│           ├── ffi.rs                # Rust declarations for the native C ABI
-│           ├── engine.rs             # Engine runtime/session, callbacks, input forwarding
-│           ├── presentation.rs       # IOSurface frames, GPU completion, lease tracking
-│           ├── display.rs            # Display refresh rate for Engine frame pacing
-│           ├── window_observer.rs    # Window occlusion and display-change notifications
-│           ├── presentation_xpc.rs   # XPC broker client and descriptor transport
-│           └── ui/
-│               ├── window.rs         # Top-level window layout and app bootstrap
-│               ├── webview.rs        # Page surface composition
-│               ├── input.rs          # Keyboard, pointer, and scroll forwarding
-│               └── theme.rs          # Shell visual theme
-├── photon-core/                      # UI-independent browser state and C API
-│   └── src/
-│       ├── lib.rs                    # Public crate API
-│       ├── state.rs                  # BrowserState, commands, Engine events, URL adapter
-│       └── api.rs                    # Exported photon_browser_* C ABI implementation
-├── photon-omnibox/                   # Address-vs-search rules, independent of the UI
-│   └── src/
-│       ├── lib.rs                    # Public crate API
-│       ├── engines.rs                # SearchEngine values, built-ins, registry
-│       └── resolve.rs                # Address classification and URL resolution
-├── photon-cli/                       # `./photon` developer and runtime commands
-│   └── src/
-│       ├── cli.rs                    # CLI definition and dispatch
-│       ├── support.rs                # Shared command helpers
-│       └── commands/                 # One module per command
-└── photon-presentation-broker/       # macOS XPC broker service executable
+│       ├── engine.rs                 # Engine session, callbacks, input forwarding
+│       ├── presentation.rs           # IOSurface frames, leases, GPU completion
+│       ├── window_settings.rs        # Native window options and material choice
+│       └── ui/
+│           ├── window.rs             # App bootstrap and top-level window behavior
+│           ├── webview.rs            # Page surface composition
+│           ├── input.rs              # Keyboard, pointer, and scroll forwarding
+│           ├── theme.rs              # Appearance and semantic color tokens
+│           └── metrics.rs            # Shared UI dimensions and typography
+├── photon-core/                      # Framework-independent browser model
+├── photon-omnibox/                   # Search engines and address resolution
+├── photon-ffi/                       # Exported C API and static library
+├── photon-shortcuts/                 # Browser actions and key bindings
+├── photon-cli/                       # `./photon` developer commands
+├── photon-presentation-ipc/          # XPC protocol, client, and native transport
+└── photon-presentation-broker/       # macOS XPC service executable
 ```
 
 | Package | Owns | Depends on |
 | --- | --- | --- |
 | `photon-app` | Runnable Photon entry point | `photon-shell` |
-| `photon-shell` | GPUI-CE window, Engine session adapter, native presentation lifecycle, browser input forwarding | GPUI-CE, `photon-omnibox`, native embedder bridge |
-| `photon-core` | Framework-independent browser state and exported C API | `photon-omnibox` |
-| `photon-omnibox` | Search engines and address/query resolution | URL parsing library |
+| `photon-shell` | GPUI-CE window, Engine session adapter, native presentation lifecycle, browser input | GPUI-CE, `photon-core`, `photon-shortcuts`, `photon-presentation-ipc`, native embedder bridge |
+| `photon-core` | Browser state, commands, diagnostics, shared address normalization | `photon-omnibox` |
+| `photon-omnibox` | Search engine list and address/query resolution | URL parsing library |
+| `photon-ffi` | `photon_browser_*` C ABI and static library | `photon-core` |
+| `photon-shortcuts` | Browser actions and default key bindings | GPUI-CE |
 | `photon-cli` | `./photon` developer and runtime commands | CLI and command-line support libraries |
-| `photon-presentation-broker` | macOS XPC service entry point and native descriptor transport | Native presentation service glue |
+| `photon-presentation-ipc` | XPC protocol, client channel, descriptor transport, service entry point | macOS frameworks |
+| `photon-presentation-broker` | macOS XPC service executable | `photon-presentation-ipc` |
 
-### Common edit points
+`Engine/` and `vendor/gpui-ce/` are separately maintained submodules, not
+Photon workspace packages. `native/embedder` is the small native build target
+owned by the shell; the presentation XPC implementation lives inside
+`photon-presentation-ipc`.
+
+## Common edit points
 
 | Change | Start here |
 | --- | --- |
-| GPUI-CE native window size, titlebar, traffic lights, blur | [`platform/window_settings.rs`](../crates/photon-shell/src/platform/window_settings.rs) |
-| Page inset, rounded surface, pointer-coordinate mapping | [`platform/window_settings.rs`](../crates/photon-shell/src/platform/window_settings.rs), then [`platform/ui/webview.rs`](../crates/photon-shell/src/platform/ui/webview.rs) |
-| Window layout or app startup | [`platform/ui/window.rs`](../crates/photon-shell/src/platform/ui/window.rs) |
-| Page surface composition | [`platform/ui/webview.rs`](../crates/photon-shell/src/platform/ui/webview.rs) |
-| Keyboard, pointer, or scroll forwarding | [`platform/ui/input.rs`](../crates/photon-shell/src/platform/ui/input.rs) |
+| GPUI-CE native window size, titlebar, traffic lights, blur | [`platform/window_settings.rs`](../crates/photon-shell/src/platform/window_settings.rs) and [`ui/metrics.rs`](../crates/photon-shell/src/platform/ui/metrics.rs) |
+| Shell colors, appearance, or theme mapping | [`ui/theme.rs`](../crates/photon-shell/src/platform/ui/theme.rs) |
+| Shared layout, spacing, corner radii, or type sizes | [`ui/metrics.rs`](../crates/photon-shell/src/platform/ui/metrics.rs) |
+| Window layout or app startup | [`ui/window.rs`](../crates/photon-shell/src/platform/ui/window.rs) |
+| Page surface composition | [`ui/webview.rs`](../crates/photon-shell/src/platform/ui/webview.rs) |
+| Keyboard, pointer, or scroll forwarding | [`ui/input.rs`](../crates/photon-shell/src/platform/ui/input.rs) |
 | Engine session or callback behavior | [`platform/engine.rs`](../crates/photon-shell/src/platform/engine.rs) |
 | Frame acceptance, presentation order, or release lifetime | [`platform/presentation.rs`](../crates/photon-shell/src/platform/presentation.rs) |
-| Engine frame pacing to the display, or pausing Engine while the window is occluded | [`platform/display.rs`](../crates/photon-shell/src/platform/display.rs), [`platform/window_observer.rs`](../crates/photon-shell/src/platform/window_observer.rs), then [`platform/ui/window.rs`](../crates/photon-shell/src/platform/ui/window.rs) |
-| Rust declarations for native embedder functions | [`platform/ffi.rs`](../crates/photon-shell/src/platform/ffi.rs) and [`native/embedder/PhotonEmbedderBridge.h`](../native/embedder/PhotonEmbedderBridge.h) |
+| XPC messages, descriptor transport, or broker connection | [`photon-presentation-ipc`](../crates/photon-presentation-ipc/src/lib.rs) |
+| Engine frame pacing or pausing Engine while the window is occluded | [`platform/display.rs`](../crates/photon-shell/src/platform/display.rs), [`platform/window_observer.rs`](../crates/photon-shell/src/platform/window_observer.rs), then [`ui/window.rs`](../crates/photon-shell/src/platform/ui/window.rs) |
+| Rust declarations for native embedder functions | [`platform/ffi.rs`](../crates/photon-shell/src/platform/ffi.rs) and [`PhotonEmbedderBridge.h`](../native/embedder/PhotonEmbedderBridge.h) |
 | Browser state and command rules | [`photon-core/src/state.rs`](../crates/photon-core/src/state.rs) |
-| C API exposed to the native bridge | [`photon-core/src/api.rs`](../crates/photon-core/src/api.rs) |
-| Search engine list or default registry behavior | [`photon-omnibox/src/engines.rs`](../crates/photon-omnibox/src/engines.rs) |
-| Address or query classification | [`photon-omnibox/src/resolve.rs`](../crates/photon-omnibox/src/resolve.rs) |
+| C ABI exposed to native callers | [`photon-ffi/include/photon_ffi.h`](../crates/photon-ffi/include/photon_ffi.h) and [`photon-ffi/src/api.rs`](../crates/photon-ffi/src/api.rs) |
+| Search engines or address/query classification | [`photon-omnibox/src/`](../crates/photon-omnibox/src/lib.rs) |
 | `./photon` command behavior | [`photon-cli/src/commands/`](../crates/photon-cli/src/commands/) |
 
-`photon-shell/src/platform/mod.rs` only wires the macOS implementation together. Keep window policy in `window_settings.rs`, visible composition in `ui/`, browser rules in `photon-core`/`photon-omnibox`, and native lifecycle code in the Engine/presentation modules.
+Keep window policy in `window_settings.rs`, shared presentation values in
+`ui/metrics.rs`, shell color roles in `ui/theme.rs`, browser rules in core and
+omnibox, frame lifecycle in the shell presentation module, and XPC transport in
+`photon-presentation-ipc`. Add a crate only when the code has an independent
+ownership boundary or a useful consumer outside its current crate.
 
 ## Frame and lifetime path
 
-Ladybird's Skia compositor writes a leased IOSurface and signals an `MTLSharedEvent`. Photon receives the frame descriptor through its XPC broker, resolves the IOSurface once, and passes an external surface to GPUI-CE. The Metal renderer caches the texture by resource, generation, and actual IOSurface identity; it encodes the producer wait in the command buffer that samples the texture.
+Ladybird's Skia compositor writes a leased IOSurface and signals an
+`MTLSharedEvent`. Photon receives the frame descriptor through its XPC broker,
+resolves the IOSurface once, and passes an external surface to GPUI-CE. The
+Metal renderer caches the texture by resource, generation, and actual IOSurface
+identity; it encodes the producer wait in the command buffer that samples the
+texture.
 
-When a replacement surface's command buffer completes, Photon releases the retired Engine frame. On shutdown it stops new presentation, waits for tracked sampling command buffers, releases the current and queued leases, and asserts that outstanding leases are zero.
+When a replacement surface's command buffer completes, Photon releases the
+retired Engine frame. On shutdown it stops new presentation, waits for tracked
+sampling command buffers, releases the current and queued leases, and asserts
+that outstanding leases are zero.
 
-Photon UI code never receives page pixel buffers. Normal rendering uses native Metal sampling with no CPU full-frame copies or GPUI image uploads. The app currently targets macOS for external IOSurface presentation.
+Photon UI code never receives page pixel buffers. Normal rendering uses native
+Metal sampling with no CPU full-frame copies or GPUI image uploads. The app
+currently targets macOS for external IOSurface presentation.
 
-See [PhotonWebView](WebView.md), [native GPU presentation](NativeGpuPresentation.md), and [upstream maintenance](Upstream.md).
+See [PhotonWebView](WebView.md), [native GPU presentation](NativeGpuPresentation.md),
+[theme and style tokens](Theme.md), and [upstream maintenance](Upstream.md).
