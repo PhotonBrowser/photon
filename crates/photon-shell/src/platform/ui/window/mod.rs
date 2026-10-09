@@ -4,6 +4,8 @@ mod actions;
 mod alerts;
 mod app;
 mod menu;
+mod popup_window;
+mod popups;
 mod tabs;
 
 use gpui::{
@@ -12,11 +14,11 @@ use gpui::{
 };
 use photon_core::BrowserCommand;
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 use std::time::Instant;
 
-use super::super::engine::{EngineRuntime, UiWake};
+use super::super::engine::{EngineRuntime, EngineSession, UiWake};
 use super::super::trace;
 use super::super::window_observer::WindowObserver;
 use super::super::window_settings;
@@ -33,6 +35,7 @@ use super::{
 };
 use alerts::{EngineNotice, NoticeExpiry};
 use menu::{OpenMenu, toolbar_menu_anchor};
+use popups::PendingPopup;
 use tabs::ClosedTab;
 
 pub use app::run;
@@ -57,6 +60,8 @@ struct BrowserWindow {
     spinner_running: bool,
     /// The active tab's open JavaScript dialog.
     dialog: Option<Entity<JavaScriptDialog>>,
+    pending_popups: VecDeque<PendingPopup>,
+    popup_confirmation_focus: FocusHandle,
     /// The last Engine service stop or restart, shown in a chip.
     engine_notice: Option<EngineNotice>,
     /// Redraws when a recovery chip expires.
@@ -101,11 +106,23 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Subscription {
-        cx.subscribe_in(webview, window, |this, _, _: &WebViewEvent, window, cx| {
-            this.chrome.update(cx, |_, cx| cx.notify());
-            this.animate_spinner(cx);
-            this.sync_dialog(window, cx);
-        })
+        cx.subscribe_in(
+            webview,
+            window,
+            |this, webview, event: &WebViewEvent, window, cx| match event {
+                WebViewEvent::StateChanged => {
+                    this.chrome.update(cx, |_, cx| cx.notify());
+                    this.animate_spinner(cx);
+                    this.sync_dialog(window, cx);
+                }
+                WebViewEvent::NewWebViewRequested(id) => {
+                    if let Some(request) = webview.update(cx, |view, _| view.take_new_web_view(*id))
+                    {
+                        this.handle_requested_web_view(webview, request, window, cx);
+                    }
+                }
+            },
+        )
     }
 
     fn render_chrome(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
@@ -250,7 +267,8 @@ impl Render for BrowserWindow {
             )
             // A JavaScript dialog is modal to the whole window.
             .children(self.dialog.clone())
-            .children(self.open_menu_overlay(palette, cx));
+            .children(self.open_menu_overlay(palette, cx))
+            .children(self.popup_confirmation(palette, cx));
         self.on_actions(root, cx)
     }
 }
@@ -317,6 +335,8 @@ fn open_browser_window(
                 spinner_step: 0,
                 spinner_running: false,
                 dialog: None,
+                pending_popups: VecDeque::new(),
+                popup_confirmation_focus: cx.focus_handle(),
                 engine_notice: None,
                 notice_expiry: None,
                 revealed_icons: RefCell::default(),
@@ -340,10 +360,22 @@ fn create_webview(
     is_blank_tab: bool,
 ) -> Entity<PhotonWebView> {
     let startup_address = startup_address.map(str::to_owned);
+    let session =
+        EngineSession::create(runtime.clone(), 1200, 760, 1.0, startup_address.as_deref())
+            .unwrap_or_else(|error| panic!("could not start direct PhotonWebView: {error:#}"));
+    create_webview_from_session(cx, runtime, theme, session, is_blank_tab)
+}
+
+fn create_webview_from_session(
+    cx: &mut App,
+    runtime: Rc<EngineRuntime>,
+    theme: ThemePreference,
+    session: EngineSession,
+    is_blank_tab: bool,
+) -> Entity<PhotonWebView> {
+    let wake_runtime = runtime.clone();
     let webview = cx.new(|cx| {
-        let mut webview =
-            PhotonWebView::new(cx, runtime, theme, startup_address.as_deref(), is_blank_tab)
-                .unwrap_or_else(|error| panic!("could not start direct PhotonWebView: {error:#}"));
+        let mut webview = PhotonWebView::from_session(cx, theme, session, is_blank_tab);
         let gpu_activity = webview.session.gpu_activity.clone();
         webview._quit_subscription = Some(cx.on_app_quit(
             move |view: &mut PhotonWebView, _cx: &mut Context<'_, PhotonWebView>| {
@@ -358,6 +390,7 @@ fn create_webview(
     let wake = UiWake {
         app: cx.to_async(),
         webview: webview.downgrade(),
+        runtime: wake_runtime,
     };
     webview.update(cx, |view, _| view.session.set_ui_wake(wake));
     webview

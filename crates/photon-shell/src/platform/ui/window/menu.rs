@@ -6,6 +6,7 @@ use gpui::{
 };
 use photon_core::BrowserCommand;
 
+use super::super::super::engine::PopupPolicy;
 use super::super::layout::v_stack;
 use super::super::menu::{
     menu_action, menu_checkbox, menu_radio, menu_section, menu_separator, menu_surface,
@@ -76,6 +77,7 @@ impl BrowserWindow {
         let performance_overlay_enabled =
             self.active_webview().read(cx).performance_overlay_enabled;
         let theme = self.theme.get();
+        let popup_policy = self.runtime.popup_policy();
         let theme_radio = |id, label, tab_index, appearance: Option<WindowAppearance>| {
             menu_radio(
                 id,
@@ -86,6 +88,21 @@ impl BrowserWindow {
                     cx.stop_propagation();
                     this.open_menu = None;
                     this.set_theme(appearance, cx);
+                })),
+                palette,
+            )
+        };
+        let popup_radio = |id, label, tab_index, policy: PopupPolicy| {
+            menu_radio(
+                id,
+                label,
+                tab_index,
+                popup_policy == policy,
+                Box::new(cx.listener(move |this: &mut Self, _, _, cx| {
+                    cx.stop_propagation();
+                    this.open_menu = None;
+                    this.runtime.set_popup_policy(policy);
+                    cx.notify();
                 })),
                 palette,
             )
@@ -138,6 +155,21 @@ impl BrowserWindow {
                 "Dark",
                 5,
                 Some(WindowAppearance::Dark),
+            ))
+            .child(menu_separator(palette))
+            .child(menu_section("Pop-up windows", palette))
+            .child(popup_radio("menu-popups-ask", "Ask", 6, PopupPolicy::Ask))
+            .child(popup_radio(
+                "menu-popups-allow",
+                "Allow",
+                7,
+                PopupPolicy::Allow,
+            ))
+            .child(popup_radio(
+                "menu-popups-block",
+                "Block",
+                8,
+                PopupPolicy::Block,
             ));
 
         menu_surface(content, palette)

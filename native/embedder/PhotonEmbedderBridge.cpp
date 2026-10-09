@@ -2,6 +2,7 @@
 
 #include <LibPhotonEmbedder/PhotonEmbedder.h>
 
+#include <array>
 #include <cstdio>
 #include <memory>
 #include <string>
@@ -21,6 +22,135 @@ void copy_error(char* destination, size_t capacity,
 {
     if (destination && capacity > 0)
         std::snprintf(destination, capacity, "%s", message.c_str());
+}
+
+Photon::ViewCallbacks make_view_callbacks(
+    PhotonViewCallbacks const& callbacks,
+    void* runtime,
+    void* parent_view)
+{
+    auto callback_data = callbacks.callback_data;
+    auto state_callback = callbacks.state_callback;
+    auto frame_callback = callbacks.frame_callback;
+    auto cursor_callback = callbacks.cursor_callback;
+    auto error_callback = callbacks.error_callback;
+    auto crash_callback = callbacks.crash_callback;
+    auto performance_callback = callbacks.performance_callback;
+    auto favicon_callback = callbacks.favicon_callback;
+    auto dialog_callback = callbacks.dialog_callback;
+    auto navigation_committed_callback = callbacks.navigation_committed_callback;
+    auto crash_recovered_callback = callbacks.crash_recovered_callback;
+    auto new_web_view_callback = callbacks.new_web_view_callback;
+
+    Photon::ViewCallbacks result;
+    result.state_changed = [=](Photon::ViewState const& state) {
+        if (state_callback)
+            state_callback(callback_data, state.url.c_str(), state.title.c_str(),
+                state.loading, state.can_go_back, state.can_go_forward);
+    };
+    result.frame_ready = [=](std::shared_ptr<Photon::PresentedFrame const> frame) {
+        if (frame_callback && frame)
+            frame_callback(callback_data, frame->width, frame->height,
+                frame->stride, frame->device_pixel_ratio,
+                frame->pixels.data(), frame->pixels.size(),
+                frame->engine_paint_interval_microseconds,
+                frame->bitmap_acquisition_microseconds,
+                frame->copy_time_microseconds,
+                frame->paint_to_callback_microseconds);
+    };
+    result.performance_stats_changed = [=](Photon::PerformanceStats const& stats) {
+        if (!performance_callback)
+            return;
+        PhotonPerformanceStats snapshot {
+            stats.has_cpu_percent,
+            stats.cpu_percent,
+            stats.has_memory_bytes,
+            stats.memory_bytes,
+            stats.has_managed_heap_bytes,
+            stats.managed_heap_bytes,
+            stats.download_bytes_per_second,
+            stats.upload_bytes_per_second,
+            stats.has_frames_per_second,
+            stats.frames_per_second,
+        };
+        performance_callback(callback_data, &snapshot);
+    };
+#if defined(__APPLE__)
+    result.native_metal_presentation = callbacks.native_metal_presentation
+        && callbacks.native_backing_callback && callbacks.native_frame_callback;
+    if (result.native_metal_presentation) {
+        auto native_backing_callback = callbacks.native_backing_callback;
+        auto native_frame_callback = callbacks.native_frame_callback;
+        result.native_backing_registered = [=](Photon::NativeGpuBacking const& backing) {
+            return native_backing_callback(callback_data, backing.backing_id,
+                backing.generation, backing.width, backing.height,
+                backing.pixel_format, backing.iosurface_mach_port);
+        };
+        result.native_frame_ready = [=](Photon::NativeGpuFrame const& frame) {
+            native_frame_callback(callback_data, frame.backing_id, frame.generation,
+                frame.frame_id, frame.signal_value, frame.width, frame.height,
+                frame.device_pixel_ratio);
+        };
+    }
+#endif
+    result.cursor_changed = [=](Photon::Cursor cursor) {
+        if (cursor_callback)
+            cursor_callback(callback_data, static_cast<int>(cursor));
+    };
+    result.favicon_changed = [=](Photon::Favicon const* favicon) {
+        if (!favicon_callback)
+            return;
+        if (!favicon) {
+            favicon_callback(callback_data, nullptr, 0, 0, 0);
+            return;
+        }
+        favicon_callback(callback_data, favicon->pixels.data(),
+            favicon->pixels.size(), favicon->width, favicon->height);
+    };
+    result.dialog_requested = [=](Photon::DialogRequest const& request) {
+        if (dialog_callback)
+            dialog_callback(callback_data, static_cast<int>(request.type),
+                request.title.c_str(), request.message.c_str(),
+                request.default_text.c_str());
+    };
+    result.navigation_committed = [=] {
+        if (navigation_committed_callback)
+            navigation_committed_callback(callback_data);
+    };
+    result.new_web_view_requested = [=](Photon::NewWebViewRequest const& request) {
+        if (!new_web_view_callback)
+            return std::string {};
+        PhotonNewWebViewRequest bridge_request {
+            request.popup,
+            request.activate,
+            request.has_width,
+            request.width,
+            request.has_height,
+            request.height,
+            request.has_screen_x,
+            request.screen_x,
+            request.has_screen_y,
+            request.screen_y,
+            request.traversable,
+        };
+        std::array<char, 256> window_handle {};
+        new_web_view_callback(callback_data, runtime, parent_view,
+            &bridge_request, window_handle.data(), window_handle.size());
+        return std::string(window_handle.data());
+    };
+    result.failed = [=](std::string const& message) {
+        if (error_callback)
+            error_callback(callback_data, message.c_str());
+    };
+    result.crashed = [=](std::string const& url) {
+        if (crash_callback)
+            crash_callback(callback_data, url.c_str());
+    };
+    result.crash_recovered = [=] {
+        if (crash_recovered_callback)
+            crash_recovered_callback(callback_data);
+    };
+    return result;
 }
 
 } // namespace
@@ -61,121 +191,34 @@ extern "C" void photon_runtime_destroy(void* runtime)
 }
 
 extern "C" void* photon_view_create(void* runtime, int width, int height,
-    double dpr, void* callback_data,
-    PhotonStateCallback state_callback,
-    PhotonFrameCallback frame_callback,
-    PhotonCursorCallback cursor_callback,
-    PhotonErrorCallback error_callback,
-    PhotonCrashCallback crash_callback,
-    PhotonPerformanceCallback performance_callback,
-    PhotonFaviconCallback favicon_callback,
-    PhotonDialogCallback dialog_callback,
-    PhotonNavigationCommittedCallback navigation_committed_callback,
-    PhotonCrashRecoveredCallback crash_recovered_callback
-#if defined(__APPLE__)
-    ,
-    bool native_metal_presentation,
-    PhotonNativeBackingCallback native_backing_callback,
-    PhotonNativeFrameCallback native_frame_callback
-#endif
-)
+    double dpr, PhotonViewCallbacks const* callbacks)
 {
-    if (!runtime)
+    if (!runtime || !callbacks)
         return nullptr;
-
-    Photon::ViewCallbacks callbacks;
-    callbacks.state_changed = [=](Photon::ViewState const& state) {
-        if (state_callback)
-            state_callback(callback_data, state.url.c_str(), state.title.c_str(),
-                state.loading, state.can_go_back, state.can_go_forward);
-    };
-    callbacks.frame_ready =
-        [=](std::shared_ptr<Photon::PresentedFrame const> frame) {
-            if (frame_callback && frame)
-                frame_callback(callback_data, frame->width, frame->height,
-                    frame->stride, frame->device_pixel_ratio,
-                    frame->pixels.data(), frame->pixels.size(),
-                    frame->engine_paint_interval_microseconds,
-                    frame->bitmap_acquisition_microseconds,
-                    frame->copy_time_microseconds,
-                    frame->paint_to_callback_microseconds);
-        };
-    callbacks.performance_stats_changed = [=](Photon::PerformanceStats const& stats) {
-        if (!performance_callback)
-            return;
-        PhotonPerformanceStats snapshot {
-            stats.has_cpu_percent,
-            stats.cpu_percent,
-            stats.has_memory_bytes,
-            stats.memory_bytes,
-            stats.has_managed_heap_bytes,
-            stats.managed_heap_bytes,
-            stats.download_bytes_per_second,
-            stats.upload_bytes_per_second,
-            stats.has_frames_per_second,
-            stats.frames_per_second,
-        };
-        performance_callback(callback_data, &snapshot);
-    };
-#if defined(__APPLE__)
-    callbacks.native_metal_presentation = native_metal_presentation
-        && native_backing_callback && native_frame_callback;
-    if (callbacks.native_metal_presentation) {
-        callbacks.native_backing_registered = [=](Photon::NativeGpuBacking const& backing) {
-            return native_backing_callback(callback_data, backing.backing_id,
-                backing.generation, backing.width,
-                backing.height, backing.pixel_format,
-                backing.iosurface_mach_port);
-        };
-        callbacks.native_frame_ready = [=](Photon::NativeGpuFrame const& frame) {
-            native_frame_callback(callback_data, frame.backing_id, frame.generation,
-                frame.frame_id, frame.signal_value, frame.width, frame.height,
-                frame.device_pixel_ratio);
-        };
-    }
-#endif
-    callbacks.cursor_changed = [=](Photon::Cursor cursor) {
-        if (cursor_callback)
-            cursor_callback(callback_data, static_cast<int>(cursor));
-    };
-    callbacks.favicon_changed = [=](Photon::Favicon const* favicon) {
-        if (!favicon_callback)
-            return;
-        if (!favicon) {
-            favicon_callback(callback_data, nullptr, 0, 0, 0);
-            return;
-        }
-        favicon_callback(callback_data, favicon->pixels.data(),
-            favicon->pixels.size(), favicon->width, favicon->height);
-    };
-    callbacks.dialog_requested = [=](Photon::DialogRequest const& request) {
-        if (dialog_callback)
-            dialog_callback(callback_data, static_cast<int>(request.type),
-                request.title.c_str(), request.message.c_str(),
-                request.default_text.c_str());
-    };
-    callbacks.navigation_committed = [=] {
-        if (navigation_committed_callback)
-            navigation_committed_callback(callback_data);
-    };
-    callbacks.failed = [=](std::string const& message) {
-        if (error_callback)
-            error_callback(callback_data, message.c_str());
-    };
-    callbacks.crashed = [=](std::string const& url) {
-        if (crash_callback)
-            crash_callback(callback_data, url.c_str());
-    };
-    callbacks.crash_recovered = [=] {
-        if (crash_recovered_callback)
-            crash_recovered_callback(callback_data);
-    };
-
+    auto handle = std::make_unique<ViewHandle>();
     auto view = static_cast<RuntimeHandle*>(runtime)->runtime->create_view(
-        width, height, dpr, std::move(callbacks));
+        width, height, dpr, make_view_callbacks(*callbacks, runtime, handle.get()));
     if (!view)
         return nullptr;
-    return new ViewHandle { std::move(view) };
+    handle->view = std::move(view);
+    return handle.release();
+}
+
+extern "C" void* photon_view_create_for_traversable(void* runtime,
+    void* parent_view, void* traversable, int width, int height, double dpr,
+    PhotonViewCallbacks const* callbacks)
+{
+    if (!runtime || !parent_view || !traversable || !callbacks)
+        return nullptr;
+    auto& parent = *static_cast<ViewHandle*>(parent_view)->view;
+    auto handle = std::make_unique<ViewHandle>();
+    auto view = static_cast<RuntimeHandle*>(runtime)->runtime->create_view_for_traversable(
+        parent, traversable, width, height, dpr,
+        make_view_callbacks(*callbacks, runtime, handle.get()));
+    if (!view)
+        return nullptr;
+    handle->view = std::move(view);
+    return handle.release();
 }
 
 extern "C" void photon_view_resize(void* view, int width, int height,
@@ -262,6 +305,21 @@ extern "C" void photon_view_set_focus(void* view, bool focused)
 {
     if (view)
         static_cast<ViewHandle*>(view)->view->set_focus(focused);
+}
+
+extern "C" void photon_view_notify_state(void* view)
+{
+    if (view)
+        static_cast<ViewHandle*>(view)->view->notify_state();
+}
+
+extern "C" void photon_view_copy_window_handle(void* view, char* handle,
+    size_t capacity)
+{
+    if (!view)
+        return;
+    copy_error(handle, capacity,
+        static_cast<ViewHandle*>(view)->view->window_handle());
 }
 
 extern "C" void photon_view_close_dialog(void* view, int type, bool accepted,

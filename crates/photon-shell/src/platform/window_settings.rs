@@ -23,14 +23,33 @@ fn background() -> MacosWindowBackground {
 
 /// Builds a Photon browser window's initial size, titlebar, and native backing.
 pub(super) fn options(cx: &App) -> WindowOptions {
-    let bounds = Bounds::centered(
-        None,
-        size(
-            px(metrics::INITIAL_WINDOW_WIDTH),
-            px(metrics::INITIAL_WINDOW_HEIGHT),
-        ),
+    options_for_size(
         cx,
-    );
+        metrics::INITIAL_WINDOW_WIDTH,
+        metrics::INITIAL_WINDOW_HEIGHT,
+    )
+}
+
+pub(super) fn popup_options(cx: &App, width: Option<i32>, height: Option<i32>) -> WindowOptions {
+    let width = width
+        .map(|width| width as f32)
+        .unwrap_or(metrics::POPUP_WINDOW_WIDTH)
+        .clamp(
+            metrics::POPUP_MIN_WINDOW_WIDTH,
+            metrics::POPUP_MAX_WINDOW_WIDTH,
+        );
+    let height = height
+        .map(|height| height as f32)
+        .unwrap_or(metrics::POPUP_WINDOW_HEIGHT)
+        .clamp(
+            metrics::POPUP_MIN_WINDOW_HEIGHT,
+            metrics::POPUP_MAX_WINDOW_HEIGHT,
+        );
+    options_for_size(cx, width, height)
+}
+
+fn options_for_size(cx: &App, width: f32, height: f32) -> WindowOptions {
+    let bounds = Bounds::centered(None, size(px(width), px(height)), cx);
     WindowOptions::new()
         .window_bounds(Some(WindowBounds::Windowed(bounds)))
         .titlebar(Some(

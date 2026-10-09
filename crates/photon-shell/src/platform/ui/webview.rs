@@ -1,6 +1,6 @@
 //! The page surface and browser input forwarding.
 
-use super::super::engine::{EngineRuntime, EngineSession};
+use super::super::engine::{EngineSession, RequestedWebView};
 use super::super::presentation::PresentedSurface;
 use super::input::WebViewInput;
 use super::{
@@ -17,8 +17,8 @@ use photon_core::{
     PageCrashes, PageDialogs,
 };
 use photon_performance::{PerformanceDiagnostics, performance_overlay};
+use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
-use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -87,12 +87,14 @@ pub(in crate::platform) struct PhotonWebView {
     input: WebViewInput,
     pub(super) _quit_subscription: Option<Subscription>,
     focus_subscriptions: Vec<Subscription>,
+    pending_new_webviews: HashMap<u64, RequestedWebView>,
 }
 
 /// Page changes the browser chrome shows. Engine frames do not emit it, so
 /// the cached chrome is not rebuilt for every page frame.
 pub(in crate::platform) enum WebViewEvent {
     StateChanged,
+    NewWebViewRequested(u64),
 }
 
 impl EventEmitter<WebViewEvent> for PhotonWebView {}
@@ -214,16 +216,13 @@ impl PhotonWebView {
         self.session.navigate_startup();
     }
 
-    pub(super) fn new(
+    pub(super) fn from_session(
         cx: &mut Context<Self>,
-        runtime: Rc<EngineRuntime>,
         theme: ThemePreference,
-        startup_address: Option<&str>,
+        session: EngineSession,
         is_blank_tab: bool,
-    ) -> anyhow::Result<Self> {
-        let width = 1200;
-        let height = 760;
-        Ok(Self {
+    ) -> Self {
+        Self {
             external: None,
             state: BrowserState::default(),
             diagnostics: PerformanceDiagnostics::default(),
@@ -235,14 +234,30 @@ impl PhotonWebView {
             dialogs: PageDialogs::default(),
             theme,
             is_blank_tab,
-            session: EngineSession::create(runtime, width, height, 1.0, startup_address)?,
+            session,
             focus_handle: cx.focus_handle(),
             last_viewport: None,
             sent_dark_color_scheme: None,
             input: WebViewInput::default(),
             _quit_subscription: None,
             focus_subscriptions: Vec::new(),
-        })
+            pending_new_webviews: HashMap::new(),
+        }
+    }
+
+    pub(in crate::platform) fn queue_new_web_view(
+        &mut self,
+        id: u64,
+        request: RequestedWebView,
+        cx: &mut Context<Self>,
+    ) {
+        self.pending_new_webviews.insert(id, request);
+        cx.emit(WebViewEvent::NewWebViewRequested(id));
+        cx.notify();
+    }
+
+    pub(super) fn take_new_web_view(&mut self, id: u64) -> Option<RequestedWebView> {
+        self.pending_new_webviews.remove(&id)
     }
 
     /// Keeps Engine page focus in step with GPUI focus and window activation.

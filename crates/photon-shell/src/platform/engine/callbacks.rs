@@ -8,14 +8,14 @@ use std::{
     ffi::{CStr, c_char, c_void},
     sync::{
         Arc, Mutex, Weak,
-        atomic::{AtomicPtr, Ordering},
+        atomic::{AtomicPtr, AtomicU64, Ordering},
     },
 };
 
 use super::super::presentation::{LeaseLedger, MachPortGuard, PresentationRuntime};
 use super::super::ui::{Favicon, PhotonWebView};
 use super::super::{ffi::embedder, trace};
-use super::UiWake;
+use super::{EngineSession, PopupPolicy, RequestedWebView, UiWake};
 
 pub(super) struct CallbackState {
     pub(super) presentation: Arc<PresentationRuntime>,
@@ -28,6 +28,8 @@ pub(super) struct CallbackState {
 pub(super) struct RuntimeCallbacks {
     pub(super) views: Mutex<Vec<Weak<CallbackState>>>,
 }
+
+static NEXT_WINDOW_HANDLE: AtomicU64 = AtomicU64::new(1);
 
 impl CallbackState {
     pub(super) fn set_ui_wake(&self, wake: UiWake) {
@@ -255,6 +257,66 @@ pub(super) unsafe extern "C" fn on_engine_crash_recovered(context: *mut c_void) 
     if !context.is_null() {
         unsafe { &*(context.cast::<CallbackState>()) }.crash_recovered();
     }
+}
+
+pub(super) unsafe extern "C" fn on_engine_new_web_view(
+    context: *mut c_void,
+    _runtime: *mut c_void,
+    parent_view: *mut c_void,
+    request: *const embedder::NewWebViewRequest,
+    window_handle: *mut c_char,
+    window_handle_capacity: usize,
+) {
+    if context.is_null() || request.is_null() {
+        return;
+    }
+    let callbacks = unsafe { &*context.cast::<CallbackState>() };
+    let Some(wake) = callbacks.ui_wake.lock().unwrap().clone() else {
+        return;
+    };
+    let request = unsafe { &*request };
+    let policy = wake.runtime.popup_policy();
+    if request.popup && policy == PopupPolicy::Block {
+        trace(format_args!("blocked site popup"));
+        return;
+    }
+
+    let id = NEXT_WINDOW_HANDLE.fetch_add(1, Ordering::Relaxed);
+    let width = request.has_width.then_some(request.width);
+    let height = request.has_height.then_some(request.height);
+    let viewport_width = width.unwrap_or(1200).max(1);
+    let viewport_height = height.unwrap_or(760).max(1);
+    let session = match EngineSession::create_for_traversable(
+        wake.runtime.clone(),
+        parent_view,
+        request.traversable,
+        viewport_width,
+        viewport_height,
+        1.0,
+    ) {
+        Ok(session) => session,
+        Err(error) => {
+            trace(format_args!("could not create requested page: {error:#}"));
+            return;
+        }
+    };
+    session.copy_window_handle(window_handle, window_handle_capacity);
+    let pending = RequestedWebView {
+        session,
+        popup: request.popup,
+        activate: request.activate,
+        needs_confirmation: request.popup && policy == PopupPolicy::Ask,
+        width,
+        height,
+    };
+    wake.app
+        .spawn(async move |cx| {
+            let Some(webview) = wake.webview.upgrade() else {
+                return;
+            };
+            webview.update(cx, |view, cx| view.queue_new_web_view(id, pending, cx));
+        })
+        .detach();
 }
 
 /// Called on the main thread with an Engine service's stop or restart.

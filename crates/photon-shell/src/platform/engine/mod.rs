@@ -7,11 +7,11 @@ use gpui::{AsyncApp, WeakEntity};
 use photon_core::{BrowserCommand, DialogReply};
 use photon_performance::PerformanceMonitor;
 use std::{
-    ffi::{CStr, CString, c_void},
+    ffi::{CStr, CString, c_char, c_void},
     rc::Rc,
     sync::{
         Arc, Mutex,
-        atomic::{AtomicPtr, Ordering},
+        atomic::{AtomicPtr, AtomicU8, Ordering},
     },
 };
 
@@ -26,6 +26,7 @@ use std::cell::RefCell;
 pub(super) struct UiWake {
     pub(super) app: AsyncApp,
     pub(super) webview: WeakEntity<PhotonWebView>,
+    pub(super) runtime: Rc<EngineRuntime>,
 }
 
 pub(super) struct EngineRuntime {
@@ -33,6 +34,25 @@ pub(super) struct EngineRuntime {
     reduced_motion_observer: *mut c_void,
     callbacks: Box<RuntimeCallbacks>,
     service_callback: RefCell<Option<Box<ServiceCallback>>>,
+    popup_policy: AtomicU8,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub(super) enum PopupPolicy {
+    Ask = 0,
+    Allow = 1,
+    Block = 2,
+}
+
+impl PopupPolicy {
+    fn from_byte(value: u8) -> Self {
+        match value {
+            1 => Self::Allow,
+            2 => Self::Block,
+            _ => Self::Ask,
+        }
+    }
 }
 
 impl EngineRuntime {
@@ -70,7 +90,16 @@ impl EngineRuntime {
             reduced_motion_observer,
             callbacks,
             service_callback: RefCell::default(),
+            popup_policy: AtomicU8::new(PopupPolicy::Ask as u8),
         })
+    }
+
+    pub(super) fn popup_policy(&self) -> PopupPolicy {
+        PopupPolicy::from_byte(self.popup_policy.load(Ordering::Relaxed))
+    }
+
+    pub(super) fn set_popup_policy(&self, policy: PopupPolicy) {
+        self.popup_policy.store(policy as u8, Ordering::Relaxed);
     }
 }
 
@@ -130,6 +159,15 @@ pub(super) struct EngineSession {
     finished: bool,
 }
 
+pub(super) struct RequestedWebView {
+    pub(super) session: EngineSession,
+    pub(super) popup: bool,
+    pub(super) activate: bool,
+    pub(super) needs_confirmation: bool,
+    pub(super) width: Option<i32>,
+    pub(super) height: Option<i32>,
+}
+
 impl EngineSession {
     pub(super) fn create(
         runtime: Rc<EngineRuntime>,
@@ -141,6 +179,37 @@ impl EngineSession {
         let startup_url = startup_address
             .map(|address| resolve_address(address).context("invalid startup URL"))
             .transpose()?;
+        Self::create_with_native_view(runtime, startup_url, |runtime, callbacks| unsafe {
+            embedder::photon_view_create(runtime, width, height, dpr, callbacks)
+        })
+    }
+
+    pub(super) fn create_for_traversable(
+        runtime: Rc<EngineRuntime>,
+        parent_view: *mut c_void,
+        traversable: *mut c_void,
+        width: i32,
+        height: i32,
+        dpr: f64,
+    ) -> anyhow::Result<Self> {
+        Self::create_with_native_view(runtime, None, move |runtime, callbacks| unsafe {
+            embedder::photon_view_create_for_traversable(
+                runtime,
+                parent_view,
+                traversable,
+                width,
+                height,
+                dpr,
+                callbacks,
+            )
+        })
+    }
+
+    fn create_with_native_view(
+        runtime: Rc<EngineRuntime>,
+        startup_url: Option<CString>,
+        create_native_view: impl FnOnce(*mut c_void, *const embedder::ViewCallbacks) -> *mut c_void,
+    ) -> anyhow::Result<Self> {
         let service = std::env::var("PHOTON_PRESENTATION_XPC_SERVICE")
             .context("presentation broker service is not set")?;
         let channel_id = std::env::var("PHOTON_PRESENTATION_CHANNEL_ID")
@@ -169,28 +238,27 @@ impl EngineSession {
             .lock()
             .unwrap()
             .push(Arc::downgrade(&callbacks));
-        let view = unsafe {
-            embedder::photon_view_create(
-                runtime.runtime,
-                width,
-                height,
-                dpr,
-                Arc::as_ptr(&callbacks).cast_mut().cast(),
-                Some(on_engine_state),
-                Some(on_engine_frame),
-                Some(on_engine_cursor),
-                Some(on_engine_error),
-                Some(on_engine_crash),
-                Some(on_engine_performance_stats),
-                Some(on_engine_favicon),
-                Some(on_engine_dialog),
-                Some(on_engine_navigation_committed),
-                Some(on_engine_crash_recovered),
-                true,
-                Some(on_engine_backing),
-                Some(on_engine_native_frame),
-            )
+        let native_callbacks = embedder::ViewCallbacks {
+            callback_data: Arc::as_ptr(&callbacks).cast_mut().cast(),
+            state_callback: Some(on_engine_state),
+            frame_callback: Some(on_engine_frame),
+            cursor_callback: Some(on_engine_cursor),
+            error_callback: Some(on_engine_error),
+            crash_callback: Some(on_engine_crash),
+            performance_callback: Some(on_engine_performance_stats),
+            favicon_callback: Some(on_engine_favicon),
+            dialog_callback: Some(on_engine_dialog),
+            navigation_committed_callback: Some(on_engine_navigation_committed),
+            crash_recovered_callback: Some(on_engine_crash_recovered),
+            new_web_view_callback: Some(on_engine_new_web_view),
+            #[cfg(target_os = "macos")]
+            native_metal_presentation: true,
+            #[cfg(target_os = "macos")]
+            native_backing_callback: Some(on_engine_backing),
+            #[cfg(target_os = "macos")]
+            native_frame_callback: Some(on_engine_native_frame),
         };
+        let view = create_native_view(runtime.runtime, &native_callbacks);
         if view.is_null() {
             presentation
                 .release_scheduler
@@ -258,6 +326,11 @@ impl EngineSession {
 
     pub(super) fn set_ui_wake(&self, wake: UiWake) {
         self.callbacks.set_ui_wake(wake);
+        unsafe { embedder::photon_view_notify_state(self.view) };
+    }
+
+    pub(super) fn copy_window_handle(&self, buffer: *mut c_char, capacity: usize) {
+        unsafe { embedder::photon_view_copy_window_handle(self.view, buffer, capacity) };
     }
 
     pub(super) fn resize(&mut self, width: i32, height: i32, dpr: f64) {

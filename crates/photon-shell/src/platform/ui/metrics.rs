@@ -6,6 +6,12 @@
 pub(super) const TITLEBAR_HEIGHT: f32 = 36.0;
 pub(in crate::platform) const INITIAL_WINDOW_WIDTH: f32 = 1200.0;
 pub(in crate::platform) const INITIAL_WINDOW_HEIGHT: f32 = 760.0;
+pub(in crate::platform) const POPUP_WINDOW_WIDTH: f32 = 720.0;
+pub(in crate::platform) const POPUP_WINDOW_HEIGHT: f32 = 620.0;
+pub(in crate::platform) const POPUP_MIN_WINDOW_WIDTH: f32 = 360.0;
+pub(in crate::platform) const POPUP_MAX_WINDOW_WIDTH: f32 = 1280.0;
+pub(in crate::platform) const POPUP_MIN_WINDOW_HEIGHT: f32 = 320.0;
+pub(in crate::platform) const POPUP_MAX_WINDOW_HEIGHT: f32 = 1000.0;
 const WINDOW_CONTROLS_HEIGHT: f32 = 14.0;
 /// Vertically centered origin of the native window control buttons.
 pub(in crate::platform) const WINDOW_CONTROLS_ORIGIN: (f32, f32) =
@@ -82,4 +88,5 @@ pub(super) const OMNIBOX_FONT_SIZE: f32 = 13.0;
 pub(super) const OMNIBOX_ICON_SIZE: f32 = 13.0;
 
 pub(super) const PAGE_INSET: f32 = 4.0;
+pub(super) const POPUP_URL_FONT_SIZE: f32 = 12.0;
 pub(super) const WEBVIEW_CORNER_RADIUS: f32 = 12.0;

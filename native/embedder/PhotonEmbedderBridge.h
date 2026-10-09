@@ -38,6 +38,21 @@ using PhotonDialogCallback = void (*)(void*, int, char const*, char const*,
 using PhotonNavigationCommittedCallback = void (*)(void*);
 // Called when the page that replaced a crashed one presents its first frame.
 using PhotonCrashRecoveredCallback = void (*)(void*);
+struct PhotonNewWebViewRequest {
+    bool popup;
+    bool activate;
+    bool has_width;
+    int width;
+    bool has_height;
+    int height;
+    bool has_screen_x;
+    int screen_x;
+    bool has_screen_y;
+    int screen_y;
+    void* traversable;
+};
+using PhotonNewWebViewCallback = void (*)(void*, void*, void*,
+    PhotonNewWebViewRequest const*, char*, size_t);
 // Called with the service (0 compositor, 1 network) and whether it has been
 // restarted (true) or has just stopped (false).
 using PhotonServiceCallback = void (*)(void*, int, bool);
@@ -53,6 +68,26 @@ using PhotonNativeFrameCallback = void (*)(void*, uint64_t, uint64_t, uint64_t,
     uint64_t, int, int, double);
 #endif
 
+struct PhotonViewCallbacks {
+    void* callback_data;
+    PhotonStateCallback state_callback;
+    PhotonFrameCallback frame_callback;
+    PhotonCursorCallback cursor_callback;
+    PhotonErrorCallback error_callback;
+    PhotonCrashCallback crash_callback;
+    PhotonPerformanceCallback performance_callback;
+    PhotonFaviconCallback favicon_callback;
+    PhotonDialogCallback dialog_callback;
+    PhotonNavigationCommittedCallback navigation_committed_callback;
+    PhotonCrashRecoveredCallback crash_recovered_callback;
+    PhotonNewWebViewCallback new_web_view_callback;
+#if defined(__APPLE__)
+    bool native_metal_presentation;
+    PhotonNativeBackingCallback native_backing_callback;
+    PhotonNativeFrameCallback native_frame_callback;
+#endif
+};
+
 void* photon_runtime_create(char const* helper_directory, char* error,
     size_t error_capacity);
 #if defined(__APPLE__)
@@ -63,24 +98,10 @@ void photon_runtime_schedule_native_release_drain(void* runtime);
 #endif
 void photon_runtime_destroy(void* runtime);
 void* photon_view_create(void* runtime, int width, int height, double dpr,
-    void* callback_data,
-    PhotonStateCallback state_callback,
-    PhotonFrameCallback frame_callback,
-    PhotonCursorCallback cursor_callback,
-    PhotonErrorCallback error_callback,
-    PhotonCrashCallback crash_callback,
-    PhotonPerformanceCallback performance_callback,
-    PhotonFaviconCallback favicon_callback,
-    PhotonDialogCallback dialog_callback,
-    PhotonNavigationCommittedCallback navigation_committed_callback,
-    PhotonCrashRecoveredCallback crash_recovered_callback
-#if defined(__APPLE__)
-    ,
-    bool native_metal_presentation,
-    PhotonNativeBackingCallback native_backing_callback,
-    PhotonNativeFrameCallback native_frame_callback
-#endif
-);
+    PhotonViewCallbacks const* callbacks);
+void* photon_view_create_for_traversable(void* runtime, void* parent_view,
+    void* traversable, int width, int height, double dpr,
+    PhotonViewCallbacks const* callbacks);
 void photon_view_resize(void* view, int width, int height, double dpr);
 void photon_view_set_performance_monitor_enabled(void* view, bool enabled);
 void photon_view_set_visible(void* view, bool visible);
@@ -97,6 +118,8 @@ void photon_view_stop_loading(void* view);
 void photon_view_go_back(void* view);
 void photon_view_go_forward(void* view);
 void photon_view_set_focus(void* view, bool focused);
+void photon_view_notify_state(void* view);
+void photon_view_copy_window_handle(void* view, char* handle, size_t capacity);
 // 0 follows the engine default, 1 prefers dark, 2 prefers light.
 void photon_view_set_preferred_color_scheme(void* view, int color_scheme);
 // Answers the open dialog of `type`. For a prompt, null `text` means it was

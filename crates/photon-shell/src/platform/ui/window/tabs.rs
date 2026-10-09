@@ -5,7 +5,8 @@ use std::time::{Duration, Instant};
 
 use super::super::icons::LOADING_SPINNER_STEPS;
 use super::super::tabs::{ICON_APPEAR_DURATION, TabIcon, TabItem, tab_strip};
-use super::{BrowserWindow, create_webview};
+use super::{BrowserWindow, create_webview, create_webview_from_session};
+use crate::platform::engine::RequestedWebView;
 
 /// A closed tab's page and position, for reopening.
 pub(super) struct ClosedTab {
@@ -82,17 +83,52 @@ impl BrowserWindow {
             address,
             address.is_none(),
         );
+        self.insert_webview(index, webview, true, window, cx);
+    }
+
+    pub(super) fn open_requested_tab(
+        &mut self,
+        request: RequestedWebView,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let webview = create_webview_from_session(
+            cx,
+            self.runtime.clone(),
+            self.theme.clone(),
+            request.session,
+            false,
+        );
+        self.insert_webview(self.tabs.len(), webview, request.activate, window, cx);
+    }
+
+    fn insert_webview(
+        &mut self,
+        index: usize,
+        webview: gpui::Entity<super::super::PhotonWebView>,
+        activate: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let index = index.min(self.tabs.len());
         self.tab_subscriptions
             .insert(index, Self::subscribe_to_tab(&webview, window, cx));
-        self.tabs.insert(index, webview);
+        self.tabs.insert(index, webview.clone());
         self.tab_focus_handles
             .insert(index, cx.focus_handle().tab_stop(false));
         if index <= self.active_tab {
             // Keep `active_tab` naming the same page until the switch below.
             self.active_tab += 1;
         }
-        self.activate_tab(index, true, window, cx);
+        if activate {
+            self.activate_tab(index, true, window, cx);
+        } else {
+            webview.update(cx, |view, _| {
+                view.session.set_visible(false);
+                view.session.set_focus(false);
+            });
+            cx.notify();
+        }
     }
 
     pub(super) fn reopen_closed_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
