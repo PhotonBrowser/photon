@@ -68,11 +68,12 @@ crates/
 │           │   ├── tabs.rs           # Tab lifecycle and the tab strip
 │           │   ├── menu.rs           # Browser menu and theme choice
 │           │   ├── actions.rs        # Keyboard shortcuts
-│           │   └── alerts.rs         # Crash alerts and JavaScript dialogs
+│           │   └── alerts.rs         # Crash and restart notices, JavaScript dialogs
 │           ├── webview.rs            # Page surface composition
 │           ├── js_dialog.rs          # JavaScript alert, confirm and prompt
 │           ├── modal.rs              # Reusable centered modal
 │           ├── button.rs             # Shared text buttons
+│           ├── status_chip.rs        # Bottom-right crash and restart chips
 │           ├── input.rs              # Keyboard, pointer, and scroll forwarding
 │           ├── theme.rs              # Appearance and semantic color tokens
 │           └── metrics.rs            # Shared UI dimensions and typography
@@ -114,6 +115,7 @@ owned by the shell; the presentation XPC implementation lives inside
 | Shared layout, spacing, corner radii, or type sizes | [`ui/metrics.rs`](../crates/photon-shell/src/platform/ui/metrics.rs) |
 | Window layout or app startup | [`ui/window/`](../crates/photon-shell/src/platform/ui/window/mod.rs) |
 | Dialogs, modals, and buttons | [`ui/js_dialog.rs`](../crates/photon-shell/src/platform/ui/js_dialog.rs), [`ui/modal.rs`](../crates/photon-shell/src/platform/ui/modal.rs), [`ui/button.rs`](../crates/photon-shell/src/platform/ui/button.rs), and [`photon-core/src/dialogs.rs`](../crates/photon-core/src/dialogs.rs) |
+| Crash recovery and its notices | [`photon-core/src/crashes.rs`](../crates/photon-core/src/crashes.rs), [`ui/window/alerts.rs`](../crates/photon-shell/src/platform/ui/window/alerts.rs), and [`ui/status_chip.rs`](../crates/photon-shell/src/platform/ui/status_chip.rs) |
 | Page surface composition | [`ui/webview.rs`](../crates/photon-shell/src/platform/ui/webview.rs) |
 | Keyboard, pointer, or scroll forwarding | [`ui/input.rs`](../crates/photon-shell/src/platform/ui/input.rs) |
 | Engine session or callback behavior | [`platform/engine/`](../crates/photon-shell/src/platform/engine/mod.rs) |

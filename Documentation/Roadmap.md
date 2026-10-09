@@ -10,7 +10,7 @@ What the Photon shell does today and what comes next. Engine performance work is
 - [x] Engine pages drawn from shared IOSurfaces through Metal, paced to the window's display and refresh rate
 - [x] Engine stops rendering while the window is occluded or the tab is hidden
 - [x] Keyboard, pointer, scroll and cursor forwarding to the page; page focus follows window focus
-- [x] Crash recovery: a crashed page process restarts and offers to reload the page
+- [x] Crash recovery: a crashed page reloads in a fresh process, a page that keeps crashing offers a Reload, and Engine service restarts are announced, all in a chip at the bottom right
 - [x] JavaScript `alert`, `confirm` and `prompt` as a window modal; dialogs are dismissed and held off while the browser navigates away
 - [x] Pages follow the shell theme through `prefers-color-scheme`
 - [x] Multiple windows
