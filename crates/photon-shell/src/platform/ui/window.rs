@@ -452,8 +452,7 @@ impl Render for BrowserWindow {
                 div()
                     .flex_1()
                     .w_full()
-                    .px(px(metrics::PAGE_INSET))
-                    .pb(px(metrics::PAGE_INSET))
+                    .p(px(metrics::PAGE_INSET))
                     .child(self.active_webview()),
             );
         if let Some(tab) = self
