@@ -78,11 +78,24 @@ Reviewed after the crate split (`photon-ffi`, `photon-presentation-ipc`). The fr
 4. **Frame delivery waits for a spawned task.** Measured: the `app.spawn` hop before `present_latest` takes 31 µs p50 and 76 µs p90. The frame waits for GPUI's next vsync either way, so this is not a real cost.
 5. **Small per-frame costs.** `platform::trace` reads `PHOTON_VERBOSE` from the environment on every call, including from Metal completion handlers; `record_frame` scans up to ~1,200 gap entries per frame even with diagnostics off; `on_engine_native_frame` signals the release-drain source on every frame even when nothing is pending.
 
+## 6. Idle pages kept rendering — fixed
+
+Measured on `https://en.wikipedia.org/wiki/Web_browser` (2026-10-09). After loading, the page kept rendering at the full display rate with no script or CSS animation running.
+
+- **Video elements requested a repaint on every rendering update.** `Page::sync_media_element_video_sink_ticking` called `Painting::push_video_paint_facts` for each laid-out video, which requested a repaint unconditionally; the repaint requested the next update. Any page with a `<video>`, even paused, rendered at display rate indefinitely. Frames are presented through the video's sink, so the per-update sync now repaints only when a video's paint facts or destination change (Engine `e2746e5`). Wikipedia now goes idle about 5 s after load (0 fps); a playing video still presents at 60 fps and a paused one goes idle.
+- **Loading SVG images broadcast frame requests to every SVG image.** An SVG image document finishing its load requested a frame before its image existed, so the request went to every SVG image of the page. Wikipedia's 206 SVG images produced about 13,000 invalidations while loading. Such requests are now suppressed until the image exists (Engine `967707f`); images still render.
+
+Both are upstream Ladybird code (`LibWeb: Commit video paint facts`, 2026-09-09; the SVG image loading changes of 2026-10-05/06) and still present on Ladybird `master` when fixed; worth sending upstream.
+
+The Compositor's Skia GPU cache was also checked on the same page: about 47 MB, 41 MB of it purgeable, within its 256 MB limit. Purging it when idle would save roughly 40 MB per Compositor; not done.
+
 ## Commits
 
 - Engine `864c2a0892` LibPhotonEmbedder: Accept display metadata from the embedder
 - Engine `37e4b20582` Compositor: Allocate a fourth backing store for GPU-sampling clients
 - Engine `74d3338ba6` LibPhotonEmbedder: Keep the presentation generation across resizes
+- Engine `e2746e5c0a` LibWeb: Repaint for video paint facts only when they change
+- Engine `967707f712` LibWeb: Keep loading SVG images from requesting frames of every image
 
 `Tests/Compositor/TestContextState.cpp` does not compile on Engine `master` independently of these changes: its `TestCompositorClient` still uses the old `did_present_frame` signature (without `presentation_signal_value`) and `spin_event_loop_until` overloads. Photon's Engine build does not build these tests (`ENABLE_LADYBIRD_UI` is off), which is why the breakage went unnoticed.
 
@@ -101,4 +114,7 @@ Reviewed after the crate split (`photon-ffi`, `photon-presentation-ipc`). The fr
 - [x] Bump the presentation generation only when the compositor replaces its pool, not on every resize (Engine `74d3338`: 20 resizes went from 21 generations / 66 registrations to 3 / 10)
 - [x] Release backing registrations for replaced generations (Rust map + broker send rights; GPUI-CE evicts textures undrawn for 120 frames). 60 resizes: unused Compositor surfaces stay ~50 MB instead of growing past 230 MB
 - [x] Cache the browser chrome and stop refreshing the window per Engine frame: UI-thread draw 1.26 → 0.84 ms p50, 1.76 → 1.03 ms p90
+- [x] Stop idle pages rendering at display rate (video paint facts; SVG image load broadcasts)
+- [ ] Purge Skia's unlocked GPU cache after the page goes idle (~40 MB per Compositor)
+- [ ] Send the video and SVG fixes upstream to Ladybird
 - [ ] If still short of 120: profile Engine 4K Skia paint time (`compositor_frame_profile`) against the 8.3 ms budget
