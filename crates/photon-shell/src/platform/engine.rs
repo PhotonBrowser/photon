@@ -1,7 +1,7 @@
 //! Engine runtime, its C callbacks, and input forwarding.
 
 use anyhow::Context as _;
-use gpui::{AsyncApp, Context, RenderImage, WeakEntity};
+use gpui::{AsyncApp, Context, WeakEntity};
 use mach2::port::mach_port_t;
 use photon_core::{BrowserCommand, BrowserState, EngineEvent};
 use photon_performance::{EnginePerformanceStats, PerformanceMonitor};
@@ -17,7 +17,7 @@ use std::{
 use super::presentation::{
     GpuActivity, LeaseLedger, MachPortGuard, PresentationRuntime, RetiredSurface,
 };
-use super::ui::PhotonWebView;
+use super::ui::{Favicon, PhotonWebView};
 use super::{ffi::embedder, trace};
 
 #[derive(Clone)]
@@ -64,12 +64,7 @@ impl CallbackState {
     }
 
     fn set_page_state(&self, state: BrowserState) {
-        self.update_webview(move |view, cx| {
-            if view.state != state {
-                view.state.apply(EngineEvent::ViewStateChanged(state));
-                view.state_changed(cx);
-            }
-        });
+        self.update_webview(move |view, cx| view.set_state(state, cx));
     }
 
     fn set_page_error(&self, message: String) {
@@ -79,7 +74,7 @@ impl CallbackState {
         });
     }
 
-    fn set_page_favicon(&self, favicon: Option<Arc<RenderImage>>) {
+    fn set_page_favicon(&self, favicon: Option<Favicon>) {
         self.update_webview(move |view, cx| view.set_favicon(favicon, cx));
     }
 
@@ -695,11 +690,9 @@ unsafe extern "C" fn on_engine_favicon(
     if context.is_null() {
         return;
     }
-    // Engine sends straight-alpha BGRA, the layout GPUI images hold.
     let favicon = (!pixels.is_null() && width > 0 && height > 0)
-        .then(|| unsafe { std::slice::from_raw_parts(pixels, length) }.to_vec())
-        .and_then(|pixels| image::RgbaImage::from_raw(width as u32, height as u32, pixels))
-        .map(|buffer| Arc::new(RenderImage::new([image::Frame::new(buffer)])));
+        .then(|| unsafe { std::slice::from_raw_parts(pixels, length) })
+        .and_then(|pixels| Favicon::from_bgra(pixels, width as u32, height as u32));
     unsafe { &*(context.cast::<CallbackState>()) }.set_page_favicon(favicon);
 }
 

@@ -1,9 +1,9 @@
 //! GPUI window bootstrap and top-level browser layout.
 
 use gpui::{
-    Anchor, AnyElement, App, ClickEvent, Context, Entity, FocusHandle, Global, KeyDownEvent,
-    MouseButton, MouseDownEvent, Point, QuitMode, Render, StyleRefinement, Subscription,
-    WeakEntity, Window, WindowAppearance, anchored, div, point, prelude::*, px,
+    Anchor, AnyElement, App, ClickEvent, Context, Entity, EntityId, FocusHandle, Global,
+    KeyDownEvent, MouseButton, MouseDownEvent, Point, QuitMode, Render, StyleRefinement,
+    Subscription, WeakEntity, Window, WindowAppearance, anchored, div, point, prelude::*, px,
 };
 use gpui_elements::editable_text::actions::{DEFAULT_INPUT_CONTEXT, default_bindings};
 use gpui_platform::application;
@@ -13,8 +13,10 @@ use photon_shortcuts::{
     SelectLastTab, SelectNextTab, SelectPreviousTab, SelectTab1, SelectTab2, SelectTab3,
     SelectTab4, SelectTab5, SelectTab6, SelectTab7, SelectTab8, StopLoading, browser_shortcuts,
 };
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use super::super::engine::{EngineRuntime, UiWake};
 use super::super::motion_observer::ReducedMotionObserver;
@@ -28,7 +30,7 @@ use super::menu::{
     menu_action, menu_checkbox, menu_radio, menu_section, menu_separator, menu_surface,
 };
 use super::omnibox::Omnibox;
-use super::tabs::{TabIcon, TabItem, tab_strip};
+use super::tabs::{ICON_APPEAR_DURATION, RevealedIcon, TabIcon, TabItem, tab_strip};
 use super::titlebar::titlebar;
 use super::toolbar::{ClickHandler, address_toolbar as build_address_toolbar};
 use super::{PhotonWebView, WebViewEvent};
@@ -55,6 +57,9 @@ struct BrowserWindow {
     spinner_step: usize,
     /// Whether a timer is advancing `spinner_step`.
     spinner_running: bool,
+    /// The icon each tab last revealed and when, so an icon animates in once
+    /// rather than whenever the tab redraws it after a spinner.
+    revealed_icons: RefCell<HashMap<EntityId, (RevealedIcon, Instant)>>,
     /// Whether any part of the window is on screen. Engine renders the active
     /// tab only while it is, since GPUI-CE stops drawing an occluded window.
     window_visible: bool,
@@ -295,8 +300,11 @@ impl BrowserWindow {
             view.favicon.take()
         });
         if let Some(favicon) = favicon {
-            cx.drop_image(favicon, Some(window));
+            cx.drop_image(favicon.image, Some(window));
         }
+        self.revealed_icons
+            .borrow_mut()
+            .remove(&removed.entity_id());
 
         if self.tabs.len() == 1 {
             window.remove_window();
@@ -388,13 +396,14 @@ impl BrowserWindow {
                 let is_blank = !view.has_page();
                 let icon = if is_blank {
                     TabIcon::NewTab
-                } else if state.loading {
+                } else if view.shows_spinner() {
                     TabIcon::Loading(self.spinner_step)
                 } else if let Some(favicon) = view.favicon.clone() {
                     TabIcon::Favicon(favicon)
                 } else {
                     TabIcon::Page
                 };
+                let icon_appearing = self.icon_appearing(webview.entity_id(), &icon);
                 let tab_id = format!("browser-tab-{:?}", webview.entity_id());
                 let label = if is_blank {
                     "New Tab".into()
@@ -407,6 +416,7 @@ impl BrowserWindow {
                     id: tab_id,
                     label,
                     icon,
+                    icon_appearing,
                     active: index == self.active_tab,
                     focus_handle: self.tab_focus_handles[index].clone(),
                     on_select: Box::new(cx.listener(move |this, _, window, cx| {
@@ -446,6 +456,22 @@ impl BrowserWindow {
             })),
             palette,
         )
+    }
+
+    /// Whether a tab's icon is still within its appear animation. A newly
+    /// revealed icon starts it; the same icon shown again does not.
+    fn icon_appearing(&self, tab: EntityId, icon: &TabIcon) -> bool {
+        let Some(revealed) = icon.revealed() else {
+            return false;
+        };
+        let mut revealed_icons = self.revealed_icons.borrow_mut();
+        match revealed_icons.get(&tab) {
+            Some((icon, since)) if *icon == revealed => since.elapsed() < ICON_APPEAR_DURATION,
+            _ => {
+                revealed_icons.insert(tab, (revealed, Instant::now()));
+                true
+            }
+        }
     }
 
     fn address_toolbar(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -847,6 +873,7 @@ fn open_browser_window(
                 closed_tabs: Vec::new(),
                 spinner_step: 0,
                 spinner_running: false,
+                revealed_icons: RefCell::default(),
                 window_visible: true,
                 _appearance_subscription: appearance_subscription,
                 _chrome_subscription: chrome_subscription,

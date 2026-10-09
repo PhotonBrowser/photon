@@ -12,15 +12,42 @@ use gpui::{
     Render, RenderImage, Subscription, SurfaceSource, Window, WindowAppearance, div, prelude::*,
     px, surface,
 };
-use photon_core::BrowserState;
+use photon_core::{BrowserState, EngineEvent};
 use photon_performance::{PerformanceDiagnostics, performance_overlay};
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use super::super::trace;
 
 static MOUSE_MOVE_TRACE_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+/// How long a load runs before its tab shows a spinner, so brief loads do
+/// not flash one over the page icon.
+const SPINNER_DELAY: Duration = Duration::from_millis(150);
+
+/// A page icon and a key identifying its pixels.
+#[derive(Clone)]
+pub(in crate::platform) struct Favicon {
+    pub(in crate::platform) image: Arc<RenderImage>,
+    /// Equal for identical icons, which Engine may report more than once.
+    pub(in crate::platform) key: u64,
+}
+
+impl Favicon {
+    /// Wraps straight-alpha BGRA pixels, the layout GPUI images hold.
+    pub(in crate::platform) fn from_bgra(pixels: &[u8], width: u32, height: u32) -> Option<Self> {
+        let mut hasher = DefaultHasher::new();
+        (width, height, pixels).hash(&mut hasher);
+        let buffer = image::RgbaImage::from_raw(width, height, pixels.to_vec())?;
+        Some(Self {
+            image: Arc::new(RenderImage::new([image::Frame::new(buffer)])),
+            key: hasher.finish(),
+        })
+    }
+}
 
 pub(in crate::platform) struct PhotonWebView {
     pub(super) external: Option<PresentedSurface>,
@@ -29,7 +56,9 @@ pub(in crate::platform) struct PhotonWebView {
     pub(in crate::platform) performance_overlay_enabled: bool,
     pub(in crate::platform) crash_alert: bool,
     /// The page's icon, shown in its tab while the page is not loading.
-    pub(in crate::platform) favicon: Option<Arc<RenderImage>>,
+    pub(in crate::platform) favicon: Option<Favicon>,
+    /// When the current load started.
+    loading_since: Option<Instant>,
     pub(super) theme: ThemePreference,
     is_blank_tab: bool,
     pub(super) session: EngineSession,
@@ -80,16 +109,37 @@ impl PhotonWebView {
         cx.notify();
     }
 
+    pub(in crate::platform) fn set_state(&mut self, state: BrowserState, cx: &mut Context<Self>) {
+        if self.state == state {
+            return;
+        }
+        if state.loading != self.state.loading {
+            self.loading_since = state.loading.then(Instant::now);
+        }
+        self.state.apply(EngineEvent::ViewStateChanged(state));
+        self.state_changed(cx);
+    }
+
+    /// Whether the tab should show a loading spinner instead of its icon.
+    pub(super) fn shows_spinner(&self) -> bool {
+        // A failed load clears `loading` without a new state snapshot.
+        self.state.loading
+            && self
+                .loading_since
+                .is_some_and(|since| since.elapsed() >= SPINNER_DELAY)
+    }
+
     pub(in crate::platform) fn set_favicon(
         &mut self,
-        favicon: Option<Arc<RenderImage>>,
+        favicon: Option<Favicon>,
         cx: &mut Context<Self>,
     ) {
-        if favicon.is_none() && self.favicon.is_none() {
+        let key = |favicon: &Option<Favicon>| favicon.as_ref().map(|favicon| favicon.key);
+        if key(&favicon) == key(&self.favicon) {
             return;
         }
         if let Some(replaced) = std::mem::replace(&mut self.favicon, favicon) {
-            cx.drop_image(replaced, None);
+            cx.drop_image(replaced.image, None);
         }
         self.state_changed(cx);
     }
@@ -162,6 +212,7 @@ impl PhotonWebView {
             performance_overlay_enabled: false,
             crash_alert: false,
             favicon: None,
+            loading_since: None,
             theme,
             is_blank_tab,
             session: EngineSession::create(runtime, width, height, 1.0, startup_address)?,

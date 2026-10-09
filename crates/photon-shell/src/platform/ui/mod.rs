@@ -14,5 +14,5 @@ mod toolbar;
 mod webview;
 mod window;
 
-pub(in crate::platform) use webview::{PhotonWebView, WebViewEvent};
+pub(in crate::platform) use webview::{Favicon, PhotonWebView, WebViewEvent};
 pub use window::run;

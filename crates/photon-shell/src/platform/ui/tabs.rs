@@ -1,13 +1,14 @@
 //! Browser tab strip and its controls.
 
 use gpui::{
-    Animation, AnimationExt, App, ClickEvent, ElementId, FocusHandle, Image, ImageFormat,
-    ImageSource, KeyDownEvent, MouseButton, ObjectFit, RenderImage, Role, Window, div, img,
+    Animation, AnimationExt, AnyElement, App, ClickEvent, ElementId, FocusHandle, Image,
+    ImageFormat, ImageSource, KeyDownEvent, MouseButton, ObjectFit, Role, Window, div, img,
     prelude::*, px, rgb, rgba,
 };
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
+use super::Favicon;
 use super::icons::{add_icon, close_icon, globe_icon, loading_spinner};
 use super::layout::h_stack;
 use super::{metrics, theme::ThemeColors};
@@ -18,15 +19,35 @@ type ClickHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
 pub(super) enum TabIcon {
     /// The page is loading; the value is the spinner's animation step.
     Loading(usize),
-    Favicon(Arc<RenderImage>),
+    Favicon(Favicon),
     /// A page without an icon of its own.
     Page,
     /// A new tab, which shows the Photon logo.
     NewTab,
 }
 
+/// Identifies an icon a tab reveals with the appear animation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum RevealedIcon {
+    NewTab,
+    Favicon(u64),
+}
+
+impl TabIcon {
+    /// The icon the appear animation reveals. The spinner and the generic
+    /// page icon are placeholders, so they neither animate nor replace the
+    /// last revealed icon: a page's icon that returns after them stays put.
+    pub(super) fn revealed(&self) -> Option<RevealedIcon> {
+        match self {
+            Self::NewTab => Some(RevealedIcon::NewTab),
+            Self::Favicon(favicon) => Some(RevealedIcon::Favicon(favicon.key)),
+            Self::Loading(_) | Self::Page => None,
+        }
+    }
+}
+
 /// How long a tab icon takes to grow to full size when it appears.
-const ICON_APPEAR_DURATION: Duration = Duration::from_millis(260);
+pub(super) const ICON_APPEAR_DURATION: Duration = Duration::from_millis(260);
 /// The fraction of full size an appearing tab icon starts from.
 const ICON_APPEAR_START_SCALE: f32 = 0.35;
 
@@ -44,12 +65,15 @@ fn ease_out_back(delta: f32) -> f32 {
     1.0 + (OVERSHOOT + 1.0) * t * t * t + OVERSHOOT * t * t
 }
 
-/// Grows `icon` from a small size to `size` the first time it is shown under
-/// `id`, inside a fixed slot so the tab title does not move.
-fn appearing_icon<E>(id: ElementId, icon: E, size: f32) -> impl IntoElement
+/// Sizes an icon image, growing it in from a smaller size while
+/// `appearing`, inside a fixed slot so the tab title does not move.
+fn sized_icon<E>(icon: E, id: ElementId, appearing: bool, size: f32) -> AnyElement
 where
     E: Styled + IntoElement + 'static,
 {
+    if !appearing {
+        return icon.size(px(size)).flex_shrink_0().into_any_element();
+    }
     div()
         .flex()
         .flex_shrink_0()
@@ -64,12 +88,15 @@ where
                 icon.size(px(size * scale))
             },
         ))
+        .into_any_element()
 }
 
 pub(super) struct TabItem {
     pub id: String,
     pub label: String,
     pub icon: TabIcon,
+    /// Whether the icon is still growing in after it first appeared.
+    pub icon_appearing: bool,
     pub active: bool,
     pub focus_handle: FocusHandle,
     pub on_select: ClickHandler,
@@ -168,26 +195,22 @@ fn browser_tab(
         palette.text_secondary
     };
     let icon_size = metrics::TAB_FAVICON_SIZE;
+    let icon_id: ElementId = format!("{tab_id}-icon-{:?}", tab.icon.revealed()).into();
     let icon = match tab.icon {
         TabIcon::Loading(step) => loading_spinner(icon_color, icon_size, step).into_any_element(),
-        TabIcon::Favicon(image) => appearing_icon(
-            format!("{tab_id}-favicon-{:?}", image.id).into(),
-            img(ImageSource::Render(image)).object_fit(ObjectFit::Contain),
+        TabIcon::Page => globe_icon(icon_color, icon_size).into_any_element(),
+        TabIcon::Favicon(favicon) => sized_icon(
+            img(ImageSource::Render(favicon.image)).object_fit(ObjectFit::Contain),
+            icon_id,
+            tab.icon_appearing,
             icon_size,
-        )
-        .into_any_element(),
-        TabIcon::Page => appearing_icon(
-            format!("{tab_id}-page-icon").into(),
-            globe_icon(icon_color, icon_size),
-            icon_size,
-        )
-        .into_any_element(),
-        TabIcon::NewTab => appearing_icon(
-            format!("{tab_id}-new-tab-icon").into(),
+        ),
+        TabIcon::NewTab => sized_icon(
             img(NEW_TAB_LOGO.clone()).object_fit(ObjectFit::Contain),
+            icon_id,
+            tab.icon_appearing,
             icon_size,
-        )
-        .into_any_element(),
+        ),
     };
     control = control.child(icon);
 

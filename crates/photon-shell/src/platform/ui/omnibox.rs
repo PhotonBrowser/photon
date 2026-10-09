@@ -22,7 +22,7 @@ pub(super) struct Omnibox {
     webview: Entity<PhotonWebView>,
     /// The submitted text cannot be opened. Cleared by the next edit.
     invalid: bool,
-    _input_subscription: Subscription,
+    _input_subscriptions: [Subscription; 2],
     _subscriptions: Vec<Subscription>,
 }
 
@@ -45,17 +45,23 @@ impl Omnibox {
             cx.on_blur(&input_focus, window, |this, _, cx| this.show_page_url(cx)),
             cx.observe_window_appearance(window, |_, _, cx| cx.notify()),
         ];
-        let input_subscription = cx.subscribe(&input, |this, _, _: &TextChanged, cx| {
-            if this.invalid {
-                this.invalid = false;
-                cx.notify();
-            }
-        });
+        let input_subscriptions = [
+            cx.subscribe(&input, |this, _, _: &TextChanged, cx| {
+                if this.invalid {
+                    this.invalid = false;
+                    cx.notify();
+                }
+            }),
+            // The field lives in the cached chrome, which redraws only when a
+            // view inside it is notified, so redraw for every edit, caret move
+            // and blink.
+            cx.observe(&input, |_, _, cx| cx.notify()),
+        ];
         let omnibox = Self {
             input,
             webview,
             invalid: false,
-            _input_subscription: input_subscription,
+            _input_subscriptions: input_subscriptions,
             _subscriptions: subscriptions,
         };
         omnibox.show_page_url(cx);
