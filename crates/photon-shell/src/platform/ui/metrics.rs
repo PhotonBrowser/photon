@@ -30,8 +30,7 @@ pub(super) const TAB_CLOSE_BUTTON_SIZE: f32 = 22.0;
 pub(super) const TAB_ICON_SIZE: f32 = 12.0;
 pub(super) const TAB_FAVICON_SIZE: f32 = 16.0;
 pub(super) const TAB_AUDIO_BUTTON_SIZE: f32 = 22.0;
-pub(super) const TAB_AUDIO_BADGE_SIZE: f32 = 10.0;
-pub(super) const TAB_AUDIO_ICON_SIZE: f32 = 8.0;
+pub(super) const TAB_AUDIO_ICON_SIZE: f32 = TAB_FAVICON_SIZE;
 pub(super) const TAB_FONT_SIZE: f32 = 12.0;
 pub(super) const CONTROL_RADIUS: f32 = 7.0;
 

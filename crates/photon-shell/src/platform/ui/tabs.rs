@@ -151,7 +151,7 @@ fn browser_tab(
         .aria_position_in_set(position)
         .aria_size_of_set(tab_count)
         .track_focus(&focus_handle)
-        .focus_visible(|style| style.border_1().border_color(rgb(palette.accent)))
+        .focus_visible(|style| style.bg(rgba(palette.tab_hover_surface)))
         .flex_auto()
         .min_w(px(metrics::TAB_MIN_WIDTH))
         .max_w(px(metrics::TAB_MAX_WIDTH))
@@ -192,10 +192,9 @@ fn browser_tab(
             tab.icon_appearing,
             icon_size,
         ),
-        TabIcon::Audio { favicon, muted } => audio_control_button(
+        TabIcon::Audio { muted, .. } => audio_control_button(
             format!("{tab_id}-audio"),
             tab.label.clone(),
-            favicon,
             muted,
             tab.on_toggle_audio,
             focus_index + 1,
@@ -225,7 +224,6 @@ fn browser_tab(
 fn audio_control_button(
     id: String,
     tab_label: String,
-    favicon: Option<Favicon>,
     muted: bool,
     on_click: ClickHandler,
     focus_index: isize,
@@ -237,14 +235,6 @@ fn audio_control_button(
     } else {
         format!("Mute {tab_label}")
     };
-    let favicon = favicon
-        .map(|favicon| {
-            img(ImageSource::Render(favicon.image))
-                .object_fit(ObjectFit::Contain)
-                .into_any_element()
-        })
-        .unwrap_or_else(|| globe_icon(icon_color, metrics::TAB_FAVICON_SIZE).into_any_element());
-
     div()
         .id(id)
         .role(Role::Button)
@@ -261,20 +251,7 @@ fn audio_control_button(
         .hover(|style| style.bg(rgba(palette.control_hover_surface)))
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .on_click(on_click)
-        .child(favicon)
-        .child(
-            div()
-                .absolute()
-                .right(px(0.0))
-                .bottom(px(0.0))
-                .flex()
-                .items_center()
-                .justify_center()
-                .size(px(metrics::TAB_AUDIO_BADGE_SIZE))
-                .rounded(px(metrics::TAB_AUDIO_BADGE_SIZE / 2.0))
-                .bg(rgb(palette.page_background))
-                .child(audio_icon(icon_color, metrics::TAB_AUDIO_ICON_SIZE, muted)),
-        )
+        .child(audio_icon(icon_color, metrics::TAB_AUDIO_ICON_SIZE, muted))
         .into_any_element()
 }
 
