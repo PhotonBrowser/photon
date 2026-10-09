@@ -2,9 +2,11 @@
 //!
 //! The native C ABI is implemented in the separate `photon-ffi` crate.
 
+mod crashes;
 mod dialogs;
 mod state;
 
+pub use crashes::{CrashResponse, EngineService, PageCrashes};
 pub use dialogs::{DialogKind, DialogReply, DialogRequest, PageDialogs};
 pub use photon_omnibox::{
     OmniboxError, OmniboxTarget, SearchEngine, SearchEngineError, SearchEngines, UrlKind,
