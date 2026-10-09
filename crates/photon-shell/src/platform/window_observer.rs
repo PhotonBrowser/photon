@@ -20,7 +20,8 @@ impl WindowObserver {
     /// immediately with the current visibility. It must not update GPUI
     /// entities synchronously.
     pub(super) fn new(window: &Window, on_change: impl Fn(bool, bool) + 'static) -> Option<Self> {
-        let RawWindowHandle::AppKit(handle) = HasWindowHandle::window_handle(window).ok()?.as_raw() else {
+        let RawWindowHandle::AppKit(handle) = HasWindowHandle::window_handle(window).ok()?.as_raw()
+        else {
             return None;
         };
         let mut on_change: Box<OnChange> = Box::new(Box::new(on_change));

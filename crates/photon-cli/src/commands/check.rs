@@ -14,26 +14,7 @@ pub(crate) fn check(root: &Path, verbose: bool) -> Result<(), String> {
 
 fn check_inner(root: &Path, verbose: bool) -> Result<(), String> {
     stage("Check Rust formatting");
-    invoke(
-        "cargo",
-        &[
-            "fmt",
-            "--package",
-            "photon-cli",
-            "--package",
-            "photon-core",
-            "--package",
-            "photon-app",
-            "--package",
-            "photon-presentation-broker",
-            "--package",
-            "photon-omnibox",
-            "--",
-            "--check",
-        ],
-        root,
-        verbose,
-    )?;
+    invoke("cargo", &["fmt", "--all", "--", "--check"], root, verbose)?;
     let cargo_args = ["check", "--workspace"];
     with_progress("Check Rust workspace", !verbose, || {
         invoke("cargo", &cargo_args, root, verbose)
