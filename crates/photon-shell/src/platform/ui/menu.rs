@@ -1,12 +1,12 @@
 //! Shared surface and items for browser menus.
 
-use gpui::{App, ClickEvent, MouseButton, Role, Toggled, Window, div, prelude::*, px, rgb, rgba};
+use gpui::{MouseButton, Role, Toggled, div, prelude::*, px, rgb, rgba};
 
 use super::icons::check_icon;
 use super::layout::{h_stack, v_stack};
 use super::{metrics, theme::ThemeColors};
 
-pub(super) type ClickHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
+use super::ClickHandler;
 
 pub(super) fn menu_surface(content: impl IntoElement, palette: ThemeColors) -> impl IntoElement {
     v_stack()

@@ -51,6 +51,20 @@ pub(super) const CRASH_ALERT_PADDING: f32 = 12.0;
 pub(super) const CRASH_ALERT_GAP: f32 = 8.0;
 pub(super) const CRASH_ALERT_TITLE_SIZE: f32 = 14.0;
 
+pub(super) const BUTTON_HEIGHT: f32 = 30.0;
+pub(super) const BUTTON_MIN_WIDTH: f32 = 76.0;
+pub(super) const BUTTON_HORIZONTAL_PADDING: f32 = 16.0;
+pub(super) const BUTTON_FONT_SIZE: f32 = 13.0;
+pub(super) const BUTTON_GAP: f32 = 8.0;
+
+pub(super) const MODAL_WIDTH: f32 = 400.0;
+pub(super) const MODAL_PADDING: f32 = 18.0;
+pub(super) const MODAL_GAP: f32 = 12.0;
+pub(super) const MODAL_SURFACE_INSET: f32 = 16.0;
+/// How far below its place a modal panel starts as it appears.
+pub(super) const MODAL_APPEAR_RISE: f32 = 12.0;
+pub(super) const DIALOG_MESSAGE_MAX_HEIGHT: f32 = 240.0;
+
 pub(super) const OMNIBOX_HEIGHT: f32 = 28.0;
 pub(super) const OMNIBOX_HORIZONTAL_PADDING: f32 = 10.0;
 pub(super) const OMNIBOX_GAP: f32 = 8.0;

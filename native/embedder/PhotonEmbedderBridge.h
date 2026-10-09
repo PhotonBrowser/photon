@@ -30,6 +30,12 @@ using PhotonPerformanceCallback = void (*)(void*, PhotonPerformanceStats const*)
 // with null pixels when the page has no icon.
 using PhotonFaviconCallback = void (*)(void*, std::uint8_t const*, size_t, int,
     int);
+// Called with the dialog type (0 alert, 1 confirm, 2 prompt), its title,
+// message and the prompt's default text. Answer with photon_view_close_dialog.
+using PhotonDialogCallback = void (*)(void*, int, char const*, char const*,
+    char const*);
+// Called when the page shown may open dialogs again after a navigation.
+using PhotonNavigationCommittedCallback = void (*)(void*);
 #if defined(__APPLE__)
 using PhotonReducedMotionChangedCallback = void (*)(void*, bool);
 // Called with whether the window is visible and whether its display or the
@@ -59,7 +65,9 @@ void* photon_view_create(void* runtime, int width, int height, double dpr,
     PhotonErrorCallback error_callback,
     PhotonCrashCallback crash_callback,
     PhotonPerformanceCallback performance_callback,
-    PhotonFaviconCallback favicon_callback
+    PhotonFaviconCallback favicon_callback,
+    PhotonDialogCallback dialog_callback,
+    PhotonNavigationCommittedCallback navigation_committed_callback
 #if defined(__APPLE__)
     ,
     bool native_metal_presentation,
@@ -85,6 +93,10 @@ void photon_view_go_forward(void* view);
 void photon_view_set_focus(void* view, bool focused);
 // 0 follows the engine default, 1 prefers dark, 2 prefers light.
 void photon_view_set_preferred_color_scheme(void* view, int color_scheme);
+// Answers the open dialog of `type`. For a prompt, null `text` means it was
+// cancelled; `accepted` answers a confirm.
+void photon_view_close_dialog(void* view, int type, bool accepted,
+    char const* text);
 void photon_runtime_set_system_reduced_motion_preference(void* runtime,
     bool reduce_motion);
 void photon_view_pointer(void* view, int kind, double x, double y, int button,

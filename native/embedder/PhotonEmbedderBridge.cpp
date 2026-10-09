@@ -68,7 +68,9 @@ extern "C" void* photon_view_create(void* runtime, int width, int height,
     PhotonErrorCallback error_callback,
     PhotonCrashCallback crash_callback,
     PhotonPerformanceCallback performance_callback,
-    PhotonFaviconCallback favicon_callback
+    PhotonFaviconCallback favicon_callback,
+    PhotonDialogCallback dialog_callback,
+    PhotonNavigationCommittedCallback navigation_committed_callback
 #if defined(__APPLE__)
     ,
     bool native_metal_presentation,
@@ -144,6 +146,16 @@ extern "C" void* photon_view_create(void* runtime, int width, int height,
         }
         favicon_callback(callback_data, favicon->pixels.data(),
             favicon->pixels.size(), favicon->width, favicon->height);
+    };
+    callbacks.dialog_requested = [=](Photon::DialogRequest const& request) {
+        if (dialog_callback)
+            dialog_callback(callback_data, static_cast<int>(request.type),
+                request.title.c_str(), request.message.c_str(),
+                request.default_text.c_str());
+    };
+    callbacks.navigation_committed = [=] {
+        if (navigation_committed_callback)
+            navigation_committed_callback(callback_data);
     };
     callbacks.failed = [=](std::string const& message) {
         if (error_callback)
@@ -245,6 +257,25 @@ extern "C" void photon_view_set_focus(void* view, bool focused)
 {
     if (view)
         static_cast<ViewHandle*>(view)->view->set_focus(focused);
+}
+
+extern "C" void photon_view_close_dialog(void* view, int type, bool accepted,
+    char const* text)
+{
+    if (!view)
+        return;
+    auto& engine_view = *static_cast<ViewHandle*>(view)->view;
+    switch (static_cast<Photon::DialogType>(type)) {
+    case Photon::DialogType::Alert:
+        engine_view.alert_closed();
+        break;
+    case Photon::DialogType::Confirm:
+        engine_view.confirm_closed(accepted);
+        break;
+    case Photon::DialogType::Prompt:
+        engine_view.prompt_closed(text ? std::optional<std::string>(text) : std::nullopt);
+        break;
+    }
 }
 
 extern "C" void photon_view_set_preferred_color_scheme(void* view,

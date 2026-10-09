@@ -16,6 +16,7 @@ mod opacity {
     pub(super) const TAB_HOVER: f32 = 0.12;
     pub(super) const CONTROL_HOVER: f32 = 0.18;
     pub(super) const PERFORMANCE_SURFACE: f32 = 0.95;
+    pub(super) const MODAL_BACKDROP: f32 = 0.28;
     pub(super) const MENU_BORDER: f32 = 0.55;
     pub(super) const MENU_HOVER: f32 = 0.16;
 }
@@ -73,6 +74,8 @@ pub(super) struct ThemeColors {
     pub menu_surface: u32,
     pub menu_border: u32,
     pub menu_hover: u32,
+    /// Dims what a modal covers.
+    pub modal_backdrop: u32,
 }
 
 impl ThemeColors {
@@ -121,6 +124,7 @@ impl ThemeColors {
             menu_surface: to_rgba_token(colors.container),
             menu_border: to_rgba_token(colors.border.opacity(opacity::MENU_BORDER)),
             menu_hover: to_rgba_token(colors.text.opacity(opacity::MENU_HOVER)),
+            modal_backdrop: to_rgba_token(Rgba::new(0.0, 0.0, 0.0, opacity::MODAL_BACKDROP)),
         }
     }
 }

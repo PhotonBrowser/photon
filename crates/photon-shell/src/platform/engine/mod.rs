@@ -1,24 +1,24 @@
-//! Engine runtime, its C callbacks, and input forwarding.
+//! The Engine runtime and per-tab sessions: navigation, input and shutdown.
+
+mod callbacks;
 
 use anyhow::Context as _;
-use gpui::{AsyncApp, Context, WeakEntity};
-use mach2::port::mach_port_t;
-use photon_core::{BrowserCommand, BrowserState, EngineEvent};
-use photon_performance::{EnginePerformanceStats, PerformanceMonitor};
+use gpui::{AsyncApp, WeakEntity};
+use photon_core::{BrowserCommand, DialogReply};
+use photon_performance::PerformanceMonitor;
 use std::{
-    ffi::{CStr, CString, c_char, c_void},
+    ffi::{CStr, CString, c_void},
     rc::Rc,
     sync::{
-        Arc, Mutex, Weak,
+        Arc, Mutex,
         atomic::{AtomicPtr, Ordering},
     },
 };
 
-use super::presentation::{
-    GpuActivity, LeaseLedger, MachPortGuard, PresentationRuntime, RetiredSurface,
-};
-use super::ui::{Favicon, PhotonWebView};
+use super::presentation::{GpuActivity, LeaseLedger, PresentationRuntime, RetiredSurface};
+use super::ui::PhotonWebView;
 use super::{ffi::embedder, trace};
+use callbacks::*;
 
 #[derive(Clone)]
 pub(super) struct UiWake {
@@ -26,133 +26,10 @@ pub(super) struct UiWake {
     pub(super) webview: WeakEntity<PhotonWebView>,
 }
 
-struct CallbackState {
-    pub(super) presentation: Arc<PresentationRuntime>,
-    leases: Arc<Mutex<LeaseLedger>>,
-    engine_view: AtomicPtr<c_void>,
-    ui_wake: Mutex<Option<UiWake>>,
-    performance: PerformanceMonitor,
-}
-
-struct RuntimeCallbacks {
-    views: Mutex<Vec<Weak<CallbackState>>>,
-}
-
 pub(super) struct EngineRuntime {
     runtime: *mut c_void,
     reduced_motion_observer: *mut c_void,
     callbacks: Box<RuntimeCallbacks>,
-}
-
-impl CallbackState {
-    pub(super) fn set_ui_wake(&self, wake: UiWake) {
-        *self.ui_wake.lock().unwrap() = Some(wake);
-        self.request_redraw();
-    }
-
-    fn request_redraw(&self) {
-        let diagnostics = self.performance.snapshot_if_enabled();
-        self.update_webview(move |view, cx| {
-            view.present_latest(cx);
-            if let Some(diagnostics) = diagnostics
-                && view.diagnostics != diagnostics
-            {
-                view.diagnostics = diagnostics;
-                cx.notify();
-            }
-        });
-    }
-
-    fn set_page_state(&self, state: BrowserState) {
-        self.update_webview(move |view, cx| view.set_state(state, cx));
-    }
-
-    fn set_page_error(&self, message: String) {
-        self.update_webview(move |view, cx| {
-            view.state.apply(EngineEvent::LoadFailed(message));
-            view.state_changed(cx);
-        });
-    }
-
-    fn set_page_favicon(&self, favicon: Option<Favicon>) {
-        self.update_webview(move |view, cx| view.set_favicon(favicon, cx));
-    }
-
-    fn handle_engine_crash(&self, url: String) {
-        self.update_webview(move |view, cx| {
-            if let Err(error) = view.handle_engine_crash() {
-                eprintln!("Photon Engine: failed to reload crashed page {url}: {error:#}");
-            }
-            view.state_changed(cx);
-        });
-    }
-
-    fn mark_input(&self) {
-        self.performance.mark_input();
-    }
-
-    /// Tracks frame gaps and input latency, which only the diagnostics
-    /// overlay shows, so frames skip this while it is hidden.
-    fn record_frame(&self) {
-        self.performance.record_frame();
-    }
-
-    fn set_engine_diagnostics(&self, stats: &embedder::PerformanceStats) {
-        self.performance.set_engine_stats(EnginePerformanceStats {
-            cpu_percent: stats.has_cpu_percent.then_some(stats.cpu_percent),
-            memory_bytes: stats.has_memory_bytes.then_some(stats.memory_bytes),
-            managed_heap_bytes: stats
-                .has_managed_heap_bytes
-                .then_some(stats.managed_heap_bytes),
-            download_bytes_per_second: stats.download_bytes_per_second,
-            upload_bytes_per_second: stats.upload_bytes_per_second,
-            frames_per_second: stats
-                .has_frames_per_second
-                .then_some(stats.frames_per_second),
-        });
-        if self.performance.is_enabled() {
-            self.publish_diagnostics();
-        }
-    }
-
-    fn set_diagnostics_enabled(&self, enabled: bool) {
-        // Frames were not tracked while hidden; starting enabled resets the
-        // interval so it does not span the hidden period.
-        self.performance.set_enabled(enabled);
-        if enabled {
-            self.publish_diagnostics();
-        }
-    }
-
-    fn publish_diagnostics(&self) {
-        let snapshot = self.performance.snapshot();
-        self.update_webview(move |view, cx| {
-            if view.diagnostics != snapshot {
-                view.diagnostics = snapshot;
-                cx.notify();
-            }
-        });
-    }
-
-    /// Runs `update` on the UI thread against the live WebView.
-    fn update_webview(
-        &self,
-        update: impl FnOnce(&mut PhotonWebView, &mut Context<PhotonWebView>) + 'static,
-    ) {
-        let Some(wake) = self.ui_wake.lock().unwrap().clone() else {
-            return;
-        };
-        wake.app
-            .spawn(async move |cx| {
-                let Some(webview) = wake.webview.upgrade() else {
-                    return;
-                };
-                // Notifying the view is enough to schedule a frame; a window
-                // refresh would bypass every cached view.
-                webview.update(cx, update);
-            })
-            .detach();
-    }
 }
 
 impl EngineRuntime {
@@ -212,29 +89,6 @@ impl Drop for EngineRuntime {
                 self.runtime = std::ptr::null_mut();
             }
         }
-    }
-}
-
-fn deliver_pending_releases(callbacks: &CallbackState) {
-    let view = callbacks.engine_view.load(Ordering::Acquire);
-    if view.is_null() {
-        return;
-    }
-    let pending = callbacks.leases.lock().unwrap().take_pending();
-    for release in pending {
-        unsafe {
-            embedder::photon_view_release_native_frame(
-                view,
-                release.key.backing,
-                release.key.generation,
-                release.key.frame,
-            );
-        }
-        trace(format_args!(
-            "FrameReleased frame={} gen={} delivered-to-engine",
-            release.key.frame, release.key.generation
-        ));
-        callbacks.leases.lock().unwrap().release(release.key);
     }
 }
 
@@ -305,6 +159,8 @@ impl EngineSession {
                 Some(on_engine_crash),
                 Some(on_engine_performance_stats),
                 Some(on_engine_favicon),
+                Some(on_engine_dialog),
+                Some(on_engine_navigation_committed),
                 true,
                 Some(on_engine_backing),
                 Some(on_engine_native_frame),
@@ -350,13 +206,6 @@ impl EngineSession {
         }
     }
 
-    /// Opens typed omnibox text as an address or a search.
-    pub(super) fn navigate(&mut self, input: &str) -> anyhow::Result<()> {
-        let command = BrowserCommand::from_omnibox_input(input)
-            .map_err(|error| anyhow::anyhow!("cannot open {input:?}: {error:?}"))?;
-        self.execute(command)
-    }
-
     pub(super) fn execute(&mut self, command: BrowserCommand) -> anyhow::Result<()> {
         match command {
             BrowserCommand::Navigate(url) => {
@@ -392,6 +241,25 @@ impl EngineSession {
 
     pub(super) fn set_focus(&mut self, focused: bool) {
         unsafe { embedder::photon_view_set_focus(self.view, focused) }
+    }
+
+    /// Answers the page's open dialog.
+    pub(super) fn reply_dialog(&mut self, reply: DialogReply) {
+        const ALERT: i32 = 0;
+        const CONFIRM: i32 = 1;
+        const PROMPT: i32 = 2;
+        let (dialog_type, accepted, text) = match reply {
+            DialogReply::Alert => (ALERT, true, None),
+            DialogReply::Confirm(accepted) => (CONFIRM, accepted, None),
+            DialogReply::Prompt(text) => (
+                PROMPT,
+                text.is_some(),
+                // Interior NULs cannot cross the C ABI; drop them.
+                text.map(|text| CString::new(text.replace('\0', "")).unwrap_or_default()),
+            ),
+        };
+        let text_ptr = text.as_ref().map_or(std::ptr::null(), |text| text.as_ptr());
+        unsafe { embedder::photon_view_close_dialog(self.view, dialog_type, accepted, text_ptr) }
     }
 
     /// Sets the color scheme pages see through `prefers-color-scheme`.
@@ -587,189 +455,5 @@ impl Drop for EngineSession {
             self.begin_shutdown(Arc::new(Mutex::new(Vec::new())));
             self.finish_shutdown();
         }
-    }
-}
-
-unsafe extern "C" fn on_engine_state(
-    context: *mut c_void,
-    url: *const c_char,
-    title: *const c_char,
-    loading: bool,
-    can_go_back: bool,
-    can_go_forward: bool,
-) {
-    let url = (!url.is_null()).then(|| {
-        unsafe { CStr::from_ptr(url) }
-            .to_string_lossy()
-            .into_owned()
-    });
-    let title = (!title.is_null())
-        .then(|| {
-            unsafe { CStr::from_ptr(title) }
-                .to_string_lossy()
-                .into_owned()
-        })
-        .unwrap_or_default();
-    if !loading && let Some(url) = url.as_deref() {
-        trace(format_args!("page-state url={url} title={title}"));
-    }
-    if !context.is_null() {
-        let callbacks = unsafe { &*context.cast::<CallbackState>() };
-        callbacks.set_page_state(BrowserState {
-            url: url.unwrap_or_default(),
-            title,
-            loading,
-            can_go_back,
-            can_go_forward,
-            error: None,
-        });
-    }
-}
-unsafe extern "C" fn on_engine_frame(
-    context: *mut c_void,
-    _: i32,
-    _: i32,
-    _: usize,
-    _: f64,
-    _: *const u8,
-    _: usize,
-    _: u64,
-    _: u64,
-    _: u64,
-    _: u64,
-) {
-    if !context.is_null() {
-        let callbacks = unsafe { &*(context.cast::<CallbackState>()) };
-        callbacks.record_frame();
-        callbacks.request_redraw();
-    }
-}
-unsafe extern "C" fn on_engine_cursor(_: *mut c_void, _: i32) {}
-unsafe extern "C" fn on_engine_error(context: *mut c_void, message: *const c_char) {
-    if !message.is_null() {
-        let message = unsafe { CStr::from_ptr(message) }
-            .to_string_lossy()
-            .into_owned();
-        eprintln!("Photon Engine: {message}");
-        if !context.is_null() {
-            unsafe { &*(context.cast::<CallbackState>()) }.set_page_error(message);
-        }
-    }
-}
-
-unsafe extern "C" fn on_engine_crash(context: *mut c_void, url: *const c_char) {
-    let url = (!url.is_null())
-        .then(|| {
-            unsafe { CStr::from_ptr(url) }
-                .to_string_lossy()
-                .into_owned()
-        })
-        .unwrap_or_else(|| "unknown page".into());
-    eprintln!("Photon Engine: WebContent process crashed while displaying {url}");
-    if !context.is_null() {
-        unsafe { &*(context.cast::<CallbackState>()) }.handle_engine_crash(url);
-    }
-}
-
-unsafe extern "C" fn on_engine_performance_stats(
-    context: *mut c_void,
-    stats: *const embedder::PerformanceStats,
-) {
-    if context.is_null() || stats.is_null() {
-        return;
-    }
-    unsafe { &*(context.cast::<CallbackState>()) }.set_engine_diagnostics(unsafe { &*stats });
-}
-unsafe extern "C" fn on_engine_favicon(
-    context: *mut c_void,
-    pixels: *const u8,
-    length: usize,
-    width: i32,
-    height: i32,
-) {
-    if context.is_null() {
-        return;
-    }
-    let favicon = (!pixels.is_null() && width > 0 && height > 0)
-        .then(|| unsafe { std::slice::from_raw_parts(pixels, length) })
-        .and_then(|pixels| Favicon::from_bgra(pixels, width as u32, height as u32));
-    unsafe { &*(context.cast::<CallbackState>()) }.set_page_favicon(favicon);
-}
-
-unsafe extern "C" fn on_engine_backing(
-    context: *mut c_void,
-    backing: u64,
-    generation: u64,
-    width: u32,
-    height: u32,
-    format: u32,
-    port: u32,
-) -> bool {
-    if context.is_null() {
-        return false;
-    }
-    let state = unsafe { &*(context.cast::<CallbackState>()) };
-    let _owned_port = MachPortGuard(port as mach_port_t);
-    match state.presentation.register_backing(
-        backing,
-        generation,
-        width,
-        height,
-        format,
-        port as mach_port_t,
-    ) {
-        Ok(()) => true,
-        Err(error) => {
-            eprintln!("Photon presentation rejected backing: {error:#}");
-            false
-        }
-    }
-}
-unsafe extern "C" fn on_engine_native_frame(
-    context: *mut c_void,
-    backing: u64,
-    generation: u64,
-    frame: u64,
-    signal: u64,
-    width: i32,
-    height: i32,
-    _: f64,
-) {
-    if context.is_null() {
-        return;
-    }
-    let callbacks = unsafe { &*(context.cast::<CallbackState>()) };
-    callbacks.record_frame();
-    callbacks
-        .presentation
-        .receive_frame(backing, generation, frame, signal, width, height);
-    // Receiving a frame queues a release only when it drops one; GPU
-    // completion schedules the drain for the rest.
-    if callbacks.leases.lock().unwrap().has_pending() {
-        callbacks.presentation.schedule_release_drain();
-    }
-    callbacks.request_redraw();
-}
-
-unsafe extern "C" fn on_native_release_drain(context: *mut c_void) {
-    if context.is_null() {
-        return;
-    }
-    let runtime_callbacks = unsafe { &*(context.cast::<RuntimeCallbacks>()) };
-    let callbacks = {
-        let mut views = runtime_callbacks.views.lock().unwrap();
-        let mut callbacks = Vec::with_capacity(views.len());
-        views.retain(|view| {
-            if let Some(view) = view.upgrade() {
-                callbacks.push(view);
-                true
-            } else {
-                false
-            }
-        });
-        callbacks
-    };
-    for callback in callbacks {
-        deliver_pending_releases(&callback);
     }
 }

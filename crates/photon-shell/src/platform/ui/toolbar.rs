@@ -1,12 +1,12 @@
 //! Browser navigation controls and full-width address toolbar.
 
-use gpui::{App, ClickEvent, MouseButton, Role, Window, prelude::*, px, rgb, rgba};
+use gpui::{MouseButton, Role, prelude::*, px, rgb, rgba};
 
 use super::icons::{back_icon, close_icon, forward_icon, more_icon, reload_icon};
 use super::layout::h_stack;
 use super::{metrics, theme::ThemeColors};
 
-pub(super) type ClickHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
+use super::ClickHandler;
 
 pub(super) fn address_toolbar(
     omnibox: impl IntoElement,

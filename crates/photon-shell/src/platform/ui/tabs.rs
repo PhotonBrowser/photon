@@ -1,9 +1,9 @@
 //! Browser tab strip and its controls.
 
 use gpui::{
-    Animation, AnimationExt, AnyElement, App, ClickEvent, ElementId, FocusHandle, Image,
-    ImageFormat, ImageSource, KeyDownEvent, MouseButton, ObjectFit, Role, Window, div, img,
-    prelude::*, px, rgb, rgba,
+    Animation, AnimationExt, AnyElement, App, ElementId, FocusHandle, Image, ImageFormat,
+    ImageSource, KeyDownEvent, MouseButton, ObjectFit, Role, Window, div, img, prelude::*, px, rgb,
+    rgba,
 };
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
@@ -13,7 +13,7 @@ use super::icons::{add_icon, close_icon, globe_icon, loading_spinner};
 use super::layout::h_stack;
 use super::{metrics, theme::ThemeColors};
 
-type ClickHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
+use super::ClickHandler;
 
 /// What a tab shows before its title.
 pub(super) enum TabIcon {

@@ -61,6 +61,10 @@ pub(super) mod embedder {
                 unsafe extern "C" fn(*mut c_void, *const PerformanceStats),
             >,
             favicon_callback: Option<unsafe extern "C" fn(*mut c_void, *const u8, usize, i32, i32)>,
+            dialog_callback: Option<
+                unsafe extern "C" fn(*mut c_void, i32, *const c_char, *const c_char, *const c_char),
+            >,
+            navigation_committed_callback: Option<unsafe extern "C" fn(*mut c_void)>,
             native_metal: bool,
             backing_callback: Option<
                 unsafe extern "C" fn(*mut c_void, u64, u64, u32, u32, u32, u32) -> bool,
@@ -79,6 +83,12 @@ pub(super) mod embedder {
         );
         pub fn photon_view_set_focus(view: *mut c_void, focused: bool);
         pub fn photon_view_set_preferred_color_scheme(view: *mut c_void, color_scheme: i32);
+        pub fn photon_view_close_dialog(
+            view: *mut c_void,
+            dialog_type: i32,
+            accepted: bool,
+            text: *const c_char,
+        );
         pub fn photon_runtime_set_system_reduced_motion_preference(
             runtime: *mut c_void,
             reduce_motion: bool,

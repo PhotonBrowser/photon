@@ -12,7 +12,9 @@ use gpui::{
     Render, RenderImage, Subscription, SurfaceSource, Window, WindowAppearance, div, prelude::*,
     px, surface,
 };
-use photon_core::{BrowserState, EngineEvent};
+use photon_core::{
+    BrowserCommand, BrowserState, DialogReply, DialogRequest, EngineEvent, PageDialogs,
+};
 use photon_performance::{PerformanceDiagnostics, performance_overlay};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::rc::Rc;
@@ -59,6 +61,8 @@ pub(in crate::platform) struct PhotonWebView {
     pub(in crate::platform) favicon: Option<Favicon>,
     /// When the current load started.
     loading_since: Option<Instant>,
+    /// The page's JavaScript dialog, which the window shows over the page.
+    pub(in crate::platform) dialogs: PageDialogs,
     pub(super) theme: ThemePreference,
     is_blank_tab: bool,
     pub(super) session: EngineSession,
@@ -213,6 +217,7 @@ impl PhotonWebView {
             crash_alert: false,
             favicon: None,
             loading_since: None,
+            dialogs: PageDialogs::default(),
             theme,
             is_blank_tab,
             session: EngineSession::create(runtime, width, height, 1.0, startup_address)?,
@@ -252,7 +257,67 @@ impl PhotonWebView {
 
     pub(in crate::platform) fn handle_engine_crash(&mut self) -> anyhow::Result<()> {
         self.crash_alert = true;
-        self.session.execute(photon_core::BrowserCommand::Reload)
+        // The replaced page process no longer waits for its dialog.
+        self.dialogs.reset();
+        self.session.execute(BrowserCommand::Reload)
+    }
+
+    /// Shows a page's dialog, or answers at once when it cannot be shown.
+    pub(in crate::platform) fn request_dialog(
+        &mut self,
+        request: DialogRequest,
+        cx: &mut Context<Self>,
+    ) {
+        let kind = request.kind.clone();
+        match self.dialogs.request(request) {
+            Some(reply) => {
+                trace(format_args!(
+                    "dialog {kind:?} answered without showing: {reply:?}"
+                ));
+                self.session.reply_dialog(reply);
+            }
+            None => {
+                trace(format_args!("dialog {kind:?} shown"));
+                self.state_changed(cx);
+            }
+        }
+    }
+
+    /// Closes the open dialog with OK (using `text` for a prompt) or Cancel.
+    pub(super) fn close_dialog(&mut self, accepted: bool, text: String, cx: &mut Context<Self>) {
+        let reply = if accepted {
+            self.dialogs.accept(text)
+        } else {
+            self.dialogs.dismiss()
+        };
+        self.send_dialog_reply(reply, cx);
+    }
+
+    fn send_dialog_reply(&mut self, reply: Option<DialogReply>, cx: &mut Context<Self>) {
+        if let Some(reply) = reply {
+            self.session.reply_dialog(reply);
+            self.state_changed(cx);
+        }
+    }
+
+    /// Runs a page command, closing the page's dialog first when the command
+    /// navigates away from it.
+    pub(super) fn execute(
+        &mut self,
+        command: BrowserCommand,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<()> {
+        if matches!(
+            command,
+            BrowserCommand::Navigate(_)
+                | BrowserCommand::Reload
+                | BrowserCommand::Back
+                | BrowserCommand::Forward
+        ) {
+            let reply = self.dialogs.navigation_started();
+            self.send_dialog_reply(reply, cx);
+        }
+        self.session.execute(command)
     }
 
     pub(super) fn is_blank_tab(&self) -> bool {
@@ -274,7 +339,9 @@ impl PhotonWebView {
     }
 
     pub(super) fn navigate(&mut self, input: &str, cx: &mut Context<Self>) -> anyhow::Result<()> {
-        self.session.navigate(input)?;
+        let command = BrowserCommand::from_omnibox_input(input)
+            .map_err(|error| anyhow::anyhow!("cannot open {input:?}: {error:?}"))?;
+        self.execute(command, cx)?;
         self.crash_alert = false;
         if self.is_blank_tab {
             self.is_blank_tab = false;
