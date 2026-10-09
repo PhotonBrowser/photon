@@ -13,11 +13,11 @@ mod opacity {
     pub(super) const TEXT_SECONDARY: f32 = 0.72;
     pub(super) const TEXT_DISABLED: f32 = 0.42;
     pub(super) const FOCUSED_FIELD: f32 = 0.08;
-    pub(super) const TAB_HOVER: f32 = 0.08;
-    pub(super) const CONTROL_HOVER: f32 = 0.12;
+    pub(super) const TAB_HOVER: f32 = 0.12;
+    pub(super) const CONTROL_HOVER: f32 = 0.18;
     pub(super) const PERFORMANCE_SURFACE: f32 = 0.95;
     pub(super) const MENU_BORDER: f32 = 0.55;
-    pub(super) const MENU_HOVER: f32 = 0.12;
+    pub(super) const MENU_HOVER: f32 = 0.16;
 }
 
 /// GPUI-CE's palettes have no error role, so the shell uses the macOS system
@@ -106,7 +106,7 @@ impl ThemeColors {
             )),
             field_error_border: to_rgba_token(error),
             tab_active_surface: to_rgba_token(colors.container),
-            tab_hover_surface: to_rgba_token(colors.selected.opacity(opacity::TAB_HOVER)),
+            tab_hover_surface: to_rgba_token(colors.text.opacity(opacity::TAB_HOVER)),
             control_hover_surface: to_rgba_token(colors.text.opacity(opacity::CONTROL_HOVER)),
             performance_palette: PerformancePalette {
                 surface: to_rgba_token(colors.container.opacity(opacity::PERFORMANCE_SURFACE)),
@@ -115,7 +115,7 @@ impl ThemeColors {
             },
             menu_surface: to_rgba_token(colors.container),
             menu_border: to_rgba_token(colors.border.opacity(opacity::MENU_BORDER)),
-            menu_hover: to_rgba_token(colors.selected.opacity(opacity::MENU_HOVER)),
+            menu_hover: to_rgba_token(colors.text.opacity(opacity::MENU_HOVER)),
         }
     }
 }
