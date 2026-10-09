@@ -25,7 +25,7 @@ const RECOVERED_NOTICE_DURATION: Duration = Duration::from_secs(3);
 struct Notice {
     id: &'static str,
     icon: ChipIcon,
-    message: &'static str,
+    message: SharedString,
     /// When a recovery notice was shown, so it can expire.
     recovered_at: Option<Instant>,
     /// The page keeps crashing, so offer to reload it and to dismiss.
@@ -82,7 +82,10 @@ impl BrowserWindow {
             return true;
         }
         self.active_webview().update(cx, |view, cx| {
-            let dismissed = view.crash_notice.take().is_some();
+            let mut dismissed = view.crash_notice.take().is_some();
+            if view.state.error.take().is_some() {
+                dismissed = true;
+            }
             if dismissed {
                 cx.notify();
             }
@@ -103,39 +106,49 @@ impl BrowserWindow {
             Some(EngineNotice::Restarting) => Notice {
                 id: "engine-restarting",
                 icon: ChipIcon::Working(step),
-                message: "Photon Engine stopped. Restarting…",
+                message: SharedString::new_static("Photon Engine stopped. Restarting…"),
                 recovered_at: None,
                 actionable: false,
             },
             Some(EngineNotice::Restarted(at)) => Notice {
                 id: "engine-restarted",
                 icon: ChipIcon::Done,
-                message: "Photon Engine restarted",
+                message: SharedString::new_static("Photon Engine restarted"),
                 recovered_at: Some(at),
                 actionable: false,
             },
-            None => match self.active_webview().read(cx).crash_notice? {
-                CrashNotice::Reloading => Notice {
+            None => match self.active_webview().read(cx).crash_notice {
+                Some(CrashNotice::Reloading) => Notice {
                     id: "page-reloading",
                     icon: ChipIcon::Working(step),
-                    message: "This page crashed. Reloading…",
+                    message: SharedString::new_static("This page crashed. Reloading…"),
                     recovered_at: None,
                     actionable: false,
                 },
-                CrashNotice::Reloaded(at) => Notice {
+                Some(CrashNotice::Reloaded(at)) => Notice {
                     id: "page-reloaded",
                     icon: ChipIcon::Done,
-                    message: "Page reloaded",
+                    message: SharedString::new_static("Page reloaded"),
                     recovered_at: Some(at),
                     actionable: false,
                 },
-                CrashNotice::KeepsCrashing => Notice {
+                Some(CrashNotice::KeepsCrashing) => Notice {
                     id: "page-keeps-crashing",
                     icon: ChipIcon::Problem,
-                    message: "This page keeps crashing",
+                    message: SharedString::new_static("This page keeps crashing"),
                     recovered_at: None,
                     actionable: true,
                 },
+                None => {
+                    let error = self.active_webview().read(cx).state.error.clone()?;
+                    Notice {
+                        id: "page-error",
+                        icon: ChipIcon::Problem,
+                        message: SharedString::from(format!("Page error: {error}")),
+                        recovered_at: None,
+                        actionable: true,
+                    }
+                }
             },
         };
         let expired = notice
@@ -171,7 +184,7 @@ impl BrowserWindow {
             ElementId::Name(notice.id.into()),
             palette,
             notice.icon,
-            SharedString::new_static(notice.message),
+            notice.message,
             action,
             on_dismiss,
         ))

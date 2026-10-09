@@ -118,6 +118,7 @@ impl BrowserWindow {
                     this.chrome.update(cx, |_, cx| cx.notify());
                     this.animate_spinner(cx);
                     this.sync_dialog(window, cx);
+                    cx.notify();
                 }
                 WebViewEvent::NewWebViewRequested(id) => {
                     if let Some(request) = webview.update(cx, |view, _| view.take_new_web_view(*id))
