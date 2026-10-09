@@ -1,8 +1,9 @@
 //! Browser tab strip and its controls.
 
 use gpui::{
-    AnyElement, App, ElementId, FocusHandle, Image, ImageFormat, ImageSource, KeyDownEvent,
-    MouseButton, ObjectFit, Role, Window, div, img, prelude::*, px, rgb, rgba,
+    AnyElement, App, Context, ElementId, FocusHandle, Image, ImageFormat, ImageSource,
+    KeyDownEvent, MouseButton, MouseDownEvent, MouseUpEvent, ObjectFit, Render, Role, SharedString,
+    Window, div, img, prelude::*, px, rgb, rgba,
 };
 use std::sync::{Arc, LazyLock};
 
@@ -13,6 +14,45 @@ use super::motion::{AnimateIn, Entrance};
 use super::{metrics, theme::ThemeColors};
 
 use super::ClickHandler;
+
+/// A tab being dragged to a new position.
+pub(super) struct DraggedTab {
+    /// The tab's position when the drag started.
+    pub index: usize,
+}
+
+/// What follows the cursor while a tab is dragged.
+struct TabDragPreview {
+    label: SharedString,
+    palette: ThemeColors,
+}
+
+impl Render for TabDragPreview {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.palette;
+        h_stack()
+            .items_center()
+            .h(px(metrics::TAB_HEIGHT))
+            .max_w(px(metrics::TAB_MAX_WIDTH))
+            .px(px(metrics::TAB_HORIZONTAL_PADDING))
+            .rounded(px(metrics::CONTROL_RADIUS))
+            .border_1()
+            .border_color(rgba(palette.menu_border))
+            .bg(rgba(palette.menu_surface))
+            .text_size(px(metrics::TAB_FONT_SIZE))
+            .text_color(rgb(palette.text_primary))
+            .shadow_md()
+            .opacity(metrics::TAB_DRAG_PREVIEW_OPACITY)
+            .child(div().truncate().child(self.label.clone()))
+    }
+}
+
+/// A callback for a mouse button pressed on a tab.
+pub(super) type TabMouseDown = Box<dyn Fn(&MouseDownEvent, &mut Window, &mut App)>;
+/// A callback for a mouse button released on a tab.
+pub(super) type TabMouseUp = Box<dyn Fn(&MouseUpEvent, &mut Window, &mut App)>;
+/// A callback for a tab dropped onto another.
+pub(super) type TabDrop = Box<dyn Fn(&DraggedTab, &mut Window, &mut App)>;
 
 /// What a tab shows before its title.
 pub(super) enum TabIcon {
@@ -95,6 +135,12 @@ pub(super) struct TabItem {
     pub on_key_down: Box<dyn Fn(&KeyDownEvent, &mut Window, &mut App)>,
     pub on_close: ClickHandler,
     pub on_toggle_audio: ClickHandler,
+    /// Middle-click closes the tab.
+    pub on_middle_click: TabMouseUp,
+    /// Right-click opens the tab's menu.
+    pub on_context_menu: TabMouseDown,
+    /// A dragged tab dropped onto this one moves to its place.
+    pub on_drop: TabDrop,
 }
 
 pub(super) fn tab_strip(
@@ -116,7 +162,7 @@ pub(super) fn tab_strip(
     let mut focus_index = 0;
     for (index, tab) in tabs.into_iter().enumerate() {
         let audio_control = matches!(&tab.icon, TabIcon::Audio { .. });
-        tab_list = tab_list.child(browser_tab(tab, index + 1, tab_count, focus_index, palette));
+        tab_list = tab_list.child(browser_tab(tab, index, tab_count, focus_index, palette));
         focus_index += if audio_control { 3 } else { 2 };
     }
 
@@ -133,7 +179,7 @@ pub(super) fn tab_strip(
 
 fn browser_tab(
     tab: TabItem,
-    position: usize,
+    index: usize,
     tab_count: usize,
     focus_index: isize,
     palette: ThemeColors,
@@ -148,7 +194,7 @@ fn browser_tab(
         .role(Role::Tab)
         .aria_label(tab.label.clone())
         .aria_selected(tab.active)
-        .aria_position_in_set(position)
+        .aria_position_in_set(index + 1)
         .aria_size_of_set(tab_count)
         .track_focus(&focus_handle)
         .focus_visible(|style| style.bg(rgba(palette.tab_hover_surface)))
@@ -168,7 +214,18 @@ fn browser_tab(
         }))
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .on_click(tab.on_select)
-        .on_key_down(tab.on_key_down);
+        .on_key_down(tab.on_key_down)
+        .on_mouse_up(MouseButton::Middle, tab.on_middle_click)
+        .on_mouse_down(MouseButton::Right, tab.on_context_menu)
+        .on_drag(DraggedTab { index }, {
+            let label = SharedString::from(tab.label.clone());
+            move |_, _, _, cx| {
+                let label = label.clone();
+                cx.new(|_| TabDragPreview { label, palette })
+            }
+        })
+        .drag_over::<DraggedTab>(move |style, _, _, _| style.bg(rgba(palette.tab_hover_surface)))
+        .on_drop(tab.on_drop);
 
     control = if tab.active {
         control.bg(rgba(palette.tab_active_surface))

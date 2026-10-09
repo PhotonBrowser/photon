@@ -1,4 +1,5 @@
-//! The browser menu, opened from the toolbar or by right-clicking the titlebar.
+//! The browser menu, opened from the toolbar or by right-clicking the titlebar,
+//! and the overlay that shows it or a tab's menu.
 
 use gpui::{
     Anchor, ClickEvent, Context, MouseButton, MouseDownEvent, Point, Window, WindowAppearance,
@@ -19,6 +20,8 @@ use super::BrowserWindow;
 pub(super) enum OpenMenu {
     Context(Point<gpui::Pixels>),
     Toolbar(Point<gpui::Pixels>),
+    /// The menu for the tab at this index.
+    Tab(usize, Point<gpui::Pixels>),
 }
 
 /// Anchors the toolbar menu below the menu button's bottom-right corner.
@@ -43,9 +46,16 @@ impl BrowserWindow {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> Option<impl IntoElement + use<>> {
-        let (anchor, position) = match self.open_menu? {
-            OpenMenu::Context(position) => (Anchor::TopLeft, position),
+        let open_menu = self.open_menu?;
+        let (anchor, position) = match open_menu {
+            OpenMenu::Context(position) | OpenMenu::Tab(_, position) => (Anchor::TopLeft, position),
             OpenMenu::Toolbar(position) => (Anchor::TopRight, position),
+        };
+        let menu = match open_menu {
+            OpenMenu::Tab(index, _) => self.tab_menu(index, palette, cx).into_any_element(),
+            OpenMenu::Context(_) | OpenMenu::Toolbar(_) => {
+                self.browser_menu(palette, cx).into_any_element()
+            }
         };
         Some(
             div()
@@ -58,7 +68,7 @@ impl BrowserWindow {
                         .anchor(anchor)
                         .position(position)
                         .snap_to_window()
-                        .child(self.browser_menu(palette, cx)),
+                        .child(menu),
                 ),
         )
     }

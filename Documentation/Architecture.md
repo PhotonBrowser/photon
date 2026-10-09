@@ -66,6 +66,7 @@ crates/
 │           ├── window/               # Browser window: layout, commands, rendering
 │           │   ├── app.rs            # App startup and the first window
 │           │   ├── tabs.rs           # Tab lifecycle and the tab strip
+│           │   ├── tab_menu.rs       # Tab menu, reordering and bulk tab actions
 │           │   ├── menu.rs           # Browser menu and theme choice
 │           │   ├── find.rs           # Opening and closing the find bar
 │           │   ├── actions.rs        # Keyboard shortcuts

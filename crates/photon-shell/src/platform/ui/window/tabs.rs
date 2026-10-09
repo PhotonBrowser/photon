@@ -1,10 +1,11 @@
 //! Opening, closing and switching tabs, and the tab strip they show in.
 
-use gpui::{Context, EntityId, KeyDownEvent, Window, prelude::*};
+use gpui::{Context, EntityId, KeyDownEvent, MouseDownEvent, MouseUpEvent, Window, prelude::*};
 use std::time::{Duration, Instant};
 
 use super::super::icons::LOADING_SPINNER_STEPS;
-use super::super::tabs::{ICON_ENTRANCE, TabIcon, TabItem, tab_strip};
+use super::super::tabs::{DraggedTab, ICON_ENTRANCE, TabIcon, TabItem, tab_strip};
+use super::menu::OpenMenu;
 use super::{BrowserWindow, create_webview, create_webview_from_session};
 use crate::platform::engine::RequestedWebView;
 
@@ -71,7 +72,7 @@ impl BrowserWindow {
         self.insert_tab(self.tabs.len(), None, window, cx);
     }
 
-    fn insert_tab(
+    pub(super) fn insert_tab(
         &mut self,
         index: usize,
         address: Option<&str>,
@@ -297,6 +298,22 @@ impl BrowserWindow {
                         if let Some(webview) = this.tabs.get(index) {
                             webview.update(cx, |view, cx| view.toggle_audio_mute(cx));
                         }
+                    })),
+                    on_middle_click: Box::new(cx.listener(
+                        move |this, _: &MouseUpEvent, window, cx| {
+                            cx.stop_propagation();
+                            this.close_tab(index, window, cx);
+                        },
+                    )),
+                    on_context_menu: Box::new(cx.listener(
+                        move |this, event: &MouseDownEvent, _, cx| {
+                            cx.stop_propagation();
+                            this.open_menu = Some(OpenMenu::Tab(index, event.position));
+                            cx.notify();
+                        },
+                    )),
+                    on_drop: Box::new(cx.listener(move |this, dragged: &DraggedTab, _, cx| {
+                        this.move_tab(dragged.index, index, cx);
                     })),
                 }
             })

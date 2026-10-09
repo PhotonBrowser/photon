@@ -29,6 +29,8 @@ pub(super) const TAB_CLOSE_GAP: f32 = 6.0;
 pub(super) const TAB_CLOSE_BUTTON_SIZE: f32 = 22.0;
 pub(super) const TAB_ICON_SIZE: f32 = 12.0;
 pub(super) const TAB_FAVICON_SIZE: f32 = 16.0;
+/// A dragged tab's preview is slightly see-through, showing where it lands.
+pub(super) const TAB_DRAG_PREVIEW_OPACITY: f32 = 0.9;
 pub(super) const TAB_AUDIO_BUTTON_SIZE: f32 = 22.0;
 pub(super) const TAB_AUDIO_ICON_SIZE: f32 = TAB_FAVICON_SIZE;
 pub(super) const TAB_FONT_SIZE: f32 = 12.0;

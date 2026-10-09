@@ -22,6 +22,7 @@ What the Photon shell does today and what comes next. Engine performance work is
 - [x] Page favicons from the Engine, a globe for pages without one, and the Photon logo for new tabs
 - [x] Icons scale in once when a new icon appears
 - [x] Reopen closed tabs (last 25 per window)
+- [x] Middle-click to close, drag to reorder, and a right-click menu: reload, duplicate, close, close others, close to the right
 
 ### Toolbar and omnibox
 
@@ -48,7 +49,6 @@ What the Photon shell does today and what comes next. Engine performance work is
 
 In order of priority.
 
-- [ ] Tab strip interactions: middle-click to close, right-click menu (close others, duplicate), drag to reorder
 - [ ] Omnibox suggestions: "Search for" and "Go to" rows while typing
 - [ ] Page right-click menus
 - [ ] Page zoom (⌘+, ⌘−, ⌘0)

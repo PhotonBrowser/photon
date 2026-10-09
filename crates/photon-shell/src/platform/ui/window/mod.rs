@@ -7,6 +7,7 @@ mod find;
 mod menu;
 mod popup_window;
 mod popups;
+mod tab_menu;
 mod tabs;
 
 use gpui::{
