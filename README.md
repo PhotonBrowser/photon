@@ -25,6 +25,6 @@ cd photon
 ./photon run
 ```
 
-See [Contributor setup](CONTRIBUTOR_SETUP.md), [Building Photon](Documentation/Building.md), [Architecture](Documentation/Architecture.md), [theme and style tokens](Documentation/Theme.md), [PhotonWebView](Documentation/WebView.md), and [upstream maintenance](Documentation/Upstream.md).
+See [Contributor setup](CONTRIBUTOR_SETUP.md), [Building Photon](Documentation/Building.md), [Architecture](Documentation/Architecture.md), [theme and style tokens](Documentation/Theme.md), [PhotonWebView](Documentation/WebView.md), and [upstream maintenance](Documentation/Upstream.md). Performance results are in [Performance](Documentation/Performance.md).
 
 Photon Engine is maintained in [PhotonBrowser/photon-engine](https://github.com/PhotonBrowser/photon-engine), downstream of Ladybird. Photon maintains its GPUI-CE fork at [PhotonBrowser/gpui-ce](https://github.com/PhotonBrowser/gpui-ce), upstream of [gpui-ce/gpui-ce](https://github.com/gpui-ce/gpui-ce).

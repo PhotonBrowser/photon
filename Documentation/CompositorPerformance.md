@@ -89,6 +89,24 @@ Both are upstream Ladybird code (`LibWeb: Commit video paint facts`, 2026-09-09;
 
 The Compositor's Skia GPU cache was also checked on the same page: 50–75 MB, almost all of it purgeable, which Skia trims only after a flush. The Compositor now purges resources unused for 5 s once no frame has completed for 5 s (Engine `1c9ff08eb5`): on idle Wikipedia its footprint fell from 230 MB to 122 MB and its GPU memory from 114 MB to 17 MB. Released GPU memory takes several seconds to leave the footprint.
 
+## 7. Scrolling — measured
+
+A long page with text, gradients, shadows and SVG images scrolled continuously by keeping a `scrollBy({behavior: "smooth"})` in flight (compositor smooth-scroll path), on a 60 Hz display:
+
+| | 2384×1380 (3.3 MP) | 3384×1826 (6.2 MP) |
+|---|---|---|
+| Frames per second | 60, no deferrals for backings | 60 |
+| Compositor GPU time (p50 / p90 / p99) | 4.1 / 5.3 / 5.7 ms | 5.8 / 9.1 / 12.5 ms |
+| Compositor CPU paint (p50) | 0.8 ms | 0.4 ms |
+| WebContent rendering update (p50) | 0.5 ms | 0.4 ms |
+| GPUI-CE draw (p50) | 0.7 ms | 0.8 ms |
+
+Each scroll frame re-rasterizes the whole viewport, so GPU time scales with pixels. A full 4K window (8.3 MP) extrapolates to about 7.7 ms p50 and 12 ms p90, over the 8.3 ms budget of 120 Hz. Caching rasterized scroll content instead of repainting the viewport each frame would address it.
+
+## 8. Blank launch — not reproduced
+
+20 launches (12 with a local page, 8 with Wikipedia) all presented frames.
+
 ## Commits
 
 - Engine `864c2a0892` LibPhotonEmbedder: Accept display metadata from the embedder
@@ -96,6 +114,8 @@ The Compositor's Skia GPU cache was also checked on the same page: 50–75 MB, a
 - Engine `74d3338ba6` LibPhotonEmbedder: Keep the presentation generation across resizes
 - Engine `e2746e5c0a` LibWeb: Repaint for video paint facts only when they change
 - Engine `967707f712` LibWeb: Keep loading SVG images from requesting frames of every image
+- Engine `1c9ff08eb5` Compositor: Purge unused GPU cache once a page stops drawing
+- GPUI-CE `fdd3033141` gpui_apple: Release external surface textures that are no longer drawn
 
 `Tests/Compositor/TestContextState.cpp` does not compile on Engine `master` independently of these changes: its `TestCompositorClient` still uses the old `did_present_frame` signature (without `presentation_signal_value`) and `spin_event_loop_until` overloads. Photon's Engine build does not build these tests (`ENABLE_LADYBIRD_UI` is off), which is why the breakage went unnoticed.
 
@@ -116,5 +136,7 @@ The Compositor's Skia GPU cache was also checked on the same page: 50–75 MB, a
 - [x] Cache the browser chrome and stop refreshing the window per Engine frame: UI-thread draw 1.26 → 0.84 ms p50, 1.76 → 1.03 ms p90
 - [x] Stop idle pages rendering at display rate (video paint facts; SVG image load broadcasts)
 - [x] Purge Skia's unused GPU cache after the page goes idle (Compositor 230 → 122 MB on idle Wikipedia)
-- [ ] Send the video and SVG fixes upstream to Ladybird
-- [ ] If still short of 120: profile Engine 4K Skia paint time (`compositor_frame_profile`) against the 8.3 ms budget
+- [ ] Send the video and SVG fixes upstream to Ladybird: branches are on `TheoSlater/ladybird`; opening PRs from the CLI was refused by GitHub, so open them from the web
+- [ ] Cache rasterized scroll content so 4K scrolling fits the 120 Hz GPU budget
+- [x] Profile scrolling (section 7)
+- [x] Chase the intermittent blank launch (not reproduced, section 8)
