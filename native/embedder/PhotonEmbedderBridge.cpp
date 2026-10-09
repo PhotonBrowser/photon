@@ -67,7 +67,8 @@ extern "C" void* photon_view_create(void* runtime, int width, int height,
     PhotonCursorCallback cursor_callback,
     PhotonErrorCallback error_callback,
     PhotonCrashCallback crash_callback,
-    PhotonPerformanceCallback performance_callback
+    PhotonPerformanceCallback performance_callback,
+    PhotonFaviconCallback favicon_callback
 #if defined(__APPLE__)
     ,
     bool native_metal_presentation,
@@ -133,6 +134,16 @@ extern "C" void* photon_view_create(void* runtime, int width, int height,
     callbacks.cursor_changed = [=](Photon::Cursor cursor) {
         if (cursor_callback)
             cursor_callback(callback_data, static_cast<int>(cursor));
+    };
+    callbacks.favicon_changed = [=](Photon::Favicon const* favicon) {
+        if (!favicon_callback)
+            return;
+        if (!favicon) {
+            favicon_callback(callback_data, nullptr, 0, 0, 0);
+            return;
+        }
+        favicon_callback(callback_data, favicon->pixels.data(),
+            favicon->pixels.size(), favicon->width, favicon->height);
     };
     callbacks.failed = [=](std::string const& message) {
         if (error_callback)
@@ -234,6 +245,19 @@ extern "C" void photon_view_set_focus(void* view, bool focused)
 {
     if (view)
         static_cast<ViewHandle*>(view)->view->set_focus(focused);
+}
+
+extern "C" void photon_view_set_preferred_color_scheme(void* view,
+    int color_scheme)
+{
+    if (!view)
+        return;
+    auto scheme = Photon::PreferredColorScheme::Auto;
+    if (color_scheme == 1)
+        scheme = Photon::PreferredColorScheme::Dark;
+    else if (color_scheme == 2)
+        scheme = Photon::PreferredColorScheme::Light;
+    static_cast<ViewHandle*>(view)->view->set_preferred_color_scheme(scheme);
 }
 
 extern "C" void

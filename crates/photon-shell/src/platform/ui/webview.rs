@@ -9,7 +9,8 @@ use super::{
 };
 use gpui::{
     Context, EventEmitter, FocusHandle, InteractiveElement, KeyDownEvent, KeyUpEvent, ObjectFit,
-    Render, Subscription, SurfaceSource, Window, div, prelude::*, px, surface,
+    Render, RenderImage, Subscription, SurfaceSource, Window, WindowAppearance, div, prelude::*,
+    px, surface,
 };
 use photon_core::BrowserState;
 use photon_performance::{PerformanceDiagnostics, performance_overlay};
@@ -27,11 +28,15 @@ pub(in crate::platform) struct PhotonWebView {
     pub(in crate::platform) diagnostics: PerformanceDiagnostics,
     pub(in crate::platform) performance_overlay_enabled: bool,
     pub(in crate::platform) crash_alert: bool,
+    /// The page's icon, shown in its tab while the page is not loading.
+    pub(in crate::platform) favicon: Option<Arc<RenderImage>>,
     pub(super) theme: ThemePreference,
     is_blank_tab: bool,
     pub(super) session: EngineSession,
     pub(super) focus_handle: FocusHandle,
     pub(super) last_viewport: Option<(i32, i32, u32)>,
+    /// The color scheme last sent to Engine, `true` for dark.
+    sent_dark_color_scheme: Option<bool>,
     input: WebViewInput,
     pub(super) _quit_subscription: Option<Subscription>,
     focus_subscriptions: Vec<Subscription>,
@@ -75,6 +80,20 @@ impl PhotonWebView {
         cx.notify();
     }
 
+    pub(in crate::platform) fn set_favicon(
+        &mut self,
+        favicon: Option<Arc<RenderImage>>,
+        cx: &mut Context<Self>,
+    ) {
+        if favicon.is_none() && self.favicon.is_none() {
+            return;
+        }
+        if let Some(replaced) = std::mem::replace(&mut self.favicon, favicon) {
+            cx.drop_image(replaced, None);
+        }
+        self.state_changed(cx);
+    }
+
     pub(super) fn prepare_shutdown(&mut self) {
         if self.session.shutdown_started {
             return;
@@ -91,6 +110,19 @@ impl PhotonWebView {
             Arc::new(Mutex::new(Vec::new()))
         };
         self.session.begin_shutdown(final_releases);
+    }
+
+    /// Lets pages follow the shell theme. Runs before the first viewport
+    /// update, so the startup page loads with the right scheme.
+    fn update_color_scheme(&mut self, appearance: WindowAppearance) {
+        let dark = matches!(
+            appearance,
+            WindowAppearance::Dark | WindowAppearance::VibrantDark
+        );
+        if self.sent_dark_color_scheme != Some(dark) {
+            self.session.set_dark_color_scheme(dark);
+            self.sent_dark_color_scheme = Some(dark);
+        }
     }
 
     fn update_viewport(&mut self, width: f32, height: f32, scale: f32) {
@@ -129,11 +161,13 @@ impl PhotonWebView {
             diagnostics: PerformanceDiagnostics::default(),
             performance_overlay_enabled: false,
             crash_alert: false,
+            favicon: None,
             theme,
             is_blank_tab,
             session: EngineSession::create(runtime, width, height, 1.0, startup_address)?,
             focus_handle: cx.focus_handle(),
             last_viewport: None,
+            sent_dark_color_scheme: None,
             input: WebViewInput::default(),
             _quit_subscription: None,
             focus_subscriptions: Vec::new(),
@@ -174,6 +208,12 @@ impl PhotonWebView {
         self.is_blank_tab
     }
 
+    /// Whether the tab shows a page. A new tab may load one behind its blank
+    /// surface, whose state the chrome ignores until someone navigates.
+    pub(super) fn has_page(&self) -> bool {
+        !self.is_blank_tab && !self.state.url.is_empty() && self.state.url != "about:blank"
+    }
+
     pub(super) fn omnibox_url(&self) -> String {
         if self.is_blank_tab {
             String::new()
@@ -196,6 +236,7 @@ impl PhotonWebView {
 impl Render for PhotonWebView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let appearance = self.theme.appearance(window.appearance());
+        self.update_color_scheme(appearance);
         let palette = ThemeColors::for_appearance(appearance);
         let weak_this = cx.entity().downgrade();
         let weak_mouse_down = weak_this.clone();

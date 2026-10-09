@@ -1,9 +1,9 @@
 //! GPUI window bootstrap and top-level browser layout.
 
 use gpui::{
-    Anchor, AnyElement, App, ClickEvent, Context, Entity, FocusHandle, KeyDownEvent, MouseButton,
-    MouseDownEvent, Point, QuitMode, Render, StyleRefinement, Subscription, WeakEntity, Window,
-    WindowAppearance, anchored, div, point, prelude::*, px,
+    Anchor, AnyElement, App, ClickEvent, Context, Entity, FocusHandle, Global, KeyDownEvent,
+    MouseButton, MouseDownEvent, Point, QuitMode, Render, StyleRefinement, Subscription,
+    WeakEntity, Window, WindowAppearance, anchored, div, point, prelude::*, px,
 };
 use gpui_elements::editable_text::actions::{DEFAULT_INPUT_CONTEXT, default_bindings};
 use gpui_platform::application;
@@ -17,16 +17,18 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use super::super::engine::{EngineRuntime, UiWake};
+use super::super::motion_observer::ReducedMotionObserver;
 use super::super::trace;
 use super::super::window_observer::WindowObserver;
 use super::super::window_settings;
 use super::crash_alert::crash_alert;
+use super::icons::LOADING_SPINNER_STEPS;
 use super::layout::v_stack;
 use super::menu::{
     menu_action, menu_checkbox, menu_radio, menu_section, menu_separator, menu_surface,
 };
 use super::omnibox::Omnibox;
-use super::tabs::{TabItem, tab_strip};
+use super::tabs::{TabIcon, TabItem, tab_strip};
 use super::titlebar::titlebar;
 use super::toolbar::{ClickHandler, address_toolbar as build_address_toolbar};
 use super::{PhotonWebView, WebViewEvent};
@@ -49,6 +51,10 @@ struct BrowserWindow {
     open_menu: Option<OpenMenu>,
     /// Pages of closed tabs, most recent last, for reopening.
     closed_tabs: Vec<ClosedTab>,
+    /// The loading spinners' animation step, shared by every loading tab.
+    spinner_step: usize,
+    /// Whether a timer is advancing `spinner_step`.
+    spinner_running: bool,
     /// Whether any part of the window is on screen. Engine renders the active
     /// tab only while it is, since GPUI-CE stops drawing an occluded window.
     window_visible: bool,
@@ -80,6 +86,16 @@ struct ClosedTab {
 /// How many closed tabs a window remembers.
 const CLOSED_TAB_LIMIT: usize = 25;
 
+/// Time between loading spinner steps.
+const SPINNER_STEP_INTERVAL: Duration = Duration::from_millis(80);
+
+/// Keeps the system reduced-motion preference flowing into GPUI.
+struct ReducedMotion {
+    _observer: Option<ReducedMotionObserver>,
+}
+
+impl Global for ReducedMotion {}
+
 #[derive(Clone, Copy)]
 enum OpenMenu {
     Context(Point<gpui::Pixels>),
@@ -94,7 +110,47 @@ impl BrowserWindow {
     fn subscribe_to_tab(webview: &Entity<PhotonWebView>, cx: &mut Context<Self>) -> Subscription {
         cx.subscribe(webview, |this, _, _: &WebViewEvent, cx| {
             this.chrome.update(cx, |_, cx| cx.notify());
+            this.animate_spinner(cx);
         })
+    }
+
+    fn any_tab_loading(&self, cx: &App) -> bool {
+        self.tabs.iter().any(|tab| {
+            let view = tab.read(cx);
+            view.state.loading && view.has_page()
+        })
+    }
+
+    /// Steps the loading spinners while any tab loads. With reduced motion
+    /// they stay still.
+    fn animate_spinner(&mut self, cx: &mut Context<Self>) {
+        if self.spinner_running || cx.reduce_motion() || !self.any_tab_loading(cx) {
+            return;
+        }
+        self.spinner_running = true;
+        cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor().timer(SPINNER_STEP_INTERVAL).await;
+                let keep_running = this
+                    .update(cx, |this, cx| {
+                        let keep_running = !cx.reduce_motion() && this.any_tab_loading(cx);
+                        if keep_running {
+                            this.spinner_step = (this.spinner_step + 1) % LOADING_SPINNER_STEPS;
+                            if this.window_visible {
+                                this.chrome.update(cx, |_, cx| cx.notify());
+                            }
+                        } else {
+                            this.spinner_running = false;
+                        }
+                        keep_running
+                    })
+                    .unwrap_or(false);
+                if !keep_running {
+                    break;
+                }
+            }
+        })
+        .detach();
     }
 
     fn render_chrome(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
@@ -202,7 +258,7 @@ impl BrowserWindow {
         self.tabs.insert(index, webview);
         self.tab_focus_handles
             .insert(index, cx.focus_handle().tab_stop(false));
-        if index <= self.active_tab && self.tabs.len() > 1 {
+        if index <= self.active_tab {
             // Keep `active_tab` naming the same page until the switch below.
             self.active_tab += 1;
         }
@@ -213,6 +269,11 @@ impl BrowserWindow {
         if let Some(closed) = self.closed_tabs.pop() {
             self.insert_tab(closed.index, Some(&closed.url), window, cx);
         }
+    }
+
+    /// An action handler that activates the tab at `index`, if there is one.
+    fn select_tab_at<A>(index: usize) -> impl Fn(&mut Self, &A, &mut Window, &mut Context<Self>) {
+        move |this, _, window, cx| this.activate_tab(index, true, window, cx)
     }
 
     /// Activates the tab `offset` places from the active one, wrapping at the ends.
@@ -228,18 +289,23 @@ impl BrowserWindow {
         }
 
         let removed = self.tabs[index].clone();
-        removed.update(cx, |view, _| {
+        let favicon = removed.update(cx, |view, _| {
             view.session.set_visible(false);
             view.session.set_focus(false);
+            view.favicon.take()
         });
+        if let Some(favicon) = favicon {
+            cx.drop_image(favicon, Some(window));
+        }
 
         if self.tabs.len() == 1 {
             window.remove_window();
             return;
         }
 
-        let url = removed.read(cx).state.url.clone();
-        if !url.is_empty() && url != "about:blank" {
+        let view = removed.read(cx);
+        if view.has_page() {
+            let url = view.state.url.clone();
             if self.closed_tabs.len() == CLOSED_TAB_LIMIT {
                 self.closed_tabs.remove(0);
             }
@@ -317,18 +383,30 @@ impl BrowserWindow {
             .iter()
             .enumerate()
             .map(|(index, webview)| {
-                let state = webview.read(cx).state.clone();
+                let view = webview.read(cx);
+                let state = view.state.clone();
+                let is_blank = !view.has_page();
+                let icon = if is_blank {
+                    TabIcon::NewTab
+                } else if state.loading {
+                    TabIcon::Loading(self.spinner_step)
+                } else if let Some(favicon) = view.favicon.clone() {
+                    TabIcon::Favicon(favicon)
+                } else {
+                    TabIcon::Page
+                };
                 let tab_id = format!("browser-tab-{:?}", webview.entity_id());
-                let label = if !state.title.trim().is_empty() {
-                    state.title
-                } else if state.url.is_empty() || state.url == "about:blank" {
+                let label = if is_blank {
                     "New Tab".into()
+                } else if !state.title.trim().is_empty() {
+                    state.title
                 } else {
                     state.url
                 };
                 TabItem {
                     id: tab_id,
                     label,
+                    icon,
                     active: index == self.active_tab,
                     focus_handle: self.tab_focus_handles[index].clone(),
                     on_select: Box::new(cx.listener(move |this, _, window, cx| {
@@ -372,8 +450,9 @@ impl BrowserWindow {
 
     fn address_toolbar(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = ThemeColors::for_appearance(self.theme.appearance(window.appearance()));
-        let state = self.active_webview().read(cx).state.clone();
-        let can_reload = !state.url.is_empty() && state.url != "about:blank";
+        let view = self.active_webview().read(cx);
+        let state = view.state.clone();
+        let can_reload = view.has_page();
         let loading = state.loading;
         let menu_open = matches!(self.open_menu, Some(OpenMenu::Toolbar(_)));
 
@@ -555,30 +634,14 @@ impl Render for BrowserWindow {
             .on_action(cx.listener(|this, _: &SelectPreviousTab, window, cx| {
                 this.select_relative_tab(-1, window, cx);
             }))
-            .on_action(cx.listener(|this, _: &SelectTab1, window, cx| {
-                this.activate_tab(0, true, window, cx);
-            }))
-            .on_action(cx.listener(|this, _: &SelectTab2, window, cx| {
-                this.activate_tab(1, true, window, cx);
-            }))
-            .on_action(cx.listener(|this, _: &SelectTab3, window, cx| {
-                this.activate_tab(2, true, window, cx);
-            }))
-            .on_action(cx.listener(|this, _: &SelectTab4, window, cx| {
-                this.activate_tab(3, true, window, cx);
-            }))
-            .on_action(cx.listener(|this, _: &SelectTab5, window, cx| {
-                this.activate_tab(4, true, window, cx);
-            }))
-            .on_action(cx.listener(|this, _: &SelectTab6, window, cx| {
-                this.activate_tab(5, true, window, cx);
-            }))
-            .on_action(cx.listener(|this, _: &SelectTab7, window, cx| {
-                this.activate_tab(6, true, window, cx);
-            }))
-            .on_action(cx.listener(|this, _: &SelectTab8, window, cx| {
-                this.activate_tab(7, true, window, cx);
-            }))
+            .on_action(cx.listener(Self::select_tab_at::<SelectTab1>(0)))
+            .on_action(cx.listener(Self::select_tab_at::<SelectTab2>(1)))
+            .on_action(cx.listener(Self::select_tab_at::<SelectTab3>(2)))
+            .on_action(cx.listener(Self::select_tab_at::<SelectTab4>(3)))
+            .on_action(cx.listener(Self::select_tab_at::<SelectTab5>(4)))
+            .on_action(cx.listener(Self::select_tab_at::<SelectTab6>(5)))
+            .on_action(cx.listener(Self::select_tab_at::<SelectTab7>(6)))
+            .on_action(cx.listener(Self::select_tab_at::<SelectTab8>(7)))
             .on_action(cx.listener(|this, _: &SelectLastTab, window, cx| {
                 this.activate_tab(this.tabs.len() - 1, true, window, cx);
             }))
@@ -697,6 +760,14 @@ pub fn run() {
         cx.bind_keys(default_bindings().as_keybindings(Some(DEFAULT_INPUT_CONTEXT)));
         // Keep browser actions and their default bindings in the shortcuts crate.
         cx.bind_keys(browser_shortcuts());
+        let app = cx.to_async();
+        let observer = ReducedMotionObserver::new(move |reduce_motion| {
+            app.spawn(async move |cx| cx.update(|cx| cx.set_reduce_motion(reduce_motion)))
+                .detach();
+        });
+        cx.set_global(ReducedMotion {
+            _observer: observer,
+        });
         let runtime = Rc::new(
             EngineRuntime::create()
                 .unwrap_or_else(|error| panic!("could not start Photon Engine: {error:#}")),
@@ -774,6 +845,8 @@ fn open_browser_window(
                 theme,
                 open_menu: None,
                 closed_tabs: Vec::new(),
+                spinner_step: 0,
+                spinner_running: false,
                 window_visible: true,
                 _appearance_subscription: appearance_subscription,
                 _chrome_subscription: chrome_subscription,

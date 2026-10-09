@@ -26,6 +26,10 @@ struct PhotonPerformanceStats {
     double frames_per_second;
 };
 using PhotonPerformanceCallback = void (*)(void*, PhotonPerformanceStats const*);
+// Called with straight-alpha BGRA8888 pixels and their width and height, or
+// with null pixels when the page has no icon.
+using PhotonFaviconCallback = void (*)(void*, std::uint8_t const*, size_t, int,
+    int);
 #if defined(__APPLE__)
 using PhotonReducedMotionChangedCallback = void (*)(void*, bool);
 // Called with whether the window is visible and whether its display or the
@@ -54,7 +58,8 @@ void* photon_view_create(void* runtime, int width, int height, double dpr,
     PhotonCursorCallback cursor_callback,
     PhotonErrorCallback error_callback,
     PhotonCrashCallback crash_callback,
-    PhotonPerformanceCallback performance_callback
+    PhotonPerformanceCallback performance_callback,
+    PhotonFaviconCallback favicon_callback
 #if defined(__APPLE__)
     ,
     bool native_metal_presentation,
@@ -78,6 +83,8 @@ void photon_view_stop_loading(void* view);
 void photon_view_go_back(void* view);
 void photon_view_go_forward(void* view);
 void photon_view_set_focus(void* view, bool focused);
+// 0 follows the engine default, 1 prefers dark, 2 prefers light.
+void photon_view_set_preferred_color_scheme(void* view, int color_scheme);
 void photon_runtime_set_system_reduced_motion_preference(void* runtime,
     bool reduce_motion);
 void photon_view_pointer(void* view, int kind, double x, double y, int button,

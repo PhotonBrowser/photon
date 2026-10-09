@@ -1,7 +1,7 @@
 //! Engine runtime, its C callbacks, and input forwarding.
 
 use anyhow::Context as _;
-use gpui::{AsyncApp, Context, WeakEntity};
+use gpui::{AsyncApp, Context, RenderImage, WeakEntity};
 use mach2::port::mach_port_t;
 use photon_core::{BrowserCommand, BrowserState, EngineEvent};
 use photon_performance::{EnginePerformanceStats, PerformanceMonitor};
@@ -77,6 +77,10 @@ impl CallbackState {
             view.state.apply(EngineEvent::LoadFailed(message));
             view.state_changed(cx);
         });
+    }
+
+    fn set_page_favicon(&self, favicon: Option<Arc<RenderImage>>) {
+        self.update_webview(move |view, cx| view.set_favicon(favicon, cx));
     }
 
     fn handle_engine_crash(&self, url: String) {
@@ -305,6 +309,7 @@ impl EngineSession {
                 Some(on_engine_error),
                 Some(on_engine_crash),
                 Some(on_engine_performance_stats),
+                Some(on_engine_favicon),
                 true,
                 Some(on_engine_backing),
                 Some(on_engine_native_frame),
@@ -392,6 +397,14 @@ impl EngineSession {
 
     pub(super) fn set_focus(&mut self, focused: bool) {
         unsafe { embedder::photon_view_set_focus(self.view, focused) }
+    }
+
+    /// Sets the color scheme pages see through `prefers-color-scheme`.
+    pub(super) fn set_dark_color_scheme(&mut self, dark: bool) {
+        const DARK: i32 = 1;
+        const LIGHT: i32 = 2;
+        let scheme = if dark { DARK } else { LIGHT };
+        unsafe { embedder::photon_view_set_preferred_color_scheme(self.view, scheme) }
     }
 
     pub(super) fn set_visible(&mut self, visible: bool) {
@@ -672,6 +685,24 @@ unsafe extern "C" fn on_engine_performance_stats(
     }
     unsafe { &*(context.cast::<CallbackState>()) }.set_engine_diagnostics(unsafe { &*stats });
 }
+unsafe extern "C" fn on_engine_favicon(
+    context: *mut c_void,
+    pixels: *const u8,
+    length: usize,
+    width: i32,
+    height: i32,
+) {
+    if context.is_null() {
+        return;
+    }
+    // Engine sends straight-alpha BGRA, the layout GPUI images hold.
+    let favicon = (!pixels.is_null() && width > 0 && height > 0)
+        .then(|| unsafe { std::slice::from_raw_parts(pixels, length) }.to_vec())
+        .and_then(|pixels| image::RgbaImage::from_raw(width as u32, height as u32, pixels))
+        .map(|buffer| Arc::new(RenderImage::new([image::Frame::new(buffer)])));
+    unsafe { &*(context.cast::<CallbackState>()) }.set_page_favicon(favicon);
+}
+
 unsafe extern "C" fn on_engine_backing(
     context: *mut c_void,
     backing: u64,

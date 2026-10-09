@@ -1,19 +1,75 @@
 //! Browser tab strip and its controls.
 
 use gpui::{
-    App, ClickEvent, FocusHandle, KeyDownEvent, MouseButton, Role, Window, div, prelude::*, px,
-    rgb, rgba,
+    Animation, AnimationExt, App, ClickEvent, ElementId, FocusHandle, Image, ImageFormat,
+    ImageSource, KeyDownEvent, MouseButton, ObjectFit, RenderImage, Role, Window, div, img,
+    prelude::*, px, rgb, rgba,
 };
+use std::sync::{Arc, LazyLock};
+use std::time::Duration;
 
-use super::icons::{add_icon, close_icon};
+use super::icons::{add_icon, close_icon, globe_icon, loading_spinner};
 use super::layout::h_stack;
 use super::{metrics, theme::ThemeColors};
 
 type ClickHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
 
+/// What a tab shows before its title.
+pub(super) enum TabIcon {
+    /// The page is loading; the value is the spinner's animation step.
+    Loading(usize),
+    Favicon(Arc<RenderImage>),
+    /// A page without an icon of its own.
+    Page,
+    /// A new tab, which shows the Photon logo.
+    NewTab,
+}
+
+/// How long a tab icon takes to grow to full size when it appears.
+const ICON_APPEAR_DURATION: Duration = Duration::from_millis(260);
+/// The fraction of full size an appearing tab icon starts from.
+const ICON_APPEAR_START_SCALE: f32 = 0.35;
+
+static NEW_TAB_LOGO: LazyLock<Arc<Image>> = LazyLock::new(|| {
+    Arc::new(Image::from_bytes(
+        ImageFormat::Svg,
+        include_bytes!("../../../assets/monotone-planet.svg").to_vec(),
+    ))
+});
+
+/// Eases out past full size and settles back, so icons pop in.
+fn ease_out_back(delta: f32) -> f32 {
+    const OVERSHOOT: f32 = 1.70158;
+    let t = delta - 1.0;
+    1.0 + (OVERSHOOT + 1.0) * t * t * t + OVERSHOOT * t * t
+}
+
+/// Grows `icon` from a small size to `size` the first time it is shown under
+/// `id`, inside a fixed slot so the tab title does not move.
+fn appearing_icon<E>(id: ElementId, icon: E, size: f32) -> impl IntoElement
+where
+    E: Styled + IntoElement + 'static,
+{
+    div()
+        .flex()
+        .flex_shrink_0()
+        .items_center()
+        .justify_center()
+        .size(px(size))
+        .child(icon.with_animation(
+            id,
+            Animation::new(ICON_APPEAR_DURATION).with_easing(ease_out_back),
+            move |icon, delta| {
+                let scale = ICON_APPEAR_START_SCALE + (1.0 - ICON_APPEAR_START_SCALE) * delta;
+                icon.size(px(size * scale))
+            },
+        ))
+}
+
 pub(super) struct TabItem {
     pub id: String,
     pub label: String,
+    pub icon: TabIcon,
     pub active: bool,
     pub focus_handle: FocusHandle,
     pub on_select: ClickHandler,
@@ -71,6 +127,7 @@ fn browser_tab(
 ) -> impl IntoElement {
     let close_label = format!("Close {}", tab.label);
     let close_id = format!("{}-close", tab.id);
+    let tab_id = tab.id.clone();
     let focus_handle = tab.focus_handle.tab_index(focus_index).tab_stop(tab.active);
     let mut control = h_stack()
         .id(tab.id)
@@ -104,6 +161,35 @@ fn browser_tab(
     } else {
         control.hover(|style| style.bg(rgba(palette.tab_hover_surface)))
     };
+
+    let icon_color = if tab.active {
+        palette.text_primary
+    } else {
+        palette.text_secondary
+    };
+    let icon_size = metrics::TAB_FAVICON_SIZE;
+    let icon = match tab.icon {
+        TabIcon::Loading(step) => loading_spinner(icon_color, icon_size, step).into_any_element(),
+        TabIcon::Favicon(image) => appearing_icon(
+            format!("{tab_id}-favicon-{:?}", image.id).into(),
+            img(ImageSource::Render(image)).object_fit(ObjectFit::Contain),
+            icon_size,
+        )
+        .into_any_element(),
+        TabIcon::Page => appearing_icon(
+            format!("{tab_id}-page-icon").into(),
+            globe_icon(icon_color, icon_size),
+            icon_size,
+        )
+        .into_any_element(),
+        TabIcon::NewTab => appearing_icon(
+            format!("{tab_id}-new-tab-icon").into(),
+            img(NEW_TAB_LOGO.clone()).object_fit(ObjectFit::Contain),
+            icon_size,
+        )
+        .into_any_element(),
+    };
+    control = control.child(icon);
 
     control
         .child(div().flex_1().min_w(px(0.0)).truncate().child(tab.label))

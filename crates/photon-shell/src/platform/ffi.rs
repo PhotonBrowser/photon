@@ -60,6 +60,7 @@ pub(super) mod embedder {
             performance_callback: Option<
                 unsafe extern "C" fn(*mut c_void, *const PerformanceStats),
             >,
+            favicon_callback: Option<unsafe extern "C" fn(*mut c_void, *const u8, usize, i32, i32)>,
             native_metal: bool,
             backing_callback: Option<
                 unsafe extern "C" fn(*mut c_void, u64, u64, u32, u32, u32, u32) -> bool,
@@ -77,6 +78,7 @@ pub(super) mod embedder {
             refresh_rate: f64,
         );
         pub fn photon_view_set_focus(view: *mut c_void, focused: bool);
+        pub fn photon_view_set_preferred_color_scheme(view: *mut c_void, color_scheme: i32);
         pub fn photon_runtime_set_system_reduced_motion_preference(
             runtime: *mut c_void,
             reduce_motion: bool,

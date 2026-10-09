@@ -3,6 +3,7 @@
 mod display;
 mod engine;
 mod ffi;
+mod motion_observer;
 mod presentation;
 mod ui;
 mod window_observer;

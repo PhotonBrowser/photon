@@ -4250,6 +4250,7 @@ dependencies = [
  "gpui_ce_apple",
  "gpui_ce_elements",
  "gpui_ce_platform",
+ "image",
  "io-surface",
  "mach2",
  "metal",
