@@ -68,6 +68,8 @@ pub(super) const BUTTON_MIN_WIDTH: f32 = 76.0;
 pub(super) const BUTTON_HORIZONTAL_PADDING: f32 = 16.0;
 pub(super) const BUTTON_FONT_SIZE: f32 = 13.0;
 pub(super) const BUTTON_GAP: f32 = 8.0;
+/// Opacity of a control that cannot be used right now.
+pub(super) const DISABLED_OPACITY: f32 = 0.4;
 pub(super) const SMALL_BUTTON_HEIGHT: f32 = 20.0;
 pub(super) const SMALL_BUTTON_HORIZONTAL_PADDING: f32 = 9.0;
 pub(super) const SMALL_BUTTON_FONT_SIZE: f32 = 12.0;

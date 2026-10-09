@@ -70,3 +70,41 @@ pub(super) fn button(
             .hover(|style| style.bg(rgba(palette.menu_hover)))
     }
 }
+
+/// A round button `size` pixels across showing only an icon, labelled for
+/// accessibility.
+pub(super) fn icon_button(
+    id: &'static str,
+    label: &'static str,
+    enabled: bool,
+    size: f32,
+    icon: impl IntoElement,
+    palette: ThemeColors,
+    on_click: ClickHandler,
+) -> impl IntoElement {
+    let button = h_stack()
+        .id(id)
+        .role(Role::Button)
+        .aria_label(label)
+        .aria_disabled(!enabled)
+        .focus_visible(|style| style.border_1().border_color(rgb(palette.accent)))
+        .flex_shrink_0()
+        .items_center()
+        .justify_center()
+        .size(px(size))
+        .rounded(px(size / 2.0))
+        .opacity(if enabled {
+            1.0
+        } else {
+            metrics::DISABLED_OPACITY
+        })
+        .child(icon);
+    if !enabled {
+        return button;
+    }
+    button
+        .tab_index(0)
+        .hover(|style| style.bg(rgba(palette.control_hover_surface)))
+        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .on_click(on_click)
+}

@@ -1,10 +1,8 @@
 //! A small status chip in the window's bottom-right corner.
 
-use gpui::{
-    ElementId, MouseButton, Role, SharedString, prelude::*, px, rgb, rgba,
-};
+use gpui::{ElementId, MouseButton, Role, SharedString, prelude::*, px, rgb, rgba};
 
-use super::button::{ButtonSize, button};
+use super::button::{ButtonSize, button, icon_button};
 use super::icons::{check_icon, close_icon, loading_spinner, warning_icon};
 use super::layout::h_stack;
 use super::motion::{AnimateIn, Entrance};
@@ -72,25 +70,15 @@ pub(super) fn status_chip(
         ));
     }
     if let Some(on_dismiss) = on_dismiss {
-        chip = chip.child(
-            h_stack()
-                .id("status-chip-dismiss")
-                .role(Role::Button)
-                .aria_label("Dismiss")
-                .tab_index(0)
-                .focus_visible(|style| style.border_1().border_color(rgb(palette.accent)))
-                .items_center()
-                .justify_center()
-                .size(px(metrics::CHIP_CLOSE_SIZE))
-                .rounded(px(metrics::CHIP_CLOSE_SIZE / 2.0))
-                .hover(|style| style.bg(rgba(palette.control_hover_surface)))
-                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                .on_click(on_dismiss)
-                .child(close_icon(
-                    palette.text_secondary,
-                    metrics::CHIP_CLOSE_ICON_SIZE,
-                )),
-        );
+        chip = chip.child(icon_button(
+            "status-chip-dismiss",
+            "Dismiss",
+            true,
+            metrics::CHIP_CLOSE_SIZE,
+            close_icon(palette.text_secondary, metrics::CHIP_CLOSE_ICON_SIZE),
+            palette,
+            on_dismiss,
+        ));
     }
 
     chip.animate_in(id, Entrance::fade())
