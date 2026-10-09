@@ -87,7 +87,7 @@ Measured on `https://en.wikipedia.org/wiki/Web_browser` (2026-10-09). After load
 
 Both are upstream Ladybird code (`LibWeb: Commit video paint facts`, 2026-09-09; the SVG image loading changes of 2026-10-05/06) and still present on Ladybird `master` when fixed; worth sending upstream.
 
-The Compositor's Skia GPU cache was also checked on the same page: about 47 MB, 41 MB of it purgeable, within its 256 MB limit. Purging it when idle would save roughly 40 MB per Compositor; not done.
+The Compositor's Skia GPU cache was also checked on the same page: 50–75 MB, almost all of it purgeable, which Skia trims only after a flush. The Compositor now purges resources unused for 5 s once no frame has completed for 5 s (Engine `1c9ff08eb5`): on idle Wikipedia its footprint fell from 230 MB to 122 MB and its GPU memory from 114 MB to 17 MB. Released GPU memory takes several seconds to leave the footprint.
 
 ## Commits
 
@@ -115,6 +115,6 @@ The Compositor's Skia GPU cache was also checked on the same page: about 47 MB, 
 - [x] Release backing registrations for replaced generations (Rust map + broker send rights; GPUI-CE evicts textures undrawn for 120 frames). 60 resizes: unused Compositor surfaces stay ~50 MB instead of growing past 230 MB
 - [x] Cache the browser chrome and stop refreshing the window per Engine frame: UI-thread draw 1.26 → 0.84 ms p50, 1.76 → 1.03 ms p90
 - [x] Stop idle pages rendering at display rate (video paint facts; SVG image load broadcasts)
-- [ ] Purge Skia's unlocked GPU cache after the page goes idle (~40 MB per Compositor)
+- [x] Purge Skia's unused GPU cache after the page goes idle (Compositor 230 → 122 MB on idle Wikipedia)
 - [ ] Send the video and SVG fixes upstream to Ladybird
 - [ ] If still short of 120: profile Engine 4K Skia paint time (`compositor_frame_profile`) against the 8.3 ms budget
