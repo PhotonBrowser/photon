@@ -76,8 +76,6 @@ pub(super) const MODAL_WIDTH: f32 = 400.0;
 pub(super) const MODAL_PADDING: f32 = 18.0;
 pub(super) const MODAL_GAP: f32 = 12.0;
 pub(super) const MODAL_SURFACE_INSET: f32 = 16.0;
-/// How far below its place a modal panel starts as it appears.
-pub(super) const MODAL_APPEAR_RISE: f32 = 12.0;
 pub(super) const DIALOG_MESSAGE_MAX_HEIGHT: f32 = 240.0;
 
 pub(super) const OMNIBOX_HEIGHT: f32 = 28.0;

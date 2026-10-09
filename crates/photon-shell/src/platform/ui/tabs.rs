@@ -1,16 +1,15 @@
 //! Browser tab strip and its controls.
 
 use gpui::{
-    Animation, AnimationExt, AnyElement, App, ElementId, FocusHandle, Image, ImageFormat,
-    ImageSource, KeyDownEvent, MouseButton, ObjectFit, Role, Window, div, img, prelude::*, px, rgb,
-    rgba,
+    AnyElement, App, ElementId, FocusHandle, Image, ImageFormat, ImageSource, KeyDownEvent,
+    MouseButton, ObjectFit, Role, Window, div, img, prelude::*, px, rgb, rgba,
 };
 use std::sync::{Arc, LazyLock};
-use std::time::Duration;
 
 use super::Favicon;
 use super::icons::{add_icon, close_icon, globe_icon, loading_spinner};
 use super::layout::h_stack;
+use super::motion::{AnimateIn, Entrance};
 use super::{metrics, theme::ThemeColors};
 
 use super::ClickHandler;
@@ -46,10 +45,8 @@ impl TabIcon {
     }
 }
 
-/// How long a tab icon takes to grow to full size when it appears.
-pub(super) const ICON_APPEAR_DURATION: Duration = Duration::from_millis(260);
-/// The fraction of full size an appearing tab icon starts from.
-const ICON_APPEAR_START_SCALE: f32 = 0.35;
+/// How a tab icon appears.
+pub(super) const ICON_ENTRANCE: Entrance = Entrance::pop(metrics::TAB_FAVICON_SIZE);
 
 static NEW_TAB_LOGO: LazyLock<Arc<Image>> = LazyLock::new(|| {
     Arc::new(Image::from_bytes(
@@ -57,13 +54,6 @@ static NEW_TAB_LOGO: LazyLock<Arc<Image>> = LazyLock::new(|| {
         include_bytes!("../../../assets/monotone-planet.svg").to_vec(),
     ))
 });
-
-/// Eases out past full size and settles back, so icons pop in.
-fn ease_out_back(delta: f32) -> f32 {
-    const OVERSHOOT: f32 = 1.70158;
-    let t = delta - 1.0;
-    1.0 + (OVERSHOOT + 1.0) * t * t * t + OVERSHOOT * t * t
-}
 
 /// Sizes an icon image, growing it in from a smaller size while
 /// `appearing`, inside a fixed slot so the tab title does not move.
@@ -80,14 +70,7 @@ where
         .items_center()
         .justify_center()
         .size(px(size))
-        .child(icon.with_animation(
-            id,
-            Animation::new(ICON_APPEAR_DURATION).with_easing(ease_out_back),
-            move |icon, delta| {
-                let scale = ICON_APPEAR_START_SCALE + (1.0 - ICON_APPEAR_START_SCALE) * delta;
-                icon.size(px(size * scale))
-            },
-        ))
+        .child(icon.animate_in(id, ICON_ENTRANCE))
         .into_any_element()
 }
 

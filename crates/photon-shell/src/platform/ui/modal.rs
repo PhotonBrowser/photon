@@ -1,16 +1,10 @@
 //! A centered modal surface that dims and blocks what it covers.
 
-use gpui::{
-    Animation, AnimationExt, Div, ElementId, MouseButton, div, ease_out_quint, prelude::*, px, rgb,
-    rgba,
-};
-use std::time::Duration;
+use gpui::{Div, ElementId, MouseButton, div, prelude::*, px, rgb, rgba};
 
 use super::layout::v_stack;
+use super::motion::{AnimateIn, Entrance, distance};
 use super::{metrics, theme::ThemeColors};
-
-/// How long a modal takes to fade in.
-const APPEAR_DURATION: Duration = Duration::from_millis(220);
 
 /// The modal's panel: a raised surface sized for short content. Callers give
 /// it an id, role, label, focus and children before passing it to [`modal`].
@@ -35,10 +29,10 @@ pub(super) fn modal<E>(id: &'static str, palette: ThemeColors, panel: E) -> impl
 where
     E: Styled + IntoElement + 'static,
 {
-    let panel = panel.with_animation(
+    // The backdrop's fade also fades the panel, so the panel only rises.
+    let panel = panel.animate_in(
         ElementId::Name(format!("{id}-panel").into()),
-        Animation::new(APPEAR_DURATION).with_easing(ease_out_quint()),
-        |panel, delta| panel.mt(px((1.0 - delta) * metrics::MODAL_APPEAR_RISE)),
+        Entrance::new().slide_up(distance::SHIFT),
     );
     div()
         .id(id)
@@ -53,9 +47,8 @@ where
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
         .child(panel)
-        .with_animation(
+        .animate_in(
             ElementId::Name(format!("{id}-backdrop").into()),
-            Animation::new(APPEAR_DURATION),
-            |backdrop, delta| backdrop.opacity(delta),
+            Entrance::new().fade_from(0.0),
         )
 }

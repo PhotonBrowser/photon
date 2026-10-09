@@ -8,6 +8,7 @@ mod layout;
 mod menu;
 pub(super) mod metrics;
 mod modal;
+mod motion;
 mod omnibox;
 mod status_chip;
 mod tabs;

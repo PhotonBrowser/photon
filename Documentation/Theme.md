@@ -32,11 +32,46 @@ Add a named token there when a view needs a reusable visual measurement. Keep
 layout mechanics such as `flex_1`, `size_full`, zero minimum widths, and
 GPUI-CE's named border or shadow styles in the view that owns that layout.
 
+## Motion
+
+[`motion.rs`](../crates/photon-shell/src/platform/ui/motion.rs) is the shell's
+animation system. An `Entrance` describes how an element appears, combining any
+of these effects:
+
+- `fade_from(opacity)`: fades to fully opaque.
+- `slide_from(edge, distance)`, or `slide_up`, `slide_down`, `slide_left` and
+  `slide_right`: slides into place without moving its siblings.
+- `blur_from(radius)`: sharpens from a blur.
+- `grow_from(size, fraction)`: grows a fixed-size element, such as an icon.
+
+Timing comes from `speed(Speed::Quick | Standard | Gentle)` (120, 200 and
+320 ms) or `duration`, plus `delay` for staggering, and `curve(...)`: `EaseOut`
+(the default), `Linear`, `EaseInOut`, `Overshoot`, or a spring such as
+`Curve::SNAPPY` and `Curve::BOUNCY`. Distances come from `motion::distance`.
+
+Start from a preset and adjust it:
+
+| Preset | Effect | Used for |
+| --- | --- | --- |
+| `Entrance::fade()` | Quick fade | Status chips |
+| `Entrance::rise()` | Fade while rising | Panels and dialogs |
+| `Entrance::fall()` | Fade while falling | The find bar |
+| `Entrance::popover()` | Quick fade with a slight drop | Menus, popovers, dropdowns (built into `menu_surface`) |
+| `Entrance::slide_in(edge)` | Fade while sliding in from an edge | Sidebars and sheets |
+| `Entrance::focus()` | Fade while sharpening from a blur | Content replaced in place |
+| `Entrance::pop(size)` | Grow with a little overshoot | Tab icons |
+
+Apply it with `element.animate_in(id, entrance)`. The entrance plays the first
+time the element is shown under that id; a new id plays it again. Every
+entrance follows the system's reduced-motion setting by appearing at once.
+
 ## Editing rules
 
 - Use semantic `ThemeColors` roles; do not put RGB literals in components.
 - Keep opacity adjustments named by role in `theme.rs`.
 - Put repeated dimensions and type sizes in `metrics.rs`.
+- Animate elements in with `motion.rs` entrances rather than hand-written
+  animations, so motion stays consistent.
 - Give a new token a clear semantic name and reuse it where the same role
   appears.
 - Keep genuinely component-specific layout local when it has no shared role.

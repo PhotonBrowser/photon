@@ -1,18 +1,14 @@
 //! A small status chip in the window's bottom-right corner.
 
 use gpui::{
-    Animation, AnimationExt, ElementId, MouseButton, Role, SharedString, ease_out_quint,
-    prelude::*, px, rgb, rgba,
+    ElementId, MouseButton, Role, SharedString, prelude::*, px, rgb, rgba,
 };
-use std::time::Duration;
 
 use super::button::{ButtonSize, button};
 use super::icons::{check_icon, close_icon, loading_spinner, warning_icon};
 use super::layout::h_stack;
+use super::motion::{AnimateIn, Entrance};
 use super::{ClickHandler, metrics, theme::ThemeColors};
-
-/// How long a chip takes to fade in.
-const APPEAR_DURATION: Duration = Duration::from_millis(200);
 
 /// What a chip's leading icon shows.
 pub(super) enum ChipIcon {
@@ -97,9 +93,5 @@ pub(super) fn status_chip(
         );
     }
 
-    chip.with_animation(
-        id,
-        Animation::new(APPEAR_DURATION).with_easing(ease_out_quint()),
-        |chip, delta| chip.opacity(delta),
-    )
+    chip.animate_in(id, Entrance::fade())
 }

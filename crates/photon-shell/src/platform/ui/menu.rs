@@ -4,10 +4,13 @@ use gpui::{MouseButton, Role, Toggled, div, prelude::*, px, rgb, rgba};
 
 use super::icons::check_icon;
 use super::layout::{h_stack, v_stack};
+use super::motion::{AnimateIn, Entrance};
 use super::{metrics, theme::ThemeColors};
 
 use super::ClickHandler;
 
+/// A menu's raised surface. It animates in each time it opens, so every
+/// popover, dropdown and context menu built on it does too.
 pub(super) fn menu_surface(content: impl IntoElement, palette: ThemeColors) -> impl IntoElement {
     v_stack()
         .id("browser-menu")
@@ -25,6 +28,7 @@ pub(super) fn menu_surface(content: impl IntoElement, palette: ThemeColors) -> i
         .text_color(rgb(palette.text_primary))
         .shadow_lg()
         .child(content)
+        .animate_in("browser-menu-appear", Entrance::popover())
 }
 
 pub(super) fn menu_section(label: &'static str, palette: ThemeColors) -> impl IntoElement {

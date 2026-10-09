@@ -4,7 +4,7 @@ use gpui::{Context, EntityId, KeyDownEvent, Window, prelude::*};
 use std::time::{Duration, Instant};
 
 use super::super::icons::LOADING_SPINNER_STEPS;
-use super::super::tabs::{ICON_APPEAR_DURATION, TabIcon, TabItem, tab_strip};
+use super::super::tabs::{ICON_ENTRANCE, TabIcon, TabItem, tab_strip};
 use super::{BrowserWindow, create_webview, create_webview_from_session};
 use crate::platform::engine::RequestedWebView;
 
@@ -329,7 +329,7 @@ impl BrowserWindow {
         };
         let mut revealed_icons = self.revealed_icons.borrow_mut();
         match revealed_icons.get(&tab) {
-            Some((icon, since)) if *icon == revealed => since.elapsed() < ICON_APPEAR_DURATION,
+            Some((icon, since)) if *icon == revealed => since.elapsed() < ICON_ENTRANCE.total_duration(),
             _ => {
                 revealed_icons.insert(tab, (revealed, Instant::now()));
                 true
