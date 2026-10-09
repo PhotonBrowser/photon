@@ -102,10 +102,18 @@ impl CallbackState {
     }
 
     fn mark_input(&self) {
+        if !self.diagnostics_enabled.load(Ordering::Acquire) {
+            return;
+        }
         self.diagnostics.lock().unwrap().last_input_at = Some(Instant::now());
     }
 
+    /// Tracks frame gaps and input latency, which only the diagnostics
+    /// overlay shows, so frames skip this while it is hidden.
     fn record_frame(&self) {
+        if !self.diagnostics_enabled.load(Ordering::Acquire) {
+            return;
+        }
         let now = Instant::now();
         {
             let mut diagnostics = self.diagnostics.lock().unwrap();
@@ -157,6 +165,17 @@ impl CallbackState {
     }
 
     fn set_diagnostics_enabled(&self, enabled: bool) {
+        if enabled {
+            // Frames were not tracked while hidden; start a fresh history so
+            // the first interval does not span the hidden period.
+            let mut diagnostics = self.diagnostics.lock().unwrap();
+            diagnostics.last_frame_at = None;
+            diagnostics.last_input_at = None;
+            diagnostics.frame_gaps.clear();
+            diagnostics.snapshot.last_frame_interval_ms = None;
+            diagnostics.snapshot.longest_frame_gap_ms = None;
+            diagnostics.snapshot.input_to_frame_latency_ms = None;
+        }
         self.diagnostics_enabled.store(enabled, Ordering::Release);
         if enabled {
             self.publish_diagnostics();
@@ -759,7 +778,11 @@ unsafe extern "C" fn on_engine_native_frame(
     callbacks
         .presentation
         .receive_frame(backing, generation, frame, signal, width, height);
-    callbacks.presentation.schedule_release_drain();
+    // Receiving a frame queues a release only when it drops one; GPU
+    // completion schedules the drain for the rest.
+    if callbacks.leases.lock().unwrap().has_pending() {
+        callbacks.presentation.schedule_release_drain();
+    }
     callbacks.request_redraw();
 }
 

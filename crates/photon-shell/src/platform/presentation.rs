@@ -85,6 +85,10 @@ impl LeaseLedger {
         }
     }
 
+    pub(super) fn has_pending(&self) -> bool {
+        !self.pending.is_empty()
+    }
+
     pub(super) fn take_pending(&mut self) -> Vec<Release> {
         std::mem::take(&mut self.pending)
     }

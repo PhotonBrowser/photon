@@ -47,6 +47,8 @@ impl PhotonWebView {
     pub(in crate::platform) fn present_latest(&mut self, cx: &mut Context<Self>) {
         self.session.drain_releases();
         let Some(presented) = self.session.presentation.take_surface() else {
+            // A rejected frame completes its lease with no GPU work to follow.
+            self.session.drain_releases();
             return;
         };
         if let Some(replaced) = self.external.take() {

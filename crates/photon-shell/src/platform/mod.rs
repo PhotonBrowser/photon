@@ -9,7 +9,9 @@ mod window_observer;
 mod window_settings;
 
 fn trace(args: std::fmt::Arguments<'_>) {
-    if std::env::var_os("PHOTON_VERBOSE").is_some() {
+    // Read once: traces run on every frame, including in Metal completion handlers.
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    if *ENABLED.get_or_init(|| std::env::var_os("PHOTON_VERBOSE").is_some()) {
         eprintln!("[PhotonWebView/GPUI-CE] {args}");
     }
 }
