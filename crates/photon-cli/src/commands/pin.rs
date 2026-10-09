@@ -60,7 +60,9 @@ pub(crate) fn pin(root: &Path, verbose: bool) -> Result<(), String> {
 
     stage("Validate Photon before advancing dependency pins");
     if changed.contains(&"Engine") {
-        crate::commands::build::engine_build(root, false, verbose)?;
+        // Pin validation uses the shipping build so it never starts an
+        // implicit debug Engine build.
+        crate::commands::build::engine_build(root, true, verbose)?;
     }
     if changed.contains(&"vendor/gpui-ce") {
         let gpui_ce = root.join("vendor/gpui-ce");
