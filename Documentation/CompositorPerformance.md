@@ -68,10 +68,21 @@ When measuring, keep animated content inside the viewport and the window uncover
 - While the window is fully occluded the active tab is marked hidden, so Engine stops delivering rendering opportunities and frames. Verified: hiding the app took Engine from 60 fps to 0, and bringing it to the front resumed 60 fps, with lease accounting balanced at shutdown.
 - On a display change every tab forgets its cached display metadata and re-reads the refresh rate on its next layout.
 
+## 5. Further opportunities — review of 2026-10-09
+
+Reviewed after the crate split (`photon-ffi`, `photon-presentation-ipc`). The frame pipeline itself now runs at display rate; these are the remaining costs, most significant first.
+
+1. **Every resize re-registers every backing over synchronous XPC.** `PhotonEmbedder.cpp` bumps `m_native_generation` on every physical size change, even when the compositor keeps its padded pool. Each new generation re-registers each backing: two synchronous broker round trips (`register_backing` + `import_backing`), an `IOSurfaceLookupFromMachPort` and a `CVPixelBuffer` on the UI thread, plus a GPUI-CE texture-cache miss. Measured: 20 window resizes produced 21 generations and 66 registrations. **Fixed** in Engine `74d3338`: the generation now advances only when the compositor replaces its pool (`on_backing_store_pool_changed`); the same resizes produce 3 generations and 10 registrations, with the page rendering correctly at each size.
+2. **Registrations are never released.** `PresentationRuntime::backings` (Rust), `m_registered_native_backings` (embedder) and GPUI-CE's `external_surface_textures` only ever insert. Each entry retains its IOSurface, so pools the compositor has replaced stay alive in the UI process for the session; the Compositor showed 87 MB of owned, unmapped memory after resizing. Drop entries for older generations once their leases are released, and give GPUI-CE a way to evict an external surface identity.
+3. **The whole window re-renders on every page frame.** `update_webview` ends with `cx.refresh()`, which marks every window as refreshing, and no view uses `.cached()`, so titlebar, tabs, toolbar and omnibox rebuild for each Engine frame. Measured full-window draw: 1.3–1.4 ms p50, 1.7 ms p90 on the UI thread (~20% of a 120 Hz frame). Notify only the WebView and cache the chrome views so a page frame repaints just the surface.
+4. **Frame delivery waits for a spawned task.** `on_engine_native_frame` → `request_redraw` → `app.spawn` adds an executor hop before `present_latest`; a frame that lands just after GPUI's frame callback waits a full GPUI frame. (Already on the checklist.)
+5. **Small per-frame costs.** `platform::trace` reads `PHOTON_VERBOSE` from the environment on every call, including from Metal completion handlers; `record_frame` scans up to ~1,200 gap entries per frame even with diagnostics off; `on_engine_native_frame` signals the release-drain source on every frame even when nothing is pending.
+
 ## Commits
 
 - Engine `864c2a0892` LibPhotonEmbedder: Accept display metadata from the embedder
 - Engine `37e4b20582` Compositor: Allocate a fourth backing store for GPU-sampling clients
+- Engine `74d3338ba6` LibPhotonEmbedder: Keep the presentation generation across resizes
 
 `Tests/Compositor/TestContextState.cpp` does not compile on Engine `master` independently of these changes: its `TestCompositorClient` still uses the old `did_present_frame` signature (without `presentation_signal_value`) and `spin_event_loop_until` overloads. Photon's Engine build does not build these tests (`ENABLE_LADYBIRD_UI` is off), which is why the breakage went unnoticed.
 
@@ -88,4 +99,7 @@ When measuring, keep animated content inside the viewport and the window uncover
 - [ ] Deliver releases without the CFRunLoop hop where thread safety allows
 - [ ] Call `present_latest` directly from the main-thread frame callback instead of via `app.spawn`, so a frame is not deferred an extra GPUI frame
 - [ ] Cache `PHOTON_VERBOSE` in `platform::trace` (`OnceLock`); it calls `getenv` on every call, including in Metal completion handlers
+- [x] Bump the presentation generation only when the compositor replaces its pool, not on every resize (Engine `74d3338`: 20 resizes went from 21 generations / 66 registrations to 3 / 10)
+- [ ] Release backing registrations (Rust map, embedder set, GPUI-CE texture cache) for replaced generations
+- [ ] Notify only the WebView on Engine frames and cache the chrome views, instead of `cx.refresh()`
 - [ ] If still short of 120: profile Engine 4K Skia paint time (`compositor_frame_profile`) against the 8.3 ms budget
