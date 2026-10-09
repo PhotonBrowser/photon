@@ -142,6 +142,9 @@ impl CallbackState {
             diagnostics.snapshot.cpu_percent = stats.has_cpu_percent.then_some(stats.cpu_percent);
             diagnostics.snapshot.memory_bytes =
                 stats.has_memory_bytes.then_some(stats.memory_bytes);
+            diagnostics.snapshot.managed_heap_bytes = stats
+                .has_managed_heap_bytes
+                .then_some(stats.managed_heap_bytes);
             diagnostics.snapshot.download_bytes_per_second = stats.download_bytes_per_second;
             diagnostics.snapshot.upload_bytes_per_second = stats.upload_bytes_per_second;
             diagnostics.snapshot.frames_per_second = stats

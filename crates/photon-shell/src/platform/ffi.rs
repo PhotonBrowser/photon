@@ -9,6 +9,8 @@ pub(super) mod embedder {
         pub cpu_percent: f64,
         pub has_memory_bytes: bool,
         pub memory_bytes: u64,
+        pub has_managed_heap_bytes: bool,
+        pub managed_heap_bytes: u64,
         pub download_bytes_per_second: u64,
         pub upload_bytes_per_second: u64,
         pub has_frames_per_second: bool,

@@ -40,6 +40,13 @@ pub(super) fn debug_overlay(
             palette,
         ))
         .child(row(
+            "Managed heap",
+            diagnostics
+                .managed_heap_bytes
+                .map_or_else(|| "—".into(), format_bytes),
+            palette,
+        ))
+        .child(row(
             "Network ↓ / ↑",
             format!(
                 "{} / {}",
@@ -64,6 +71,12 @@ pub(super) fn debug_overlay(
                 .text_size(px(metrics::DEBUG_OVERLAY_NOTE_FONT_SIZE))
                 .text_color(rgb(palette.diagnostics_secondary_text))
                 .child("Frame gaps are a stall proxy; JS/layout attribution is unavailable."),
+        )
+        .child(
+            div()
+                .text_size(px(metrics::DEBUG_OVERLAY_NOTE_FONT_SIZE))
+                .text_color(rgb(palette.diagnostics_secondary_text))
+                .child("Managed heap is the last-GC estimate; some native, media, and GPU memory is missing."),
         )
 }
 

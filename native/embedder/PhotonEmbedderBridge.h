@@ -18,6 +18,8 @@ struct PhotonPerformanceStats {
   double cpu_percent;
   bool has_memory_bytes;
   uint64_t memory_bytes;
+  bool has_managed_heap_bytes;
+  uint64_t managed_heap_bytes;
   uint64_t download_bytes_per_second;
   uint64_t upload_bytes_per_second;
   bool has_frames_per_second;

@@ -39,6 +39,7 @@ pub struct BrowserDiagnostics {
     pub frames_per_second: Option<f64>,
     pub cpu_percent: Option<f64>,
     pub memory_bytes: Option<u64>,
+    pub managed_heap_bytes: Option<u64>,
     pub download_bytes_per_second: u64,
     pub upload_bytes_per_second: u64,
     pub input_to_frame_latency_ms: Option<f64>,
