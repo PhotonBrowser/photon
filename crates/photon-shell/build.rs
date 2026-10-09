@@ -7,7 +7,7 @@ fn main() {
         .unwrap();
     let engine_build = env::var_os("PHOTON_ENGINE_BUILD_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|| root.join("build/engine-debug"));
+        .unwrap_or_else(|| root.join("build/engine-release"));
     let out = PathBuf::from(env::var_os("OUT_DIR").unwrap());
     let generated = engine_build.join("Libraries");
     let fallback = out.join("include/LibPhotonEmbedder/Export.h");

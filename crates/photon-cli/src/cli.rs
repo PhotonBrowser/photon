@@ -45,20 +45,14 @@ enum Command {
     /// Build Photon Engine and the GPUI-CE application.
     Build {
         /// Build with optimizations (the default).
-        #[arg(long, conflicts_with = "debug")]
+        #[arg(long, default_value_t = true)]
         release: bool,
-        /// Build without optimizations.
-        #[arg(long, conflicts_with = "release")]
-        debug: bool,
     },
     /// Build Photon Engine and launch the direct GPUI-CE application.
     Run {
         /// Build with optimizations (the default).
-        #[arg(long, conflicts_with = "debug")]
+        #[arg(long, default_value_t = true)]
         release: bool,
-        /// Build without optimizations.
-        #[arg(long, conflicts_with = "release")]
-        debug: bool,
         /// Navigate the PhotonWebView to this URL after launch.
         #[arg(long)]
         url: Option<String>,
@@ -136,11 +130,8 @@ enum EngineCommand {
     /// Build Photon Engine libraries and services.
     Build {
         /// Build with optimizations (the default).
-        #[arg(long, conflicts_with = "debug")]
+        #[arg(long, default_value_t = true)]
         release: bool,
-        /// Build without optimizations.
-        #[arg(long, conflicts_with = "release")]
-        debug: bool,
     },
     /// Fetch and merge upstream/master into the Engine checkout.
     Sync {
@@ -162,17 +153,14 @@ pub fn run() -> Result<(), String> {
         Some(Command::Ide { command }) => match command {
             IdeCommand::Setup => commands::ide::setup(&root, verbose),
         },
-        Some(Command::Build { release, debug }) => {
-            commands::build::build(&root, release || !debug, verbose)
-        }
+        Some(Command::Build { release }) => commands::build::build(&root, release, verbose),
         Some(Command::Run {
             release,
-            debug,
             url,
             shutdown_after_seconds,
         }) => commands::build::run_direct(
             &root,
-            release || !debug,
+            release,
             verbose,
             url.as_deref(),
             shutdown_after_seconds,
@@ -218,8 +206,8 @@ pub fn run() -> Result<(), String> {
             None | Some(EngineCommand::Status) => {
                 commands::engine::engine(&root, Some("status"), false, verbose)
             }
-            Some(EngineCommand::Build { release, debug }) => {
-                commands::engine::engine(&root, Some("build"), release || !debug, verbose)
+            Some(EngineCommand::Build { release }) => {
+                commands::engine::engine(&root, Some("build"), release, verbose)
             }
             Some(EngineCommand::Edit) => commands::engine::edit(&root, verbose),
             Some(EngineCommand::Pin) => commands::engine::pin(&root, verbose),
