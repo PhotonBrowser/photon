@@ -118,3 +118,23 @@ pub(super) fn warning_icon(color: u32, size: f32) -> impl IntoElement {
         .flex_shrink_0()
         .text_color(rgb(color))
 }
+
+pub(super) fn chevron_up_icon(color: u32, size: f32) -> impl IntoElement {
+    svg()
+        .data(
+            br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>"##,
+        )
+        .size(px(size))
+        .flex_shrink_0()
+        .text_color(rgb(color))
+}
+
+pub(super) fn chevron_down_icon(color: u32, size: f32) -> impl IntoElement {
+    svg()
+        .data(
+            br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>"##,
+        )
+        .size(px(size))
+        .flex_shrink_0()
+        .text_color(rgb(color))
+}

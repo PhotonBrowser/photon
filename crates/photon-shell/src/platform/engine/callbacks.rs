@@ -13,7 +13,7 @@ use std::{
 };
 
 use super::super::presentation::{LeaseLedger, MachPortGuard, PresentationRuntime};
-use super::super::ui::{Favicon, PhotonWebView};
+use super::super::ui::{Favicon, FindResult, PhotonWebView};
 use super::super::{ffi::embedder, trace};
 use super::{EngineSession, PopupPolicy, RequestedWebView, UiWake};
 
@@ -75,6 +75,10 @@ impl CallbackState {
 
     pub(super) fn handle_engine_crash(&self) {
         self.update_webview(|view, cx| view.handle_engine_crash(cx));
+    }
+
+    pub(super) fn set_find_result(&self, result: FindResult) {
+        self.update_webview(move |view, cx| view.set_find_result(result, cx));
     }
 
     pub(super) fn crash_recovered(&self) {
@@ -251,6 +255,22 @@ pub(super) unsafe extern "C" fn on_engine_crash(context: *mut c_void, url: *cons
     if !context.is_null() {
         unsafe { &*(context.cast::<CallbackState>()) }.handle_engine_crash();
     }
+}
+
+pub(super) unsafe extern "C" fn on_engine_find_result(
+    context: *mut c_void,
+    current_match_index: usize,
+    has_total: bool,
+    total_match_count: usize,
+) {
+    if context.is_null() {
+        return;
+    }
+    let result = FindResult {
+        current_match_index,
+        total_match_count: has_total.then_some(total_match_count),
+    };
+    unsafe { &*(context.cast::<CallbackState>()) }.set_find_result(result);
 }
 
 pub(super) unsafe extern "C" fn on_engine_crash_recovered(context: *mut c_void) {

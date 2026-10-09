@@ -38,6 +38,9 @@ using PhotonDialogCallback = void (*)(void*, int, char const*, char const*,
 using PhotonNavigationCommittedCallback = void (*)(void*);
 // Called when the page that replaced a crashed one presents its first frame.
 using PhotonCrashRecoveredCallback = void (*)(void*);
+// Called with a find-in-page result: the current match's index, whether the
+// match count is known, and the count.
+using PhotonFindResultCallback = void (*)(void*, size_t, bool, size_t);
 struct PhotonNewWebViewRequest {
     bool popup;
     bool activate;
@@ -81,6 +84,7 @@ struct PhotonViewCallbacks {
     PhotonNavigationCommittedCallback navigation_committed_callback;
     PhotonCrashRecoveredCallback crash_recovered_callback;
     PhotonNewWebViewCallback new_web_view_callback;
+    PhotonFindResultCallback find_result_callback;
 #if defined(__APPLE__)
     bool native_metal_presentation;
     PhotonNativeBackingCallback native_backing_callback;
@@ -126,6 +130,13 @@ void photon_view_set_preferred_color_scheme(void* view, int color_scheme);
 // cancelled; `accepted` answers a confirm.
 void photon_view_close_dialog(void* view, int type, bool accepted,
     char const* text);
+// Finds `query` in the page; an empty query clears the search.
+void photon_view_find_in_page(void* view, char const* query,
+    bool case_sensitive, bool highlight_all_matches);
+// Moves to the next match, or the previous one when `forward` is false.
+void photon_view_find_in_page_step(void* view, bool forward);
+// Ends the search and removes its highlights.
+void photon_view_find_in_page_end(void* view);
 void photon_runtime_set_system_reduced_motion_preference(void* runtime,
     bool reduce_motion);
 void photon_runtime_set_service_callback(void* runtime, void* callback_data,

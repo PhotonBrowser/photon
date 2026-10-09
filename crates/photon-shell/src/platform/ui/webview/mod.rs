@@ -1,4 +1,4 @@
-//! The page surface and browser input forwarding.
+//! The page surface, its tab state, and browser input forwarding.
 
 use super::super::engine::{EngineSession, RequestedWebView};
 use super::super::presentation::PresentedSurface;
@@ -9,59 +9,31 @@ use super::{
 };
 use gpui::{
     Context, EventEmitter, FocusHandle, InteractiveElement, KeyDownEvent, KeyUpEvent, ObjectFit,
-    Render, RenderImage, Subscription, SurfaceSource, Window, WindowAppearance, div, prelude::*,
-    px, surface,
+    Render, Subscription, SurfaceSource, Window, WindowAppearance, div, prelude::*, px, surface,
 };
-use photon_core::{
-    BrowserCommand, BrowserState, CrashResponse, DialogReply, DialogRequest, EngineEvent,
-    PageCrashes, PageDialogs,
-};
+use photon_core::{BrowserCommand, BrowserState, EngineEvent, PageCrashes, PageDialogs};
 use photon_performance::{PerformanceDiagnostics, performance_overlay};
 use std::collections::HashMap;
-use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use super::super::trace;
 
+mod crashes;
+mod dialogs;
+mod favicon;
+mod find;
+
+pub(in crate::platform) use crashes::CrashNotice;
+pub(in crate::platform) use favicon::Favicon;
+pub(in crate::platform) use find::FindResult;
+
 static MOUSE_MOVE_TRACE_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 /// How long a load runs before its tab shows a spinner, so brief loads do
 /// not flash one over the page icon.
 const SPINNER_DELAY: Duration = Duration::from_millis(150);
-
-/// What a tab says about recovering from a crash.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(in crate::platform) enum CrashNotice {
-    /// The page crashed and is reloading in a fresh process.
-    Reloading,
-    /// The reloaded page showed at this time.
-    Reloaded(Instant),
-    /// The page crashed again soon after recovering, so it was not reloaded.
-    KeepsCrashing,
-}
-
-/// A page icon and a key identifying its pixels.
-#[derive(Clone)]
-pub(in crate::platform) struct Favicon {
-    pub(in crate::platform) image: Arc<RenderImage>,
-    /// Equal for identical icons, which Engine may report more than once.
-    pub(in crate::platform) key: u64,
-}
-
-impl Favicon {
-    /// Wraps straight-alpha BGRA pixels, the layout GPUI images hold.
-    pub(in crate::platform) fn from_bgra(pixels: &[u8], width: u32, height: u32) -> Option<Self> {
-        let mut hasher = DefaultHasher::new();
-        (width, height, pixels).hash(&mut hasher);
-        let buffer = image::RgbaImage::from_raw(width, height, pixels.to_vec())?;
-        Some(Self {
-            image: Arc::new(RenderImage::new([image::Frame::new(buffer)])),
-            key: hasher.finish(),
-        })
-    }
-}
 
 pub(in crate::platform) struct PhotonWebView {
     pub(super) external: Option<PresentedSurface>,
@@ -71,6 +43,8 @@ pub(in crate::platform) struct PhotonWebView {
     /// What the tab's crash chip says, if anything.
     pub(in crate::platform) crash_notice: Option<CrashNotice>,
     crashes: PageCrashes,
+    /// The latest result of a find-in-page search.
+    pub(in crate::platform) find_result: Option<FindResult>,
     /// The page's icon, shown in its tab while the page is not loading.
     pub(in crate::platform) favicon: Option<Favicon>,
     /// When the current load started.
@@ -149,21 +123,6 @@ impl PhotonWebView {
                 .is_some_and(|since| since.elapsed() >= SPINNER_DELAY)
     }
 
-    pub(in crate::platform) fn set_favicon(
-        &mut self,
-        favicon: Option<Favicon>,
-        cx: &mut Context<Self>,
-    ) {
-        let key = |favicon: &Option<Favicon>| favicon.as_ref().map(|favicon| favicon.key);
-        if key(&favicon) == key(&self.favicon) {
-            return;
-        }
-        if let Some(replaced) = std::mem::replace(&mut self.favicon, favicon) {
-            cx.drop_image(replaced.image, None);
-        }
-        self.state_changed(cx);
-    }
-
     pub(super) fn prepare_shutdown(&mut self) {
         if self.session.shutdown_started {
             return;
@@ -229,6 +188,7 @@ impl PhotonWebView {
             performance_overlay_enabled: false,
             crash_notice: None,
             crashes: PageCrashes::default(),
+            find_result: None,
             favicon: None,
             loading_since: None,
             dialogs: PageDialogs::default(),
@@ -283,73 +243,6 @@ impl PhotonWebView {
     pub(super) fn set_performance_overlay_enabled(&mut self, enabled: bool) {
         self.performance_overlay_enabled = enabled;
         self.session.set_diagnostics_enabled(enabled);
-    }
-
-    /// The page's process crashed: reloads it, unless it keeps crashing.
-    pub(in crate::platform) fn handle_engine_crash(&mut self, cx: &mut Context<Self>) {
-        // The replaced page process no longer waits for its dialog.
-        self.dialogs.reset();
-        let response = self.crashes.crashed(Instant::now());
-        trace(format_args!("page crashed: {response:?}"));
-        match response {
-            CrashResponse::Reload => {
-                self.crash_notice = Some(CrashNotice::Reloading);
-                if let Err(error) = self.session.execute(BrowserCommand::Reload) {
-                    trace(format_args!("reloading crashed page: {error:#}"));
-                }
-            }
-            CrashResponse::GiveUp => self.crash_notice = Some(CrashNotice::KeepsCrashing),
-        }
-        self.state_changed(cx);
-    }
-
-    /// The page that replaced a crashed one is showing.
-    pub(in crate::platform) fn crash_recovered(&mut self, cx: &mut Context<Self>) {
-        let now = Instant::now();
-        self.crashes.recovered(now);
-        trace(format_args!("crashed page recovered"));
-        if self.crash_notice == Some(CrashNotice::Reloading) {
-            self.crash_notice = Some(CrashNotice::Reloaded(now));
-            self.state_changed(cx);
-        }
-    }
-
-    /// Shows a page's dialog, or answers at once when it cannot be shown.
-    pub(in crate::platform) fn request_dialog(
-        &mut self,
-        request: DialogRequest,
-        cx: &mut Context<Self>,
-    ) {
-        let kind = request.kind.clone();
-        match self.dialogs.request(request) {
-            Some(reply) => {
-                trace(format_args!(
-                    "dialog {kind:?} answered without showing: {reply:?}"
-                ));
-                self.session.reply_dialog(reply);
-            }
-            None => {
-                trace(format_args!("dialog {kind:?} shown"));
-                self.state_changed(cx);
-            }
-        }
-    }
-
-    /// Closes the open dialog with OK (using `text` for a prompt) or Cancel.
-    pub(super) fn close_dialog(&mut self, accepted: bool, text: String, cx: &mut Context<Self>) {
-        let reply = if accepted {
-            self.dialogs.accept(text)
-        } else {
-            self.dialogs.dismiss()
-        };
-        self.send_dialog_reply(reply, cx);
-    }
-
-    fn send_dialog_reply(&mut self, reply: Option<DialogReply>, cx: &mut Context<Self>) {
-        if let Some(reply) = reply {
-            self.session.reply_dialog(reply);
-            self.state_changed(cx);
-        }
     }
 
     /// Runs a page command, closing the page's dialog first when the command

@@ -32,6 +32,8 @@ impl BrowserWindow {
             return;
         }
         if index != self.active_tab {
+            // The find bar searches one page; switching tabs ends its search.
+            self.close_find_bar(false, window, cx);
             if let Some(previous) = self.tabs.get(self.active_tab) {
                 previous.update(cx, |view, _| {
                     view.session.set_visible(false);
@@ -329,7 +331,9 @@ impl BrowserWindow {
         };
         let mut revealed_icons = self.revealed_icons.borrow_mut();
         match revealed_icons.get(&tab) {
-            Some((icon, since)) if *icon == revealed => since.elapsed() < ICON_ENTRANCE.total_duration(),
+            Some((icon, since)) if *icon == revealed => {
+                since.elapsed() < ICON_ENTRANCE.total_duration()
+            }
             _ => {
                 revealed_icons.insert(tab, (revealed, Instant::now()));
                 true

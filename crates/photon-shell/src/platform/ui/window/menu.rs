@@ -130,10 +130,21 @@ impl BrowserWindow {
                 })),
                 palette,
             ))
+            .child(menu_action(
+                "menu-find",
+                "Find in Page…",
+                2,
+                Box::new(cx.listener(|this, _, window, cx| {
+                    cx.stop_propagation();
+                    this.open_menu = None;
+                    this.open_find_bar(window, cx);
+                })),
+                palette,
+            ))
             .child(menu_checkbox(
                 "menu-debug-info",
                 "Debug info",
-                2,
+                3,
                 performance_overlay_enabled,
                 Box::new(cx.listener(|this, _, _, cx| {
                     cx.stop_propagation();
@@ -143,17 +154,17 @@ impl BrowserWindow {
             ))
             .child(menu_separator(palette))
             .child(menu_section("Theme", palette))
-            .child(theme_radio("menu-theme-system", "System", 3, None))
+            .child(theme_radio("menu-theme-system", "System", 4, None))
             .child(theme_radio(
                 "menu-theme-light",
                 "Light",
-                4,
+                5,
                 Some(WindowAppearance::Light),
             ))
             .child(theme_radio(
                 "menu-theme-dark",
                 "Dark",
-                5,
+                6,
                 Some(WindowAppearance::Dark),
             ))
             .child(menu_separator(palette))

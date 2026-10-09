@@ -3,6 +3,7 @@
 mod actions;
 mod alerts;
 mod app;
+mod find;
 mod menu;
 mod popup_window;
 mod popups;
@@ -22,6 +23,7 @@ use super::super::engine::{EngineRuntime, EngineSession, UiWake};
 use super::super::trace;
 use super::super::window_observer::WindowObserver;
 use super::super::window_settings;
+use super::find_bar::FindBar;
 use super::js_dialog::JavaScriptDialog;
 use super::layout::v_stack;
 use super::omnibox::Omnibox;
@@ -58,6 +60,8 @@ struct BrowserWindow {
     spinner_step: usize,
     /// Whether a timer is advancing `spinner_step`.
     spinner_running: bool,
+    /// The open find bar, for the active tab.
+    find_bar: Option<(Entity<FindBar>, Subscription)>,
     /// The active tab's open JavaScript dialog.
     dialog: Option<Entity<JavaScriptDialog>>,
     pending_popups: VecDeque<PendingPopup>,
@@ -256,6 +260,14 @@ impl Render for BrowserWindow {
                     .w_full()
                     .p(px(metrics::PAGE_INSET))
                     .child(self.active_webview())
+                    // The find bar floats in the page's top-right corner.
+                    .children(self.find_bar.as_ref().map(|(bar, _)| {
+                        div()
+                            .absolute()
+                            .top(px(metrics::PAGE_INSET + metrics::CHIP_INSET))
+                            .right(px(metrics::PAGE_INSET + metrics::CHIP_INSET))
+                            .child(bar.clone())
+                    }))
                     // Crash and restart chips sit in the page's bottom-right corner.
                     .children(self.notice_chip(palette, cx).map(|chip| {
                         div()
@@ -334,6 +346,7 @@ fn open_browser_window(
                 closed_tabs: Vec::new(),
                 spinner_step: 0,
                 spinner_running: false,
+                find_bar: None,
                 dialog: None,
                 pending_popups: VecDeque::new(),
                 popup_confirmation_focus: cx.focus_handle(),

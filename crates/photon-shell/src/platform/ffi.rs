@@ -74,6 +74,7 @@ pub(super) mod embedder {
         pub navigation_committed_callback: Option<unsafe extern "C" fn(*mut c_void)>,
         pub crash_recovered_callback: Option<unsafe extern "C" fn(*mut c_void)>,
         pub new_web_view_callback: Option<NewWebViewCallback>,
+        pub find_result_callback: Option<unsafe extern "C" fn(*mut c_void, usize, bool, usize)>,
         #[cfg(target_os = "macos")]
         pub native_metal_presentation: bool,
         #[cfg(target_os = "macos")]
@@ -129,6 +130,14 @@ pub(super) mod embedder {
             capacity: usize,
         );
         pub fn photon_view_set_preferred_color_scheme(view: *mut c_void, color_scheme: i32);
+        pub fn photon_view_find_in_page(
+            view: *mut c_void,
+            query: *const c_char,
+            case_sensitive: bool,
+            highlight_all_matches: bool,
+        );
+        pub fn photon_view_find_in_page_step(view: *mut c_void, forward: bool);
+        pub fn photon_view_find_in_page_end(view: *mut c_void);
         pub fn photon_view_close_dialog(
             view: *mut c_void,
             dialog_type: i32,

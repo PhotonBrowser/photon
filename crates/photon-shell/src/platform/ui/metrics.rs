@@ -51,6 +51,14 @@ pub(super) const MENU_ITEM_GAP: f32 = 2.0;
 pub(super) const MENU_SECTION_INSET: f32 = 6.0;
 pub(super) const MENU_SEPARATOR_HEIGHT: f32 = 1.0;
 
+pub(super) const FIND_BAR_HEIGHT: f32 = 34.0;
+pub(super) const FIND_BAR_PADDING: f32 = 10.0;
+pub(super) const FIND_BAR_TRAILING_PADDING: f32 = 5.0;
+pub(super) const FIND_BAR_GAP: f32 = 6.0;
+pub(super) const FIND_FIELD_WIDTH: f32 = 180.0;
+pub(super) const FIND_FONT_SIZE: f32 = 13.0;
+pub(super) const FIND_RESULT_FONT_SIZE: f32 = 12.0;
+
 /// Distance from the page's corner to a status chip.
 pub(super) const CHIP_INSET: f32 = 10.0;
 pub(super) const CHIP_HEIGHT: f32 = 26.0;
@@ -68,6 +76,8 @@ pub(super) const BUTTON_MIN_WIDTH: f32 = 76.0;
 pub(super) const BUTTON_HORIZONTAL_PADDING: f32 = 16.0;
 pub(super) const BUTTON_FONT_SIZE: f32 = 13.0;
 pub(super) const BUTTON_GAP: f32 = 8.0;
+pub(super) const ICON_BUTTON_SIZE: f32 = 24.0;
+pub(super) const ICON_BUTTON_ICON_SIZE: f32 = 13.0;
 /// Opacity of a control that cannot be used right now.
 pub(super) const DISABLED_OPACITY: f32 = 0.4;
 pub(super) const SMALL_BUTTON_HEIGHT: f32 = 20.0;

@@ -251,6 +251,7 @@ impl EngineSession {
             navigation_committed_callback: Some(on_engine_navigation_committed),
             crash_recovered_callback: Some(on_engine_crash_recovered),
             new_web_view_callback: Some(on_engine_new_web_view),
+            find_result_callback: Some(on_engine_find_result),
             #[cfg(target_os = "macos")]
             native_metal_presentation: true,
             #[cfg(target_os = "macos")]
@@ -358,6 +359,26 @@ impl EngineSession {
         };
         let text_ptr = text.as_ref().map_or(std::ptr::null(), |text| text.as_ptr());
         unsafe { embedder::photon_view_close_dialog(self.view, dialog_type, accepted, text_ptr) }
+    }
+
+    /// Finds text in the page, highlighting every match; an empty query
+    /// clears the search.
+    pub(super) fn find_in_page(&mut self, query: &str) {
+        // Interior NULs cannot cross the C ABI; drop them.
+        let Ok(query) = CString::new(query.replace('\0', "")) else {
+            return;
+        };
+        unsafe { embedder::photon_view_find_in_page(self.view, query.as_ptr(), false, true) }
+    }
+
+    /// Moves to the next match, or the previous one when `forward` is false.
+    pub(super) fn find_in_page_step(&mut self, forward: bool) {
+        unsafe { embedder::photon_view_find_in_page_step(self.view, forward) }
+    }
+
+    /// Ends the search and removes its highlights.
+    pub(super) fn find_in_page_end(&mut self) {
+        unsafe { embedder::photon_view_find_in_page_end(self.view) }
     }
 
     /// Sets the color scheme pages see through `prefers-color-scheme`.

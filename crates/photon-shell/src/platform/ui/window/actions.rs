@@ -3,9 +3,10 @@
 use gpui::{Context, Div, KeyDownEvent, Window, prelude::*};
 use photon_core::BrowserCommand;
 use photon_shortcuts::{
-    CloseTab, FocusOmnibox, GoBack, GoForward, NewTab, NewWindow, Reload, ReopenClosedTab,
-    SelectLastTab, SelectNextTab, SelectPreviousTab, SelectTab1, SelectTab2, SelectTab3,
-    SelectTab4, SelectTab5, SelectTab6, SelectTab7, SelectTab8, StopLoading,
+    CloseTab, FindInPage, FindNext, FindPrevious, FocusOmnibox, GoBack, GoForward, NewTab,
+    NewWindow, Reload, ReopenClosedTab, SelectLastTab, SelectNextTab, SelectPreviousTab,
+    SelectTab1, SelectTab2, SelectTab3, SelectTab4, SelectTab5, SelectTab6, SelectTab7, SelectTab8,
+    StopLoading,
 };
 
 use super::BrowserWindow;
@@ -17,6 +18,15 @@ impl BrowserWindow {
             .on_action(cx.listener(|this, _: &FocusOmnibox, window, cx| {
                 this.omnibox
                     .update(cx, |omnibox, cx| omnibox.focus(window, cx));
+            }))
+            .on_action(cx.listener(|this, _: &FindInPage, window, cx| {
+                this.open_find_bar(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &FindNext, window, cx| {
+                this.find_step(true, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &FindPrevious, window, cx| {
+                this.find_step(false, window, cx);
             }))
             .on_action(cx.listener(|this, _: &NewTab, window, cx| {
                 this.dispatch_command(BrowserCommand::NewTab, window, cx);

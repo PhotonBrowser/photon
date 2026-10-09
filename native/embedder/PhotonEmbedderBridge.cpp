@@ -41,6 +41,7 @@ Photon::ViewCallbacks make_view_callbacks(
     auto navigation_committed_callback = callbacks.navigation_committed_callback;
     auto crash_recovered_callback = callbacks.crash_recovered_callback;
     auto new_web_view_callback = callbacks.new_web_view_callback;
+    auto find_result_callback = callbacks.find_result_callback;
 
     Photon::ViewCallbacks result;
     result.state_changed = [=](Photon::ViewState const& state) {
@@ -149,6 +150,11 @@ Photon::ViewCallbacks make_view_callbacks(
     result.crash_recovered = [=] {
         if (crash_recovered_callback)
             crash_recovered_callback(callback_data);
+    };
+    result.find_result = [=](size_t current, std::optional<size_t> total) {
+        if (find_result_callback)
+            find_result_callback(callback_data, current, total.has_value(),
+                total.value_or(0));
     };
     return result;
 }
@@ -320,6 +326,31 @@ extern "C" void photon_view_copy_window_handle(void* view, char* handle,
         return;
     copy_error(handle, capacity,
         static_cast<ViewHandle*>(view)->view->window_handle());
+}
+
+extern "C" void photon_view_find_in_page(void* view, char const* query,
+    bool case_sensitive, bool highlight_all_matches)
+{
+    if (view && query)
+        static_cast<ViewHandle*>(view)->view->find_in_page(query,
+            case_sensitive, highlight_all_matches);
+}
+
+extern "C" void photon_view_find_in_page_step(void* view, bool forward)
+{
+    if (!view)
+        return;
+    auto& engine_view = *static_cast<ViewHandle*>(view)->view;
+    if (forward)
+        engine_view.find_in_page_next_match();
+    else
+        engine_view.find_in_page_previous_match();
+}
+
+extern "C" void photon_view_find_in_page_end(void* view)
+{
+    if (view)
+        static_cast<ViewHandle*>(view)->view->find_in_page_end();
 }
 
 extern "C" void photon_view_close_dialog(void* view, int type, bool accepted,
