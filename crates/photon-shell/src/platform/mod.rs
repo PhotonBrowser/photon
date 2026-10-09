@@ -4,7 +4,6 @@ mod display;
 mod engine;
 mod ffi;
 mod presentation;
-mod presentation_xpc;
 mod ui;
 mod window_observer;
 mod window_settings;

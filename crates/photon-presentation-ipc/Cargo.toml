@@ -1,0 +1,18 @@
+[package]
+name = "photon-presentation-ipc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+build = "build.rs"
+
+[dependencies]
+anyhow = "1"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+foreign-types = "0.5"
+mach2 = "0.5"
+metal = "0.33"
+objc = "0.2"
+
+[build-dependencies]
+cc = "1"

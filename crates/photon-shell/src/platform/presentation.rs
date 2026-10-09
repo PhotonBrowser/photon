@@ -18,7 +18,8 @@ use std::{
     },
 };
 
-use super::{ffi::embedder, presentation_xpc, trace};
+use super::{ffi::embedder, trace};
+use photon_presentation_ipc::Channel;
 
 pub(super) struct MachPortGuard(pub(super) mach_port_t);
 impl Drop for MachPortGuard {
@@ -211,7 +212,7 @@ fn schedule_release_drain(release_scheduler: &AtomicPtr<c_void>) {
 }
 
 pub(super) struct PresentationRuntime {
-    channel: presentation_xpc::Channel,
+    channel: Channel,
     channel_id: String,
     consumer_event: Mutex<Option<SharedEvent>>,
     backings: Mutex<HashMap<(u64, u64), Backing>>,
@@ -231,7 +232,7 @@ impl PresentationRuntime {
         gpu_activity: Arc<GpuActivity>,
     ) -> anyhow::Result<Self> {
         Ok(Self {
-            channel: presentation_xpc::Channel::connect(service)?,
+            channel: Channel::connect(service)?,
             channel_id,
             consumer_event: Mutex::new(None),
             backings: Mutex::new(HashMap::new()),

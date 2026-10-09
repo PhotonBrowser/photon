@@ -12,6 +12,7 @@ gpui_apple = { package = "gpui_ce_apple", path = "../../vendor/gpui-ce/crates/gp
 gpui_elements = { package = "gpui_ce_elements", path = "../../vendor/gpui-ce/crates/gpui_elements" }
 photon-core = { path = "../photon-core" }
 photon-shortcuts = { path = "../photon-shortcuts" }
+photon-presentation-ipc = { path = "../photon-presentation-ipc" }
 anyhow = "1"
 raw-window-handle = "0.6"
 

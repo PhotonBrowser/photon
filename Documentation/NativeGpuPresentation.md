@@ -8,6 +8,11 @@ Photon resolves and caches the IOSurface once per backing. GPUI-CE caches the im
 
 Photon keeps the displayed Engine backing leased until it is replaced and nothing samples it: a command buffer sampling a newer frame has been submitted, and every command buffer that sampled the old frame has completed. The compositor allocates four backings for a client that samples them on its GPU, so it can render while Photon holds the displayed frame and the next one. While the window is fully occluded Photon marks the active view hidden, and Engine stops rendering frames GPUI-CE would not draw. At shutdown, the application disables new frame publication, waits for all tracked surface-sampling command buffers, releases pending and displayed leases, and asserts `submitted == completed == released` with `outstanding == 0`.
 
-The Photon-owned XPC service is implemented in `native/presentation/PhotonPresentationXpc.m` and launched by `crates/photon-cli/src/commands/presentation_broker.rs`. It transports IOSurface Mach ports and shared-event handles between the Engine and Photon processes. GPUI-CE itself contains only generic external Metal surface rendering APIs.
+The XPC protocol, Rust client channel, and native Objective-C transport live in
+`crates/photon-presentation-ipc`. The small
+`crates/photon-presentation-broker` executable starts the service; the CLI
+command stages and registers that executable. It transports IOSurface Mach
+ports and shared-event handles between the Engine and Photon processes. GPUI-CE
+itself contains only generic external Metal surface rendering APIs.
 
 `./photon run --verbose --shutdown-after-seconds 5` provides a fixed-window trace. The latest verified run reported `submitted=4 completed=4 released=4 outstanding=0 gpu-in-flight=0`. The compositor profile reported zero GPU-to-CPU bitmap readback time, and repeated frames reused backing IDs 13–15. AppKit titlebar and window material styling remain separate work after interaction and resize validation.

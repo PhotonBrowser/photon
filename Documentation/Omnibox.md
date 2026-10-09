@@ -46,13 +46,13 @@ Enter.
 
 ## Who calls it
 
-- `crates/photon-shell` calls `photon_omnibox::resolve` in
-  `EngineSession::navigate`, the one place the shell asks the engine to open
-  something. The `<photon-webview url="…">` prop therefore takes typed text, and
-  the field and the engine cannot disagree about what Enter opened.
-- `crates/photon-core` re-exports the crate, and `photon_browser_navigate` maps a
-  resolution onto the engine navigation target. `normalize_url` is the same call
-  with the error flattened to the strings the C ABI reports.
+- `crates/photon-shell` submits omnibox text through
+  `BrowserCommand::from_omnibox_input` before the Engine session navigates.
+  Startup addresses use the same rule.
+- `crates/photon-core` re-exports the shared resolution rules and exposes
+  `normalize_url` with errors flattened for native callers.
+- `crates/photon-ffi` implements `photon_browser_navigate` on top of core and
+  owns the C string and output-buffer boundary.
 
 The native shell owns the address entry and keeps typed text when a navigation
 is rejected, so it can be corrected. There is no second UI-side copy of the

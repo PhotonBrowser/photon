@@ -1,4 +1,4 @@
-//! Photon-owned macOS client for the presentation broker.
+//! Safe Rust client and service entry point for the presentation XPC transport.
 #![allow(unexpected_cfgs)]
 
 use anyhow::{Context, Result, ensure};
@@ -12,6 +12,7 @@ use std::{
 };
 
 unsafe extern "C" {
+    fn photon_presentation_xpc_run_service(service_name: *const c_char) -> i32;
     fn photon_presentation_xpc_connect(service_name: *const c_char) -> *mut c_void;
     fn photon_presentation_xpc_disconnect(connection: *mut c_void);
     fn photon_presentation_xpc_copy_event_handle(
@@ -153,4 +154,12 @@ impl Drop for ObjectGuard {
     fn drop(&mut self) {
         unsafe { photon_presentation_xpc_release_object(self.0.as_ptr()) }
     }
+}
+
+/// Runs the macOS presentation broker service for `service_name`.
+pub fn run_service(service_name: &str) -> i32 {
+    let Ok(service_name) = CString::new(service_name) else {
+        return 2;
+    };
+    unsafe { photon_presentation_xpc_run_service(service_name.as_ptr()) }
 }

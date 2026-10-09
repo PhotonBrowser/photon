@@ -33,7 +33,6 @@ fn main() {
         "native/embedder/PhotonEmbedderBridge.h",
         "native/embedder/ReducedMotionObserver.mm",
         "native/embedder/WindowObserver.mm",
-        "native/presentation/PhotonPresentationXpc.m",
     ] {
         println!("cargo:rerun-if-changed={}", root.join(source).display());
     }
@@ -57,11 +56,6 @@ fn main() {
             .flag("-fblocks")
             .include(root.join("native/embedder"))
             .compile("photon_reduced_motion_observer");
-        cc::Build::new()
-            .file(root.join("native/presentation/PhotonPresentationXpc.m"))
-            .flag("-fobjc-arc")
-            .flag("-fblocks")
-            .compile("photon_presentation_xpc_direct");
         for framework in ["AppKit", "Foundation", "Metal", "CoreFoundation"] {
             println!("cargo:rustc-link-lib=framework={framework}");
         }

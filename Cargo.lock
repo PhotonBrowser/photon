@@ -4199,6 +4199,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "photon-ffi"
+version = "0.1.0"
+dependencies = [
+ "photon-core",
+]
+
+[[package]]
 name = "photon-omnibox"
 version = "0.1.0"
 dependencies = [
@@ -4209,7 +4216,19 @@ dependencies = [
 name = "photon-presentation-broker"
 version = "0.1.0"
 dependencies = [
+ "photon-presentation-ipc",
+]
+
+[[package]]
+name = "photon-presentation-ipc"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
  "cc",
+ "foreign-types",
+ "mach2",
+ "metal",
+ "objc",
 ]
 
 [[package]]
@@ -4229,6 +4248,7 @@ dependencies = [
  "metal",
  "objc",
  "photon-core",
+ "photon-presentation-ipc",
  "photon-shortcuts",
  "raw-window-handle",
 ]

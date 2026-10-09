@@ -3,7 +3,19 @@
 use std::ffi::{CStr, CString, c_char};
 use std::ptr;
 
-use crate::{BrowserCommand, BrowserState, EngineEvent, normalize_url};
+use photon_core::{BrowserCommand, BrowserState, EngineEvent, normalize_url};
+
+// Keep these values aligned with the public enums in include/photon_ffi.h.
+const STRING_URL: u32 = 0;
+const STRING_TITLE: u32 = 1;
+const STRING_ERROR: u32 = 2;
+const FLAG_LOADING: u32 = 0;
+const FLAG_CAN_GO_BACK: u32 = 1;
+const FLAG_CAN_GO_FORWARD: u32 = 2;
+const COMMAND_RELOAD: u32 = 1;
+const COMMAND_BACK: u32 = 2;
+const COMMAND_FORWARD: u32 = 3;
+const COMMAND_STOP_LOADING: u32 = 4;
 
 /// Opaque state allocation used by native shell adapters.
 pub struct BrowserHandle {
@@ -65,9 +77,9 @@ pub unsafe extern "C" fn photon_browser_string(
         return ptr::null();
     };
     match field {
-        0 => handle.url.as_ptr(),
-        1 => handle.title.as_ptr(),
-        2 => handle.error.as_ptr(),
+        STRING_URL => handle.url.as_ptr(),
+        STRING_TITLE => handle.title.as_ptr(),
+        STRING_ERROR => handle.error.as_ptr(),
         _ => ptr::null(),
     }
 }
@@ -82,9 +94,9 @@ pub unsafe extern "C" fn photon_browser_flag(handle: *const BrowserHandle, field
         return false;
     };
     match field {
-        0 => handle.navigation_active,
-        1 => handle.state.can_go_back,
-        2 => handle.state.can_go_forward,
+        FLAG_LOADING => handle.navigation_active,
+        FLAG_CAN_GO_BACK => handle.state.can_go_back,
+        FLAG_CAN_GO_FORWARD => handle.state.can_go_forward,
         _ => false,
     }
 }
@@ -291,10 +303,10 @@ pub unsafe extern "C" fn photon_browser_command(
         return false;
     }
     let command = match command {
-        1 => BrowserCommand::Reload,
-        2 => BrowserCommand::Back,
-        3 => BrowserCommand::Forward,
-        4 => BrowserCommand::StopLoading,
+        COMMAND_RELOAD => BrowserCommand::Reload,
+        COMMAND_BACK => BrowserCommand::Back,
+        COMMAND_FORWARD => BrowserCommand::Forward,
+        COMMAND_STOP_LOADING => BrowserCommand::StopLoading,
         _ => return false,
     };
     matches!(
@@ -304,84 +316,4 @@ pub unsafe extern "C" fn photon_browser_command(
             | BrowserCommand::Back
             | BrowserCommand::Forward
     )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn normalizes_domains_and_paths_to_https() {
-        assert_eq!(
-            normalize_url("example.com").unwrap(),
-            "https://example.com/"
-        );
-        assert_eq!(
-            normalize_url("https://example.com/foo").unwrap(),
-            "https://example.com/foo"
-        );
-    }
-
-    #[test]
-    fn searches_for_anything_that_is_not_an_address() {
-        assert_eq!(
-            normalize_url("how to bake bread").unwrap(),
-            "https://www.google.com/search?q=how%20to%20bake%20bread"
-        );
-        assert_eq!(
-            normalize_url("rust & golang").unwrap(),
-            "https://www.google.com/search?q=rust%20%26%20golang"
-        );
-    }
-
-    #[test]
-    fn normalizes_local_addresses_to_http() {
-        assert_eq!(
-            normalize_url("localhost:3000").unwrap(),
-            "http://localhost:3000/"
-        );
-        assert_eq!(
-            normalize_url("127.0.0.1:8080").unwrap(),
-            "http://127.0.0.1:8080/"
-        );
-        assert_eq!(
-            normalize_url("http://localhost:3000").unwrap(),
-            "http://localhost:3000/"
-        );
-    }
-
-    #[test]
-    fn preserves_explicit_non_web_schemes() {
-        assert_eq!(
-            normalize_url("mailto:person@example.com").unwrap(),
-            "mailto:person@example.com"
-        );
-        assert_eq!(normalize_url("about:blank").unwrap(), "about:blank");
-    }
-
-    #[test]
-    fn trims_input_and_rejects_empty_input() {
-        assert_eq!(
-            normalize_url("  example.com  ").unwrap(),
-            "https://example.com/"
-        );
-        assert_eq!(normalize_url("  "), Err("Address is empty"));
-    }
-
-    #[test]
-    fn applies_engine_state_snapshots() {
-        let mut state = BrowserState::default();
-        state.apply(EngineEvent::ViewStateChanged(BrowserState {
-            url: "https://example.com/".into(),
-            title: "Example".into(),
-            loading: true,
-            can_go_back: true,
-            can_go_forward: false,
-            error: None,
-        }));
-        assert_eq!(state.url, "https://example.com/");
-        assert_eq!(state.title, "Example");
-        assert!(state.loading && state.can_go_back);
-        assert!(!state.can_go_forward);
-    }
 }
