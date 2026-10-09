@@ -19,6 +19,8 @@ use super::presentation::{GpuActivity, LeaseLedger, PresentationRuntime, Retired
 use super::ui::PhotonWebView;
 use super::{ffi::embedder, trace};
 use callbacks::*;
+use photon_core::EngineService;
+use std::cell::RefCell;
 
 #[derive(Clone)]
 pub(super) struct UiWake {
@@ -30,6 +32,7 @@ pub(super) struct EngineRuntime {
     runtime: *mut c_void,
     reduced_motion_observer: *mut c_void,
     callbacks: Box<RuntimeCallbacks>,
+    service_callback: RefCell<Option<Box<ServiceCallback>>>,
 }
 
 impl EngineRuntime {
@@ -66,7 +69,28 @@ impl EngineRuntime {
             runtime,
             reduced_motion_observer,
             callbacks,
+            service_callback: RefCell::default(),
         })
+    }
+}
+
+impl EngineRuntime {
+    /// Calls `on_change(service, restarted)` on the main thread when an Engine
+    /// service stops (`false`) and once it is running again (`true`). It must
+    /// not update GPUI entities synchronously.
+    pub(in crate::platform) fn on_service_change(
+        &self,
+        on_change: impl Fn(EngineService, bool) + 'static,
+    ) {
+        let mut callback: Box<ServiceCallback> = Box::new(Box::new(on_change));
+        unsafe {
+            embedder::photon_runtime_set_service_callback(
+                self.runtime,
+                (&mut *callback as *mut ServiceCallback).cast(),
+                Some(on_engine_service),
+            );
+        }
+        self.service_callback.replace(Some(callback));
     }
 }
 
@@ -161,6 +185,7 @@ impl EngineSession {
                 Some(on_engine_favicon),
                 Some(on_engine_dialog),
                 Some(on_engine_navigation_committed),
+                Some(on_engine_crash_recovered),
                 true,
                 Some(on_engine_backing),
                 Some(on_engine_native_frame),

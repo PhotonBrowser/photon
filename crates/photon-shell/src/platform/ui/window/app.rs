@@ -10,7 +10,7 @@ use std::time::Duration;
 use super::super::super::engine::EngineRuntime;
 use super::super::super::motion_observer::ReducedMotionObserver;
 use super::super::theme::ThemePreference;
-use super::open_browser_window;
+use super::{BrowserWindow, open_browser_window};
 
 /// Keeps the system reduced-motion preference flowing into GPUI.
 struct ReducedMotion {
@@ -33,6 +33,7 @@ pub fn run() {
             EngineRuntime::create()
                 .unwrap_or_else(|error| panic!("could not start Photon Engine: {error:#}")),
         );
+        announce_service_restarts(&runtime, cx);
         quit_after_env_timeout(cx);
         cx.activate(true);
         open_browser_window(runtime, initial_address(), ThemePreference::default(), cx)
@@ -57,6 +58,25 @@ fn follow_reduced_motion(cx: &mut App) {
     });
     cx.set_global(ReducedMotion {
         _observer: observer,
+    });
+}
+
+/// Shows Engine service stops and restarts in every window.
+fn announce_service_restarts(runtime: &EngineRuntime, cx: &mut App) {
+    let app = cx.to_async();
+    runtime.on_service_change(move |_, restarted| {
+        app.spawn(async move |cx| {
+            cx.update(|cx| {
+                for window in cx.windows() {
+                    if let Some(window) = window.downcast::<BrowserWindow>() {
+                        window
+                            .update(cx, |this, _, cx| this.engine_service_changed(restarted, cx))
+                            .ok();
+                    }
+                }
+            })
+        })
+        .detach();
     });
 }
 

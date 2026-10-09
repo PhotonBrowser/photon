@@ -36,6 +36,11 @@ using PhotonDialogCallback = void (*)(void*, int, char const*, char const*,
     char const*);
 // Called when the page shown may open dialogs again after a navigation.
 using PhotonNavigationCommittedCallback = void (*)(void*);
+// Called when the page that replaced a crashed one presents its first frame.
+using PhotonCrashRecoveredCallback = void (*)(void*);
+// Called with the service (0 compositor, 1 network) and whether it has been
+// restarted (true) or has just stopped (false).
+using PhotonServiceCallback = void (*)(void*, int, bool);
 #if defined(__APPLE__)
 using PhotonReducedMotionChangedCallback = void (*)(void*, bool);
 // Called with whether the window is visible and whether its display or the
@@ -67,7 +72,8 @@ void* photon_view_create(void* runtime, int width, int height, double dpr,
     PhotonPerformanceCallback performance_callback,
     PhotonFaviconCallback favicon_callback,
     PhotonDialogCallback dialog_callback,
-    PhotonNavigationCommittedCallback navigation_committed_callback
+    PhotonNavigationCommittedCallback navigation_committed_callback,
+    PhotonCrashRecoveredCallback crash_recovered_callback
 #if defined(__APPLE__)
     ,
     bool native_metal_presentation,
@@ -99,6 +105,8 @@ void photon_view_close_dialog(void* view, int type, bool accepted,
     char const* text);
 void photon_runtime_set_system_reduced_motion_preference(void* runtime,
     bool reduce_motion);
+void photon_runtime_set_service_callback(void* runtime, void* callback_data,
+    PhotonServiceCallback callback);
 void photon_view_pointer(void* view, int kind, double x, double y, int button,
     uint8_t buttons, bool shift, bool control, bool alt,
     bool meta, double wheel_x, double wheel_y,

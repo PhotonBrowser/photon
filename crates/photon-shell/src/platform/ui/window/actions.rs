@@ -63,12 +63,12 @@ impl BrowserWindow {
             }))
     }
 
-    /// Escape closes the open menu, or else dismisses a crash alert.
+    /// Escape closes the open menu, or else dismisses a notice chip.
     fn escape(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         if event.keystroke.key != "escape" {
             return;
         }
-        if self.open_menu.take().is_none() && !self.dismiss_crash_alert(cx) {
+        if self.open_menu.take().is_none() && !self.dismiss_notice(cx) {
             return;
         }
         window.prevent_default();

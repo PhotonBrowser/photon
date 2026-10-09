@@ -2,7 +2,7 @@
 
 use gpui::Context;
 use mach2::port::mach_port_t;
-use photon_core::{BrowserState, DialogKind, DialogRequest, EngineEvent};
+use photon_core::{BrowserState, DialogKind, DialogRequest, EngineEvent, EngineService};
 use photon_performance::{EnginePerformanceStats, PerformanceMonitor};
 use std::{
     ffi::{CStr, c_char, c_void},
@@ -71,13 +71,12 @@ impl CallbackState {
         self.update_webview(move |view, cx| view.request_dialog(request, cx));
     }
 
-    pub(super) fn handle_engine_crash(&self, url: String) {
-        self.update_webview(move |view, cx| {
-            if let Err(error) = view.handle_engine_crash() {
-                eprintln!("Photon Engine: failed to reload crashed page {url}: {error:#}");
-            }
-            view.state_changed(cx);
-        });
+    pub(super) fn handle_engine_crash(&self) {
+        self.update_webview(|view, cx| view.handle_engine_crash(cx));
+    }
+
+    pub(super) fn crash_recovered(&self) {
+        self.update_webview(|view, cx| view.crash_recovered(cx));
     }
 
     pub(super) fn mark_input(&self) {
@@ -248,8 +247,37 @@ pub(super) unsafe extern "C" fn on_engine_crash(context: *mut c_void, url: *cons
         .unwrap_or_else(|| "unknown page".into());
     eprintln!("Photon Engine: WebContent process crashed while displaying {url}");
     if !context.is_null() {
-        unsafe { &*(context.cast::<CallbackState>()) }.handle_engine_crash(url);
+        unsafe { &*(context.cast::<CallbackState>()) }.handle_engine_crash();
     }
+}
+
+pub(super) unsafe extern "C" fn on_engine_crash_recovered(context: *mut c_void) {
+    if !context.is_null() {
+        unsafe { &*(context.cast::<CallbackState>()) }.crash_recovered();
+    }
+}
+
+/// Called on the main thread with an Engine service's stop or restart.
+pub(super) type ServiceCallback = Box<dyn Fn(EngineService, bool)>;
+
+pub(super) unsafe extern "C" fn on_engine_service(
+    context: *mut c_void,
+    service: i32,
+    restarted: bool,
+) {
+    if context.is_null() {
+        return;
+    }
+    let service = match service {
+        0 => EngineService::Compositor,
+        _ => EngineService::Network,
+    };
+    eprintln!(
+        "Photon Engine: {service:?} service {}",
+        if restarted { "restarted" } else { "stopped" }
+    );
+    let on_change = unsafe { &*context.cast::<ServiceCallback>() };
+    on_change(service, restarted);
 }
 
 pub(super) unsafe extern "C" fn on_engine_performance_stats(

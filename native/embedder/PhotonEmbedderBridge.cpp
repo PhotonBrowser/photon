@@ -70,7 +70,8 @@ extern "C" void* photon_view_create(void* runtime, int width, int height,
     PhotonPerformanceCallback performance_callback,
     PhotonFaviconCallback favicon_callback,
     PhotonDialogCallback dialog_callback,
-    PhotonNavigationCommittedCallback navigation_committed_callback
+    PhotonNavigationCommittedCallback navigation_committed_callback,
+    PhotonCrashRecoveredCallback crash_recovered_callback
 #if defined(__APPLE__)
     ,
     bool native_metal_presentation,
@@ -164,6 +165,10 @@ extern "C" void* photon_view_create(void* runtime, int width, int height,
     callbacks.crashed = [=](std::string const& url) {
         if (crash_callback)
             crash_callback(callback_data, url.c_str());
+    };
+    callbacks.crash_recovered = [=] {
+        if (crash_recovered_callback)
+            crash_recovered_callback(callback_data);
     };
 
     auto view = static_cast<RuntimeHandle*>(runtime)->runtime->create_view(
@@ -298,6 +303,17 @@ photon_runtime_set_system_reduced_motion_preference(void* runtime,
     if (runtime)
         static_cast<RuntimeHandle*>(runtime)
             ->runtime->set_system_reduced_motion_preference(reduce_motion);
+}
+
+extern "C" void photon_runtime_set_service_callback(void* runtime,
+    void* callback_data, PhotonServiceCallback callback)
+{
+    if (!runtime || !callback)
+        return;
+    static_cast<RuntimeHandle*>(runtime)->runtime->set_service_callback(
+        [=](Photon::EngineService service, bool restarted) {
+            callback(callback_data, static_cast<int>(service), restarted);
+        });
 }
 
 extern "C" void photon_view_pointer(void* view, int kind, double x, double y,

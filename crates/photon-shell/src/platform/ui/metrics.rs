@@ -45,17 +45,26 @@ pub(super) const MENU_ITEM_GAP: f32 = 2.0;
 pub(super) const MENU_SECTION_INSET: f32 = 6.0;
 pub(super) const MENU_SEPARATOR_HEIGHT: f32 = 1.0;
 
-pub(super) const CRASH_ALERT_MAX_WIDTH: f32 = 360.0;
-pub(super) const CRASH_ALERT_INSET: f32 = 16.0;
-pub(super) const CRASH_ALERT_PADDING: f32 = 12.0;
-pub(super) const CRASH_ALERT_GAP: f32 = 8.0;
-pub(super) const CRASH_ALERT_TITLE_SIZE: f32 = 14.0;
+/// Distance from the page's corner to a status chip.
+pub(super) const CHIP_INSET: f32 = 10.0;
+pub(super) const CHIP_HEIGHT: f32 = 26.0;
+pub(super) const CHIP_PADDING: f32 = 10.0;
+/// Right padding beside a chip's buttons, which bring their own.
+pub(super) const CHIP_TRAILING_PADDING: f32 = 3.0;
+pub(super) const CHIP_GAP: f32 = 6.0;
+pub(super) const CHIP_ICON_SIZE: f32 = 12.0;
+pub(super) const CHIP_FONT_SIZE: f32 = 12.0;
+pub(super) const CHIP_CLOSE_SIZE: f32 = 20.0;
+pub(super) const CHIP_CLOSE_ICON_SIZE: f32 = 10.0;
 
 pub(super) const BUTTON_HEIGHT: f32 = 30.0;
 pub(super) const BUTTON_MIN_WIDTH: f32 = 76.0;
 pub(super) const BUTTON_HORIZONTAL_PADDING: f32 = 16.0;
 pub(super) const BUTTON_FONT_SIZE: f32 = 13.0;
 pub(super) const BUTTON_GAP: f32 = 8.0;
+pub(super) const SMALL_BUTTON_HEIGHT: f32 = 20.0;
+pub(super) const SMALL_BUTTON_HORIZONTAL_PADDING: f32 = 9.0;
+pub(super) const SMALL_BUTTON_FONT_SIZE: f32 = 12.0;
 
 pub(super) const MODAL_WIDTH: f32 = 400.0;
 pub(super) const MODAL_PADDING: f32 = 18.0;

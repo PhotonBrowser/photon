@@ -11,7 +11,7 @@ use gpui_elements::editable_text::{
 };
 use photon_core::{DialogKind, DialogRequest};
 
-use super::button::button;
+use super::button::{ButtonSize, button};
 use super::layout::h_stack;
 use super::modal::{modal, modal_panel};
 use super::{PhotonWebView, metrics, theme::ThemeColors};
@@ -111,6 +111,7 @@ impl Render for JavaScriptDialog {
                 "javascript-dialog-cancel",
                 "Cancel",
                 false,
+                ButtonSize::Regular,
                 palette,
                 Box::new(cx.listener(|this, _, _, cx| {
                     cx.stop_propagation();
@@ -122,6 +123,7 @@ impl Render for JavaScriptDialog {
             "javascript-dialog-ok",
             "OK",
             true,
+            ButtonSize::Regular,
             palette,
             Box::new(cx.listener(|this, _, _, cx| {
                 cx.stop_propagation();

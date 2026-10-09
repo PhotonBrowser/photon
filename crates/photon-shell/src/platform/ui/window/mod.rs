@@ -31,6 +31,7 @@ use super::{
     metrics,
     theme::{ThemeColors, ThemePreference},
 };
+use alerts::{EngineNotice, NoticeExpiry};
 use menu::{OpenMenu, toolbar_menu_anchor};
 use tabs::ClosedTab;
 
@@ -56,6 +57,10 @@ struct BrowserWindow {
     spinner_running: bool,
     /// The active tab's open JavaScript dialog.
     dialog: Option<Entity<JavaScriptDialog>>,
+    /// The last Engine service stop or restart, shown in a chip.
+    engine_notice: Option<EngineNotice>,
+    /// Redraws when a recovery chip expires.
+    notice_expiry: NoticeExpiry,
     /// The icon each tab last revealed and when, so an icon animates in once
     /// rather than whenever the tab redraws it after a spinner.
     revealed_icons: RefCell<HashMap<EntityId, (RevealedIcon, Instant)>>,
@@ -188,12 +193,8 @@ impl BrowserWindow {
                 }
             }
             command => {
-                let dismiss_crash_alert = matches!(&command, BrowserCommand::Reload);
                 let webview = self.active_webview();
                 if let Err(error) = webview.update(cx, |view, cx| {
-                    if dismiss_crash_alert {
-                        view.crash_alert = false;
-                    }
                     let result = view.execute(command, cx);
                     cx.notify();
                     result
@@ -233,12 +234,20 @@ impl Render for BrowserWindow {
             )
             .child(
                 div()
+                    .relative()
                     .flex_1()
                     .w_full()
                     .p(px(metrics::PAGE_INSET))
-                    .child(self.active_webview()),
+                    .child(self.active_webview())
+                    // Crash and restart chips sit in the page's bottom-right corner.
+                    .children(self.notice_chip(palette, cx).map(|chip| {
+                        div()
+                            .absolute()
+                            .right(px(metrics::PAGE_INSET + metrics::CHIP_INSET))
+                            .bottom(px(metrics::PAGE_INSET + metrics::CHIP_INSET))
+                            .child(chip)
+                    })),
             )
-            .children(self.crash_alert(palette, cx))
             // A JavaScript dialog is modal to the whole window.
             .children(self.dialog.clone())
             .children(self.open_menu_overlay(palette, cx));
@@ -308,6 +317,8 @@ fn open_browser_window(
                 spinner_step: 0,
                 spinner_running: false,
                 dialog: None,
+                engine_notice: None,
+                notice_expiry: None,
                 revealed_icons: RefCell::default(),
                 window_visible: true,
                 _appearance_subscription: appearance_subscription,

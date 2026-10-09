@@ -13,7 +13,8 @@ use gpui::{
     px, surface,
 };
 use photon_core::{
-    BrowserCommand, BrowserState, DialogReply, DialogRequest, EngineEvent, PageDialogs,
+    BrowserCommand, BrowserState, CrashResponse, DialogReply, DialogRequest, EngineEvent,
+    PageCrashes, PageDialogs,
 };
 use photon_performance::{PerformanceDiagnostics, performance_overlay};
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -29,6 +30,17 @@ static MOUSE_MOVE_TRACE_COUNT: AtomicUsize = AtomicUsize::new(0);
 /// How long a load runs before its tab shows a spinner, so brief loads do
 /// not flash one over the page icon.
 const SPINNER_DELAY: Duration = Duration::from_millis(150);
+
+/// What a tab says about recovering from a crash.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(in crate::platform) enum CrashNotice {
+    /// The page crashed and is reloading in a fresh process.
+    Reloading,
+    /// The reloaded page showed at this time.
+    Reloaded(Instant),
+    /// The page crashed again soon after recovering, so it was not reloaded.
+    KeepsCrashing,
+}
 
 /// A page icon and a key identifying its pixels.
 #[derive(Clone)]
@@ -56,7 +68,9 @@ pub(in crate::platform) struct PhotonWebView {
     pub(in crate::platform) state: BrowserState,
     pub(in crate::platform) diagnostics: PerformanceDiagnostics,
     pub(in crate::platform) performance_overlay_enabled: bool,
-    pub(in crate::platform) crash_alert: bool,
+    /// What the tab's crash chip says, if anything.
+    pub(in crate::platform) crash_notice: Option<CrashNotice>,
+    crashes: PageCrashes,
     /// The page's icon, shown in its tab while the page is not loading.
     pub(in crate::platform) favicon: Option<Favicon>,
     /// When the current load started.
@@ -214,7 +228,8 @@ impl PhotonWebView {
             state: BrowserState::default(),
             diagnostics: PerformanceDiagnostics::default(),
             performance_overlay_enabled: false,
-            crash_alert: false,
+            crash_notice: None,
+            crashes: PageCrashes::default(),
             favicon: None,
             loading_since: None,
             dialogs: PageDialogs::default(),
@@ -255,11 +270,33 @@ impl PhotonWebView {
         self.session.set_diagnostics_enabled(enabled);
     }
 
-    pub(in crate::platform) fn handle_engine_crash(&mut self) -> anyhow::Result<()> {
-        self.crash_alert = true;
+    /// The page's process crashed: reloads it, unless it keeps crashing.
+    pub(in crate::platform) fn handle_engine_crash(&mut self, cx: &mut Context<Self>) {
         // The replaced page process no longer waits for its dialog.
         self.dialogs.reset();
-        self.session.execute(BrowserCommand::Reload)
+        let response = self.crashes.crashed(Instant::now());
+        trace(format_args!("page crashed: {response:?}"));
+        match response {
+            CrashResponse::Reload => {
+                self.crash_notice = Some(CrashNotice::Reloading);
+                if let Err(error) = self.session.execute(BrowserCommand::Reload) {
+                    trace(format_args!("reloading crashed page: {error:#}"));
+                }
+            }
+            CrashResponse::GiveUp => self.crash_notice = Some(CrashNotice::KeepsCrashing),
+        }
+        self.state_changed(cx);
+    }
+
+    /// The page that replaced a crashed one is showing.
+    pub(in crate::platform) fn crash_recovered(&mut self, cx: &mut Context<Self>) {
+        let now = Instant::now();
+        self.crashes.recovered(now);
+        trace(format_args!("crashed page recovered"));
+        if self.crash_notice == Some(CrashNotice::Reloading) {
+            self.crash_notice = Some(CrashNotice::Reloaded(now));
+            self.state_changed(cx);
+        }
     }
 
     /// Shows a page's dialog, or answers at once when it cannot be shown.
@@ -317,6 +354,15 @@ impl PhotonWebView {
             let reply = self.dialogs.navigation_started();
             self.send_dialog_reply(reply, cx);
         }
+        if self.crash_notice == Some(CrashNotice::KeepsCrashing) {
+            if command == BrowserCommand::Reload {
+                self.crashes.reload_requested();
+                self.crash_notice = Some(CrashNotice::Reloading);
+            } else {
+                self.crash_notice = None;
+            }
+            self.state_changed(cx);
+        }
         self.session.execute(command)
     }
 
@@ -342,7 +388,6 @@ impl PhotonWebView {
         let command = BrowserCommand::from_omnibox_input(input)
             .map_err(|error| anyhow::anyhow!("cannot open {input:?}: {error:?}"))?;
         self.execute(command, cx)?;
-        self.crash_alert = false;
         if self.is_blank_tab {
             self.is_blank_tab = false;
             self.state_changed(cx);

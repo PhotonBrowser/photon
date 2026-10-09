@@ -1,6 +1,6 @@
 //! Opening, closing and switching tabs, and the tab strip they show in.
 
-use gpui::{App, Context, EntityId, KeyDownEvent, Window, prelude::*};
+use gpui::{Context, EntityId, KeyDownEvent, Window, prelude::*};
 use std::time::{Duration, Instant};
 
 use super::super::icons::LOADING_SPINNER_STEPS;
@@ -162,17 +162,18 @@ impl BrowserWindow {
         }
     }
 
-    fn any_tab_loading(&self, cx: &App) -> bool {
-        self.tabs.iter().any(|tab| {
-            let view = tab.read(cx);
-            view.state.loading && view.has_page()
-        })
+    /// Whether a loading tab or a notice shows a spinner.
+    fn spinner_shown(&self, cx: &Context<Self>) -> bool {
+        self.notice_is_working(cx)
+            || self.tabs.iter().any(|tab| {
+                let view = tab.read(cx);
+                view.state.loading && view.has_page()
+            })
     }
 
-    /// Steps the loading spinners while any tab loads. With reduced motion
-    /// they stay still.
+    /// Steps the spinners while any is shown. With reduced motion they stay still.
     pub(super) fn animate_spinner(&mut self, cx: &mut Context<Self>) {
-        if self.spinner_running || cx.reduce_motion() || !self.any_tab_loading(cx) {
+        if self.spinner_running || cx.reduce_motion() || !self.spinner_shown(cx) {
             return;
         }
         self.spinner_running = true;
@@ -181,11 +182,14 @@ impl BrowserWindow {
                 cx.background_executor().timer(SPINNER_STEP_INTERVAL).await;
                 let keep_running = this
                     .update(cx, |this, cx| {
-                        let keep_running = !cx.reduce_motion() && this.any_tab_loading(cx);
+                        let keep_running = !cx.reduce_motion() && this.spinner_shown(cx);
                         if keep_running {
                             this.spinner_step = (this.spinner_step + 1) % LOADING_SPINNER_STEPS;
                             if this.window_visible {
                                 this.chrome.update(cx, |_, cx| cx.notify());
+                                if this.notice_is_working(cx) {
+                                    cx.notify();
+                                }
                             }
                         } else {
                             this.spinner_running = false;
