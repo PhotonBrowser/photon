@@ -329,7 +329,30 @@ impl PresentationRuntime {
         trace(format_args!(
             "backing={backing} gen={generation} surface={iosurface_id} cache=imported-once texture={width}x{height}"
         ));
-        self.backings.lock().unwrap().insert(
+        let mut backings = self.backings.lock().unwrap();
+        // Engine replaced its pool, so older generations never return. Frames
+        // already presented hold their own pixel buffer, and a late frame from
+        // an older generation is rejected as out of order or missing.
+        let mut released = 0;
+        backings.retain(|&(old_backing, old_generation), _| {
+            if old_generation >= generation {
+                return true;
+            }
+            if let Err(error) =
+                self.channel
+                    .unregister_backing(&self.channel_id, old_backing, old_generation)
+            {
+                eprintln!("Photon presentation could not release backing: {error:#}");
+            }
+            released += 1;
+            false
+        });
+        if released > 0 {
+            trace(format_args!(
+                "gen={generation} released {released} older backings"
+            ));
+        }
+        backings.insert(
             (backing, generation),
             Backing {
                 image,

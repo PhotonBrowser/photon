@@ -40,6 +40,12 @@ unsafe extern "C" {
         height: *mut u32,
         pixel_format: *mut u32,
     ) -> bool;
+    fn photon_presentation_xpc_unregister_backing(
+        connection: *mut c_void,
+        channel: *const c_char,
+        backing: u64,
+        generation: u64,
+    ) -> bool;
     fn photon_presentation_xpc_release_object(object: *mut c_void);
 }
 
@@ -112,6 +118,24 @@ impl Channel {
                 )
             },
             "broker rejected IOSurface registration"
+        );
+        Ok(())
+    }
+
+    /// Asks the broker to drop its send right for a backing, without waiting.
+    /// Its IOSurface is freed once no process holds it any longer.
+    pub fn unregister_backing(&self, channel: &str, backing: u64, generation: u64) -> Result<()> {
+        let channel = CString::new(channel).context("channel ID contains NUL")?;
+        ensure!(
+            unsafe {
+                photon_presentation_xpc_unregister_backing(
+                    self.0.as_ptr(),
+                    channel.as_ptr(),
+                    backing,
+                    generation,
+                )
+            },
+            "could not send IOSurface unregistration"
         );
         Ok(())
     }

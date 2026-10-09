@@ -567,8 +567,12 @@ bool photon_presentation_xpc_unregister_backing(void *opaque_connection, const c
     xpc_dictionary_set_string(request, "channel", channel.UTF8String);
     xpc_dictionary_set_uint64(request, "backing", backing_id);
     xpc_dictionary_set_uint64(request, "generation", generation);
-    xpc_object_t response = xpc_connection_send_message_with_reply_sync(pair->surface_connection, request);
-    return response && xpc_get_type(response) == XPC_TYPE_DICTIONARY && xpc_dictionary_get_bool(response, "accepted");
+    // The service always replies, so ask for one, but do not block on it: nothing
+    // depends on the outcome. Messages on the connection stay ordered behind
+    // earlier registrations.
+    xpc_connection_send_message_with_reply(pair->surface_connection, request,
+        dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^(xpc_object_t) {});
+    return true;
 }
 
 static bool photon_presentation_xpc_frame_operation(void *opaque_connection, const char *channel_name, const char *operation, uint64_t backing_id, uint64_t generation, uint64_t frame_id)
