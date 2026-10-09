@@ -68,6 +68,7 @@ pub(super) mod embedder {
         pub performance_callback:
             Option<unsafe extern "C" fn(*mut c_void, *const PerformanceStats)>,
         pub favicon_callback: Option<unsafe extern "C" fn(*mut c_void, *const u8, usize, i32, i32)>,
+        pub audio_state_callback: Option<unsafe extern "C" fn(*mut c_void, bool, bool)>,
         pub dialog_callback: Option<
             unsafe extern "C" fn(*mut c_void, i32, *const c_char, *const c_char, *const c_char),
         >,
@@ -205,6 +206,7 @@ pub(super) mod embedder {
         pub fn photon_view_stop_loading(view: *mut c_void);
         pub fn photon_view_go_back(view: *mut c_void);
         pub fn photon_view_go_forward(view: *mut c_void);
+        pub fn photon_view_toggle_audio_mute(view: *mut c_void) -> bool;
         pub fn photon_view_shutdown(view: *mut c_void);
         pub fn photon_view_destroy(view: *mut c_void);
     }

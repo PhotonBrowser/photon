@@ -65,6 +65,10 @@ impl CallbackState {
         self.update_webview(move |view, cx| view.set_favicon(favicon, cx));
     }
 
+    pub(super) fn set_audio_state(&self, playing: bool, muted: bool) {
+        self.update_webview(move |view, cx| view.set_audio_state(playing, muted, cx));
+    }
+
     pub(super) fn navigation_committed(&self) {
         self.update_webview(|view, _| view.dialogs.navigation_committed());
     }
@@ -385,6 +389,16 @@ pub(super) unsafe extern "C" fn on_engine_favicon(
         .then(|| unsafe { std::slice::from_raw_parts(pixels, length) })
         .and_then(|pixels| Favicon::from_bgra(pixels, width as u32, height as u32));
     unsafe { &*(context.cast::<CallbackState>()) }.set_page_favicon(favicon);
+}
+
+pub(super) unsafe extern "C" fn on_engine_audio_state(
+    context: *mut c_void,
+    playing: bool,
+    muted: bool,
+) {
+    if !context.is_null() {
+        unsafe { &*(context.cast::<CallbackState>()) }.set_audio_state(playing, muted);
+    }
 }
 
 pub(super) unsafe extern "C" fn on_engine_navigation_committed(context: *mut c_void) {

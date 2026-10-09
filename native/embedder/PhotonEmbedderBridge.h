@@ -30,6 +30,7 @@ using PhotonPerformanceCallback = void (*)(void*, PhotonPerformanceStats const*)
 // with null pixels when the page has no icon.
 using PhotonFaviconCallback = void (*)(void*, std::uint8_t const*, size_t, int,
     int);
+using PhotonAudioStateCallback = void (*)(void*, bool, bool);
 // Called with the dialog type (0 alert, 1 confirm, 2 prompt), its title,
 // message and the prompt's default text. Answer with photon_view_close_dialog.
 using PhotonDialogCallback = void (*)(void*, int, char const*, char const*,
@@ -80,6 +81,7 @@ struct PhotonViewCallbacks {
     PhotonCrashCallback crash_callback;
     PhotonPerformanceCallback performance_callback;
     PhotonFaviconCallback favicon_callback;
+    PhotonAudioStateCallback audio_state_callback;
     PhotonDialogCallback dialog_callback;
     PhotonNavigationCommittedCallback navigation_committed_callback;
     PhotonCrashRecoveredCallback crash_recovered_callback;
@@ -121,6 +123,7 @@ void photon_view_reload(void* view);
 void photon_view_stop_loading(void* view);
 void photon_view_go_back(void* view);
 void photon_view_go_forward(void* view);
+bool photon_view_toggle_audio_mute(void* view);
 void photon_view_set_focus(void* view, bool focused);
 void photon_view_notify_state(void* view);
 void photon_view_copy_window_handle(void* view, char* handle, size_t capacity);

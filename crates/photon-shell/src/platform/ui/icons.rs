@@ -56,6 +56,19 @@ pub(super) fn close_icon(color: u32, size: f32) -> impl IntoElement {
         .text_color(rgb(color))
 }
 
+pub(super) fn audio_icon(color: u32, size: f32, muted: bool) -> impl IntoElement {
+    let data: &[u8] = if muted {
+        br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="m16 9 5 6m0-6-5 6"/></g></svg>"##
+    } else {
+        br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7m3-10a9 9 0 0 1 0 13"/></g></svg>"##
+    };
+    svg()
+        .data(data)
+        .size(px(size))
+        .flex_shrink_0()
+        .text_color(rgb(color))
+}
+
 pub(super) fn add_icon(color: u32, size: f32) -> impl IntoElement {
     svg()
         .data(

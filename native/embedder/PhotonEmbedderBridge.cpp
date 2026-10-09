@@ -37,6 +37,7 @@ Photon::ViewCallbacks make_view_callbacks(
     auto crash_callback = callbacks.crash_callback;
     auto performance_callback = callbacks.performance_callback;
     auto favicon_callback = callbacks.favicon_callback;
+    auto audio_state_callback = callbacks.audio_state_callback;
     auto dialog_callback = callbacks.dialog_callback;
     auto navigation_committed_callback = callbacks.navigation_committed_callback;
     auto crash_recovered_callback = callbacks.crash_recovered_callback;
@@ -107,6 +108,10 @@ Photon::ViewCallbacks make_view_callbacks(
         }
         favicon_callback(callback_data, favicon->pixels.data(),
             favicon->pixels.size(), favicon->width, favicon->height);
+    };
+    result.audio_state_changed = [=](bool playing, bool muted) {
+        if (audio_state_callback)
+            audio_state_callback(callback_data, playing, muted);
     };
     result.dialog_requested = [=](Photon::DialogRequest const& request) {
         if (dialog_callback)
@@ -305,6 +310,11 @@ extern "C" void photon_view_go_forward(void* view)
 {
     if (view)
         static_cast<ViewHandle*>(view)->view->go_forward();
+}
+
+extern "C" bool photon_view_toggle_audio_mute(void* view)
+{
+    return view && static_cast<ViewHandle*>(view)->view->toggle_audio_mute();
 }
 
 extern "C" void photon_view_set_focus(void* view, bool focused)

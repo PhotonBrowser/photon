@@ -253,6 +253,11 @@ impl BrowserWindow {
                 let is_blank = !view.has_page();
                 let icon = if is_blank {
                     TabIcon::NewTab
+                } else if view.audio_playing {
+                    TabIcon::Audio {
+                        favicon: view.favicon.clone(),
+                        muted: view.audio_muted,
+                    }
                 } else if view.shows_spinner() {
                     TabIcon::Loading(self.spinner_step)
                 } else if let Some(favicon) = view.favicon.clone() {
@@ -286,6 +291,12 @@ impl BrowserWindow {
                     on_close: Box::new(cx.listener(move |this, _, window, cx| {
                         cx.stop_propagation();
                         this.close_tab(index, window, cx);
+                    })),
+                    on_toggle_audio: Box::new(cx.listener(move |this, _, _, cx| {
+                        cx.stop_propagation();
+                        if let Some(webview) = this.tabs.get(index) {
+                            webview.update(cx, |view, cx| view.toggle_audio_mute(cx));
+                        }
                     })),
                 }
             })

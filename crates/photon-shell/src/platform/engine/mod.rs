@@ -247,6 +247,7 @@ impl EngineSession {
             crash_callback: Some(on_engine_crash),
             performance_callback: Some(on_engine_performance_stats),
             favicon_callback: Some(on_engine_favicon),
+            audio_state_callback: Some(on_engine_audio_state),
             dialog_callback: Some(on_engine_dialog),
             navigation_committed_callback: Some(on_engine_navigation_committed),
             crash_recovered_callback: Some(on_engine_crash_recovered),
@@ -391,6 +392,10 @@ impl EngineSession {
 
     pub(super) fn set_visible(&mut self, visible: bool) {
         unsafe { embedder::photon_view_set_visible(self.view, visible) }
+    }
+
+    pub(super) fn toggle_audio_mute(&mut self) -> bool {
+        unsafe { embedder::photon_view_toggle_audio_mute(self.view) }
     }
 
     /// Re-reads the display's refresh rate the next time the view is laid out.

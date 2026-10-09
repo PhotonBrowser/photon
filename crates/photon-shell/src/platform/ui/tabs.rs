@@ -7,7 +7,7 @@ use gpui::{
 use std::sync::{Arc, LazyLock};
 
 use super::Favicon;
-use super::icons::{add_icon, close_icon, globe_icon, loading_spinner};
+use super::icons::{add_icon, audio_icon, close_icon, globe_icon, loading_spinner};
 use super::layout::h_stack;
 use super::motion::{AnimateIn, Entrance};
 use super::{metrics, theme::ThemeColors};
@@ -19,6 +19,11 @@ pub(super) enum TabIcon {
     /// The page is loading; the value is the spinner's animation step.
     Loading(usize),
     Favicon(Favicon),
+    /// A page is playing audio; clicking this icon toggles its mute state.
+    Audio {
+        favicon: Option<Favicon>,
+        muted: bool,
+    },
     /// A page without an icon of its own.
     Page,
     /// A new tab, which shows the Photon logo.
@@ -40,7 +45,11 @@ impl TabIcon {
         match self {
             Self::NewTab => Some(RevealedIcon::NewTab),
             Self::Favicon(favicon) => Some(RevealedIcon::Favicon(favicon.key)),
-            Self::Loading(_) | Self::Page => None,
+            Self::Audio {
+                favicon: Some(favicon),
+                ..
+            } => Some(RevealedIcon::Favicon(favicon.key)),
+            Self::Loading(_) | Self::Page | Self::Audio { favicon: None, .. } => None,
         }
     }
 }
@@ -85,6 +94,7 @@ pub(super) struct TabItem {
     pub on_select: ClickHandler,
     pub on_key_down: Box<dyn Fn(&KeyDownEvent, &mut Window, &mut App)>,
     pub on_close: ClickHandler,
+    pub on_toggle_audio: ClickHandler,
 }
 
 pub(super) fn tab_strip(
@@ -103,14 +113,11 @@ pub(super) fn tab_strip(
         .min_w(px(0.0))
         .overflow_x_scroll();
 
+    let mut focus_index = 0;
     for (index, tab) in tabs.into_iter().enumerate() {
-        tab_list = tab_list.child(browser_tab(
-            tab,
-            index + 1,
-            tab_count,
-            (index * 2) as isize,
-            palette,
-        ));
+        let audio_control = matches!(&tab.icon, TabIcon::Audio { .. });
+        tab_list = tab_list.child(browser_tab(tab, index + 1, tab_count, focus_index, palette));
+        focus_index += if audio_control { 3 } else { 2 };
     }
 
     h_stack()
@@ -121,11 +128,7 @@ pub(super) fn tab_strip(
         .px(px(metrics::TAB_STRIP_INSET))
         .tab_group()
         .child(tab_list)
-        .child(new_tab_button(
-            on_new_tab,
-            (tab_count * 2) as isize,
-            palette,
-        ))
+        .child(new_tab_button(on_new_tab, focus_index, palette))
 }
 
 fn browser_tab(
@@ -138,6 +141,7 @@ fn browser_tab(
     let close_label = format!("Close {}", tab.label);
     let close_id = format!("{}-close", tab.id);
     let tab_id = tab.id.clone();
+    let audio_control = matches!(&tab.icon, TabIcon::Audio { .. });
     let focus_handle = tab.focus_handle.tab_index(focus_index).tab_stop(tab.active);
     let mut control = h_stack()
         .id(tab.id)
@@ -188,6 +192,16 @@ fn browser_tab(
             tab.icon_appearing,
             icon_size,
         ),
+        TabIcon::Audio { favicon, muted } => audio_control_button(
+            format!("{tab_id}-audio"),
+            tab.label.clone(),
+            favicon,
+            muted,
+            tab.on_toggle_audio,
+            focus_index + 1,
+            icon_color,
+            palette,
+        ),
         TabIcon::NewTab => sized_icon(
             img(NEW_TAB_LOGO.clone()).object_fit(ObjectFit::Contain),
             icon_id,
@@ -203,9 +217,65 @@ fn browser_tab(
             close_id,
             close_label,
             tab.on_close,
-            focus_index + 1,
+            focus_index + 1 + if audio_control { 1 } else { 0 },
             palette,
         ))
+}
+
+fn audio_control_button(
+    id: String,
+    tab_label: String,
+    favicon: Option<Favicon>,
+    muted: bool,
+    on_click: ClickHandler,
+    focus_index: isize,
+    icon_color: u32,
+    palette: ThemeColors,
+) -> AnyElement {
+    let label = if muted {
+        format!("Unmute {tab_label}")
+    } else {
+        format!("Mute {tab_label}")
+    };
+    let favicon = favicon
+        .map(|favicon| {
+            img(ImageSource::Render(favicon.image))
+                .object_fit(ObjectFit::Contain)
+                .into_any_element()
+        })
+        .unwrap_or_else(|| globe_icon(icon_color, metrics::TAB_FAVICON_SIZE).into_any_element());
+
+    div()
+        .id(id)
+        .role(Role::Button)
+        .aria_label(label)
+        .tab_index(focus_index)
+        .focus_visible(|style| style.border_1().border_color(rgb(palette.accent)))
+        .flex_shrink_0()
+        .relative()
+        .items_center()
+        .justify_center()
+        .size(px(metrics::TAB_AUDIO_BUTTON_SIZE))
+        .rounded(px(metrics::CONTROL_RADIUS))
+        .text_color(rgb(icon_color))
+        .hover(|style| style.bg(rgba(palette.control_hover_surface)))
+        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .on_click(on_click)
+        .child(favicon)
+        .child(
+            div()
+                .absolute()
+                .right(px(0.0))
+                .bottom(px(0.0))
+                .flex()
+                .items_center()
+                .justify_center()
+                .size(px(metrics::TAB_AUDIO_BADGE_SIZE))
+                .rounded(px(metrics::TAB_AUDIO_BADGE_SIZE / 2.0))
+                .bg(rgb(palette.page_background))
+                .child(audio_icon(icon_color, metrics::TAB_AUDIO_ICON_SIZE, muted)),
+        )
+        .into_any_element()
 }
 
 fn close_tab_button(

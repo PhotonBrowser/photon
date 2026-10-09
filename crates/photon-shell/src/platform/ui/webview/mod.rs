@@ -47,6 +47,9 @@ pub(in crate::platform) struct PhotonWebView {
     pub(in crate::platform) find_result: Option<FindResult>,
     /// The page's icon, shown in its tab while the page is not loading.
     pub(in crate::platform) favicon: Option<Favicon>,
+    /// Whether the page is playing audio and whether its tab is muted.
+    pub(in crate::platform) audio_playing: bool,
+    pub(in crate::platform) audio_muted: bool,
     /// When the current load started.
     loading_since: Option<Instant>,
     /// The page's JavaScript dialog, which the window shows over the page.
@@ -111,6 +114,25 @@ impl PhotonWebView {
             self.loading_since = state.loading.then(Instant::now);
         }
         self.state.apply(EngineEvent::ViewStateChanged(state));
+        self.state_changed(cx);
+    }
+
+    pub(in crate::platform) fn set_audio_state(
+        &mut self,
+        playing: bool,
+        muted: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if self.audio_playing == playing && self.audio_muted == muted {
+            return;
+        }
+        self.audio_playing = playing;
+        self.audio_muted = muted;
+        self.state_changed(cx);
+    }
+
+    pub(super) fn toggle_audio_mute(&mut self, cx: &mut Context<Self>) {
+        self.audio_muted = self.session.toggle_audio_mute();
         self.state_changed(cx);
     }
 
@@ -190,6 +212,8 @@ impl PhotonWebView {
             crashes: PageCrashes::default(),
             find_result: None,
             favicon: None,
+            audio_playing: false,
+            audio_muted: false,
             loading_since: None,
             dialogs: PageDialogs::default(),
             theme,
