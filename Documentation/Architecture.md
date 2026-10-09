@@ -67,13 +67,20 @@ crates/
 │           │   ├── app.rs            # App startup and the first window
 │           │   ├── tabs.rs           # Tab lifecycle and the tab strip
 │           │   ├── menu.rs           # Browser menu and theme choice
+│           │   ├── find.rs           # Opening and closing the find bar
 │           │   ├── actions.rs        # Keyboard shortcuts
 │           │   └── alerts.rs         # Crash and restart notices, JavaScript dialogs
-│           ├── webview.rs            # Page surface composition
+│           ├── webview/              # Page surface composition and tab state
+│           │   ├── favicon.rs        # The page icon
+│           │   ├── crashes.rs        # Crash recovery notices
+│           │   ├── dialogs.rs        # JavaScript dialog requests and replies
+│           │   └── find.rs           # Find-in-page state
 │           ├── js_dialog.rs          # JavaScript alert, confirm and prompt
 │           ├── modal.rs              # Reusable centered modal
+│           ├── motion.rs             # Entrance animations and presets
 │           ├── button.rs             # Shared text buttons
 │           ├── status_chip.rs        # Bottom-right crash and restart chips
+│           ├── find_bar.rs           # Find-in-page bar
 │           ├── input.rs              # Keyboard, pointer, and scroll forwarding
 │           ├── theme.rs              # Appearance and semantic color tokens
 │           └── metrics.rs            # Shared UI dimensions and typography
@@ -116,7 +123,7 @@ owned by the shell; the presentation XPC implementation lives inside
 | Window layout or app startup | [`ui/window/`](../crates/photon-shell/src/platform/ui/window/mod.rs) |
 | Dialogs, modals, and buttons | [`ui/js_dialog.rs`](../crates/photon-shell/src/platform/ui/js_dialog.rs), [`ui/modal.rs`](../crates/photon-shell/src/platform/ui/modal.rs), [`ui/button.rs`](../crates/photon-shell/src/platform/ui/button.rs), and [`photon-core/src/dialogs.rs`](../crates/photon-core/src/dialogs.rs) |
 | Crash recovery and its notices | [`photon-core/src/crashes.rs`](../crates/photon-core/src/crashes.rs), [`ui/window/alerts.rs`](../crates/photon-shell/src/platform/ui/window/alerts.rs), and [`ui/status_chip.rs`](../crates/photon-shell/src/platform/ui/status_chip.rs) |
-| Page surface composition | [`ui/webview.rs`](../crates/photon-shell/src/platform/ui/webview.rs) |
+| Page surface composition | [`ui/webview/`](../crates/photon-shell/src/platform/ui/webview/mod.rs) |
 | Keyboard, pointer, or scroll forwarding | [`ui/input.rs`](../crates/photon-shell/src/platform/ui/input.rs) |
 | Engine session or callback behavior | [`platform/engine/`](../crates/photon-shell/src/platform/engine/mod.rs) |
 | Frame acceptance, presentation order, or release lifetime | [`platform/presentation.rs`](../crates/photon-shell/src/platform/presentation.rs) |

@@ -30,12 +30,14 @@ What the Photon shell does today and what comes next. Engine performance work is
 - [x] Browser menu: new tab, new window, debug overlay, and a system, light or dark theme
 - [x] Titlebar right-click menu
 - [x] Performance diagnostics overlay
+- [x] Find in page: a floating bar in the page's corner with match count and highlights (⌘F, ⌘G, ⌘⇧G)
 
 ### Keyboard shortcuts
 
 - [x] ⌘T, ⌘N, ⌘W, ⌘⇧T
 - [x] ⌃Tab / ⌃⇧Tab, ⌘⇧] / ⌘⇧[, ⌘1–⌘8, ⌘9
 - [x] ⌘R, ⌘., ⌘[, ⌘], ⌘L
+- [x] ⌘F, ⌘G, ⌘⇧G
 
 ### Accessibility and motion
 
@@ -46,7 +48,6 @@ What the Photon shell does today and what comes next. Engine performance work is
 
 In order of priority.
 
-- [ ] Find in page (⌘F)
 - [ ] Tab strip interactions: middle-click to close, right-click menu (close others, duplicate), drag to reorder
 - [ ] Omnibox suggestions: "Search for" and "Go to" rows while typing
 - [ ] Page right-click menus
