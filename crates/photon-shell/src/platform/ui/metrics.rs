@@ -26,6 +26,8 @@ pub(super) const TAB_FONT_SIZE: f32 = 12.0;
 pub(super) const CONTROL_RADIUS: f32 = 7.0;
 
 pub(super) const TOOLBAR_HEIGHT: f32 = 30.0;
+/// Titlebar and address toolbar, laid out as one cached view.
+pub(super) const CHROME_HEIGHT: f32 = TITLEBAR_HEIGHT + TOOLBAR_HEIGHT;
 pub(super) const TOOLBAR_HORIZONTAL_INSET: f32 = 12.0;
 pub(super) const TOOLBAR_CONTROL_GAP: f32 = 8.0;
 pub(super) const TOOLBAR_BUTTON_SIZE: f32 = 28.0;

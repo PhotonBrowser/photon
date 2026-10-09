@@ -80,7 +80,7 @@ impl CallbackState {
         self.update_webview(move |view, cx| {
             if view.state != state {
                 view.state.apply(EngineEvent::ViewStateChanged(state));
-                cx.notify();
+                view.state_changed(cx);
             }
         });
     }
@@ -88,7 +88,7 @@ impl CallbackState {
     fn set_page_error(&self, message: String) {
         self.update_webview(move |view, cx| {
             view.state.apply(EngineEvent::LoadFailed(message));
-            cx.notify();
+            view.state_changed(cx);
         });
     }
 
@@ -97,7 +97,7 @@ impl CallbackState {
             if let Err(error) = view.handle_engine_crash() {
                 eprintln!("Photon Engine: failed to reload crashed page {url}: {error:#}");
             }
-            cx.notify();
+            view.state_changed(cx);
         });
     }
 
@@ -192,7 +192,7 @@ impl CallbackState {
         });
     }
 
-    /// Runs `update` on the UI thread against the live WebView, then refreshes the window.
+    /// Runs `update` on the UI thread against the live WebView.
     fn update_webview(
         &self,
         update: impl FnOnce(&mut PhotonWebView, &mut Context<PhotonWebView>) + 'static,
@@ -205,8 +205,9 @@ impl CallbackState {
                 let Some(webview) = wake.webview.upgrade() else {
                     return;
                 };
+                // Notifying the view is enough to schedule a frame; a window
+                // refresh would bypass every cached view.
                 webview.update(cx, update);
-                cx.refresh();
             })
             .detach();
     }

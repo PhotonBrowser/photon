@@ -1,9 +1,9 @@
 //! Address and search input in the native browser toolbar.
 
 use super::super::trace;
-use super::PhotonWebView;
 use super::icons::search_icon_sized;
 use super::layout::h_stack;
+use super::{PhotonWebView, WebViewEvent};
 use super::{metrics, theme::ThemeColors};
 use gpui::{
     Context, Entity, Focusable, MouseButton, Render, Subscription, Window, prelude::*, px, rgb,
@@ -39,7 +39,7 @@ impl Omnibox {
         let input_focus = input.focus_handle(cx);
         let subscriptions = vec![
             // Follow the page address, except while someone is editing it.
-            cx.observe_in(&webview, window, move |this, _, window, cx| {
+            cx.subscribe_in(&webview, window, |this, _, _: &WebViewEvent, window, cx| {
                 if !this.is_editing(window, cx) {
                     this.show_page_url(cx);
                 }
@@ -71,11 +71,15 @@ impl Omnibox {
         self.webview = webview;
         let input_focus = self.input.focus_handle(cx);
         self._subscriptions = vec![
-            cx.observe_in(&self.webview, window, |this, _, window, cx| {
-                if !this.is_editing(window, cx) {
-                    this.show_page_url(cx);
-                }
-            }),
+            cx.subscribe_in(
+                &self.webview,
+                window,
+                |this, _, _: &WebViewEvent, window, cx| {
+                    if !this.is_editing(window, cx) {
+                        this.show_page_url(cx);
+                    }
+                },
+            ),
             cx.on_blur(&input_focus, window, |this, _, cx| this.show_page_url(cx)),
             cx.observe_window_appearance(window, |_, _, cx| cx.notify()),
         ];

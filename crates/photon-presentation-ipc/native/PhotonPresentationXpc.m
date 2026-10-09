@@ -571,7 +571,7 @@ bool photon_presentation_xpc_unregister_backing(void *opaque_connection, const c
     // depends on the outcome. Messages on the connection stay ordered behind
     // earlier registrations.
     xpc_connection_send_message_with_reply(pair->surface_connection, request,
-        dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^(xpc_object_t) {});
+        dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^(xpc_object_t reply) { (void)reply; });
     return true;
 }
 

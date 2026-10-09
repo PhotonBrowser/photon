@@ -9,8 +9,8 @@ use super::{
     theme::{ThemeColors, ThemePreference},
 };
 use gpui::{
-    Context, FocusHandle, InteractiveElement, KeyDownEvent, KeyUpEvent, ObjectFit, Render,
-    Subscription, SurfaceSource, Window, div, prelude::*, px, surface,
+    Context, EventEmitter, FocusHandle, InteractiveElement, KeyDownEvent, KeyUpEvent, ObjectFit,
+    Render, Subscription, SurfaceSource, Window, div, prelude::*, px, surface,
 };
 use photon_core::{BrowserDiagnostics, BrowserState};
 use std::rc::Rc;
@@ -37,6 +37,14 @@ pub(in crate::platform) struct PhotonWebView {
     focus_subscriptions: Vec<Subscription>,
 }
 
+/// Page changes the browser chrome shows. Engine frames do not emit it, so
+/// the cached chrome is not rebuilt for every page frame.
+pub(in crate::platform) enum WebViewEvent {
+    StateChanged,
+}
+
+impl EventEmitter<WebViewEvent> for PhotonWebView {}
+
 impl Drop for PhotonWebView {
     fn drop(&mut self) {
         self.prepare_shutdown();
@@ -58,6 +66,12 @@ impl PhotonWebView {
             retired.extend(pending);
         }
         self.external = Some(presented);
+        cx.notify();
+    }
+
+    /// Re-renders the view and tells the chrome its page state changed.
+    pub(in crate::platform) fn state_changed(&self, cx: &mut Context<Self>) {
+        cx.emit(WebViewEvent::StateChanged);
         cx.notify();
     }
 
@@ -173,7 +187,7 @@ impl PhotonWebView {
         self.crash_alert = false;
         if self.is_blank_tab {
             self.is_blank_tab = false;
-            cx.notify();
+            self.state_changed(cx);
         }
         Ok(())
     }

@@ -1,9 +1,9 @@
 //! GPUI window bootstrap and top-level browser layout.
 
 use gpui::{
-    Anchor, App, ClickEvent, Context, Entity, FocusHandle, KeyBinding, KeyDownEvent, MouseButton,
-    MouseDownEvent, Point, QuitMode, Render, Subscription, Window, WindowAppearance, anchored, div,
-    point, prelude::*, px,
+    Anchor, AnyElement, App, ClickEvent, Context, Entity, FocusHandle, KeyBinding, KeyDownEvent,
+    MouseButton, MouseDownEvent, Point, QuitMode, Render, StyleRefinement, Subscription,
+    WeakEntity, Window, WindowAppearance, anchored, div, point, prelude::*, px,
 };
 use gpui_elements::editable_text::actions::{DEFAULT_INPUT_CONTEXT, default_bindings};
 use gpui_platform::application;
@@ -16,7 +16,6 @@ use super::super::engine::{EngineRuntime, UiWake};
 use super::super::trace;
 use super::super::window_observer::WindowObserver;
 use super::super::window_settings;
-use super::PhotonWebView;
 use super::crash_alert::crash_alert;
 use super::layout::v_stack;
 use super::menu::{
@@ -26,6 +25,7 @@ use super::omnibox::{FocusOmnibox, Omnibox};
 use super::tabs::{TabItem, tab_strip};
 use super::titlebar::titlebar;
 use super::toolbar::{ClickHandler, address_toolbar as build_address_toolbar};
+use super::{PhotonWebView, WebViewEvent};
 use super::{
     metrics,
     theme::{ThemeColors, ThemePreference},
@@ -33,6 +33,10 @@ use super::{
 
 struct BrowserWindow {
     tabs: Vec<Entity<PhotonWebView>>,
+    /// One per tab, in `tabs` order: re-renders the chrome on page state changes.
+    tab_subscriptions: Vec<Subscription>,
+    /// Titlebar and toolbar, cached so Engine frames repaint only the page.
+    chrome: Entity<BrowserChrome>,
     tab_focus_handles: Vec<FocusHandle>,
     active_tab: usize,
     omnibox: Entity<Omnibox>,
@@ -43,7 +47,23 @@ struct BrowserWindow {
     /// tab only while it is, since GPUI-CE stops drawing an occluded window.
     window_visible: bool,
     _appearance_subscription: Subscription,
+    _chrome_subscription: Subscription,
     _window_observer: Option<WindowObserver>,
+}
+
+/// The titlebar and address toolbar. A cached view re-renders only when it is
+/// notified, so `BrowserWindow` notifies it whenever the window or a tab's page
+/// state changes; Engine frames, which notify only the page view, leave it be.
+struct BrowserChrome {
+    browser: WeakEntity<BrowserWindow>,
+}
+
+impl Render for BrowserChrome {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.browser
+            .update(cx, |browser, cx| browser.render_chrome(window, cx))
+            .unwrap_or_else(|_| div().into_any_element())
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -55,6 +75,20 @@ enum OpenMenu {
 impl BrowserWindow {
     fn active_webview(&self) -> Entity<PhotonWebView> {
         self.tabs[self.active_tab].clone()
+    }
+
+    fn subscribe_to_tab(webview: &Entity<PhotonWebView>, cx: &mut Context<Self>) -> Subscription {
+        cx.subscribe(webview, |this, _, _: &WebViewEvent, cx| {
+            this.chrome.update(cx, |_, cx| cx.notify());
+        })
+    }
+
+    fn render_chrome(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+        v_stack()
+            .w_full()
+            .child(titlebar(self.tab_strip(window, cx)))
+            .child(self.address_toolbar(window, cx))
+            .into_any_element()
     }
 
     fn window_changed(&mut self, visible: bool, display_changed: bool, cx: &mut Context<Self>) {
@@ -133,6 +167,8 @@ impl BrowserWindow {
     fn open_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let webview = create_webview(cx, self.runtime.clone(), self.theme.clone(), None, true);
         let index = self.tabs.len();
+        self.tab_subscriptions
+            .push(Self::subscribe_to_tab(&webview, cx));
         self.tabs.push(webview);
         self.tab_focus_handles
             .push(cx.focus_handle().tab_stop(false));
@@ -157,6 +193,7 @@ impl BrowserWindow {
 
         let was_active = index == self.active_tab;
         self.tabs.remove(index);
+        drop(self.tab_subscriptions.remove(index));
         self.tab_focus_handles.remove(index);
         if index < self.active_tab {
             self.active_tab -= 1;
@@ -446,8 +483,13 @@ impl Render for BrowserWindow {
                 this.open_menu = None;
                 this.close_tab(this.active_tab, window, cx);
             }))
-            .child(titlebar(self.tab_strip(window, cx)))
-            .child(self.address_toolbar(window, cx))
+            .child(
+                self.chrome.clone().cached(
+                    StyleRefinement::default()
+                        .w_full()
+                        .h(px(metrics::CHROME_HEIGHT)),
+                ),
+            )
             .child(
                 div()
                     .flex_1()
@@ -593,6 +635,12 @@ fn open_browser_window(
         cx.new(move |cx| {
             let appearance_subscription =
                 cx.observe_window_appearance(window, |_, _, cx| cx.notify());
+            let browser = cx.entity().downgrade();
+            let chrome = cx.new(|_| BrowserChrome { browser });
+            // Whatever re-renders the window's own state re-renders the chrome too.
+            let chrome_subscription =
+                cx.observe_self(|this, cx| this.chrome.update(cx, |_, cx| cx.notify()));
+            let tab_subscriptions = vec![BrowserWindow::subscribe_to_tab(&webview, cx)];
             let this = cx.entity().downgrade();
             let app = cx.to_async();
             let window_observer = WindowObserver::new(window, move |visible, display_changed| {
@@ -607,6 +655,8 @@ fn open_browser_window(
             });
             BrowserWindow {
                 tabs: vec![webview],
+                tab_subscriptions,
+                chrome,
                 tab_focus_handles: vec![cx.focus_handle().tab_stop(true)],
                 active_tab: 0,
                 omnibox,
@@ -615,6 +665,7 @@ fn open_browser_window(
                 open_menu: None,
                 window_visible: true,
                 _appearance_subscription: appearance_subscription,
+                _chrome_subscription: chrome_subscription,
                 _window_observer: window_observer,
             }
         })
