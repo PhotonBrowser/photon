@@ -36,5 +36,11 @@ gpui::actions!(
         GoForward,
         /// Move keyboard focus to the omnibox and select its contents.
         FocusOmnibox,
+        /// Open the find bar, or focus it when it is open.
+        FindInPage,
+        /// Go to the next find-in-page match.
+        FindNext,
+        /// Go to the previous find-in-page match.
+        FindPrevious,
     ]
 );

@@ -29,5 +29,8 @@ pub fn browser_shortcuts() -> Vec<KeyBinding> {
         KeyBinding::new("secondary-[", GoBack, None),
         KeyBinding::new("secondary-]", GoForward, None),
         KeyBinding::new("secondary-l", FocusOmnibox, None),
+        KeyBinding::new("secondary-f", FindInPage, None),
+        KeyBinding::new("secondary-g", FindNext, None),
+        KeyBinding::new("secondary-shift-g", FindPrevious, None),
     ]
 }
