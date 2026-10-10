@@ -25,8 +25,9 @@ file.
 ## Settings
 
 `BrowserSettings` in [`photon-core`](../crates/photon-core/src/settings.rs)
-holds the theme, transparency, search engine, pop-up policy and the new tab
-page's layout. Fields have serde defaults, so a profile saved by an older
+holds the theme, transparency, search engine, pop-up policy, the new tab
+page's layout, the sidebar's favourites and spaces, and whether closing the
+last tab closes the window. Fields have serde defaults, so a profile saved by an older
 build still loads.
 
 In the shell, [`ui/settings.rs`](../crates/photon-shell/src/platform/ui/settings.rs)

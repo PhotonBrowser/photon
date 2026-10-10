@@ -78,6 +78,7 @@ has a sidebar of sections, one shown at a time, each in its own module:
 | Appearance | Theme (system, light, dark) and transparency (off, subtle, clear) |
 | Search | The search engine for the omnibox |
 | New tab page | The new tab page's options |
+| Tabs | Whether closing the last tab closes the window, or leaves it open on a new tab page |
 | Sites | Pop-up windows: ask, allow or block |
 | Privacy | Clear browsing data: a time range, which kinds (history, searches, cache, cookies and site data) with their sizes on disk, and Clear data |
 

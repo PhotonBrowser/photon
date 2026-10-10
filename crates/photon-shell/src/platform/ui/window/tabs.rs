@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 
 use super::super::icons::LOADING_SPINNER_STEPS;
 use super::super::pages::{NEW_TAB, PageDefinition};
+use super::super::settings::Settings;
 use super::super::sidebar::{ICON_ENTRANCE, TabIcon};
 use super::BrowserWindow;
 use super::content::{
@@ -257,20 +258,14 @@ impl BrowserWindow {
         }
         self.revealed_icons.borrow_mut().remove(&removed.id);
 
-        if self.tabs.len() == 1 {
+        if self.tabs.len() == 1 && Settings::get(cx).close_window_with_last_tab {
             window.remove_window();
             return;
         }
-
-        if let Some(webview) = removed.content.webview() {
-            let view = webview.read(cx);
-            if view.has_page() {
-                let url = view.state.url.clone();
-                if self.closed_tabs.len() == CLOSED_TAB_LIMIT {
-                    self.closed_tabs.remove(0);
-                }
-                self.closed_tabs.push(ClosedTab { index, url });
-            }
+        self.remember_closed(index, &removed.content, cx);
+        if self.tabs.len() == 1 {
+            self.replace_last_tab_with_new_tab(window, cx);
+            return;
         }
 
         let was_active = index == self.active_tab;
@@ -288,6 +283,35 @@ impl BrowserWindow {
         } else {
             cx.notify();
         }
+    }
+
+    /// Keeps a closed web page so it can be reopened.
+    fn remember_closed(&mut self, index: usize, content: &TabContent, cx: &Context<Self>) {
+        let Some(webview) = content.webview() else {
+            return;
+        };
+        let view = webview.read(cx);
+        if view.has_page() {
+            if self.closed_tabs.len() == CLOSED_TAB_LIMIT {
+                self.closed_tabs.remove(0);
+            }
+            self.closed_tabs.push(ClosedTab {
+                index,
+                url: view.state.url.clone(),
+            });
+        }
+    }
+
+    /// Keeps the window open after its last tab closes, showing a fresh new
+    /// tab page in that tab's place.
+    fn replace_last_tab_with_new_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.close_find_bar(false, window, cx);
+        let content = self.new_page(NEW_TAB, cx);
+        self.tab_subscriptions[0] = self.subscribe_to_content(&content, window, cx);
+        let id = self.allocate_tab_id();
+        self.tabs[0] = BrowserTab { id, content };
+        self.active_tab = 0;
+        self.activate_tab(0, true, window, cx);
     }
 
     /// Whether a loading tab or a notice shows a spinner.

@@ -49,6 +49,9 @@ pub struct BrowserSettings {
     pub popup_policy: PopupPolicy,
     pub new_tab: NewTabSettings,
     pub sidebar: SidebarSettings,
+    /// Whether closing the last tab closes its window. When not, the window
+    /// stays open on a new tab page.
+    pub close_window_with_last_tab: bool,
 }
 
 impl Default for BrowserSettings {
@@ -60,6 +63,7 @@ impl Default for BrowserSettings {
             popup_policy: PopupPolicy::Ask,
             new_tab: NewTabSettings::default(),
             sidebar: SidebarSettings::default(),
+            close_window_with_last_tab: true,
         }
     }
 }

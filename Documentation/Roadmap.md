@@ -20,6 +20,7 @@ What the Photon shell does today and what comes next. Engine performance work is
 - [x] Vertical tab sidebar: navigation, address field, favourite sites, the current space's tabs and a footer, shown or hidden with ⌘S
 - [x] Favourite sites: up to 12 in a grid, added from a tab's menu, opening or switching to the site's tab
 - [x] Tabs with new, close and select; up and down arrows move between tabs
+- [x] Optionally keep the window open on a new tab page when its last tab closes
 - [x] Loading spinner after a load has run for 150 ms
 - [x] Page favicons from the Engine, a globe for pages without one, the brand logo for new tabs, and a symbol for each of the browser's own pages
 - [x] Icons scale in once when a new icon appears

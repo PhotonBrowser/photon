@@ -16,6 +16,10 @@ transparency settings like the rest of the window.
 | Tabs | "+ New Tab", then one row per tab: icon or loading spinner, title, and a close button on the active tab and on the row under the pointer. Click to switch, middle-click or the close button to close, drag to reorder, right-click for the tab menu, and the up and down arrows move between focused tabs. The list scrolls. |
 | Footer | Settings, the current space, and the browser menu, which opens above it. |
 
+Closing the last tab closes the window, unless Settings → Tabs says to keep
+it open; then a fresh new tab page takes the closed tab's place, and ⌘⇧T
+still reopens what was closed.
+
 ⌘S shows or hides the sidebar. Hidden, a slim bar keeps room for the window
 controls and the toggle, and the page takes the whole width; ⌘L shows the
 sidebar again to focus the address field. The sidebar slides in when shown.

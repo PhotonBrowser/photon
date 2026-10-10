@@ -9,9 +9,11 @@ mod new_tab;
 mod privacy;
 mod search;
 mod sites;
+mod tabs;
 
 use super::super::icons::{
     appearance_icon, globe_icon, grid_icon, search_icon_sized, settings_icon, shield_icon,
+    sidebar_icon,
 };
 use super::super::layout::{h_stack, v_stack};
 use super::super::motion::{AnimateIn, Entrance};
@@ -35,15 +37,17 @@ enum Section {
     Appearance,
     Search,
     NewTab,
+    Tabs,
     Sites,
     Privacy,
 }
 
 impl Section {
-    const ALL: [Self; 5] = [
+    const ALL: [Self; 6] = [
         Self::Appearance,
         Self::Search,
         Self::NewTab,
+        Self::Tabs,
         Self::Sites,
         Self::Privacy,
     ];
@@ -53,6 +57,7 @@ impl Section {
             Self::Appearance => "appearance",
             Self::Search => "search",
             Self::NewTab => "new-tab",
+            Self::Tabs => "tabs",
             Self::Sites => "sites",
             Self::Privacy => "privacy",
         }
@@ -63,6 +68,7 @@ impl Section {
             Self::Appearance => "Appearance",
             Self::Search => "Search",
             Self::NewTab => "New tab page",
+            Self::Tabs => "Tabs",
             Self::Sites => "Sites",
             Self::Privacy => "Privacy",
         }
@@ -74,6 +80,7 @@ impl Section {
             Self::Appearance => format!("How {name} looks."),
             Self::Search => "Where searches from the address bar go.".to_owned(),
             Self::NewTab => "What new tabs show.".to_owned(),
+            Self::Tabs => "How tabs open and close.".to_owned(),
             Self::Sites => "What sites may do.".to_owned(),
             Self::Privacy => format!("Delete what {name} and websites keep on this Mac."),
         }
@@ -85,6 +92,7 @@ impl Section {
             Self::Appearance => appearance_icon(color, size).into_any_element(),
             Self::Search => search_icon_sized(color, size).into_any_element(),
             Self::NewTab => grid_icon(color, size).into_any_element(),
+            Self::Tabs => sidebar_icon(color, size).into_any_element(),
             Self::Sites => globe_icon(color, size).into_any_element(),
             Self::Privacy => shield_icon(color, size).into_any_element(),
         }
@@ -139,6 +147,7 @@ impl Render for SettingsPage {
             Section::Appearance => appearance::settings(palette, cx).into_any_element(),
             Section::Search => search::settings(palette, cx).into_any_element(),
             Section::NewTab => new_tab::settings(palette, cx).into_any_element(),
+            Section::Tabs => tabs::settings(palette, cx).into_any_element(),
             Section::Sites => sites::settings(palette, cx).into_any_element(),
             Section::Privacy => self.privacy_settings(palette, cx).into_any_element(),
         };
