@@ -19,7 +19,7 @@ What the Photon shell does today and what comes next. Engine performance work is
 
 - [x] Tab strip with new, close and select; arrow keys move between tabs
 - [x] Loading spinner after a load has run for 150 ms
-- [x] Page favicons from the Engine, a globe for pages without one, and the Photon logo for new tabs
+- [x] Page favicons from the Engine, a globe for pages without one, the brand logo for new tabs, and a symbol for each of the browser's own pages
 - [x] Icons scale in once when a new icon appears
 - [x] Reopen closed tabs (last 25 per window)
 - [x] Middle-click to close, drag to reorder, and a right-click menu: reload, duplicate, close, close others, close to the right
@@ -30,8 +30,8 @@ What the Photon shell does today and what comes next. Engine performance work is
 - [x] Omnibox: address-or-search resolution, search engine URLs, unopenable addresses flagged in place
 - [x] Omnibox opens into a suggestion panel while typing: visited pages with their icons, past searches, the typed address and a search, with the best visited address completed inline
 - [x] History of visited pages and past searches, saved in the profile with page icons; rows can be removed from the omnibox
-- [x] Persistent profile for cookies, site storage and the cache (`PHOTON_TEMPORARY_PROFILE` for a throwaway one), with clearing ready for settings
-- [x] Browser menu: new tab, new window, debug overlay, and a system, light or dark theme
+- [x] Persistent profile for cookies, site storage and the cache (`PHOTON_TEMPORARY_PROFILE` for a throwaway one)
+- [x] Browser menu: new tab, new window, settings, find in page, zoom and the debug overlay
 - [x] Titlebar right-click menu
 - [x] Performance diagnostics overlay
 - [x] Page zoom from the menu or ⌘+, ⌘−, ⌘0, shown in a chip with Reset; each site's zoom is remembered for the session
@@ -44,7 +44,7 @@ What the Photon shell does today and what comes next. Engine performance work is
 - [x] Settings page with a sidebar of sections: appearance, search, new tab page, sites (pop-ups), and privacy (clearing browsing data by time range, with disk usage)
 - [x] Settings saved in the profile and followed by every window at once
 - [x] Transparency setting (off, subtle, clear) applied to every surface: window, tabs, omnibox, buttons, menus and pages
-- [x] Photon's pages live at `photon://` addresses, shown in the omnibox (the new tab page leaves it empty) and listed in one registry
+- [x] The browser's own pages live at `photon://` addresses, shown in the omnibox (the new tab page leaves it empty) and listed in one registry
 
 ### Keyboard shortcuts
 
@@ -58,7 +58,11 @@ What the Photon shell does today and what comes next. Engine performance work is
 
 - [x] Accessibility roles and labels on tabs, buttons, menus, the omnibox and alerts
 - [x] System reduced-motion preference passed to the Engine and to shell animations
-- [x] Menus, chips, the find bar and JavaScript dialogs animate in and back out
+- [x] Menus, chips, the find bar and JavaScript dialogs animate in and back out; switches, checkboxes and settings sections animate only when they change
+
+### Branding
+
+- [x] The browser's name, page scheme, profile folder and logo come from one place, `photon-brand`
 
 ## Next
 

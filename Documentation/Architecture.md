@@ -79,15 +79,23 @@ crates/
 │           │   ├── app.rs            # App startup and the first window
 │           │   ├── tabs.rs           # Tab lifecycle and the tab strip
 │           │   ├── tab_menu.rs       # Tab menu, reordering and bulk tab actions
-│           │   ├── menu.rs           # Browser menu and theme choice
+│           │   ├── content.rs        # What a tab shows: a web view or one of the browser's pages
+│           │   ├── menu.rs           # Browser menu and the menu overlay
+│           │   ├── page_menu.rs      # Page right-click menus
 │           │   ├── find.rs           # Opening and closing the find bar
+│           │   ├── zoom.rs           # Zoom commands and the zoom chip
+│           │   ├── popups.rs         # Pop-up window confirmation
+│           │   ├── popup_window.rs   # Minimal windows for site pop-ups
 │           │   ├── actions.rs        # Keyboard shortcuts
 │           │   └── alerts.rs         # Crash and restart notices, JavaScript dialogs
 │           ├── webview/              # Page surface composition and tab state
 │           │   ├── favicon.rs        # The page icon
 │           │   ├── crashes.rs        # Crash recovery notices
 │           │   ├── dialogs.rs        # JavaScript dialog requests and replies
-│           │   └── find.rs           # Find-in-page state
+│           │   ├── find.rs           # Find-in-page state
+│           │   ├── zoom.rs           # Page zoom
+│           │   ├── context_menu.rs   # Page right-click menu requests
+│           │   └── history.rs        # Recording visits in the history
 │           ├── pages/                # Photon's own pages at photon:// addresses, drawn natively in a tab
 │           │   ├── registry.rs       # Every page, found by its photon:// name
 │           │   ├── new_tab/          # Logo, shortcut tiles, customise panel, adding a shortcut
@@ -99,12 +107,15 @@ crates/
 │           ├── settings.rs           # Shared settings, saved to the profile
 │           ├── js_dialog.rs          # JavaScript alert, confirm and prompt
 │           ├── modal.rs              # Reusable centered modal
-│           ├── motion.rs             # Entrance animations and presets
-│           ├── button.rs             # Shared text buttons
+│           ├── motion.rs             # Entrance and exit animations, presets and Presence
+│           ├── menu.rs               # Popover surface and menu rows
+│           ├── controls.rs           # Segmented choices, switches, checkbox marks, text fields
+│           ├── layout.rs             # Stacks and elevation levels
+│           ├── button.rs             # Shared text and icon buttons
 │           ├── status_chip.rs        # Bottom-right crash and restart chips
 │           ├── find_bar.rs           # Find-in-page bar
 │           ├── input.rs              # Keyboard, pointer, and scroll forwarding
-│           ├── theme.rs              # Appearance and semantic color tokens
+│           ├── theme.rs              # Semantic color roles for each appearance and transparency
 │           └── metrics.rs            # Shared UI dimensions and typography
 ├── photon-performance/               # Performance diagnostics model and overlay
 ├── photon-core/                      # Framework-independent browser model
@@ -144,7 +155,9 @@ owned by the shell; the presentation XPC implementation lives inside
 | --- | --- |
 | Performance diagnostics or overlay | [`photon-performance`](../crates/photon-performance/src/lib.rs) and the Engine adapter |
 | GPUI-CE native window size, titlebar, traffic lights, blur | [`platform/window_settings.rs`](../crates/photon-shell/src/platform/window_settings.rs) and [`ui/metrics.rs`](../crates/photon-shell/src/platform/ui/metrics.rs) |
-| Shell colors, appearance, or theme mapping | [`ui/theme.rs`](../crates/photon-shell/src/platform/ui/theme.rs) |
+| Shell colors, appearance, transparency, or theme mapping | [`ui/theme.rs`](../crates/photon-shell/src/platform/ui/theme.rs) |
+| Menus, popovers, and shared controls | [`ui/menu.rs`](../crates/photon-shell/src/platform/ui/menu.rs) and [`ui/controls.rs`](../crates/photon-shell/src/platform/ui/controls.rs) |
+| The browser's name, page scheme, profile folder, or logo | [`photon-brand`](../crates/photon-brand/src/lib.rs) |
 | Shared layout, spacing, corner radii, or type sizes | [`ui/metrics.rs`](../crates/photon-shell/src/platform/ui/metrics.rs) |
 | Window layout or app startup | [`ui/window/`](../crates/photon-shell/src/platform/ui/window/mod.rs) |
 | Dialogs, modals, and buttons | [`ui/js_dialog.rs`](../crates/photon-shell/src/platform/ui/js_dialog.rs), [`ui/modal.rs`](../crates/photon-shell/src/platform/ui/modal.rs), [`ui/button.rs`](../crates/photon-shell/src/platform/ui/button.rs), and [`photon-core/src/dialogs.rs`](../crates/photon-core/src/dialogs.rs) |
@@ -191,5 +204,7 @@ Photon UI code never receives page pixel buffers. Normal rendering uses native
 Metal sampling with no CPU full-frame copies or GPUI image uploads. The app
 currently targets macOS for external IOSurface presentation.
 
-See [PhotonWebView](WebView.md), [native GPU presentation](NativeGpuPresentation.md),
+See [PhotonWebView](WebView.md), [the browser's own pages](Pages.md),
+[profile, settings, history and branding](Profile.md), [the omnibox](Omnibox.md),
+[native GPU presentation](NativeGpuPresentation.md),
 [theme and style tokens](Theme.md), and [upstream maintenance](Upstream.md).
