@@ -10,7 +10,7 @@ use std::time::Duration;
 use super::super::super::engine::EngineRuntime;
 use super::super::super::motion_observer::ReducedMotionObserver;
 use super::super::history::load_browsing_history;
-use super::super::theme::ThemePreference;
+use super::super::settings::{Settings, load_settings};
 use super::{BrowserWindow, open_browser_window};
 use photon_storage::Profile;
 
@@ -32,6 +32,7 @@ pub fn run() {
         cx.bind_keys(browser_shortcuts());
         follow_reduced_motion(cx);
         let profile = open_profile();
+        load_settings(profile.clone(), cx);
         let runtime = Rc::new(
             EngineRuntime::create(
                 profile
@@ -41,13 +42,26 @@ pub fn run() {
             )
             .unwrap_or_else(|error| panic!("could not start Photon Engine: {error:#}")),
         );
+        follow_settings(&runtime, cx);
         load_browsing_history(profile, cx);
         announce_service_restarts(&runtime, cx);
         quit_after_env_timeout(cx);
         cx.activate(true);
-        open_browser_window(runtime, initial_address(), ThemePreference::default(), cx)
-            .expect("open GPUI-CE Photon window");
+        open_browser_window(runtime, initial_address(), cx).expect("open GPUI-CE Photon window");
     });
+}
+
+/// Applies the settings that belong to the whole app, now and whenever they
+/// change: the window appearance and the pop-up policy.
+fn follow_settings(runtime: &Rc<EngineRuntime>, cx: &mut App) {
+    let apply = |runtime: &EngineRuntime, cx: &mut App| {
+        cx.set_window_appearance(Settings::chosen_appearance(cx));
+        runtime.set_popup_policy(Settings::get(cx).popup_policy);
+    };
+    apply(runtime, cx);
+    let runtime = runtime.clone();
+    cx.observe_global::<Settings>(move |cx| apply(&runtime, cx))
+        .detach();
 }
 
 /// The profile Photon keeps history and website data in, or `None` for a

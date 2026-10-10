@@ -4,7 +4,7 @@ mod callbacks;
 
 use anyhow::Context as _;
 use gpui::{AsyncApp, WeakEntity};
-use photon_core::{BrowserCommand, ClearBrowsingData, DialogReply};
+use photon_core::{BrowserCommand, ClearBrowsingData, DialogReply, PopupPolicy};
 use photon_performance::PerformanceMonitor;
 use std::{
     ffi::{CStr, CString, c_char, c_void},
@@ -36,24 +36,6 @@ pub(super) struct EngineRuntime {
     callbacks: Box<RuntimeCallbacks>,
     service_callback: RefCell<Option<Box<ServiceCallback>>>,
     popup_policy: AtomicU8,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u8)]
-pub(super) enum PopupPolicy {
-    Ask = 0,
-    Allow = 1,
-    Block = 2,
-}
-
-impl PopupPolicy {
-    fn from_byte(value: u8) -> Self {
-        match value {
-            1 => Self::Allow,
-            2 => Self::Block,
-            _ => Self::Ask,
-        }
-    }
 }
 
 impl EngineRuntime {
@@ -112,7 +94,11 @@ impl EngineRuntime {
     }
 
     pub(super) fn popup_policy(&self) -> PopupPolicy {
-        PopupPolicy::from_byte(self.popup_policy.load(Ordering::Relaxed))
+        match self.popup_policy.load(Ordering::Relaxed) {
+            value if value == PopupPolicy::Allow as u8 => PopupPolicy::Allow,
+            value if value == PopupPolicy::Block as u8 => PopupPolicy::Block,
+            _ => PopupPolicy::Ask,
+        }
     }
 
     pub(super) fn set_popup_policy(&self, policy: PopupPolicy) {

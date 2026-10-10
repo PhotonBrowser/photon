@@ -7,6 +7,7 @@
 
 use gpui::{App, BorrowAppContext, Global, Task};
 use photon_core::{ClearBrowsingData, History, HistoryEntry, Suggestions};
+use photon_omnibox::SearchEngines;
 use photon_storage::{DataUsage, Profile};
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -60,24 +61,22 @@ pub(in crate::platform) fn load_browsing_history(profile: Option<Profile>, cx: &
 
 impl BrowsingHistory {
     fn update<R>(cx: &mut App, update: impl FnOnce(&mut Self, &mut App) -> R) -> R {
-        cx.default_global::<Self>();
+        if !cx.has_global::<Self>() {
+            cx.set_global(Self::default());
+        }
         cx.update_global(update)
     }
 
     /// What the omnibox offers for `input`.
-    pub(super) fn suggestions(input: &str, cx: &App) -> Suggestions {
+    pub(super) fn suggestions(input: &str, engines: &SearchEngines, cx: &App) -> Suggestions {
         match cx.try_global::<Self>() {
-            Some(browsing) => browsing.history.omnibox_suggestions(input),
-            None => History::default().omnibox_suggestions(input),
+            Some(browsing) => browsing.history.omnibox_suggestions_with(input, engines),
+            None => History::default().omnibox_suggestions_with(input, engines),
         }
     }
 
     /// The pages visited most often, for a new tab page.
-    #[expect(
-        dead_code,
-        reason = "for settings and internal pages, which are not built yet"
-    )]
-    pub(in crate::platform) fn most_visited(limit: usize, cx: &App) -> Vec<HistoryEntry> {
+    pub(super) fn most_visited(limit: usize, cx: &App) -> Vec<HistoryEntry> {
         cx.try_global::<Self>().map_or_else(Vec::new, |browsing| {
             browsing
                 .history
@@ -88,21 +87,27 @@ impl BrowsingHistory {
         })
     }
 
-    /// How much disk the profile's data takes.
-    #[expect(
-        dead_code,
-        reason = "for settings and internal pages, which are not built yet"
-    )]
-    pub(in crate::platform) fn data_usage(cx: &App) -> DataUsage {
-        cx.try_global::<Self>()
-            .and_then(|browsing| browsing.profile.as_ref())
-            .map(Profile::data_usage)
-            .unwrap_or_default()
+    /// Measures how much disk the profile's data takes, off the main thread.
+    /// `None` when nothing is saved.
+    pub(super) fn measure_data_usage(cx: &App) -> Task<Option<DataUsage>> {
+        let profile = cx
+            .try_global::<Self>()
+            .and_then(|browsing| browsing.profile.clone());
+        cx.background_executor()
+            .spawn(async move { profile.map(|profile| profile.data_usage()) })
     }
 
     /// The icon `url` showed when last visited, loading it from the profile
     /// the first time it is asked for.
     pub(super) fn favicon(url: &str, cx: &mut App) -> Option<Favicon> {
+        // Drawing asks for icons every frame; answer from memory without
+        // touching the global once an icon has been looked up.
+        if let Some(known) = cx
+            .try_global::<Self>()
+            .and_then(|browsing| browsing.favicons.get(url))
+        {
+            return known.clone();
+        }
         Self::update(cx, |browsing, _| {
             if let Some(favicon) = browsing.favicons.get(url) {
                 return favicon.clone();
@@ -180,11 +185,7 @@ impl BrowsingHistory {
     /// Deletes what `request` asks for: Photon's history, searches and icons
     /// here, and website data in the Engine. Calls `done` once all of it is
     /// gone.
-    #[expect(
-        dead_code,
-        reason = "for settings and internal pages, which are not built yet"
-    )]
-    pub(in crate::platform) fn clear(
+    pub(super) fn clear(
         request: ClearBrowsingData,
         runtime: &EngineRuntime,
         done: impl FnOnce(&mut App) + 'static,

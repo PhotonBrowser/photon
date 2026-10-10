@@ -15,7 +15,8 @@ use std::{
 use super::super::presentation::{LeaseLedger, MachPortGuard, PresentationRuntime};
 use super::super::ui::{Favicon, FindResult, PageMenuItem, PhotonWebView};
 use super::super::{ffi::embedder, trace};
-use super::{EngineSession, PopupPolicy, RequestedWebView, UiWake};
+use super::{EngineSession, RequestedWebView, UiWake};
+use photon_core::PopupPolicy;
 
 pub(super) struct CallbackState {
     pub(super) presentation: Arc<PresentationRuntime>,
