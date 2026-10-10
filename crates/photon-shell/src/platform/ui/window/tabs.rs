@@ -49,9 +49,11 @@ impl BrowserWindow {
                 .get(self.active_tab)
                 .and_then(|tab| tab.content.webview())
             {
-                previous.update(cx, |view, _| {
+                previous.update(cx, |view, cx| {
+                    view.reset_history_swipe(true);
                     view.session.set_visible(false);
                     view.session.set_focus(false);
+                    cx.notify();
                 });
             }
             self.active_tab = index;

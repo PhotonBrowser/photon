@@ -287,6 +287,7 @@ impl EngineSession {
             audio_state_callback: Some(on_engine_audio_state),
             dialog_callback: Some(on_engine_dialog),
             navigation_committed_callback: Some(on_engine_navigation_committed),
+            history_swipe_candidate_callback: Some(on_engine_history_swipe_candidate),
             crash_recovered_callback: Some(on_engine_crash_recovered),
             new_web_view_callback: Some(on_engine_new_web_view),
             find_result_callback: Some(on_engine_find_result),
@@ -499,14 +500,33 @@ impl EngineSession {
         precise: bool,
         phase: i32,
         clicks: i32,
+        history_swipe_back_enabled: bool,
+        history_swipe_forward_enabled: bool,
+        history_swipe_gesture_id: u64,
     ) {
         if kind == 2 || kind == 4 {
             self.callbacks.mark_input();
         }
         unsafe {
             embedder::photon_view_pointer(
-                self.view, kind, x, y, button, buttons, shift, control, alt, meta, wheel_x,
-                wheel_y, precise, phase, clicks,
+                self.view,
+                kind,
+                x,
+                y,
+                button,
+                buttons,
+                shift,
+                control,
+                alt,
+                meta,
+                wheel_x,
+                wheel_y,
+                precise,
+                phase,
+                clicks,
+                history_swipe_back_enabled,
+                history_swipe_forward_enabled,
+                history_swipe_gesture_id,
             )
         }
     }

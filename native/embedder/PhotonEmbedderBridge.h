@@ -37,6 +37,7 @@ using PhotonDialogCallback = void (*)(void*, int, char const*, char const*,
     char const*);
 // Called when the page shown may open dialogs again after a navigation.
 using PhotonNavigationCommittedCallback = void (*)(void*);
+using PhotonHistorySwipeCandidateCallback = void (*)(void*, uint64_t, bool, double);
 // Called when the page that replaced a crashed one presents its first frame.
 using PhotonCrashRecoveredCallback = void (*)(void*);
 // Called with a find-in-page result: the current match's index, whether the
@@ -103,6 +104,7 @@ struct PhotonViewCallbacks {
     PhotonAudioStateCallback audio_state_callback;
     PhotonDialogCallback dialog_callback;
     PhotonNavigationCommittedCallback navigation_committed_callback;
+    PhotonHistorySwipeCandidateCallback history_swipe_candidate_callback;
     PhotonCrashRecoveredCallback crash_recovered_callback;
     PhotonNewWebViewCallback new_web_view_callback;
     PhotonFindResultCallback find_result_callback;
@@ -188,7 +190,9 @@ void photon_runtime_set_service_callback(void* runtime, void* callback_data,
 void photon_view_pointer(void* view, int kind, double x, double y, int button,
     uint8_t buttons, bool shift, bool control, bool alt,
     bool meta, double wheel_x, double wheel_y,
-    bool precise, int phase, int clicks);
+    bool precise, int phase, int clicks,
+    bool history_swipe_back_enabled, bool history_swipe_forward_enabled,
+    uint64_t history_swipe_gesture_id);
 void photon_view_key(void* view, uint16_t key, bool pressed,
     uint32_t code_point, bool shift, bool control, bool alt,
     bool meta, bool repeat, bool insert_text);

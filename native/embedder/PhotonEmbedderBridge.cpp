@@ -44,6 +44,7 @@ Photon::ViewCallbacks make_view_callbacks(
     auto audio_state_callback = callbacks.audio_state_callback;
     auto dialog_callback = callbacks.dialog_callback;
     auto navigation_committed_callback = callbacks.navigation_committed_callback;
+    auto history_swipe_candidate_callback = callbacks.history_swipe_candidate_callback;
     auto crash_recovered_callback = callbacks.crash_recovered_callback;
     auto new_web_view_callback = callbacks.new_web_view_callback;
     auto find_result_callback = callbacks.find_result_callback;
@@ -131,6 +132,10 @@ Photon::ViewCallbacks make_view_callbacks(
     result.navigation_committed = [=] {
         if (navigation_committed_callback)
             navigation_committed_callback(callback_data);
+    };
+    result.history_swipe_candidate = [=](uint64_t gesture_id, bool back, float unconsumed_delta) {
+        if (history_swipe_candidate_callback)
+            history_swipe_candidate_callback(callback_data, gesture_id, back, unconsumed_delta);
     };
     result.new_web_view_requested = [=](Photon::NewWebViewRequest const& request) {
         if (!new_web_view_callback)
@@ -515,7 +520,9 @@ extern "C" void photon_view_pointer(void* view, int kind, double x, double y,
     int button, uint8_t buttons, bool shift,
     bool control, bool alt, bool meta,
     double wheel_x, double wheel_y,
-    bool precise, int phase, int clicks)
+    bool precise, int phase, int clicks,
+    bool history_swipe_back_enabled, bool history_swipe_forward_enabled,
+    uint64_t history_swipe_gesture_id)
 {
     if (!view)
         return;
@@ -534,6 +541,9 @@ extern "C" void photon_view_pointer(void* view, int kind, double x, double y,
     event.precise_wheel = precise;
     event.scroll_phase = static_cast<Photon::ScrollPhase>(phase);
     event.click_count = clicks;
+    event.history_swipe_back_enabled = history_swipe_back_enabled;
+    event.history_swipe_forward_enabled = history_swipe_forward_enabled;
+    event.history_swipe_gesture_id = history_swipe_gesture_id;
     static_cast<ViewHandle*>(view)->view->send_pointer_event(event);
 }
 

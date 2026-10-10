@@ -58,6 +58,7 @@ impl CallbackState {
     pub(super) fn set_page_error(&self, message: String) {
         self.update_webview(move |view, cx| {
             view.state.apply(EngineEvent::LoadFailed(message));
+            view.history_swipe_navigation_failed(cx);
             view.state_changed(cx);
         });
     }
@@ -71,7 +72,21 @@ impl CallbackState {
     }
 
     pub(super) fn navigation_committed(&self) {
-        self.update_webview(|view, _| view.dialogs.navigation_committed());
+        self.update_webview(|view, cx| {
+            view.dialogs.navigation_committed();
+            view.history_swipe_navigation_committed(cx);
+        });
+    }
+
+    pub(super) fn history_swipe_candidate(
+        &self,
+        gesture_id: u64,
+        back: bool,
+        unconsumed_delta: f64,
+    ) {
+        self.update_webview(move |view, cx| {
+            view.history_swipe_candidate(gesture_id, back, unconsumed_delta as f32, cx);
+        });
     }
 
     pub(super) fn request_page_dialog(&self, request: DialogRequest) {
@@ -497,6 +512,18 @@ pub(super) unsafe extern "C" fn on_engine_audio_state(
 pub(super) unsafe extern "C" fn on_engine_navigation_committed(context: *mut c_void) {
     if !context.is_null() {
         unsafe { &*(context.cast::<CallbackState>()) }.navigation_committed();
+    }
+}
+
+pub(super) unsafe extern "C" fn on_engine_history_swipe_candidate(
+    context: *mut c_void,
+    gesture_id: u64,
+    back: bool,
+    unconsumed_delta: f64,
+) {
+    if !context.is_null() {
+        let callbacks = unsafe { &*(context.cast::<CallbackState>()) };
+        callbacks.history_swipe_candidate(gesture_id, back, unconsumed_delta);
     }
 }
 

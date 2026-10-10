@@ -125,6 +125,21 @@ pub(super) const PAGE_CHROME_GAP: f32 = 4.0;
 pub(super) const POPUP_URL_FONT_SIZE: f32 = 12.0;
 /// The corners of the frame a page sits in, web page or the browser's own.
 pub(super) const PAGE_RADIUS: f32 = 12.0;
+/// Horizontal travel required before a history swipe commits.
+pub(super) const HISTORY_SWIPE_COMMIT_FRACTION: f32 = 0.33;
+/// Minimum progress needed for a fast flick to commit a history swipe.
+pub(super) const HISTORY_SWIPE_FLICK_FRACTION: f32 = 0.12;
+/// Outward trackpad velocity that qualifies as a fast history swipe, in px/s.
+pub(super) const HISTORY_SWIPE_FLICK_VELOCITY: f32 = 900.0;
+/// Spring stiffness for settling a history swipe.
+pub(super) const HISTORY_SWIPE_SPRING_STIFFNESS: f32 = 420.0;
+/// Spring damping for settling a history swipe.
+pub(super) const HISTORY_SWIPE_SPRING_DAMPING: f32 = 42.0;
+/// Diameter of the arrow shown in the exposed page edge during a history swipe.
+pub(super) const HISTORY_SWIPE_INDICATOR_SIZE: f32 = 42.0;
+pub(super) const HISTORY_SWIPE_INDICATOR_ICON_SIZE: f32 = 18.0;
+/// Gesture travel at which the edge arrow becomes fully visible.
+pub(super) const HISTORY_SWIPE_INDICATOR_REVEAL_DISTANCE: f32 = 20.0;
 pub(super) const INTERNAL_PAGE_INSET: f32 = 32.0;
 pub(super) const INTERNAL_PAGE_MAX_WIDTH: f32 = 620.0;
 pub(super) const INTERNAL_PAGE_SECTION_GAP: f32 = 28.0;

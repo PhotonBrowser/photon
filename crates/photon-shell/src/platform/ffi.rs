@@ -85,6 +85,8 @@ pub(super) mod embedder {
             unsafe extern "C" fn(*mut c_void, i32, *const c_char, *const c_char, *const c_char),
         >,
         pub navigation_committed_callback: Option<unsafe extern "C" fn(*mut c_void)>,
+        pub history_swipe_candidate_callback:
+            Option<unsafe extern "C" fn(*mut c_void, u64, bool, f64)>,
         pub crash_recovered_callback: Option<unsafe extern "C" fn(*mut c_void)>,
         pub new_web_view_callback: Option<NewWebViewCallback>,
         pub find_result_callback: Option<unsafe extern "C" fn(*mut c_void, usize, bool, usize)>,
@@ -202,6 +204,9 @@ pub(super) mod embedder {
             precise: bool,
             phase: i32,
             clicks: i32,
+            history_swipe_back_enabled: bool,
+            history_swipe_forward_enabled: bool,
+            history_swipe_gesture_id: u64,
         );
         pub fn photon_view_key(
             view: *mut c_void,

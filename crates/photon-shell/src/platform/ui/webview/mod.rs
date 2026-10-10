@@ -6,8 +6,8 @@ use super::input::WebViewInput;
 use super::{metrics::PAGE_RADIUS, settings::Settings, theme::palette};
 use gpui::{
     Context, EventEmitter, FocusHandle, InteractiveElement, KeyDownEvent, KeyUpEvent, MouseButton,
-    NavigationDirection, ObjectFit, Render, Subscription, SurfaceSource, Window, WindowAppearance,
-    div, prelude::*, px, surface,
+    NavigationDirection, ObjectFit, Render, Subscription, SurfaceSource, Task, Window,
+    WindowAppearance, div, prelude::*, px, surface,
 };
 use photon_core::{BrowserCommand, BrowserState, EngineEvent, PageCrashes, PageDialogs};
 use photon_performance::{PerformanceDiagnostics, performance_overlay};
@@ -24,6 +24,7 @@ mod dialogs;
 mod favicon;
 mod find;
 mod history;
+mod history_swipe;
 mod zoom;
 
 pub(in crate::platform) use context_menu::{PageMenu, PageMenuItem};
@@ -70,6 +71,8 @@ pub(in crate::platform) struct PhotonWebView {
     /// The color scheme last sent to Engine, `true` for dark.
     sent_dark_color_scheme: Option<bool>,
     input: WebViewInput,
+    history_swipe: history_swipe::HistorySwipe,
+    history_swipe_animation: Option<Task<()>>,
     pub(super) _quit_subscription: Option<Subscription>,
     focus_subscriptions: Vec<Subscription>,
     pending_new_webviews: HashMap<u64, RequestedWebView>,
@@ -114,6 +117,7 @@ impl PhotonWebView {
             retired.extend(pending);
         }
         self.external = Some(presented);
+        self.history_swipe_surface_replaced(cx);
         cx.notify();
     }
 
@@ -126,6 +130,17 @@ impl PhotonWebView {
     pub(in crate::platform) fn set_state(&mut self, state: BrowserState, cx: &mut Context<Self>) {
         if self.state == state {
             return;
+        }
+        if state.url != self.state.url {
+            if self.history_swipe.phase == history_swipe::HistorySwipePhase::Committing {
+                self.history_swipe_navigation_committed(cx);
+            } else if matches!(
+                self.history_swipe.phase,
+                history_swipe::HistorySwipePhase::Tracking
+                    | history_swipe::HistorySwipePhase::Cancelling
+            ) {
+                self.reset_history_swipe(true);
+            }
         }
         if state.loading != self.state.loading {
             self.loading_since = state.loading.then(Instant::now);
@@ -261,6 +276,8 @@ impl PhotonWebView {
             last_viewport: None,
             sent_dark_color_scheme: None,
             input: WebViewInput::default(),
+            history_swipe: history_swipe::HistorySwipe::default(),
+            history_swipe_animation: None,
             _quit_subscription: None,
             focus_subscriptions: Vec::new(),
             pending_new_webviews: HashMap::new(),
@@ -288,10 +305,18 @@ impl PhotonWebView {
             cx.on_focus(&self.focus_handle, window, |this, window, _| {
                 this.sync_engine_focus(window)
             }),
-            cx.on_blur(&self.focus_handle, window, |this, window, _| {
-                this.sync_engine_focus(window)
+            cx.on_blur(&self.focus_handle, window, |this, window, cx| {
+                this.sync_engine_focus(window);
+                this.reset_history_swipe(true);
+                cx.notify();
             }),
-            cx.observe_window_activation(window, |this, window, _| this.sync_engine_focus(window)),
+            cx.observe_window_activation(window, |this, window, cx| {
+                this.sync_engine_focus(window);
+                if !window.is_window_active() {
+                    this.reset_history_swipe(true);
+                    cx.notify();
+                }
+            }),
             cx.observe_window_appearance(window, |_, _, cx| cx.notify()),
         ];
         self.sync_engine_focus(window);
@@ -314,6 +339,9 @@ impl PhotonWebView {
         command: BrowserCommand,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<()> {
+        if self.history_swipe.phase == history_swipe::HistorySwipePhase::Tracking {
+            self.reset_history_swipe(true);
+        }
         if matches!(
             command,
             BrowserCommand::Navigate(_)
@@ -442,8 +470,17 @@ impl Render for PhotonWebView {
             .on_mouse_exit(cx.listener(|this, event, _, _| {
                 this.input.mouse_exit(&mut this.session, event);
             }))
-            .on_scroll_wheel(cx.listener(|this, event, _, _| {
-                this.input.scroll(&mut this.session, event);
+            .on_scroll_wheel(cx.listener(|this, event, _, cx| {
+                let gesture_id = this.input.history_swipe_gesture_id(event);
+                let captured = this.handle_history_swipe_scroll(event, gesture_id, cx);
+                this.input.scroll(
+                    &mut this.session,
+                    event,
+                    this.state.can_go_back,
+                    this.state.can_go_forward,
+                    gesture_id,
+                    captured,
+                );
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                 let should_consume = this.input.key_down(&mut this.session, event);
@@ -459,14 +496,20 @@ impl Render for PhotonWebView {
             }));
         webview = webview
             .rounded(px(PAGE_RADIUS))
+            .overflow_hidden()
             .bg(gpui::rgb(palette.page_background));
         if let Some(presented) = self.external.as_ref() {
             webview = webview.child(
                 surface(SurfaceSource::ExternalMetal(presented.surface.clone()))
                     .size_full()
                     .object_fit(ObjectFit::Fill)
+                    .relative()
+                    .left(px(self.history_swipe.offset))
                     .rounded(px(PAGE_RADIUS)),
             );
+        }
+        if let Some(indicator) = self.history_swipe_indicator(palette) {
+            webview = webview.child(indicator);
         }
         if self.performance_overlay_enabled {
             webview = webview.child(performance_overlay(

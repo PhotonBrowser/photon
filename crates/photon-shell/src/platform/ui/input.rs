@@ -10,6 +10,9 @@ use gpui::{
 pub(super) struct WebViewInput {
     viewport_origin: (f32, f32),
     pointer_inside: bool,
+    history_swipe_gesture_id: u64,
+    next_history_swipe_gesture_id: u64,
+    history_swipe_touch_ended: bool,
 }
 
 impl WebViewInput {
@@ -44,6 +47,9 @@ impl WebViewInput {
             false,
             0,
             event.click_count as i32,
+            false,
+            false,
+            0,
         );
     }
 
@@ -65,6 +71,9 @@ impl WebViewInput {
             false,
             0,
             event.click_count as i32,
+            false,
+            false,
+            0,
         );
     }
 
@@ -99,6 +108,9 @@ impl WebViewInput {
             false,
             0,
             0,
+            false,
+            false,
+            0,
         );
     }
 
@@ -106,7 +118,15 @@ impl WebViewInput {
         self.mouse_leave(session, event.modifiers);
     }
 
-    pub(super) fn scroll(&mut self, session: &mut EngineSession, event: &ScrollWheelEvent) {
+    pub(super) fn scroll(
+        &mut self,
+        session: &mut EngineSession,
+        event: &ScrollWheelEvent,
+        can_go_back: bool,
+        can_go_forward: bool,
+        history_swipe_gesture_id: u64,
+        history_swipe_captured: bool,
+    ) {
         let (x, y) = self.content_position(event.position);
         let (delta, precise) = match event.delta {
             ScrollDelta::Pixels(delta) => (
@@ -118,12 +138,55 @@ impl WebViewInput {
                 false,
             ),
         };
+        let physical_delta_x = if event.is_direction_inverted_from_device {
+            -delta.0
+        } else {
+            delta.0
+        };
+        let is_native_trackpad_gesture = precise
+            && event.has_native_phase
+            && event.is_swipe_tracking_enabled
+            && !event.is_momentum
+            && !history_swipe_captured
+            && !matches!(event.touch_phase, TouchPhase::Ended | TouchPhase::Cancelled)
+            && physical_delta_x.abs() > delta.1.abs();
+        let history_swipe_back_enabled =
+            is_native_trackpad_gesture && can_go_back && physical_delta_x > 0.0;
+        let history_swipe_forward_enabled =
+            is_native_trackpad_gesture && can_go_forward && physical_delta_x < 0.0;
+
+        if precise && delta.0.abs() > 0.0 {
+            super::super::trace(format_args!(
+                "trackpad-scroll id={history_swipe_gesture_id} phase={:?} delta=({:.2},{:.2}) inverted={} swipe_enabled={} momentum={} history=({}, {}) captured={} eligible=({}, {})",
+                event.touch_phase,
+                delta.0,
+                delta.1,
+                event.is_direction_inverted_from_device,
+                event.is_swipe_tracking_enabled,
+                event.is_momentum,
+                can_go_back,
+                can_go_forward,
+                history_swipe_captured,
+                history_swipe_back_enabled,
+                history_swipe_forward_enabled,
+            ));
+        }
+
         // Normalize AppKit/GPUI's sign to the Engine's wheel-delta convention,
         // matching the pixel-delta conversion in the existing Qt shell.
-        let delta = (-delta.0, -delta.1);
-        let phase = match event.touch_phase {
-            TouchPhase::Started | TouchPhase::Moved => 1,
-            TouchPhase::Ended | TouchPhase::Cancelled => 3,
+        let delta = if history_swipe_captured {
+            (0.0, 0.0)
+        } else {
+            (-delta.0, -delta.1)
+        };
+        let phase = match (
+            event.is_momentum,
+            event.is_momentum_ended,
+            event.touch_phase,
+        ) {
+            (true, false, _) => 2,
+            (_, true, _) | (_, _, TouchPhase::Ended | TouchPhase::Cancelled) => 3,
+            _ => 1,
         };
         session.send_pointer(
             4,
@@ -140,7 +203,49 @@ impl WebViewInput {
             precise,
             phase,
             0,
+            history_swipe_back_enabled,
+            history_swipe_forward_enabled,
+            history_swipe_gesture_id,
         );
+    }
+
+    pub(super) fn history_swipe_gesture_id(&mut self, event: &ScrollWheelEvent) -> u64 {
+        // A gesture starts when none is under way, or when touch begins again
+        // after it ended.
+        let starts_gesture = !event.is_momentum
+            && (self.history_swipe_gesture_id == 0
+                || (event.touch_phase == TouchPhase::Started && self.history_swipe_touch_ended));
+        if starts_gesture {
+            self.next_history_swipe_gesture_id =
+                self.next_history_swipe_gesture_id.wrapping_add(1).max(1);
+            self.history_swipe_gesture_id = self.next_history_swipe_gesture_id;
+        }
+
+        let gesture_id = self.history_swipe_gesture_id;
+        if event.touch_phase == TouchPhase::Ended {
+            self.history_swipe_touch_ended = true;
+        }
+        if event.is_momentum_ended || event.touch_phase == TouchPhase::Cancelled {
+            self.history_swipe_gesture_id = 0;
+            self.history_swipe_touch_ended = false;
+        } else if event.touch_phase == TouchPhase::Started && !event.is_momentum {
+            self.history_swipe_touch_ended = false;
+        }
+        gesture_id
+    }
+
+    pub(super) fn end_history_swipe(&mut self, session: &mut EngineSession, gesture_id: u64) {
+        if gesture_id == 0 {
+            return;
+        }
+        session.send_pointer(
+            4, 0.0, 0.0, 0, 0, false, false, false, false, 0.0, 0.0, true, 3, 0, false, false,
+            gesture_id,
+        );
+        if self.history_swipe_gesture_id == gesture_id {
+            self.history_swipe_gesture_id = 0;
+            self.history_swipe_touch_ended = false;
+        }
     }
 
     pub(super) fn key_down(&mut self, session: &mut EngineSession, event: &KeyDownEvent) -> bool {
@@ -192,6 +297,9 @@ impl WebViewInput {
             false,
             0,
             0,
+            false,
+            false,
+            0,
         );
         self.pointer_inside = false;
     }
@@ -241,4 +349,59 @@ fn keyboard_key(key: &str, key_char: Option<&str>) -> (u16, u32) {
         _ => 0,
     };
     (key_code, code_point)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn appkit_may_begin_and_began_share_one_gesture_id() {
+        let mut input = WebViewInput::default();
+        let event = ScrollWheelEvent {
+            touch_phase: TouchPhase::Started,
+            has_native_phase: true,
+            ..Default::default()
+        };
+
+        let may_begin_id = input.history_swipe_gesture_id(&event);
+        let began_id = input.history_swipe_gesture_id(&event);
+
+        assert_ne!(may_begin_id, 0);
+        assert_eq!(may_begin_id, began_id);
+    }
+
+    #[test]
+    fn a_new_gesture_after_touch_end_gets_a_fresh_id() {
+        let mut input = WebViewInput::default();
+        let mut event = ScrollWheelEvent {
+            touch_phase: TouchPhase::Started,
+            has_native_phase: true,
+            ..Default::default()
+        };
+        let first_id = input.history_swipe_gesture_id(&event);
+
+        event.touch_phase = TouchPhase::Ended;
+        assert_eq!(input.history_swipe_gesture_id(&event), first_id);
+
+        event.touch_phase = TouchPhase::Started;
+        assert_ne!(input.history_swipe_gesture_id(&event), first_id);
+    }
+
+    #[test]
+    fn cancellation_clears_the_interrupted_gesture_id() {
+        let mut input = WebViewInput::default();
+        let mut event = ScrollWheelEvent {
+            touch_phase: TouchPhase::Started,
+            has_native_phase: true,
+            ..Default::default()
+        };
+        let interrupted_id = input.history_swipe_gesture_id(&event);
+
+        event.touch_phase = TouchPhase::Cancelled;
+        assert_eq!(input.history_swipe_gesture_id(&event), interrupted_id);
+
+        event.touch_phase = TouchPhase::Moved;
+        assert_ne!(input.history_swipe_gesture_id(&event), interrupted_id);
+    }
 }
