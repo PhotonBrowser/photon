@@ -223,4 +223,5 @@ currently targets macOS for external IOSurface presentation.
 See [tab layouts and the sidebar](Sidebar.md), [PhotonWebView](WebView.md), [the browser's own pages](Pages.md),
 [profile, settings, history and branding](Profile.md), [the omnibox](Omnibox.md),
 [native GPU presentation](NativeGpuPresentation.md),
-[theme and style tokens](Theme.md), and [upstream maintenance](Upstream.md).
+[theme and style tokens](Theme.md), the [customizable workspace architecture](Customization.md),
+and [upstream maintenance](Upstream.md).
