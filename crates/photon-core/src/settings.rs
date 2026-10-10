@@ -14,6 +14,19 @@ pub enum ThemeMode {
     Dark,
 }
 
+/// How much of the desktop shows through the browser's surfaces.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Transparency {
+    /// Solid surfaces.
+    Off,
+    /// A light frosted look that keeps text easy to read.
+    #[default]
+    Subtle,
+    /// More of the desktop shows through.
+    Clear,
+}
+
 /// How Photon handles pages that ask to open a separate window.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[repr(u8)]
@@ -30,6 +43,7 @@ pub enum PopupPolicy {
 #[serde(default)]
 pub struct BrowserSettings {
     pub theme: ThemeMode,
+    pub transparency: Transparency,
     pub default_search_engine: String,
     pub popup_policy: PopupPolicy,
     pub new_tab: NewTabSettings,
@@ -39,6 +53,7 @@ impl Default for BrowserSettings {
     fn default() -> Self {
         Self {
             theme: ThemeMode::System,
+            transparency: Transparency::default(),
             default_search_engine: "google".to_owned(),
             popup_policy: PopupPolicy::Ask,
             new_tab: NewTabSettings::default(),

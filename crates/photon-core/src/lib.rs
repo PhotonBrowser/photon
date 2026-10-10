@@ -21,5 +21,5 @@ pub use photon_omnibox::{
     OmniboxError, OmniboxTarget, SearchEngine, SearchEngineError, SearchEngines, Suggestion,
     SuggestionKind, Suggestions, UrlKind, resolve as resolve_omnibox_input,
 };
-pub use settings::{BrowserSettings, PopupPolicy, ThemeMode};
+pub use settings::{BrowserSettings, PopupPolicy, ThemeMode, Transparency};
 pub use state::{BrowserCommand, BrowserState, EngineEvent, normalize_url};
