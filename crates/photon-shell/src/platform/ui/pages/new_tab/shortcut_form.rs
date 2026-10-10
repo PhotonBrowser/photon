@@ -87,7 +87,7 @@ impl NewTabPage {
                 .h(px(metrics::BUTTON_HEIGHT))
                 .px(px(metrics::MENU_ITEM_HORIZONTAL_PADDING))
                 .rounded(px(metrics::CONTROL_RADIUS))
-                .bg(rgba(palette.field))
+                .bg(rgba(palette.surface))
                 .whitespace_nowrap()
                 .overflow_x_scroll()
         };

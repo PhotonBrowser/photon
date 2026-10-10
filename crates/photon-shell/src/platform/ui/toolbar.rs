@@ -90,9 +90,9 @@ fn menu_button(menu_open: bool, palette: ThemeColors, on_click: ClickHandler) ->
         .child(more_icon(palette.text_primary, metrics::TOOLBAR_ICON_SIZE));
 
     button = if menu_open {
-        button.bg(rgba(palette.control_hover_surface))
+        button.bg(rgba(palette.selected_surface))
     } else {
-        button.hover(|style| style.bg(rgba(palette.control_hover_surface)))
+        button.hover(|style| style.bg(rgba(palette.hover_surface)))
     };
 
     button
@@ -128,7 +128,7 @@ fn navigation_button(
     if enabled {
         button = button
             .tab_index(tab_index)
-            .hover(|style| style.bg(rgba(palette.control_hover_surface)))
+            .hover(|style| style.bg(rgba(palette.hover_surface)))
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_click(on_click);
     }

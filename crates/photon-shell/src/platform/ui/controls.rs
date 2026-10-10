@@ -62,7 +62,7 @@ pub(super) fn choices(
         .gap(px(metrics::SEGMENT_GAP))
         .p(px(metrics::SEGMENT_INSET))
         .rounded(px(metrics::CONTROL_RADIUS))
-        .bg(rgba(palette.field))
+        .bg(rgba(palette.surface))
         .children(options)
 }
 
@@ -106,7 +106,7 @@ impl RenderOnce for Switch {
             .p(px(metrics::SWITCH_INSET))
             .rounded_full()
             .when(on, |track| track.justify_end().bg(rgb(palette.chosen)))
-            .when(!on, |track| track.bg(rgba(palette.control_hover_surface)))
+            .when(!on, |track| track.bg(rgba(palette.selected_surface)))
             .child(knob)
     }
 }

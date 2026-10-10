@@ -102,7 +102,7 @@ impl InternalPage {
             .size_full()
             .overflow_hidden()
             .rounded(px(metrics::WEBVIEW_CORNER_RADIUS))
-            .bg(rgba(palette.internal_page_surface))
+            .bg(rgba(palette.surface))
             .child(self.view.clone())
             .into_any_element()
     }

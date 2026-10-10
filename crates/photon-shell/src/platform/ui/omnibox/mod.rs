@@ -200,11 +200,6 @@ impl Render for Omnibox {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = palette(window, cx);
         let editing = self.is_editing(window, cx);
-        let field = if editing {
-            palette.field_focused
-        } else {
-            palette.field
-        };
         let field_box = h_stack()
             .id("titlebar-omnibox")
             .relative()
@@ -213,7 +208,7 @@ impl Render for Omnibox {
             .min_w_0()
             .h(px(metrics::OMNIBOX_HEIGHT))
             .rounded(px(metrics::OMNIBOX_RADIUS))
-            .bg(rgba(field))
+            .bg(rgba(palette.surface))
             .border_1()
             .border_color(if self.invalid {
                 rgb_to_hsla(rgba(palette.field_error_border))

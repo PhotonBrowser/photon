@@ -194,7 +194,7 @@ fn browser_tab(
         .aria_position_in_set(index + 1)
         .aria_size_of_set(tab_count)
         .track_focus(&focus_handle)
-        .focus_visible(|style| style.bg(rgba(palette.tab_hover_surface)))
+        .focus_visible(|style| style.bg(rgba(palette.hover_surface)))
         .flex_auto()
         .min_w(px(metrics::TAB_MIN_WIDTH))
         .max_w(px(metrics::TAB_MAX_WIDTH))
@@ -221,13 +221,13 @@ fn browser_tab(
                 cx.new(|_| TabDragPreview { label, palette })
             }
         })
-        .drag_over::<DraggedTab>(move |style, _, _, _| style.bg(rgba(palette.tab_hover_surface)))
+        .drag_over::<DraggedTab>(move |style, _, _, _| style.bg(rgba(palette.hover_surface)))
         .on_drop(tab.on_drop);
 
     control = if tab.active {
-        control.bg(rgba(palette.tab_active_surface))
+        control.bg(rgba(palette.surface))
     } else {
-        control.hover(|style| style.bg(rgba(palette.tab_hover_surface)))
+        control.hover(|style| style.bg(rgba(palette.hover_surface)))
     };
 
     let icon_color = if tab.active {
@@ -303,7 +303,7 @@ fn audio_control_button(
         .size(px(metrics::TAB_AUDIO_BUTTON_SIZE))
         .rounded(px(metrics::CONTROL_RADIUS))
         .text_color(rgb(icon_color))
-        .hover(|style| style.bg(rgba(palette.control_hover_surface)))
+        .hover(|style| style.bg(rgba(palette.hover_surface)))
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .on_click(on_click)
         .child(audio_icon(icon_color, metrics::TAB_AUDIO_ICON_SIZE, muted))
@@ -329,7 +329,7 @@ fn close_tab_button(
         .size(px(metrics::TAB_CLOSE_BUTTON_SIZE))
         .rounded(px(metrics::CONTROL_RADIUS))
         .text_color(rgb(palette.text_secondary))
-        .hover(|style| style.bg(rgba(palette.control_hover_surface)))
+        .hover(|style| style.bg(rgba(palette.hover_surface)))
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .on_click(on_click)
         .child(close_icon(palette.text_secondary, metrics::TAB_ICON_SIZE))
@@ -352,7 +352,7 @@ fn new_tab_button(
         .size(px(metrics::TAB_HEIGHT))
         .rounded(px(metrics::CONTROL_RADIUS))
         .text_color(rgb(palette.text_secondary))
-        .hover(|style| style.bg(rgba(palette.control_hover_surface)))
+        .hover(|style| style.bg(rgba(palette.hover_surface)))
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .on_click(on_click)
         .child(add_icon(palette.text_secondary, metrics::TAB_ICON_SIZE))

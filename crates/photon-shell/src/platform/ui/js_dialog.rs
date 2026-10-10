@@ -183,7 +183,7 @@ impl Render for JavaScriptDialog {
                     .h(px(metrics::OMNIBOX_HEIGHT))
                     .px(px(metrics::OMNIBOX_HORIZONTAL_PADDING))
                     .rounded(px(metrics::MENU_ITEM_RADIUS))
-                    .bg(rgba(palette.field_focused))
+                    .bg(rgba(palette.surface))
                     .text_size(px(metrics::MENU_FONT_SIZE))
                     .capture_action(cx.listener(Self::accept_from_field))
                     .capture_action(cx.listener(Self::cancel_from_field))

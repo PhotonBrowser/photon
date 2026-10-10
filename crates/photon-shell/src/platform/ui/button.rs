@@ -66,8 +66,8 @@ pub(super) fn button(
     } else {
         button
             .text_color(rgb(palette.text_primary))
-            .bg(rgba(palette.control_hover_surface))
-            .hover(|style| style.bg(rgba(palette.hover_surface)))
+            .bg(rgba(palette.surface))
+            .hover(|style| style.bg(rgba(palette.selected_surface)))
     }
 }
 
@@ -104,7 +104,7 @@ pub(super) fn icon_button(
     }
     button
         .tab_index(0)
-        .hover(|style| style.bg(rgba(palette.control_hover_surface)))
+        .hover(|style| style.bg(rgba(palette.hover_surface)))
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .on_click(on_click)
 }

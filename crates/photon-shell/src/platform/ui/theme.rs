@@ -46,14 +46,12 @@ impl SurfaceOpacity {
 mod opacity {
     pub(super) const TEXT_SECONDARY: f32 = 0.72;
     pub(super) const TEXT_DISABLED: f32 = 0.42;
-    pub(super) const FOCUSED_FIELD: f32 = 0.08;
-    pub(super) const TAB_HOVER: f32 = 0.12;
-    pub(super) const CONTROL_HOVER: f32 = 0.18;
     pub(super) const PERFORMANCE_SURFACE: f32 = 0.95;
     pub(super) const MODAL_BACKDROP: f32 = 0.28;
     pub(super) const MENU_BORDER: f32 = 0.12;
     pub(super) const HOVER: f32 = 0.07;
-    pub(super) const INTERNAL_PAGE: f32 = 0.04;
+    /// How much of the text color tints the shared surface.
+    pub(super) const SURFACE_TINT: f32 = 0.06;
     pub(super) const SELECTED: f32 = 0.12;
 }
 
@@ -102,18 +100,14 @@ pub(super) struct ThemeColors {
     pub text_secondary: u32,
     pub text_disabled: u32,
     pub selection: u32,
-    pub field: u32,
-    pub field_focused: u32,
     pub field_error_border: u32,
-    pub tab_active_surface: u32,
-    pub tab_hover_surface: u32,
-    pub control_hover_surface: u32,
     pub performance_palette: PerformancePalette,
     pub menu_surface: u32,
     pub menu_border: u32,
-    /// The background of the browser's own pages: a subtle translucent tint
-    /// set apart from the window.
-    pub internal_page_surface: u32,
+    /// The one surface the window's parts sit on: the browser's own pages,
+    /// the omnibox field, the active tab, buttons and text fields. A light
+    /// tint of the window, as see-through as the transparency setting says.
+    pub surface: u32,
     /// A row or control under the pointer.
     pub hover_surface: u32,
     /// The selected row, such as the open settings section.
@@ -161,16 +155,7 @@ impl ThemeColors {
             text_secondary: to_rgb_token(text_secondary),
             text_disabled: to_rgb_token(text_disabled),
             selection: to_rgba_token(colors.selected),
-            field: control(colors.container),
-            field_focused: control(mix_colors(
-                colors.selected,
-                colors.container,
-                opacity::FOCUSED_FIELD,
-            )),
             field_error_border: to_rgba_token(error),
-            tab_active_surface: control(colors.container),
-            tab_hover_surface: to_rgba_token(colors.text.opacity(opacity::TAB_HOVER)),
-            control_hover_surface: to_rgba_token(colors.text.opacity(opacity::CONTROL_HOVER)),
             performance_palette: PerformancePalette {
                 surface: to_rgba_token(
                     colors
@@ -186,9 +171,11 @@ impl ThemeColors {
             // A light hairline that separates raised surfaces from what is under
             // them without a dark outline.
             menu_border: to_rgba_token(colors.text.opacity(opacity::MENU_BORDER)),
-            // A light tint over the window's frosted background, like the
-            // rest of the window.
-            internal_page_surface: to_rgba_token(colors.text.opacity(opacity::INTERNAL_PAGE)),
+            surface: control(mix_colors(
+                colors.text,
+                colors.background,
+                opacity::SURFACE_TINT,
+            )),
             hover_surface: to_rgba_token(colors.text.opacity(opacity::HOVER)),
             selected_surface: to_rgba_token(colors.text.opacity(opacity::SELECTED)),
             chosen: to_rgb_token(link),
