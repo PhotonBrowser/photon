@@ -42,5 +42,11 @@ gpui::actions!(
         FindNext,
         /// Go to the previous find-in-page match.
         FindPrevious,
+        /// Zoom the page in a step.
+        ZoomIn,
+        /// Zoom the page out a step.
+        ZoomOut,
+        /// Return the page to 100%.
+        ResetZoom,
     ]
 );
