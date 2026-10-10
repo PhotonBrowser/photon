@@ -32,6 +32,8 @@ fn main() {
         "native/embedder/PhotonEmbedderBridge.cpp",
         "native/embedder/PhotonEmbedderBridge.h",
         "native/embedder/ReducedMotionObserver.mm",
+        "native/embedder/SystemClipboard.h",
+        "native/embedder/SystemClipboard.mm",
         "native/embedder/WindowObserver.mm",
     ] {
         println!("cargo:rerun-if-changed={}", root.join(source).display());
@@ -51,11 +53,13 @@ fn main() {
         cc::Build::new()
             .cpp(true)
             .file(root.join("native/embedder/ReducedMotionObserver.mm"))
+            .file(root.join("native/embedder/SystemClipboard.mm"))
             .file(root.join("native/embedder/WindowObserver.mm"))
+            .std("c++20")
             .flag("-fobjc-arc")
             .flag("-fblocks")
             .include(root.join("native/embedder"))
-            .compile("photon_reduced_motion_observer");
+            .compile("photon_native_macos");
         for framework in ["AppKit", "Foundation", "Metal", "CoreFoundation"] {
             println!("cargo:rustc-link-lib=framework={framework}");
         }
