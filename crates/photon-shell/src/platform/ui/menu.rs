@@ -1,9 +1,11 @@
 //! Shared surface and items for browser menus.
 
-use gpui::{ElementId, MouseButton, Role, SharedString, Toggled, div, prelude::*, px, rgb, rgba};
+use gpui::{ElementId, MouseButton, Role, SharedString, div, prelude::*, px, rgb, rgba};
 
 use super::button::icon_button;
+use super::controls::{switch, toggled};
 use super::icons::{add_icon, check_icon, minus_icon};
+use super::layout::{Elevated, Elevation};
 use super::layout::{h_stack, v_stack};
 use super::motion::{AnimateIn, Entrance, Transition};
 use super::{metrics, theme::ThemeColors};
@@ -13,43 +15,49 @@ use super::ClickHandler;
 /// How menus open and close.
 pub(super) const MENU_MOTION: Entrance = Entrance::popover();
 
-/// A menu's raised surface. It animates in each time it opens and out as it
-/// closes, so every popover, dropdown and context menu built on it does too.
+/// A menu's raised surface, at the standard menu width.
 pub(super) fn menu_surface(
+    content: impl IntoElement,
+    transition: Transition,
+    palette: ThemeColors,
+) -> impl IntoElement {
+    popover_surface(
+        "Browser menu",
+        Role::Menu,
+        metrics::MENU_WIDTH,
+        content,
+        transition,
+        palette,
+    )
+}
+
+/// A raised surface for menus and small panels, `width` wide. It animates in
+/// each time it opens and out as it closes, so every popover, dropdown and
+/// context menu built on it does too.
+pub(super) fn popover_surface(
+    label: &'static str,
+    role: Role,
+    width: f32,
     content: impl IntoElement,
     transition: Transition,
     palette: ThemeColors,
 ) -> impl IntoElement {
     v_stack()
         .id("browser-menu")
-        .role(Role::Menu)
-        .aria_label("Browser menu")
+        .role(role)
+        .aria_label(label)
         .tab_group()
-        .w(px(metrics::MENU_WIDTH))
-        .p(px(metrics::MENU_PADDING))
-        .gap(px(metrics::MENU_ITEM_GAP))
+        .w(px(width))
+        .py(px(metrics::MENU_PADDING))
         .rounded(px(metrics::SURFACE_RADIUS))
         .border_1()
         .border_color(rgba(palette.menu_border))
         .bg(rgba(palette.menu_surface))
         .text_size(px(metrics::MENU_FONT_SIZE))
         .text_color(rgb(palette.text_primary))
-        .shadow_lg()
+        .elevated(Elevation::High)
         .child(content)
         .animate("browser-menu-motion", MENU_MOTION, transition)
-}
-
-pub(super) fn menu_section(label: &'static str, palette: ThemeColors) -> impl IntoElement {
-    div()
-        .id("browser-menu-theme-heading")
-        .role(Role::Heading)
-        .aria_level(3)
-        .w_full()
-        .px(px(metrics::MENU_SECTION_INSET))
-        .py(px(metrics::MENU_ITEM_GAP))
-        .text_size(px(metrics::TAB_FONT_SIZE))
-        .text_color(rgb(palette.text_secondary))
-        .child(label)
 }
 
 pub(super) fn menu_separator(palette: ThemeColors) -> impl IntoElement {
@@ -58,7 +66,7 @@ pub(super) fn menu_separator(palette: ThemeColors) -> impl IntoElement {
         .aria_hidden()
         .w_full()
         .h(px(metrics::MENU_SEPARATOR_HEIGHT))
-        .my(px(metrics::MENU_ITEM_GAP))
+        .my(px(metrics::MENU_SEPARATOR_MARGIN))
         .bg(rgba(palette.menu_border))
 }
 
@@ -80,13 +88,8 @@ pub(super) fn menu_checkbox(
     on_click: ClickHandler,
     palette: ThemeColors,
 ) -> impl IntoElement {
-    let toggled = if checked {
-        Toggled::True
-    } else {
-        Toggled::False
-    };
     menu_item(id, label, tab_index, Role::MenuItemCheckBox, palette)
-        .aria_toggled(toggled)
+        .aria_toggled(toggled(checked))
         .child(if checked {
             check_icon(palette.text_secondary, metrics::TOOLBAR_ICON_SIZE).into_any_element()
         } else {
@@ -97,24 +100,40 @@ pub(super) fn menu_checkbox(
         .on_click(on_click)
 }
 
-pub(super) fn menu_radio(
-    id: impl Into<ElementId>,
-    label: impl Into<SharedString>,
+/// A menu row with a switch that turns something on or off.
+pub(super) fn menu_switch(
+    id: &'static str,
+    label: &'static str,
     tab_index: isize,
-    selected: bool,
-    on_click: ClickHandler,
+    on: bool,
+    on_toggle: ClickHandler,
     palette: ThemeColors,
 ) -> impl IntoElement {
-    menu_item(id, label, tab_index, Role::MenuItemRadio, palette)
-        .aria_selected(selected)
-        .child(if selected {
-            check_icon(palette.text_secondary, metrics::TOOLBAR_ICON_SIZE).into_any_element()
-        } else {
-            div()
-                .size(px(metrics::TOOLBAR_ICON_SIZE))
-                .into_any_element()
-        })
-        .on_click(on_click)
+    menu_item(id, label, tab_index, Role::MenuItemCheckBox, palette)
+        .aria_toggled(toggled(on))
+        .child(switch(id, on, palette))
+        .on_click(on_toggle)
+}
+
+/// A small heading over the rows or control that follow it.
+pub(super) fn menu_heading(label: &'static str, palette: ThemeColors) -> impl IntoElement {
+    div()
+        .w_full()
+        .px(px(metrics::MENU_ITEM_HORIZONTAL_PADDING))
+        .pt(px(metrics::MENU_SEPARATOR_MARGIN))
+        .pb(px(metrics::MENU_ITEM_GAP))
+        .text_size(px(metrics::TAB_FONT_SIZE))
+        .text_color(rgb(palette.text_secondary))
+        .child(label)
+}
+
+/// Lines up a control, such as a segmented choice, with the menu's rows.
+pub(super) fn menu_block(content: impl IntoElement) -> impl IntoElement {
+    div()
+        .w_full()
+        .px(px(metrics::MENU_ITEM_HORIZONTAL_PADDING))
+        .pb(px(metrics::MENU_SEPARATOR_MARGIN))
+        .child(content)
 }
 
 /// A menu action that cannot be chosen right now.
@@ -137,8 +156,8 @@ fn menu_item(
 ) -> gpui::Stateful<gpui::Div> {
     menu_row(id, label.into(), role)
         .tab_index(tab_index)
-        .focus_visible(|style| style.border_1().border_color(rgb(palette.accent)))
-        .hover(|style| style.bg(rgba(palette.menu_hover)))
+        .focus_visible(|style| style.border_1().border_color(rgb(palette.chosen)))
+        .hover(|style| style.bg(rgba(palette.hover_surface)))
 }
 
 /// A menu row's layout, with a label that is cut short when too long.
@@ -157,7 +176,6 @@ fn menu_row(
         .w_full()
         .h(px(metrics::MENU_ITEM_HEIGHT))
         .px(px(metrics::MENU_ITEM_HORIZONTAL_PADDING))
-        .rounded(px(metrics::MENU_ITEM_RADIUS))
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .child(div().min_w_0().truncate().child(label))
 }
@@ -181,7 +199,7 @@ pub(super) fn menu_stepper(
         .justify_between()
         .w_full()
         .h(px(metrics::MENU_ITEM_HEIGHT))
-        .pl(px(metrics::MENU_ITEM_HORIZONTAL_PADDING))
+        .px(px(metrics::MENU_ITEM_HORIZONTAL_PADDING))
         .child(label)
         .child(
             h_stack()
@@ -202,14 +220,14 @@ pub(super) fn menu_stepper(
                         .role(Role::Button)
                         .aria_label("Reset")
                         .tab_index(0)
-                        .focus_visible(|style| style.border_1().border_color(rgb(palette.accent)))
+                        .focus_visible(|style| style.border_1().border_color(rgb(palette.chosen)))
                         .justify_center()
                         .min_w(px(metrics::MENU_STEPPER_VALUE_WIDTH))
                         .h(px(metrics::ICON_BUTTON_SIZE))
                         .items_center()
                         .rounded(px(metrics::MENU_ITEM_RADIUS))
                         .text_color(rgb(palette.text_secondary))
-                        .hover(|style| style.bg(rgba(palette.menu_hover)))
+                        .hover(|style| style.bg(rgba(palette.hover_surface)))
                         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                         .on_click(on_reset)
                         .child(value),
