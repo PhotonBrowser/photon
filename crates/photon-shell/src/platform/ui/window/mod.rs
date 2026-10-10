@@ -8,6 +8,7 @@ mod content;
 mod find;
 mod menu;
 mod page_menu;
+mod pinned;
 mod popup_window;
 mod popups;
 mod sidebar;
@@ -17,8 +18,8 @@ mod tabs;
 mod zoom;
 
 use gpui::{
-    App, Context, Entity, FocusHandle, Render, StyleRefinement, Subscription, WeakEntity, Window,
-    div, prelude::*, px,
+    App, Context, Entity, FocusHandle, Render, StyleRefinement, Subscription, Task, WeakEntity,
+    Window, div, prelude::*, px,
 };
 use photon_core::{BrowserCommand, TabLayout};
 use std::cell::RefCell;
@@ -63,6 +64,8 @@ struct BrowserWindow {
     /// Where the sidebar is, in the vertical layout.
     sidebar: SidebarState,
     tab_focus_handles: Vec<FocusHandle>,
+    /// Closes today's tabs left unused, when the setting asks.
+    _archive_task: Task<()>,
     active_tab: usize,
     next_tab_id: u64,
     omnibox: Entity<Omnibox>,
@@ -168,7 +171,7 @@ impl BrowserWindow {
             BrowserCommand::NewTab => self.open_tab(window, cx),
             BrowserCommand::NewWindow => {
                 if let Err(error) =
-                    open_browser_window(self.runtime.clone(), app::initial_address(), cx)
+                    open_browser_window(self.runtime.clone(), app::initial_address(), false, cx)
                 {
                     trace(format_args!("new window: {error:#}"));
                 }
@@ -305,9 +308,12 @@ impl Render for BrowserWindow {
     }
 }
 
+/// Opens a browser window showing `startup_address`, or a new tab page. The
+/// first window at launch also opens the pinned tabs again.
 fn open_browser_window(
     runtime: Rc<EngineRuntime>,
     startup_address: Option<String>,
+    restore_pinned_tabs: bool,
     cx: &mut App,
 ) -> anyhow::Result<()> {
     // A page's address opens that page; any other address a web page.
@@ -357,6 +363,7 @@ fn open_browser_window(
                 chrome,
                 sidebar: SidebarState::new(),
                 tab_focus_handles: Vec::new(),
+                _archive_task: BrowserWindow::archive_unused_tabs_regularly(window, cx),
                 active_tab: 0,
                 next_tab_id: 1,
                 omnibox,
@@ -393,6 +400,9 @@ fn open_browser_window(
                     browser.insert_content(0, content, true, window, cx);
                 }
                 None => browser.insert_page(0, startup_page.unwrap_or(NEW_TAB), window, cx),
+            }
+            if restore_pinned_tabs {
+                browser.restore_pinned_tabs(window, cx);
             }
             browser
         })

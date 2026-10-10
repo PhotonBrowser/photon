@@ -165,6 +165,9 @@ impl BrowserWindow {
                         cx.stop_propagation();
                         this.open_command_bar(window, cx);
                     })),
+                    Box::new(cx.listener(|this, dragged: &DraggedTab, _, cx| {
+                        this.drop_tab_into_today(dragged.index, cx);
+                    })),
                     palette,
                 )
                 .into_any_element(),
@@ -339,6 +342,7 @@ impl BrowserWindow {
                     label,
                     icon_appearing: self.icon_appearing(tab.id, &icon),
                     icon,
+                    pinned: tab.pin.is_some(),
                     active: index == self.active_tab,
                     focus_handle: self.tab_focus_handles[index].clone(),
                     on_select: Box::new(cx.listener(move |this, _, window, cx| {
@@ -376,7 +380,7 @@ impl BrowserWindow {
                         },
                     )),
                     on_drop: Box::new(cx.listener(move |this, dragged: &DraggedTab, _, cx| {
-                        this.move_tab(dragged.index, index, cx);
+                        this.drop_tab(dragged.index, index, cx);
                     })),
                 }
             })

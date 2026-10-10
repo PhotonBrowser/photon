@@ -13,8 +13,9 @@ use super::BrowserWindow;
 use super::content::TabContent;
 
 impl BrowserWindow {
-    /// Moves the tab at `from` to `to`, keeping the same tab active.
-    pub(super) fn move_tab(&mut self, from: usize, to: usize, cx: &mut Context<Self>) {
+    /// Moves the tab at `from` to `to`, keeping the same tab active. Callers
+    /// keep pinned tabs first; see `drop_tab`.
+    pub(super) fn move_tab_to(&mut self, from: usize, to: usize, cx: &mut Context<Self>) {
         let count = self.tabs.len();
         if from == to || from >= count || to >= count {
             return;
@@ -134,6 +135,7 @@ impl BrowserWindow {
                 })),
                 palette,
             ))
+            .children(self.pin_action(index, palette, cx))
             .children(self.favourite_action(index, palette, cx))
             .child(menu_separator(palette))
             .child(menu_action(
@@ -174,6 +176,30 @@ impl BrowserWindow {
             ));
         }
         menu_surface(content, transition, palette)
+    }
+
+    /// Pins the tab above today's tabs, or unpins it.
+    fn pin_action(
+        &self,
+        index: usize,
+        palette: ThemeColors,
+        cx: &mut Context<Self>,
+    ) -> Option<impl IntoElement + use<>> {
+        if !self.can_pin(index, cx) {
+            return None;
+        }
+        let pinned = self.tabs[index].pin.is_some();
+        Some(menu_action(
+            "tab-menu-pin",
+            if pinned { "Unpin Tab" } else { "Pin Tab" },
+            6,
+            Box::new(cx.listener(move |this, _, _, cx| {
+                cx.stop_propagation();
+                this.open_menu = None;
+                this.toggle_pin(index, cx);
+            })),
+            palette,
+        ))
     }
 
     /// Adds a web page's site to the favourites, or removes it.

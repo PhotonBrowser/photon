@@ -1,24 +1,29 @@
-//! The sidebar's vertical tab list.
+//! The sidebar's vertical tab list: pinned tabs, then today's tabs under a
+//! row that opens a new tab.
 
 use gpui::{MouseButton, Role, div, prelude::*, px, rgb, rgba};
 
 use super::super::icons::add_icon;
 use super::super::layout::{h_stack, v_stack};
 use super::super::{ClickHandler, metrics, theme::ThemeColors};
-use super::{TabItem, TabParts};
+use super::{DraggedTab, TabDrop, TabItem, TabParts};
 
-/// The tabs, one row each, under a row that opens a new tab.
+/// The tabs, one row each: pinned tabs above a divider, then a row that
+/// opens a new tab and today's tabs. A tab dropped on the divider or that
+/// row joins today's tabs.
 pub(in super::super) fn tab_list(
     tabs: Vec<TabItem>,
     on_new_tab: ClickHandler,
+    on_drop_into_today: TabDrop,
     palette: ThemeColors,
 ) -> impl IntoElement {
     let tab_count = tabs.len();
     let mut focus_index = 1;
-    let mut rows = Vec::with_capacity(tab_count);
+    let (mut pinned, mut today) = (Vec::new(), Vec::new());
     for (index, tab) in tabs.into_iter().enumerate() {
         let stops = TabParts::focus_stops(&tab.icon);
-        rows.push(tab_row(
+        let section = if tab.pinned { &mut pinned } else { &mut today };
+        section.push(tab_row(
             TabParts::new(
                 tab,
                 index,
@@ -31,20 +36,50 @@ pub(in super::super) fn tab_list(
         ));
         focus_index += stops;
     }
+    let section = |id: &'static str, label: &'static str, rows: Vec<_>| {
+        v_stack()
+            .id(id)
+            .role(Role::TabList)
+            .aria_label(label)
+            .w_full()
+            .gap(px(metrics::SIDEBAR_ITEM_GAP))
+            .children(rows)
+    };
+    let on_drop_into_today = std::rc::Rc::new(on_drop_into_today);
+    let divider = (!pinned.is_empty()).then(|| {
+        let on_drop = on_drop_into_today.clone();
+        div()
+            .id("browser-tab-divider")
+            .w_full()
+            .py(px(metrics::SIDEBAR_SEPARATOR_MARGIN))
+            .px(px(metrics::SIDEBAR_TAB_PADDING))
+            .rounded(px(metrics::SIDEBAR_ITEM_RADIUS))
+            .drag_over::<DraggedTab>(move |style, _, _, _| style.bg(rgba(palette.hover_surface)))
+            .on_drop(move |dragged: &DraggedTab, window, cx| on_drop(dragged, window, cx))
+            .child(
+                div()
+                    .h(px(metrics::MENU_SEPARATOR_HEIGHT))
+                    .bg(rgba(palette.menu_border)),
+            )
+    });
     v_stack()
         .w_full()
         .gap(px(metrics::SIDEBAR_ITEM_GAP))
         .tab_group()
-        .child(new_tab_row(on_new_tab, palette))
+        .when(!pinned.is_empty(), |list| {
+            list.child(section("browser-pinned-tabs", "Pinned tabs", pinned))
+        })
+        .children(divider)
         .child(
-            v_stack()
-                .id("browser-tab-list")
-                .role(Role::TabList)
-                .aria_label("Browser tabs")
-                .w_full()
-                .gap(px(metrics::SIDEBAR_ITEM_GAP))
-                .children(rows),
+            new_tab_row(on_new_tab, palette)
+                .drag_over::<DraggedTab>(move |style, _, _, _| {
+                    style.bg(rgba(palette.hover_surface))
+                })
+                .on_drop(move |dragged: &DraggedTab, window, cx| {
+                    on_drop_into_today(dragged, window, cx)
+                }),
         )
+        .child(section("browser-tab-list", "Browser tabs", today))
 }
 
 /// A full-width row: icon, title, and a close button on the active tab and
@@ -79,7 +114,7 @@ fn tab_row(parts: TabParts, palette: ThemeColors) -> impl IntoElement {
 }
 
 /// "+ New Tab", above the tabs.
-fn new_tab_row(on_click: ClickHandler, palette: ThemeColors) -> impl IntoElement {
+fn new_tab_row(on_click: ClickHandler, palette: ThemeColors) -> gpui::Stateful<gpui::Div> {
     h_stack()
         .id("browser-new-tab")
         .role(Role::Button)

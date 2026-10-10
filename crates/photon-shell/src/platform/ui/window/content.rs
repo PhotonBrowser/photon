@@ -2,8 +2,9 @@
 //! and how the window follows each.
 
 use gpui::{AnyElement, App, Context, Entity, Subscription, Window, prelude::*};
-use photon_core::BrowserCommand;
+use photon_core::{BrowserCommand, Shortcut};
 use std::rc::Rc;
+use std::time::Instant;
 
 use super::super::super::engine::{EngineRuntime, EngineSession, UiWake};
 use super::super::super::trace;
@@ -49,6 +50,21 @@ impl TabContent {
 pub(super) struct BrowserTab {
     pub(super) id: u64,
     pub(super) content: TabContent,
+    /// Where a pinned tab was pinned; `None` for today's tabs.
+    pub(super) pin: Option<Shortcut>,
+    /// When the tab was last in use, for closing tabs left unused.
+    pub(super) last_active: Instant,
+}
+
+impl BrowserTab {
+    pub(super) fn new(id: u64, content: TabContent, pin: Option<Shortcut>) -> Self {
+        Self {
+            id,
+            content,
+            pin,
+            last_active: Instant::now(),
+        }
+    }
 }
 
 impl BrowserWindow {

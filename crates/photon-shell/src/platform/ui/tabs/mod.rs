@@ -132,6 +132,8 @@ pub(super) struct TabItem {
     pub icon: TabIcon,
     /// Whether the icon is still growing in after it first appeared.
     pub icon_appearing: bool,
+    /// Whether the tab is pinned above today's tabs.
+    pub pinned: bool,
     pub active: bool,
     pub focus_handle: FocusHandle,
     pub on_select: ClickHandler,
@@ -154,6 +156,7 @@ struct TabParts {
     label: String,
     close: Stateful<gpui::Div>,
     active: bool,
+    pinned: bool,
     /// The group name for hover styles inside the tab.
     group: String,
 }
@@ -253,6 +256,7 @@ impl TabParts {
             label: tab.label,
             close,
             active: tab.active,
+            pinned: tab.pinned,
             group: tab_id,
         }
     }

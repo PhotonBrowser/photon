@@ -47,7 +47,8 @@ pub fn run() {
         announce_service_restarts(&runtime, cx);
         quit_after_env_timeout(cx);
         cx.activate(true);
-        open_browser_window(runtime, initial_address(), cx).expect("open GPUI-CE Photon window");
+        open_browser_window(runtime, initial_address(), true, cx)
+            .expect("open GPUI-CE Photon window");
     });
 }
 

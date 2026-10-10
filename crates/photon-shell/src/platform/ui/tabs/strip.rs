@@ -50,8 +50,24 @@ pub(in super::super) fn tab_strip(
         .child(new_tab_button(on_new_tab, focus_index, palette))
 }
 
-/// A tab sized to share the strip: icon, title and close button.
+/// A tab sized to share the strip: icon, title and close button. A pinned
+/// tab is just its icon, at a fixed width.
 fn strip_tab(parts: TabParts, palette: ThemeColors) -> impl IntoElement {
+    if parts.pinned {
+        let tab = parts
+            .tab
+            .flex_shrink_0()
+            .justify_center()
+            .w(px(metrics::PINNED_TAB_WIDTH))
+            .h(px(metrics::TAB_HEIGHT))
+            .rounded(px(metrics::CONTROL_RADIUS));
+        let tab = if parts.active {
+            tab.bg(rgba(palette.surface))
+        } else {
+            tab.hover(|style| style.bg(rgba(palette.hover_surface)))
+        };
+        return tab.child(parts.icon);
+    }
     let tab = parts
         .tab
         .flex_auto()

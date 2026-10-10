@@ -1,6 +1,7 @@
 //! Opening, closing and switching tabs, and the tab strip they show in.
 
 use gpui::{Context, KeyDownEvent, Window};
+use photon_core::Shortcut;
 use std::time::{Duration, Instant};
 
 use super::super::icons::LOADING_SPINNER_STEPS;
@@ -40,6 +41,9 @@ impl BrowserWindow {
             self.open_menu = None;
             // The find bar searches one page; switching tabs ends its search.
             self.close_find_bar(false, window, cx);
+            if let Some(previous) = self.tabs.get_mut(self.active_tab) {
+                previous.last_active = Instant::now();
+            }
             if let Some(previous) = self
                 .tabs
                 .get(self.active_tab)
@@ -52,6 +56,7 @@ impl BrowserWindow {
             }
             self.active_tab = index;
         }
+        self.tabs[index].last_active = Instant::now();
         let webview = self.tabs[index].content.webview();
         if let Some(webview) = webview.as_ref() {
             let window_visible = self.window_visible;
@@ -91,7 +96,7 @@ impl BrowserWindow {
     ) {
         if let Some(address) = address {
             let webview = create_webview(cx, self.runtime.clone(), address);
-            self.insert_webview(index, webview, true, window, cx);
+            self.insert_webview(index, webview, None, true, window, cx);
         } else {
             self.insert_page(index, NEW_TAB, window, cx);
         }
@@ -135,7 +140,7 @@ impl BrowserWindow {
             .position(|tab| tab.content.webview().as_ref() == Some(opener))
             .map_or(self.tabs.len(), |index| index + 1);
         let webview = create_webview(cx, self.runtime.clone(), address);
-        self.insert_webview(index, webview, activate, window, cx);
+        self.insert_webview(index, webview, None, activate, window, cx);
     }
 
     pub(super) fn open_requested_tab(
@@ -145,15 +150,17 @@ impl BrowserWindow {
         cx: &mut Context<Self>,
     ) {
         let webview = create_webview_from_session(cx, self.runtime.clone(), request.session);
-        self.insert_webview(self.tabs.len(), webview, request.activate, window, cx);
+        self.insert_webview(self.tabs.len(), webview, None, request.activate, window, cx);
     }
 
-    /// Inserts a tab showing `webview`, which adopts the window's page size so
-    /// it lays out and loads even while in the background.
-    fn insert_webview(
+    /// Inserts a tab showing `webview`, pinned at `pin` or one of today's
+    /// tabs. It adopts the window's page size so it lays out and loads even
+    /// while in the background.
+    pub(super) fn insert_webview(
         &mut self,
         index: usize,
         webview: gpui::Entity<super::super::PhotonWebView>,
+        pin: Option<Shortcut>,
         activate: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -163,7 +170,11 @@ impl BrowserWindow {
             .and_then(|webview| webview.read(cx).last_viewport);
         follow_appearance(&webview, window, cx);
         webview.update(cx, |view, _| view.adopt_viewport(viewport));
-        self.insert_content(index, TabContent::Web(webview), activate, window, cx);
+        let content = TabContent::Web(webview);
+        match pin {
+            Some(pin) => self.insert_tab_at(index, content, Some(pin), activate, window, cx),
+            None => self.insert_content(index, content, activate, window, cx),
+        }
     }
 
     /// Inserts a tab showing one of Photon's own pages, and switches to it.
@@ -178,6 +189,7 @@ impl BrowserWindow {
         self.insert_content(index, content, true, window, cx);
     }
 
+    /// Inserts a tab of today's tabs, never among the pinned ones.
     pub(super) fn insert_content(
         &mut self,
         index: usize,
@@ -186,16 +198,25 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let index = index.clamp(self.pinned_count(), self.tabs.len());
+        self.insert_tab_at(index, content, None, activate, window, cx);
+    }
+
+    /// Inserts a tab, pinned at `pin` or one of today's tabs.
+    pub(super) fn insert_tab_at(
+        &mut self,
+        index: usize,
+        content: TabContent,
+        pin: Option<Shortcut>,
+        activate: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let index = index.min(self.tabs.len());
         let subscription = self.subscribe_to_content(&content, window, cx);
         let id = self.allocate_tab_id();
-        self.tabs.insert(
-            index,
-            BrowserTab {
-                id,
-                content: content.clone(),
-            },
-        );
+        self.tabs
+            .insert(index, BrowserTab::new(id, content.clone(), pin));
         self.tab_subscriptions.insert(index, subscription);
         self.tab_focus_handles
             .insert(index, cx.focus_handle().tab_stop(self.tabs.len() == 1));
@@ -269,7 +290,7 @@ impl BrowserWindow {
         }
 
         let was_active = index == self.active_tab;
-        self.tabs.remove(index);
+        let was_pinned = self.tabs.remove(index).pin.is_some();
         drop(self.tab_subscriptions.remove(index));
         self.tab_focus_handles.remove(index);
         if index < self.active_tab {
@@ -278,6 +299,9 @@ impl BrowserWindow {
             self.active_tab = index.min(self.tabs.len() - 1);
         }
 
+        if was_pinned {
+            self.save_pinned_tabs(cx);
+        }
         if was_active {
             self.activate_tab(self.active_tab, true, window, cx);
         } else {
@@ -309,7 +333,7 @@ impl BrowserWindow {
         let content = self.new_page(NEW_TAB, cx);
         self.tab_subscriptions[0] = self.subscribe_to_content(&content, window, cx);
         let id = self.allocate_tab_id();
-        self.tabs[0] = BrowserTab { id, content };
+        self.tabs[0] = BrowserTab::new(id, content, None);
         self.active_tab = 0;
         self.activate_tab(0, true, window, cx);
     }

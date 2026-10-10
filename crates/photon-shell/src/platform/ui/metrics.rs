@@ -21,6 +21,8 @@ pub(super) const WINDOW_CONTROLS_INSET: f32 = 80.0;
 
 pub(super) const TAB_HEIGHT: f32 = 28.0;
 pub(super) const TAB_MIN_WIDTH: f32 = 72.0;
+/// A pinned tab in the strip, which shows only its icon.
+pub(super) const PINNED_TAB_WIDTH: f32 = 36.0;
 pub(super) const TAB_STRIP_GAP: f32 = 2.0;
 pub(super) const TAB_STRIP_INSET: f32 = 4.0;
 pub(super) const TAB_CLOSE_GAP: f32 = 6.0;
