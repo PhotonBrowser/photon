@@ -18,7 +18,7 @@ use gpui::{
     App, Context, Entity, FocusHandle, Render, StyleRefinement, Subscription, WeakEntity, Window,
     div, prelude::*, px,
 };
-use photon_core::BrowserCommand;
+use photon_core::{BrowserCommand, TabLayout};
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
@@ -34,9 +34,9 @@ use super::layout::{h_stack, v_stack};
 use super::modal::MODAL_MOTION;
 use super::motion::{AnimateIn, Presence};
 use super::omnibox::{Omnibox, OmniboxEvent};
-use super::pages::NEW_TAB;
+use super::pages::{NEW_TAB, find_page};
 use super::settings::Settings;
-use super::sidebar::RevealedIcon;
+use super::tabs::RevealedIcon;
 use super::{
     metrics,
     theme::{ThemeColors, palette},
@@ -101,7 +101,7 @@ struct BrowserWindow {
     _window_observer: Option<WindowObserver>,
 }
 
-/// The sidebar, or the slim bar shown while it is hidden. A cached view re-renders only when it is
+/// The tab strip and toolbar, or the sidebar. A cached view re-renders only when it is
 /// notified, so `BrowserWindow` notifies it whenever the window or a tab's page
 /// state changes; Engine frames, which notify only the page view, leave it be.
 struct BrowserChrome {
@@ -111,7 +111,7 @@ struct BrowserChrome {
 impl Render for BrowserChrome {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.browser
-            .update(cx, |browser, cx| browser.render_sidebar(window, cx))
+            .update(cx, |browser, cx| browser.render_chrome(window, cx))
             .unwrap_or_else(|_| div().into_any_element())
     }
 }
@@ -119,6 +119,19 @@ impl Render for BrowserChrome {
 impl BrowserWindow {
     fn palette(&self, window: &Window, cx: &App) -> ThemeColors {
         palette(window, cx)
+    }
+
+    /// Whether the chrome is a sidebar beside the page, rather than bars above it.
+    fn sidebar_beside_page(&self, cx: &App) -> bool {
+        Settings::get(cx).tab_layout == TabLayout::Vertical && self.sidebar_visible
+    }
+
+    /// The height of the chrome above the page.
+    fn chrome_height(&self, cx: &App) -> f32 {
+        match Settings::get(cx).tab_layout {
+            TabLayout::Horizontal => metrics::CHROME_HEIGHT,
+            TabLayout::Vertical => metrics::TITLEBAR_HEIGHT,
+        }
     }
 
     /// Redraws the chrome and every tab for changed settings, such as the theme.
@@ -195,6 +208,7 @@ impl Render for BrowserWindow {
         let dialog = self
             .dialog_presence
             .sync(self.dialog.clone(), MODAL_MOTION, cx);
+        let beside = self.sidebar_beside_page(cx);
         let page = div()
             .relative()
             .flex_1()
@@ -204,6 +218,8 @@ impl Render for BrowserWindow {
             .overflow_hidden()
             .size_full()
             .p(px(metrics::PAGE_INSET))
+            // Beside the sidebar, its own padding already separates the two.
+            .when(beside, |page| page.pl_0())
             .child(self.active_view(palette))
             // The find bar floats in the page's top-right corner.
             .children(find_bar.map(|(bar, transition)| {
@@ -225,9 +241,9 @@ impl Render for BrowserWindow {
                     .bottom(px(metrics::PAGE_INSET + metrics::CHIP_INSET))
                     .child(chip)
             }));
-        // The sidebar sits beside the page; hidden, a slim bar with room for
-        // the window controls sits above it.
-        let chrome_style = if self.sidebar_visible {
+        // The sidebar sits beside the page. The tab strip and toolbar sit
+        // above it, as does the slim bar shown while the sidebar is hidden.
+        let chrome_style = if beside {
             StyleRefinement::default()
                 .w(px(metrics::SIDEBAR_WIDTH))
                 .h_full()
@@ -235,11 +251,11 @@ impl Render for BrowserWindow {
         } else {
             StyleRefinement::default()
                 .w_full()
-                .h(px(metrics::TITLEBAR_HEIGHT))
+                .h(px(self.chrome_height(cx)))
                 .flex_shrink_0()
         };
         let chrome = self.chrome.clone().cached(chrome_style);
-        let body = if self.sidebar_visible {
+        let body = if beside {
             h_stack().size_full().child(chrome).child(page)
         } else {
             v_stack().size_full().child(chrome).child(page)
@@ -263,8 +279,11 @@ fn open_browser_window(
     startup_address: Option<String>,
     cx: &mut App,
 ) -> anyhow::Result<()> {
+    // A page's address opens that page; any other address a web page.
+    let startup_page = startup_address.as_deref().and_then(find_page);
     let initial_webview = startup_address
         .as_deref()
+        .filter(|_| startup_page.is_none())
         .map(|address| create_webview(cx, runtime.clone(), address));
     cx.open_window(window_settings::options(cx), move |window, cx| {
         window.set_window_title(photon_brand::NAME);
@@ -340,7 +359,7 @@ fn open_browser_window(
                     let content = TabContent::Web(webview);
                     browser.insert_content(0, content, true, window, cx);
                 }
-                None => browser.insert_page(0, NEW_TAB, window, cx),
+                None => browser.insert_page(0, startup_page.unwrap_or(NEW_TAB), window, cx),
             }
             browser
         })

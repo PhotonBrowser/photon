@@ -1,27 +1,26 @@
 //! The vertical tab sidebar: navigation, the address field, favourite sites,
-//! the current space's tabs, and a footer.
+//! the tabs, and a footer.
 //!
 //! These are views of state the browser window owns; the window builds them
 //! in `window/sidebar.rs`.
 //!
 //! - `navigation`: the top row with room for the window controls.
 //! - `favourites`: the grid of favourite sites.
-//! - `tabs`: the vertical tab list.
-//! - `footer`: the space header and the footer.
+//! - `footer`: settings and the browser menu.
+//!
+//! The vertical tab list itself lives with the other tab views in `tabs`.
 
 mod favourites;
 mod footer;
 mod navigation;
-mod tabs;
 
 use gpui::{AnyElement, div, prelude::*, px, rgba};
 
 use super::layout::{h_stack, v_stack};
 use super::{metrics, theme::ThemeColors};
 pub(super) use favourites::{FavouriteTile, favourites_grid};
-pub(super) use footer::{FooterActions, footer, space_header};
+pub(super) use footer::{FooterActions, footer};
 pub(super) use navigation::{NavigationActions, NavigationState, navigation_bar};
-pub(super) use tabs::{DraggedTab, ICON_ENTRANCE, RevealedIcon, TabIcon, TabItem, tab_list};
 
 /// The sidebar's sections.
 pub(super) struct SidebarSections {
@@ -29,13 +28,12 @@ pub(super) struct SidebarSections {
     pub(super) address: AnyElement,
     /// The favourites grid, when there are favourites.
     pub(super) favourites: Option<AnyElement>,
-    pub(super) space: AnyElement,
     pub(super) tabs: AnyElement,
     pub(super) footer: AnyElement,
 }
 
 /// Lays the sections out top to bottom: navigation, address and favourites
-/// stay put, the space's tabs scroll, and the footer stays at the bottom.
+/// stay put, the tabs scroll, and the footer stays at the bottom.
 pub(super) fn sidebar(sections: SidebarSections, palette: ThemeColors) -> impl IntoElement {
     let inset = |content: AnyElement| {
         h_stack()
@@ -70,8 +68,6 @@ pub(super) fn sidebar(sections: SidebarSections, palette: ThemeColors) -> impl I
                 .min_h_0()
                 .overflow_y_scroll()
                 .px(px(metrics::SIDEBAR_PADDING))
-                .gap(px(metrics::SIDEBAR_ITEM_GAP))
-                .child(sections.space)
                 .child(sections.tabs),
         )
         .child(sections.footer)

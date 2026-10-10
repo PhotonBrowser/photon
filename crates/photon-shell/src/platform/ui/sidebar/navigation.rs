@@ -1,8 +1,9 @@
 //! The sidebar's top row: room for the native window controls, the sidebar
 //! toggle, and back, forward and reload. Empty space moves the window.
 
-use gpui::{MouseButton, Role, prelude::*, px, rgb, rgba};
+use gpui::{prelude::*, px};
 
+use super::super::button::toolbar_button;
 use super::super::icons::{back_icon, close_icon, forward_icon, reload_icon, sidebar_icon};
 use super::super::layout::h_stack;
 use super::super::titlebar::window_drag_area;
@@ -38,12 +39,12 @@ pub(in super::super) fn navigation_bar(
             .h(px(metrics::TITLEBAR_HEIGHT))
             .flex_shrink_0()
             .items_center()
-            .gap(px(metrics::TOOLBAR_CONTROL_GAP))
+            .gap(px(metrics::SIDEBAR_CONTROL_GAP))
             .pl(px(metrics::WINDOW_CONTROLS_INSET))
             .pr(px(metrics::SIDEBAR_PADDING))
             .tab_group(),
     )
-    .child(button(
+    .child(toolbar_button(
         "toolbar-sidebar",
         if navigation.is_some() {
             "Hide sidebar"
@@ -66,7 +67,7 @@ pub(in super::super) fn navigation_bar(
     };
     bar = bar
         .child(gpui::div().flex_1())
-        .child(button(
+        .child(toolbar_button(
             "toolbar-back",
             "Go back",
             1,
@@ -75,7 +76,7 @@ pub(in super::super) fn navigation_bar(
             palette,
             actions.back,
         ))
-        .child(button(
+        .child(toolbar_button(
             "toolbar-forward",
             "Go forward",
             2,
@@ -84,7 +85,7 @@ pub(in super::super) fn navigation_bar(
             palette,
             actions.forward,
         ))
-        .child(button(
+        .child(toolbar_button(
             "toolbar-reload",
             reload_label,
             3,
@@ -94,36 +95,4 @@ pub(in super::super) fn navigation_bar(
             actions.reload,
         ));
     bar
-}
-
-/// A square icon button, dimmed and inert while disabled.
-pub(super) fn button(
-    id: &'static str,
-    label: &'static str,
-    tab_index: isize,
-    enabled: bool,
-    icon: impl IntoElement,
-    palette: ThemeColors,
-    on_click: ClickHandler,
-) -> impl IntoElement {
-    let button = h_stack()
-        .id(id)
-        .role(Role::Button)
-        .aria_label(label)
-        .aria_disabled(!enabled)
-        .focus_visible(|style| style.border_1().border_color(rgb(palette.chosen)))
-        .flex_shrink_0()
-        .items_center()
-        .justify_center()
-        .size(px(metrics::TOOLBAR_BUTTON_SIZE))
-        .rounded(px(metrics::CONTROL_RADIUS))
-        .child(icon);
-    if !enabled {
-        return button.opacity(metrics::DISABLED_OPACITY);
-    }
-    button
-        .tab_index(tab_index)
-        .hover(|style| style.bg(rgba(palette.hover_surface)))
-        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-        .on_click(on_click)
 }

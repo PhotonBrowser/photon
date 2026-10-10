@@ -10,24 +10,25 @@ use super::super::layout::{Elevated, Elevation};
 use super::super::layout::{h_stack, v_stack};
 use super::super::motion::{AnimateIn, Entrance};
 use super::super::{metrics, theme::ThemeColors};
-use super::Omnibox;
 use super::rows::{SuggestionActions, icon_slot, suggestion_icon, suggestion_rows};
+use super::{FieldStyle, Omnibox};
 
 impl Omnibox {
     /// The icon and text field, laid out identically whether the field is
     /// closed or open, so the text does not move as it opens.
     pub(super) fn field_content(&self, palette: ThemeColors, cx: &mut Context<Self>) -> gpui::Div {
         let input_focus = self.input.focus_handle(cx).tab_index(3).tab_stop(true);
+        let style = FieldStyle::current(cx);
+        let icon =
+            (style.idle_icon || !self.suggestions.is_empty()).then(|| self.field_icon(palette, cx));
         h_stack()
             .items_center()
             .gap(px(metrics::OMNIBOX_GAP))
             .w_full()
             .flex_shrink_0()
-            .h(px(
-                metrics::OMNIBOX_HEIGHT - 2.0 * metrics::OMNIBOX_BORDER_WIDTH
-            ))
+            .h(px(style.height - 2.0 * metrics::OMNIBOX_BORDER_WIDTH))
             .px(px(metrics::OMNIBOX_HORIZONTAL_PADDING))
-            .child(self.field_icon(palette, cx))
+            .children(icon)
             .child(
                 themed_text_input(text_input("titlebar-omnibox-input"), palette)
                     .state(self.input.downgrade())
@@ -78,7 +79,7 @@ impl Omnibox {
                 .right(border)
                 // A narrow field opens into a panel that reaches over the page.
                 .min_w(px(metrics::OMNIBOX_PANEL_MIN_WIDTH))
-                .rounded(px(metrics::OMNIBOX_RADIUS))
+                .rounded(px(FieldStyle::current(cx).radius))
                 .border_1()
                 .border_color(rgba(palette.menu_border))
                 .bg(rgba(palette.menu_surface))

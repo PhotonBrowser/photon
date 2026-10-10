@@ -20,6 +20,10 @@ pub(in crate::platform) const WINDOW_CONTROLS_ORIGIN: (f32, f32) =
 pub(super) const WINDOW_CONTROLS_INSET: f32 = 80.0;
 
 pub(super) const TAB_HEIGHT: f32 = 28.0;
+pub(super) const TAB_MIN_WIDTH: f32 = 72.0;
+pub(super) const TAB_STRIP_GAP: f32 = 2.0;
+pub(super) const TAB_STRIP_INSET: f32 = 4.0;
+pub(super) const TAB_CLOSE_GAP: f32 = 6.0;
 pub(super) const TAB_MAX_WIDTH: f32 = 220.0;
 pub(super) const TAB_HORIZONTAL_PADDING: f32 = 10.0;
 pub(super) const TAB_CLOSE_BUTTON_SIZE: f32 = 22.0;
@@ -32,8 +36,11 @@ pub(super) const TAB_AUDIO_ICON_SIZE: f32 = TAB_FAVICON_SIZE;
 pub(super) const TAB_FONT_SIZE: f32 = 12.0;
 pub(super) const CONTROL_RADIUS: f32 = 7.0;
 
-/// Space between the sidebar's top-row buttons.
-pub(super) const TOOLBAR_CONTROL_GAP: f32 = 2.0;
+pub(super) const TOOLBAR_HEIGHT: f32 = 30.0;
+/// The tab strip and address toolbar, laid out as one cached view.
+pub(super) const CHROME_HEIGHT: f32 = TITLEBAR_HEIGHT + TOOLBAR_HEIGHT;
+pub(super) const TOOLBAR_HORIZONTAL_INSET: f32 = 12.0;
+pub(super) const TOOLBAR_CONTROL_GAP: f32 = 8.0;
 pub(super) const TOOLBAR_BUTTON_SIZE: f32 = 28.0;
 pub(super) const TOOLBAR_ICON_SIZE: f32 = 14.0;
 
@@ -91,12 +98,17 @@ pub(super) const MODAL_GAP: f32 = 12.0;
 pub(super) const MODAL_SURFACE_INSET: f32 = 16.0;
 pub(super) const DIALOG_MESSAGE_MAX_HEIGHT: f32 = 240.0;
 
-pub(super) const OMNIBOX_HEIGHT: f32 = 36.0;
+/// The address field in the toolbar.
+pub(super) const OMNIBOX_HEIGHT: f32 = 28.0;
+/// The larger address field in the sidebar.
+pub(super) const SIDEBAR_OMNIBOX_HEIGHT: f32 = 42.0;
+pub(super) const SIDEBAR_OMNIBOX_RADIUS: f32 = 12.0;
+pub(super) const SIDEBAR_OMNIBOX_FONT_SIZE: f32 = 15.0;
 pub(super) const OMNIBOX_BORDER_WIDTH: f32 = 1.0;
 pub(super) const OMNIBOX_HORIZONTAL_PADDING: f32 = 12.0;
 pub(super) const OMNIBOX_GAP: f32 = 8.0;
-pub(super) const OMNIBOX_RADIUS: f32 = 10.0;
-pub(super) const OMNIBOX_FONT_SIZE: f32 = 14.0;
+pub(super) const OMNIBOX_RADIUS: f32 = 8.0;
+pub(super) const OMNIBOX_FONT_SIZE: f32 = 13.0;
 pub(super) const OMNIBOX_ICON_SIZE: f32 = 13.0;
 /// Space around the suggestion rows in the open omnibox.
 pub(super) const OMNIBOX_SUGGESTIONS_INSET: f32 = 4.0;
@@ -137,17 +149,25 @@ pub(super) const SETTINGS_SIDEBAR_ITEM_HEIGHT: f32 = 30.0;
 pub(super) const SETTINGS_SIDEBAR_ICON_SIZE: f32 = 14.0;
 
 // The sidebar: navigation, address field, favourites, tabs and its footer.
-pub(super) const SIDEBAR_WIDTH: f32 = 272.0;
+pub(super) const SIDEBAR_WIDTH: f32 = 240.0;
 /// Space between the sidebar's edges and its content.
 pub(super) const SIDEBAR_PADDING: f32 = 8.0;
+/// Space between the sidebar's top-row buttons.
+pub(super) const SIDEBAR_CONTROL_GAP: f32 = 8.0;
 /// Space between the sidebar's sections.
-pub(super) const SIDEBAR_SECTION_GAP: f32 = 10.0;
-pub(super) const SIDEBAR_ITEM_RADIUS: f32 = 10.0;
-pub(super) const SIDEBAR_ITEM_GAP: f32 = 2.0;
-pub(super) const SIDEBAR_TAB_HEIGHT: f32 = 34.0;
-pub(super) const SIDEBAR_TAB_PADDING: f32 = 10.0;
-pub(super) const SIDEBAR_FONT_SIZE: f32 = 13.0;
+pub(super) const SIDEBAR_SECTION_GAP: f32 = 8.0;
+pub(super) const SIDEBAR_ITEM_RADIUS: f32 = 12.0;
+/// Space between tab rows, and between favourite tiles.
+pub(super) const SIDEBAR_ITEM_GAP: f32 = 6.0;
+pub(super) const SIDEBAR_FAVOURITE_GAP: f32 = 8.0;
+pub(super) const SIDEBAR_TAB_HEIGHT: f32 = 40.0;
+pub(super) const SIDEBAR_TAB_PADDING: f32 = 12.0;
+/// Space between a tab's icon and its title.
+pub(super) const SIDEBAR_TAB_ICON_GAP: f32 = 10.0;
+pub(super) const SIDEBAR_FONT_SIZE: f32 = 14.0;
+pub(super) const SIDEBAR_ICON_SIZE: f32 = 18.0;
 pub(super) const SIDEBAR_FAVOURITE_COLUMNS: usize = 3;
-pub(super) const SIDEBAR_FAVOURITE_HEIGHT: f32 = 44.0;
+pub(super) const SIDEBAR_FAVOURITE_HEIGHT: f32 = 50.0;
+pub(super) const SIDEBAR_FAVOURITE_ICON_SIZE: f32 = 20.0;
 pub(super) const SIDEBAR_FOOTER_HEIGHT: f32 = 40.0;
-pub(super) const SIDEBAR_SEPARATOR_MARGIN: f32 = 6.0;
+pub(super) const SIDEBAR_SEPARATOR_MARGIN: f32 = 8.0;

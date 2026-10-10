@@ -17,7 +17,7 @@ use gpui_elements::editable_text::{
     EditableTextState, StringStorage, TextChanged,
     actions::{Enter, Escape},
 };
-use photon_core::Suggestion;
+use photon_core::{Suggestion, TabLayout};
 use photon_omnibox::{OmniboxTarget, display_address, resolve_with};
 
 use super::history::BrowsingHistory;
@@ -26,6 +26,39 @@ use super::{PhotonWebView, WebViewEvent};
 use super::{metrics, settings::Settings, theme::palette};
 
 const INVALID_ADDRESS_DESCRIPTION: &str = "This address can't be opened";
+
+/// The field's size: compact in the toolbar, larger in the sidebar, where it
+/// also leaves out the search icon until it shows suggestions.
+#[derive(Clone, Copy)]
+struct FieldStyle {
+    height: f32,
+    radius: f32,
+    font_size: f32,
+    idle_icon: bool,
+}
+
+impl FieldStyle {
+    fn for_layout(layout: TabLayout) -> Self {
+        match layout {
+            TabLayout::Horizontal => Self {
+                height: metrics::OMNIBOX_HEIGHT,
+                radius: metrics::OMNIBOX_RADIUS,
+                font_size: metrics::OMNIBOX_FONT_SIZE,
+                idle_icon: true,
+            },
+            TabLayout::Vertical => Self {
+                height: metrics::SIDEBAR_OMNIBOX_HEIGHT,
+                radius: metrics::SIDEBAR_OMNIBOX_RADIUS,
+                font_size: metrics::SIDEBAR_OMNIBOX_FONT_SIZE,
+                idle_icon: false,
+            },
+        }
+    }
+
+    fn current(cx: &gpui::App) -> Self {
+        Self::for_layout(Settings::get(cx).tab_layout)
+    }
+}
 
 pub(super) struct Omnibox {
     input: Entity<EditableTextState>,
@@ -226,14 +259,15 @@ impl Render for Omnibox {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = palette(window, cx);
         let editing = self.is_editing(window, cx);
+        let style = FieldStyle::current(cx);
         let field_box = h_stack()
             .id("titlebar-omnibox")
             .relative()
             .items_center()
             .flex_1()
             .min_w_0()
-            .h(px(metrics::OMNIBOX_HEIGHT))
-            .rounded(px(metrics::OMNIBOX_RADIUS))
+            .h(px(style.height))
+            .rounded(px(style.radius))
             .bg(rgba(palette.surface))
             .border_1()
             .border_color(if self.invalid {
@@ -241,7 +275,7 @@ impl Render for Omnibox {
             } else {
                 gpui::transparent_black()
             })
-            .text_size(px(metrics::OMNIBOX_FONT_SIZE))
+            .text_size(px(style.font_size))
             .text_color(rgb(palette.text_primary))
             // Clicks on the field's padding or icon edit the address rather than
             // falling through to the titlebar and moving the window.

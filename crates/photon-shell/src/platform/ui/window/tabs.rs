@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use super::super::icons::LOADING_SPINNER_STEPS;
 use super::super::pages::{NEW_TAB, PageDefinition};
 use super::super::settings::Settings;
-use super::super::sidebar::{ICON_ENTRANCE, TabIcon};
+use super::super::tabs::{ICON_ENTRANCE, TabIcon};
 use super::BrowserWindow;
 use super::content::{
     BrowserTab, TabContent, create_webview, create_webview_from_session, follow_appearance,

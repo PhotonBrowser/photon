@@ -1,5 +1,5 @@
-//! The browser menu, opened from the sidebar's footer or by right-clicking
-//! its top row, and the overlay that shows it or another menu.
+//! The browser menu, opened from the toolbar, the sidebar's footer, or by
+//! right-clicking the titlebar, and the overlay that shows it or another menu.
 
 use gpui::{
     Anchor, Context, MouseButton, MouseDownEvent, Point, SharedString, Window, anchored, div,
@@ -20,6 +20,8 @@ use super::BrowserWindow;
 pub(super) enum OpenMenu {
     /// Right-clicking the sidebar's top row.
     Context(Point<gpui::Pixels>),
+    /// The toolbar's menu button; the menu opens below it.
+    Toolbar(Point<gpui::Pixels>),
     /// The sidebar footer's menu button; the menu opens above it.
     Sidebar(Point<gpui::Pixels>),
     /// The menu for the favourite at this index.
@@ -44,6 +46,7 @@ impl BrowserWindow {
             | OpenMenu::Tab(_, position)
             | OpenMenu::Favourite(_, position)
             | OpenMenu::Page(position) => (Anchor::TopLeft, position),
+            OpenMenu::Toolbar(position) => (Anchor::TopRight, position),
             OpenMenu::Sidebar(position) => (Anchor::BottomRight, position),
         };
         let menu = match open_menu {
@@ -54,7 +57,7 @@ impl BrowserWindow {
             OpenMenu::Favourite(index, _) => self
                 .favourite_menu(index, transition, palette, cx)
                 .into_any_element(),
-            OpenMenu::Context(_) | OpenMenu::Sidebar(_) => self
+            OpenMenu::Context(_) | OpenMenu::Toolbar(_) | OpenMenu::Sidebar(_) => self
                 .browser_menu(transition, palette, cx)
                 .into_any_element(),
         };

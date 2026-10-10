@@ -3,6 +3,7 @@
 use gpui::{MouseButton, Role, prelude::*, px, rgb, rgba};
 
 use super::ClickHandler;
+use super::icons::more_icon;
 use super::layout::h_stack;
 use super::{metrics, theme::ThemeColors};
 
@@ -107,4 +108,73 @@ pub(super) fn icon_button(
         .hover(|style| style.bg(rgba(palette.hover_surface)))
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .on_click(on_click)
+}
+
+/// A square toolbar button showing an icon, dimmed and inert while disabled.
+pub(super) fn toolbar_button(
+    id: &'static str,
+    label: &'static str,
+    tab_index: isize,
+    enabled: bool,
+    icon: impl IntoElement,
+    palette: ThemeColors,
+    on_click: ClickHandler,
+) -> impl IntoElement {
+    let button = h_stack()
+        .id(id)
+        .role(Role::Button)
+        .aria_label(label)
+        .aria_disabled(!enabled)
+        .focus_visible(|style| style.border_1().border_color(rgb(palette.chosen)))
+        .flex_shrink_0()
+        .items_center()
+        .justify_center()
+        .size(px(metrics::TOOLBAR_BUTTON_SIZE))
+        .rounded(px(metrics::CONTROL_RADIUS))
+        .child(icon);
+    if !enabled {
+        return button.opacity(metrics::DISABLED_OPACITY);
+    }
+    button
+        .tab_index(tab_index)
+        .hover(|style| style.bg(rgba(palette.hover_surface)))
+        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .on_click(on_click)
+}
+
+/// The button that opens the browser menu, shown pressed while it is open.
+pub(super) fn menu_button(
+    id: &'static str,
+    tab_index: isize,
+    open: bool,
+    palette: ThemeColors,
+    on_click: ClickHandler,
+) -> impl IntoElement {
+    let button = h_stack()
+        .id(id)
+        .role(Role::Button)
+        .aria_label(if open {
+            "Close browser menu"
+        } else {
+            "Open browser menu"
+        })
+        .aria_expanded(open)
+        .tab_index(tab_index)
+        .focus_visible(|style| style.border_1().border_color(rgb(palette.chosen)))
+        .flex_shrink_0()
+        .items_center()
+        .justify_center()
+        .size(px(metrics::TOOLBAR_BUTTON_SIZE))
+        .rounded(px(metrics::CONTROL_RADIUS))
+        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .on_click(on_click)
+        .child(more_icon(
+            palette.text_secondary,
+            metrics::TOOLBAR_ICON_SIZE,
+        ));
+    if open {
+        button.bg(rgba(palette.selected_surface))
+    } else {
+        button.hover(|style| style.bg(rgba(palette.hover_surface)))
+    }
 }

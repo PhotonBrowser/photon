@@ -1,12 +1,12 @@
-//! Builds the sidebar from the window's state: navigation, the address
-//! field, favourites, the current space's tabs and the footer. Also the slim
-//! bar shown while the sidebar is hidden, and showing or hiding it.
+//! Builds the window's chrome from its state: the horizontal tab strip and
+//! address toolbar, or the sidebar (navigation, address field, favourites,
+//! tabs and footer) with the slim bar shown while it is hidden.
 
 use gpui::{
     AnyElement, ClickEvent, Context, ImageSource, KeyDownEvent, MouseDownEvent, MouseUpEvent,
     ObjectFit, Window, img, point, prelude::*, px,
 };
-use photon_core::{BrowserCommand, Shortcut, site_name};
+use photon_core::{BrowserCommand, Shortcut, TabLayout, site_name};
 use std::time::Instant;
 
 use super::super::history::BrowsingHistory;
@@ -15,9 +15,12 @@ use super::super::motion::{AnimateIn, Edge, Entrance};
 use super::super::pages::{PageIcon, SETTINGS};
 use super::super::settings::Settings;
 use super::super::sidebar::{
-    DraggedTab, FavouriteTile, FooterActions, NavigationActions, NavigationState, SidebarSections,
-    TabIcon, TabItem, favourites_grid, footer, navigation_bar, sidebar, space_header, tab_list,
+    FavouriteTile, FooterActions, NavigationActions, NavigationState, SidebarSections,
+    favourites_grid, footer, navigation_bar, sidebar,
 };
+use super::super::tabs::{DraggedTab, TabIcon, TabItem, tab_list, tab_strip};
+use super::super::titlebar::titlebar;
+use super::super::toolbar::address_toolbar;
 use super::super::{metrics, theme::ThemeColors};
 use super::BrowserWindow;
 use super::content::TabContent;
@@ -27,14 +30,56 @@ use super::menu::OpenMenu;
 const SIDEBAR_MOTION: Entrance = Entrance::slide_in(Edge::Left);
 
 impl BrowserWindow {
+    /// The chrome for the chosen tab layout.
+    pub(super) fn render_chrome(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+        match Settings::get(cx).tab_layout {
+            TabLayout::Horizontal => self.render_tab_strip(window, cx),
+            TabLayout::Vertical => self.render_sidebar(window, cx),
+        }
+    }
+
+    /// The tab strip in the titlebar, over the address toolbar.
+    fn render_tab_strip(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+        let palette = self.palette(window, cx);
+        let strip = tab_strip(self.tab_items(cx), self.new_tab_handler(cx), palette);
+        let toolbar = address_toolbar(
+            self.omnibox.clone(),
+            self.navigation_state(cx),
+            self.navigation_actions(cx),
+            matches!(self.open_menu, Some(OpenMenu::Toolbar(_))),
+            Box::new(cx.listener(|this, event: &ClickEvent, _, cx| {
+                cx.stop_propagation();
+                this.open_menu = match this.open_menu {
+                    Some(OpenMenu::Toolbar(_)) => None,
+                    _ => Some(OpenMenu::Toolbar(toolbar_menu_anchor(event))),
+                };
+                cx.notify();
+            })),
+            palette,
+        );
+        gpui::div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .child(titlebar(strip).on_mouse_down(
+                gpui::MouseButton::Right,
+                cx.listener(|this, event: &MouseDownEvent, _, cx| {
+                    cx.stop_propagation();
+                    this.open_menu = Some(OpenMenu::Context(event.position));
+                    cx.notify();
+                }),
+            ))
+            .child(toolbar)
+            .into_any_element()
+    }
+
     /// The sidebar, or the slim bar shown while it is hidden.
-    pub(super) fn render_sidebar(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+    fn render_sidebar(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let palette = self.palette(window, cx);
         if !self.sidebar_visible {
             return navigation_bar(None, self.navigation_actions(cx), palette).into_any_element();
         }
         let sidebar_settings = Settings::get(cx).sidebar.clone();
-        let space = sidebar_settings.active_space();
         let favourites = self.favourite_tiles(&sidebar_settings.favourites, palette, cx);
         let sections = SidebarSections {
             navigation: navigation_bar(
@@ -54,18 +99,9 @@ impl BrowserWindow {
             address: self.omnibox.clone().into_any_element(),
             favourites: (!favourites.is_empty())
                 .then(|| favourites_grid(favourites, palette).into_any_element()),
-            space: space_header(&space, palette).into_any_element(),
-            tabs: tab_list(
-                self.tab_items(cx),
-                Box::new(cx.listener(|this, _, window, cx| {
-                    cx.stop_propagation();
-                    this.open_tab(window, cx);
-                })),
-                palette,
-            )
-            .into_any_element(),
+            tabs: tab_list(self.tab_items(cx), self.new_tab_handler(cx), palette)
+                .into_any_element(),
             footer: footer(
-                &space,
                 matches!(self.open_menu, Some(OpenMenu::Sidebar(_))),
                 FooterActions {
                     settings: Box::new(cx.listener(|this, _, window, cx| {
@@ -98,8 +134,18 @@ impl BrowserWindow {
     }
 
     /// Shows or hides the sidebar. Hidden, the page takes the whole width.
+    /// The horizontal layout has no sidebar to hide.
     pub(super) fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
-        self.set_sidebar_visible(!self.sidebar_visible, cx);
+        if Settings::get(cx).tab_layout == TabLayout::Vertical {
+            self.set_sidebar_visible(!self.sidebar_visible, cx);
+        }
+    }
+
+    fn new_tab_handler(&self, cx: &mut Context<Self>) -> super::super::ClickHandler {
+        Box::new(cx.listener(|this, _, window, cx| {
+            cx.stop_propagation();
+            this.open_tab(window, cx);
+        }))
     }
 
     pub(super) fn set_sidebar_visible(&mut self, visible: bool, cx: &mut Context<Self>) {
@@ -161,11 +207,13 @@ impl BrowserWindow {
             .map(|(index, favourite)| {
                 let icon = match BrowsingHistory::favicon(&favourite.url, cx) {
                     Some(favicon) => img(ImageSource::Render(favicon.image))
-                        .size(px(metrics::TAB_FAVICON_SIZE))
+                        .size(px(metrics::SIDEBAR_FAVOURITE_ICON_SIZE))
                         .object_fit(ObjectFit::Contain)
                         .into_any_element(),
-                    None => globe_icon(palette.text_secondary, metrics::TAB_FAVICON_SIZE)
-                        .into_any_element(),
+                    None => {
+                        globe_icon(palette.text_secondary, metrics::SIDEBAR_FAVOURITE_ICON_SIZE)
+                            .into_any_element()
+                    }
                 };
                 let url = favourite.url.clone();
                 FavouriteTile {
@@ -293,6 +341,18 @@ impl BrowserWindow {
                 }
             })
             .collect()
+    }
+}
+
+/// Anchors the toolbar's menu below the menu button's bottom-right corner.
+fn toolbar_menu_anchor(event: &ClickEvent) -> gpui::Point<gpui::Pixels> {
+    match event {
+        ClickEvent::Keyboard(event) => event.bounds.bottom_right(),
+        ClickEvent::Mouse(_) | ClickEvent::Touch(_) => {
+            let position = event.position();
+            let half_button = px(metrics::TOOLBAR_BUTTON_SIZE / 2.0);
+            point(position.x + half_button, position.y + half_button)
+        }
     }
 }
 

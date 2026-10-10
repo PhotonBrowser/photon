@@ -35,7 +35,7 @@ pub(in super::super) fn favourites_grid(
         rows.push(
             h_stack()
                 .w_full()
-                .gap(px(metrics::SIDEBAR_ITEM_GAP * 3.0))
+                .gap(px(metrics::SIDEBAR_FAVOURITE_GAP))
                 .children(row)
                 .children((0..filler).map(|_| div().flex_1())),
         );
@@ -45,7 +45,7 @@ pub(in super::super) fn favourites_grid(
         .role(Role::List)
         .aria_label("Favourites")
         .w_full()
-        .gap(px(metrics::SIDEBAR_ITEM_GAP * 3.0))
+        .gap(px(metrics::SIDEBAR_FAVOURITE_GAP))
         .children(rows)
 }
 
