@@ -435,6 +435,83 @@ impl<T: Clone + 'static> Presence<T> {
     }
 }
 
+/// A value moving smoothly between 0 and 1, for layout that animates as a
+/// whole, such as a sidebar opening and the page narrowing beside it, where
+/// an entrance on one element cannot help. Its owner reads [`Tween::value`]
+/// as it draws, and asks for another frame while [`Tween::is_running`].
+#[derive(Clone, Copy, Debug)]
+pub(super) struct Tween {
+    from: f32,
+    to: f32,
+    started: Instant,
+    duration: Duration,
+}
+
+impl Tween {
+    /// A tween resting at `value`.
+    pub(super) fn at(value: f32) -> Self {
+        Self {
+            from: value,
+            to: value,
+            started: Instant::now(),
+            duration: Duration::ZERO,
+        }
+    }
+
+    /// Moves to `target` over `speed`, from wherever it is now, so turning
+    /// back midway never jumps. Reduced motion moves at once.
+    pub(super) fn animate_to(&mut self, target: f32, speed: Speed, cx: &gpui::App) {
+        if self.to == target {
+            return;
+        }
+        self.from = self.value();
+        self.to = target;
+        self.started = Instant::now();
+        self.duration = if cx.reduce_motion() {
+            Duration::ZERO
+        } else {
+            speed.duration()
+        };
+    }
+
+    /// Rests at `value` at once.
+    pub(super) fn jump_to(&mut self, value: f32) {
+        *self = Self::at(value);
+    }
+
+    /// Where it is now, eased in and out.
+    pub(super) fn value(&self) -> f32 {
+        let elapsed = self.started.elapsed();
+        if elapsed >= self.duration {
+            return self.to;
+        }
+        let progress = elapsed.as_secs_f32() / self.duration.as_secs_f32();
+        mix(self.from, self.to, ease_in_out_cubic(progress))
+    }
+
+    pub(super) fn target(&self) -> f32 {
+        self.to
+    }
+
+    pub(super) fn is_running(&self) -> bool {
+        self.started.elapsed() < self.duration
+    }
+}
+
+/// The value `progress` of the way from `from` to `to`.
+pub(super) fn mix(from: f32, to: f32, progress: f32) -> f32 {
+    from + (to - from) * progress
+}
+
+/// Starts and ends gently, for motion that may reverse.
+fn ease_in_out_cubic(delta: f32) -> f32 {
+    if delta < 0.5 {
+        4.0 * delta * delta * delta
+    } else {
+        1.0 - (-2.0 * delta + 2.0).powi(3) / 2.0
+    }
+}
+
 /// Starts slowly and accelerates away.
 fn ease_in_cubic(delta: f32) -> f32 {
     delta * delta * delta
