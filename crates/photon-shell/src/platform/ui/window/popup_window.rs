@@ -12,8 +12,12 @@ use super::super::layout::v_stack;
 use super::super::modal::{modal, modal_panel};
 use super::super::motion::Transition;
 use super::super::titlebar::titlebar;
-use super::super::{PhotonWebView, WebViewEvent, metrics, theme::ThemeColors};
-use super::{create_webview_from_session, window_settings};
+use super::super::{
+    PhotonWebView, WebViewEvent, metrics,
+    theme::{ThemeColors, palette},
+};
+use super::content::{create_webview_from_session, follow_appearance};
+use super::window_settings;
 
 struct PendingPopup {
     request: RequestedWebView,
@@ -23,7 +27,6 @@ struct PendingPopup {
 struct MinimalPopupWindow {
     webview: Entity<PhotonWebView>,
     runtime: Rc<EngineRuntime>,
-    theme: super::super::theme::ThemePreference,
     pending_popups: Vec<PendingPopup>,
     confirmation_focus: FocusHandle,
     _webview_subscription: Subscription,
@@ -31,17 +34,15 @@ struct MinimalPopupWindow {
 
 pub(super) fn open_minimal_window(
     runtime: Rc<EngineRuntime>,
-    theme: super::super::theme::ThemePreference,
     request: RequestedWebView,
     cx: &mut App,
 ) {
     let options = window_settings::popup_options(cx, request.width, request.height);
-    let webview =
-        create_webview_from_session(cx, runtime.clone(), theme.clone(), request.session, false);
+    let webview = create_webview_from_session(cx, runtime.clone(), request.session);
     if let Err(error) = cx.open_window(options, move |window, cx| {
-        window.set_window_title("Photon");
+        window.set_window_title(photon_brand::NAME);
+        follow_appearance(&webview, window, cx);
         webview.update(cx, |view, cx| {
-            view.update_color_scheme(theme.appearance(window.appearance()));
             view.session.set_visible(true);
             if request.activate {
                 window.focus(&view.focus_handle, cx);
@@ -69,7 +70,6 @@ pub(super) fn open_minimal_window(
             MinimalPopupWindow {
                 webview,
                 runtime,
-                theme,
                 pending_popups: Vec::new(),
                 confirmation_focus: cx.focus_handle(),
                 _webview_subscription: webview_subscription,
@@ -97,7 +97,7 @@ impl MinimalPopupWindow {
             }
             cx.notify();
         } else {
-            open_minimal_window(self.runtime.clone(), self.theme.clone(), request, cx);
+            open_minimal_window(self.runtime.clone(), request, cx);
         }
     }
 
@@ -177,7 +177,7 @@ impl MinimalPopupWindow {
     fn allow_pending_popup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !self.pending_popups.is_empty() {
             let popup = self.pending_popups.remove(0);
-            open_minimal_window(self.runtime.clone(), self.theme.clone(), popup.request, cx);
+            open_minimal_window(self.runtime.clone(), popup.request, cx);
         }
         self.refocus_after_popup_decision(window, cx);
     }
@@ -202,8 +202,7 @@ impl MinimalPopupWindow {
 
 impl Render for MinimalPopupWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let appearance = self.theme.appearance(window.appearance());
-        let palette = ThemeColors::for_appearance(appearance);
+        let palette = palette(window, cx);
         let url = self.webview.read(cx).state.url.clone();
         v_stack()
             .size_full()

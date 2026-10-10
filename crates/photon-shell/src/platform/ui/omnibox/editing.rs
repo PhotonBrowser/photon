@@ -9,6 +9,7 @@ use gpui_elements::editable_text::actions::{
 use photon_core::SuggestionKind;
 
 use super::super::history::BrowsingHistory;
+use super::super::settings::Settings;
 use super::Omnibox;
 
 impl Omnibox {
@@ -23,7 +24,7 @@ impl Omnibox {
         self.filled = None;
         self.invalid = false;
         let deleting = std::mem::take(&mut self.deleting);
-        if text == self.webview.read(cx).omnibox_url() {
+        if text == self.current_url {
             self.close_suggestions(cx);
         } else {
             self.typed = text;
@@ -36,7 +37,8 @@ impl Omnibox {
     /// completing it inline when `complete`. Without a completion the field
     /// and its caret are left as they are.
     fn suggest(&mut self, complete: bool, cx: &mut Context<Self>) {
-        let suggestions = BrowsingHistory::suggestions(&self.typed, cx);
+        let engines = Settings::search_engines(cx);
+        let suggestions = BrowsingHistory::suggestions(&self.typed, &engines, cx);
         self.suggestions = suggestions.rows;
         self.completion = suggestions.completion.filter(|_| complete);
         self.selected = 0;

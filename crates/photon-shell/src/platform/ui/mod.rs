@@ -1,6 +1,7 @@
 //! GPUI views and window composition.
 
 mod button;
+mod controls;
 mod find_bar;
 mod history;
 mod icons;
@@ -12,6 +13,8 @@ pub(super) mod metrics;
 mod modal;
 mod motion;
 mod omnibox;
+mod pages;
+mod settings;
 mod status_chip;
 mod tabs;
 pub(super) mod theme;

@@ -1,12 +1,16 @@
 //! Opening, closing and switching tabs, and the tab strip they show in.
 
-use gpui::{Context, EntityId, KeyDownEvent, MouseDownEvent, MouseUpEvent, Window, prelude::*};
+use gpui::{Context, KeyDownEvent, MouseDownEvent, MouseUpEvent, Window, prelude::*};
 use std::time::{Duration, Instant};
 
 use super::super::icons::LOADING_SPINNER_STEPS;
+use super::super::pages::{NEW_TAB, PageDefinition, PageIcon};
 use super::super::tabs::{DraggedTab, ICON_ENTRANCE, TabIcon, TabItem, tab_strip};
+use super::BrowserWindow;
+use super::content::{
+    BrowserTab, TabContent, create_webview, create_webview_from_session, follow_appearance,
+};
 use super::menu::OpenMenu;
-use super::{BrowserWindow, create_webview, create_webview_from_session};
 use crate::platform::engine::RequestedWebView;
 
 /// A closed tab's page and position, for reopening.
@@ -33,9 +37,14 @@ impl BrowserWindow {
             return;
         }
         if index != self.active_tab {
+            self.open_menu = None;
             // The find bar searches one page; switching tabs ends its search.
             self.close_find_bar(false, window, cx);
-            if let Some(previous) = self.tabs.get(self.active_tab) {
+            if let Some(previous) = self
+                .tabs
+                .get(self.active_tab)
+                .and_then(|tab| tab.content.webview())
+            {
                 previous.update(cx, |view, _| {
                     view.session.set_visible(false);
                     view.session.set_focus(false);
@@ -43,21 +52,20 @@ impl BrowserWindow {
             }
             self.active_tab = index;
         }
-        let webview = self.tabs[index].clone();
-        let is_blank_tab = webview.read(cx).is_blank_tab();
-        let window_visible = self.window_visible;
-        let appearance = self.theme.appearance(window.appearance());
-        webview.update(cx, |view, cx| {
-            view.update_color_scheme(appearance);
-            view.session.set_visible(window_visible);
-            if focus_contents && !is_blank_tab {
-                window.focus(&view.focus_handle, cx);
-            }
-            view.track_engine_focus(window, cx);
-        });
+        let webview = self.tabs[index].content.webview();
+        if let Some(webview) = webview.as_ref() {
+            let window_visible = self.window_visible;
+            webview.update(cx, |view, cx| {
+                view.session.set_visible(window_visible);
+                if focus_contents {
+                    window.focus(&view.focus_handle, cx);
+                }
+                view.track_engine_focus(window, cx);
+            });
+        }
         self.omnibox.update(cx, |omnibox, cx| {
-            omnibox.set_webview(webview, window, cx);
-            if focus_contents && is_blank_tab {
+            omnibox.set_content(webview, self.tabs[index].content.page_address(), window, cx);
+            if focus_contents && self.tabs[index].content.webview().is_none() {
                 omnibox.focus(window, cx);
             }
         });
@@ -71,7 +79,7 @@ impl BrowserWindow {
     }
 
     pub(super) fn open_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.insert_tab(self.tabs.len(), None, window, cx);
+        self.insert_page(self.tabs.len(), NEW_TAB, window, cx);
     }
 
     pub(super) fn insert_tab(
@@ -81,14 +89,34 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let webview = create_webview(
-            cx,
-            self.runtime.clone(),
-            self.theme.clone(),
-            address,
-            address.is_none(),
-        );
-        self.insert_webview(index, webview, true, window, cx);
+        if let Some(address) = address {
+            let webview = create_webview(cx, self.runtime.clone(), address);
+            self.insert_webview(index, webview, true, window, cx);
+        } else {
+            self.insert_page(index, NEW_TAB, window, cx);
+        }
+    }
+
+    /// Opens one of Photon's pages in a new tab, or switches to the tab
+    /// already showing it when the page keeps to one tab.
+    pub(super) fn open_page_tab(
+        &mut self,
+        page: &'static PageDefinition,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let open = page
+            .single_tab
+            .then(|| {
+                self.tabs.iter().position(|tab| {
+                    matches!(&tab.content, TabContent::Page(shown) if shown.definition.is(page))
+                })
+            })
+            .flatten();
+        match open {
+            Some(index) => self.activate_tab(index, true, window, cx),
+            None => self.insert_page(self.tabs.len(), page, window, cx),
+        }
     }
 
     /// Opens `address` in a new tab after `opener`'s, as a link opened from
@@ -104,15 +132,9 @@ impl BrowserWindow {
         let index = self
             .tabs
             .iter()
-            .position(|tab| tab == opener)
+            .position(|tab| tab.content.webview().as_ref() == Some(opener))
             .map_or(self.tabs.len(), |index| index + 1);
-        let webview = create_webview(
-            cx,
-            self.runtime.clone(),
-            self.theme.clone(),
-            Some(address),
-            false,
-        );
+        let webview = create_webview(cx, self.runtime.clone(), address);
         self.insert_webview(index, webview, activate, window, cx);
     }
 
@@ -122,16 +144,12 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let webview = create_webview_from_session(
-            cx,
-            self.runtime.clone(),
-            self.theme.clone(),
-            request.session,
-            false,
-        );
+        let webview = create_webview_from_session(cx, self.runtime.clone(), request.session);
         self.insert_webview(self.tabs.len(), webview, request.activate, window, cx);
     }
 
+    /// Inserts a tab showing `webview`, which adopts the window's page size so
+    /// it lays out and loads even while in the background.
     fn insert_webview(
         &mut self,
         index: usize,
@@ -140,31 +158,68 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let viewport = self
+            .active_webview()
+            .and_then(|webview| webview.read(cx).last_viewport);
+        follow_appearance(&webview, window, cx);
+        webview.update(cx, |view, _| view.adopt_viewport(viewport));
+        self.insert_content(index, TabContent::Web(webview), activate, window, cx);
+    }
+
+    /// Inserts a tab showing one of Photon's own pages, and switches to it.
+    pub(super) fn insert_page(
+        &mut self,
+        index: usize,
+        page: &'static PageDefinition,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let content = self.new_page(page, cx);
+        self.insert_content(index, content, true, window, cx);
+    }
+
+    pub(super) fn insert_content(
+        &mut self,
+        index: usize,
+        content: TabContent,
+        activate: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let index = index.min(self.tabs.len());
-        let viewport = self.active_webview().read(cx).last_viewport;
-        let appearance = self.theme.appearance(window.appearance());
-        webview.update(cx, |view, _| {
-            view.update_color_scheme(appearance);
-            view.adopt_viewport(viewport);
-        });
-        self.tab_subscriptions
-            .insert(index, Self::subscribe_to_tab(&webview, window, cx));
-        self.tabs.insert(index, webview.clone());
+        let subscription = self.subscribe_to_content(&content, window, cx);
+        let id = self.allocate_tab_id();
+        self.tabs.insert(
+            index,
+            BrowserTab {
+                id,
+                content: content.clone(),
+            },
+        );
+        self.tab_subscriptions.insert(index, subscription);
         self.tab_focus_handles
-            .insert(index, cx.focus_handle().tab_stop(false));
-        if index <= self.active_tab {
+            .insert(index, cx.focus_handle().tab_stop(self.tabs.len() == 1));
+        if index <= self.active_tab && self.tabs.len() > 1 {
             // Keep `active_tab` naming the same page until the switch below.
             self.active_tab += 1;
         }
         if activate {
             self.activate_tab(index, true, window, cx);
         } else {
-            webview.update(cx, |view, _| {
-                view.session.set_visible(false);
-                view.session.set_focus(false);
-            });
+            if let Some(webview) = content.webview() {
+                webview.update(cx, |view, _| {
+                    view.session.set_visible(false);
+                    view.session.set_focus(false);
+                });
+            }
             cx.notify();
         }
+    }
+
+    fn allocate_tab_id(&mut self) -> u64 {
+        let id = self.next_tab_id;
+        self.next_tab_id += 1;
+        id
     }
 
     pub(super) fn reopen_closed_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -191,30 +246,32 @@ impl BrowserWindow {
         }
 
         let removed = self.tabs[index].clone();
-        let favicon = removed.update(cx, |view, _| {
-            view.session.set_visible(false);
-            view.session.set_focus(false);
-            view.favicon.take()
-        });
-        if let Some(favicon) = favicon {
-            cx.drop_image(favicon.image, Some(window));
+        if let Some(webview) = removed.content.webview() {
+            let favicon = webview.update(cx, |view, _| {
+                view.session.set_visible(false);
+                view.session.set_focus(false);
+                view.favicon.take()
+            });
+            if let Some(favicon) = favicon {
+                cx.drop_image(favicon.image, Some(window));
+            }
         }
-        self.revealed_icons
-            .borrow_mut()
-            .remove(&removed.entity_id());
+        self.revealed_icons.borrow_mut().remove(&removed.id);
 
         if self.tabs.len() == 1 {
             window.remove_window();
             return;
         }
 
-        let view = removed.read(cx);
-        if view.has_page() {
-            let url = view.state.url.clone();
-            if self.closed_tabs.len() == CLOSED_TAB_LIMIT {
-                self.closed_tabs.remove(0);
+        if let Some(webview) = removed.content.webview() {
+            let view = webview.read(cx);
+            if view.has_page() {
+                let url = view.state.url.clone();
+                if self.closed_tabs.len() == CLOSED_TAB_LIMIT {
+                    self.closed_tabs.remove(0);
+                }
+                self.closed_tabs.push(ClosedTab { index, url });
             }
-            self.closed_tabs.push(ClosedTab { index, url });
         }
 
         let was_active = index == self.active_tab;
@@ -237,10 +294,14 @@ impl BrowserWindow {
     /// Whether a loading tab or a notice shows a spinner.
     fn spinner_shown(&self, cx: &Context<Self>) -> bool {
         self.notice_is_working(cx)
-            || self.tabs.iter().any(|tab| {
-                let view = tab.read(cx);
-                view.state.loading && view.has_page()
-            })
+            || self
+                .tabs
+                .iter()
+                .filter_map(|tab| tab.content.webview())
+                .any(|webview| {
+                    let view = webview.read(cx);
+                    view.state.loading && view.has_page()
+                })
     }
 
     /// Steps the spinners while any is shown. With reduced motion they stay still.
@@ -282,34 +343,43 @@ impl BrowserWindow {
             .tabs
             .iter()
             .enumerate()
-            .map(|(index, webview)| {
-                let view = webview.read(cx);
-                let is_blank = !view.has_page();
-                let icon = if is_blank {
-                    TabIcon::NewTab
-                } else if view.audio_playing {
-                    TabIcon::Audio {
-                        favicon: view.favicon.clone(),
-                        muted: view.audio_muted,
+            .map(|(index, tab)| {
+                let (label, icon) = match &tab.content {
+                    TabContent::Page(page) => {
+                        let icon = match page.definition.icon {
+                            PageIcon::Logo => TabIcon::Logo,
+                            PageIcon::Symbol(symbol) => TabIcon::Symbol(symbol),
+                        };
+                        (page.definition.title.to_owned(), icon)
                     }
-                } else if view.shows_spinner() {
-                    TabIcon::Loading(self.spinner_step)
-                } else if let Some(favicon) = view.favicon.clone() {
-                    TabIcon::Favicon(favicon)
-                } else {
-                    TabIcon::Page
-                };
-                let label = if is_blank {
-                    "New Tab".into()
-                } else if !view.state.title.trim().is_empty() {
-                    view.state.title.clone()
-                } else {
-                    view.state.url.clone()
+                    TabContent::Web(webview) => {
+                        let view = webview.read(cx);
+                        let icon = if view.audio_playing {
+                            TabIcon::Audio {
+                                favicon: view.favicon.clone(),
+                                muted: view.audio_muted,
+                            }
+                        } else if view.shows_spinner() {
+                            TabIcon::Loading(self.spinner_step)
+                        } else if let Some(favicon) = view.favicon.clone() {
+                            TabIcon::Favicon(favicon)
+                        } else {
+                            TabIcon::Page
+                        };
+                        let label = if !view.state.title.trim().is_empty() {
+                            view.state.title.clone()
+                        } else if view.state.url.is_empty() {
+                            "New Tab".to_owned()
+                        } else {
+                            view.state.url.clone()
+                        };
+                        (label, icon)
+                    }
                 };
                 TabItem {
-                    id: format!("browser-tab-{:?}", webview.entity_id()),
+                    id: format!("browser-tab-{}", tab.id),
                     label,
-                    icon_appearing: self.icon_appearing(webview.entity_id(), &icon),
+                    icon_appearing: self.icon_appearing(tab.id, &icon),
                     icon,
                     active: index == self.active_tab,
                     focus_handle: self.tab_focus_handles[index].clone(),
@@ -328,7 +398,9 @@ impl BrowserWindow {
                     })),
                     on_toggle_audio: Box::new(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
-                        if let Some(webview) = this.tabs.get(index) {
+                        if let Some(webview) =
+                            this.tabs.get(index).and_then(|tab| tab.content.webview())
+                        {
                             webview.update(cx, |view, cx| view.toggle_audio_mute(cx));
                         }
                     })),
@@ -358,7 +430,7 @@ impl BrowserWindow {
                 cx.stop_propagation();
                 this.open_tab(window, cx);
             })),
-            self.palette(window),
+            self.palette(window, cx),
         )
     }
 
@@ -386,7 +458,7 @@ impl BrowserWindow {
 
     /// Whether a tab's icon is still within its appear animation. A newly
     /// revealed icon starts it; the same icon shown again does not.
-    fn icon_appearing(&self, tab: EntityId, icon: &TabIcon) -> bool {
+    fn icon_appearing(&self, tab: u64, icon: &TabIcon) -> bool {
         let Some(revealed) = icon.revealed() else {
             return false;
         };

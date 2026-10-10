@@ -3,10 +3,7 @@
 use super::super::engine::{EngineSession, RequestedWebView};
 use super::super::presentation::PresentedSurface;
 use super::input::WebViewInput;
-use super::{
-    metrics::WEBVIEW_CORNER_RADIUS,
-    theme::{ThemeColors, ThemePreference},
-};
+use super::{metrics::WEBVIEW_CORNER_RADIUS, settings::Settings, theme::ThemeColors};
 use gpui::{
     Context, EventEmitter, FocusHandle, InteractiveElement, KeyDownEvent, KeyUpEvent, ObjectFit,
     Render, Subscription, SurfaceSource, Window, WindowAppearance, div, prelude::*, px, surface,
@@ -51,8 +48,8 @@ pub(in crate::platform) struct PhotonWebView {
     zoom_level: f64,
     /// Whether page input has gone unanswered by WebContent.
     pub(in crate::platform) page_unresponsive: bool,
-    /// The address last recorded in the session's history.
-    recorded_url: Option<String>,
+    /// What the tab last recorded in the browsing history.
+    recorded: history::Recorded,
     /// The context menu the page last asked for.
     pub(in crate::platform) context_menu: Option<PageMenu>,
     /// The latest result of a find-in-page search.
@@ -66,8 +63,6 @@ pub(in crate::platform) struct PhotonWebView {
     loading_since: Option<Instant>,
     /// The page's JavaScript dialog, which the window shows over the page.
     pub(in crate::platform) dialogs: PageDialogs,
-    pub(super) theme: ThemePreference,
-    is_blank_tab: bool,
     pub(super) session: EngineSession,
     pub(super) focus_handle: FocusHandle,
     pub(super) last_viewport: Option<(i32, i32, u32)>,
@@ -240,12 +235,7 @@ impl PhotonWebView {
         self.session.navigate_startup();
     }
 
-    pub(super) fn from_session(
-        cx: &mut Context<Self>,
-        theme: ThemePreference,
-        session: EngineSession,
-        is_blank_tab: bool,
-    ) -> Self {
+    pub(super) fn from_session(cx: &mut Context<Self>, session: EngineSession) -> Self {
         Self {
             external: None,
             state: BrowserState::default(),
@@ -253,7 +243,7 @@ impl PhotonWebView {
             performance_overlay_enabled: false,
             crash_notice: None,
             crashes: PageCrashes::default(),
-            recorded_url: None,
+            recorded: history::Recorded::default(),
             context_menu: None,
             find_result: None,
             zoom_level: 1.0,
@@ -263,8 +253,6 @@ impl PhotonWebView {
             audio_muted: false,
             loading_since: None,
             dialogs: PageDialogs::default(),
-            theme,
-            is_blank_tab,
             session,
             focus_handle: cx.focus_handle(),
             last_viewport: None,
@@ -345,39 +333,20 @@ impl PhotonWebView {
         self.session.execute(command)
     }
 
-    pub(super) fn is_blank_tab(&self) -> bool {
-        self.is_blank_tab
-    }
-
     /// Whether the tab shows a page. A new tab may load one behind its blank
     /// surface, whose state the chrome ignores until someone navigates.
     pub(super) fn has_page(&self) -> bool {
-        !self.is_blank_tab && !self.state.url.is_empty() && self.state.url != "about:blank"
+        !self.state.url.is_empty() && self.state.url != "about:blank"
     }
 
     pub(super) fn omnibox_url(&self) -> String {
-        if self.is_blank_tab {
-            String::new()
-        } else {
-            self.state.url.clone()
-        }
-    }
-
-    pub(super) fn navigate(&mut self, input: &str, cx: &mut Context<Self>) -> anyhow::Result<()> {
-        let command = BrowserCommand::from_omnibox_input(input)
-            .map_err(|error| anyhow::anyhow!("cannot open {input:?}: {error:?}"))?;
-        self.execute(command, cx)?;
-        if self.is_blank_tab {
-            self.is_blank_tab = false;
-            self.state_changed(cx);
-        }
-        Ok(())
+        self.state.url.clone()
     }
 }
 
 impl Render for PhotonWebView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let appearance = self.theme.appearance(window.appearance());
+        let appearance = Settings::appearance(window.appearance(), cx);
         self.update_color_scheme(appearance);
         let palette = ThemeColors::for_appearance(appearance);
         let weak_this = cx.entity().downgrade();
@@ -473,14 +442,10 @@ impl Render for PhotonWebView {
             .on_key_up(cx.listener(|this, event: &KeyUpEvent, _, _| {
                 this.input.key_up(&mut this.session, event);
             }));
-        if !self.is_blank_tab {
-            webview = webview
-                .rounded(px(WEBVIEW_CORNER_RADIUS))
-                .bg(gpui::rgb(palette.page_background));
-        }
-        if !self.is_blank_tab
-            && let Some(presented) = self.external.as_ref()
-        {
+        webview = webview
+            .rounded(px(WEBVIEW_CORNER_RADIUS))
+            .bg(gpui::rgb(palette.page_background));
+        if let Some(presented) = self.external.as_ref() {
             webview = webview.child(
                 surface(SurfaceSource::ExternalMetal(presented.surface.clone()))
                     .size_full()

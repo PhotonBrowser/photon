@@ -11,7 +11,9 @@ impl BrowserWindow {
         let bar = match &self.find_bar {
             Some((bar, _)) => bar.clone(),
             None => {
-                let webview = self.active_webview();
+                let Some(webview) = self.active_webview() else {
+                    return;
+                };
                 let bar = cx.new(|cx| FindBar::new(webview, cx));
                 let subscription =
                     cx.subscribe_in(&bar, window, |this, _, _: &CloseFindBar, window, cx| {
@@ -44,12 +46,14 @@ impl BrowserWindow {
         if self.find_bar.take().is_none() {
             return;
         }
-        self.active_webview().update(cx, |view, cx| {
-            view.end_find(cx);
-            if focus_page {
-                window.focus(&view.focus_handle, cx);
-            }
-        });
+        if let Some(webview) = self.active_webview() {
+            webview.update(cx, |view, cx| {
+                view.end_find(cx);
+                if focus_page {
+                    window.focus(&view.focus_handle, cx);
+                }
+            });
+        }
         cx.notify();
     }
 }

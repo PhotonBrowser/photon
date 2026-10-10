@@ -36,7 +36,7 @@ impl BrowserWindow {
             }
             cx.notify();
         } else if request.popup {
-            open_minimal_window(self.runtime.clone(), self.theme.clone(), request, cx);
+            open_minimal_window(self.runtime.clone(), request, cx);
         } else {
             self.open_requested_tab(request, window, cx);
         }
@@ -118,7 +118,7 @@ impl BrowserWindow {
 
     fn allow_pending_popup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(popup) = self.pending_popups.pop_front() {
-            open_minimal_window(self.runtime.clone(), self.theme.clone(), popup.request, cx);
+            open_minimal_window(self.runtime.clone(), popup.request, cx);
         }
         self.refocus_after_popup_decision(window, cx);
     }
@@ -130,8 +130,13 @@ impl BrowserWindow {
 
     fn refocus_after_popup_decision(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.pending_popups.is_empty() {
-            let focus = self.active_webview().read(cx).focus_handle.clone();
-            window.focus(&focus, cx);
+            if let Some(webview) = self.active_webview() {
+                let focus = webview.read(cx).focus_handle.clone();
+                window.focus(&focus, cx);
+            } else {
+                self.omnibox
+                    .update(cx, |omnibox, cx| omnibox.focus(window, cx));
+            }
         } else {
             window.focus(&self.popup_confirmation_focus, cx);
         }

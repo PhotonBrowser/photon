@@ -6,11 +6,13 @@ license.workspace = true
 build = "build.rs"
 
 [dependencies]
+photon-brand = { path = "../photon-brand" }
 gpui = { package = "gpui-ce", path = "../../vendor/gpui-ce/crates/gpui", default-features = false }
 gpui_platform = { package = "gpui_ce_platform", path = "../../vendor/gpui-ce/crates/gpui_platform" }
 gpui_apple = { package = "gpui_ce_apple", path = "../../vendor/gpui-ce/crates/gpui_apple" }
 gpui_elements = { package = "gpui_ce_elements", path = "../../vendor/gpui-ce/crates/gpui_elements" }
 photon-core = { path = "../photon-core" }
+photon-omnibox = { path = "../photon-omnibox" }
 photon-performance = { path = "../photon-performance" }
 photon-shortcuts = { path = "../photon-shortcuts" }
 photon-storage = { path = "../photon-storage" }

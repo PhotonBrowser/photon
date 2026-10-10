@@ -3,17 +3,15 @@
 
 use gpui::{
     Anchor, ClickEvent, Context, MouseButton, MouseDownEvent, Point, SharedString, Window,
-    WindowAppearance, anchored, div, point, prelude::*, px,
+    anchored, div, point, prelude::*, px,
 };
 use photon_core::BrowserCommand;
 
-use super::super::super::engine::{PopupPolicy, ZoomStep};
+use super::super::super::engine::ZoomStep;
 use super::super::layout::v_stack;
-use super::super::menu::{
-    MENU_MOTION, menu_action, menu_checkbox, menu_radio, menu_section, menu_separator,
-    menu_stepper, menu_surface,
-};
+use super::super::menu::{MENU_MOTION, menu_action, menu_checkbox, menu_stepper, menu_surface};
 use super::super::motion::Transition;
+use super::super::pages::SETTINGS;
 use super::super::{metrics, theme::ThemeColors};
 use super::BrowserWindow;
 
@@ -97,43 +95,15 @@ impl BrowserWindow {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
-        let performance_overlay_enabled =
-            self.active_webview().read(cx).performance_overlay_enabled;
-        let zoom_percent = self.active_webview().read(cx).zoom_percent();
-        let theme = self.theme.get();
-        let popup_policy = self.runtime.popup_policy();
-        let theme_radio = |id, label, tab_index, appearance: Option<WindowAppearance>| {
-            menu_radio(
-                id,
-                label,
-                tab_index,
-                theme == appearance,
-                Box::new(cx.listener(move |this: &mut Self, _, window, cx| {
-                    cx.stop_propagation();
-                    this.open_menu = None;
-                    this.set_theme(appearance, window, cx);
-                })),
-                palette,
-            )
-        };
-        let popup_radio = |id, label, tab_index, policy: PopupPolicy| {
-            menu_radio(
-                id,
-                label,
-                tab_index,
-                popup_policy == policy,
-                Box::new(cx.listener(move |this: &mut Self, _, _, cx| {
-                    cx.stop_propagation();
-                    this.open_menu = None;
-                    this.runtime.set_popup_policy(policy);
-                    cx.notify();
-                })),
-                palette,
-            )
-        };
-
-        let content = v_stack()
-            .gap(px(metrics::MENU_ITEM_GAP))
+        let active_webview = self.active_webview();
+        let has_page = active_webview.is_some();
+        let performance_overlay_enabled = active_webview
+            .as_ref()
+            .is_some_and(|webview| webview.read(cx).performance_overlay_enabled);
+        let zoom_percent = active_webview
+            .as_ref()
+            .map_or(100, |webview| webview.read(cx).zoom_percent());
+        let mut content = v_stack()
             .child(menu_action(
                 "menu-new-tab",
                 "New Tab",
@@ -155,105 +125,70 @@ impl BrowserWindow {
                 palette,
             ))
             .child(menu_action(
-                "menu-find",
-                "Find in Page…",
+                "menu-settings",
+                "Settings",
                 2,
                 Box::new(cx.listener(|this, _, window, cx| {
                     cx.stop_propagation();
-                    this.open_menu = None;
-                    this.open_find_bar(window, cx);
+                    this.open_page_tab(SETTINGS, window, cx);
                 })),
                 palette,
-            ))
-            .child(menu_stepper(
-                "Zoom",
-                SharedString::from(format!("{zoom_percent}%")),
-                Box::new(cx.listener(|this, _, _, cx| {
-                    cx.stop_propagation();
-                    this.zoom(ZoomStep::Out, cx);
-                })),
-                Box::new(cx.listener(|this, _, _, cx| {
-                    cx.stop_propagation();
-                    this.zoom(ZoomStep::Reset, cx);
-                })),
-                Box::new(cx.listener(|this, _, _, cx| {
-                    cx.stop_propagation();
-                    this.zoom(ZoomStep::In, cx);
-                })),
-                palette,
-            ))
-            .child(menu_checkbox(
-                "menu-debug-info",
-                "Debug info",
-                3,
-                performance_overlay_enabled,
-                Box::new(cx.listener(|this, _, _, cx| {
-                    cx.stop_propagation();
-                    this.toggle_performance_overlay(cx);
-                })),
-                palette,
-            ))
-            .child(menu_separator(palette))
-            .child(menu_section("Theme", palette))
-            .child(theme_radio("menu-theme-system", "System", 4, None))
-            .child(theme_radio(
-                "menu-theme-light",
-                "Light",
-                5,
-                Some(WindowAppearance::Light),
-            ))
-            .child(theme_radio(
-                "menu-theme-dark",
-                "Dark",
-                6,
-                Some(WindowAppearance::Dark),
-            ))
-            .child(menu_separator(palette))
-            .child(menu_section("Pop-up windows", palette))
-            .child(popup_radio("menu-popups-ask", "Ask", 6, PopupPolicy::Ask))
-            .child(popup_radio(
-                "menu-popups-allow",
-                "Allow",
-                7,
-                PopupPolicy::Allow,
-            ))
-            .child(popup_radio(
-                "menu-popups-block",
-                "Block",
-                8,
-                PopupPolicy::Block,
             ));
+
+        if has_page {
+            content = content
+                .child(menu_action(
+                    "menu-find",
+                    "Find in Page…",
+                    3,
+                    Box::new(cx.listener(|this, _, window, cx| {
+                        cx.stop_propagation();
+                        this.open_menu = None;
+                        this.open_find_bar(window, cx);
+                    })),
+                    palette,
+                ))
+                .child(menu_stepper(
+                    "Zoom",
+                    SharedString::from(format!("{zoom_percent}%")),
+                    Box::new(cx.listener(|this, _, _, cx| {
+                        cx.stop_propagation();
+                        this.zoom(ZoomStep::Out, cx);
+                    })),
+                    Box::new(cx.listener(|this, _, _, cx| {
+                        cx.stop_propagation();
+                        this.zoom(ZoomStep::Reset, cx);
+                    })),
+                    Box::new(cx.listener(|this, _, _, cx| {
+                        cx.stop_propagation();
+                        this.zoom(ZoomStep::In, cx);
+                    })),
+                    palette,
+                ))
+                .child(menu_checkbox(
+                    "menu-debug-info",
+                    "Debug info",
+                    4,
+                    performance_overlay_enabled,
+                    Box::new(cx.listener(|this, _, _, cx| {
+                        cx.stop_propagation();
+                        this.toggle_performance_overlay(cx);
+                    })),
+                    palette,
+                ));
+        }
 
         menu_surface(content, transition, palette)
     }
 
-    /// Applies a light or dark theme, or follows the system for `None`.
-    fn set_theme(
-        &mut self,
-        appearance: Option<WindowAppearance>,
-        window: &Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.theme.set(appearance);
-        cx.set_window_appearance(appearance);
-
-        let effective_appearance = appearance.unwrap_or_else(|| window.appearance());
-        for tab in self.tabs.clone() {
-            tab.update(cx, |view, cx| {
-                view.update_color_scheme(effective_appearance);
+    fn toggle_performance_overlay(&mut self, cx: &mut Context<Self>) {
+        self.open_menu = None;
+        if let Some(webview) = self.active_webview() {
+            webview.update(cx, |view, cx| {
+                view.set_performance_overlay_enabled(!view.performance_overlay_enabled);
                 cx.notify();
             });
         }
-        self.omnibox.update(cx, |_, cx| cx.notify());
-        cx.notify();
-    }
-
-    fn toggle_performance_overlay(&mut self, cx: &mut Context<Self>) {
-        self.open_menu = None;
-        self.active_webview().update(cx, |view, cx| {
-            view.set_performance_overlay_enabled(!view.performance_overlay_enabled);
-            cx.notify();
-        });
         cx.notify();
     }
 }

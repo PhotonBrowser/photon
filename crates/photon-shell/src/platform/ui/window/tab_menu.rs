@@ -1,13 +1,14 @@
 //! A tab's right-click menu and the tab actions behind it and drag-and-drop.
 
-use gpui::{Context, Window, prelude::*, px};
+use gpui::{Context, Window, prelude::*};
 use photon_core::BrowserCommand;
 
 use super::super::layout::v_stack;
 use super::super::menu::{menu_action, menu_separator, menu_surface};
 use super::super::motion::Transition;
-use super::super::{metrics, theme::ThemeColors};
+use super::super::theme::ThemeColors;
 use super::BrowserWindow;
+use super::content::TabContent;
 
 impl BrowserWindow {
     /// Moves the tab at `from` to `to`, keeping the same tab active.
@@ -16,7 +17,7 @@ impl BrowserWindow {
         if from == to || from >= count || to >= count {
             return;
         }
-        let active = self.active_webview().entity_id();
+        let active = self.tabs[self.active_tab].id;
         let tab = self.tabs.remove(from);
         self.tabs.insert(to, tab);
         let subscription = self.tab_subscriptions.remove(from);
@@ -26,7 +27,7 @@ impl BrowserWindow {
         self.active_tab = self
             .tabs
             .iter()
-            .position(|tab| tab.entity_id() == active)
+            .position(|tab| tab.id == active)
             .unwrap_or(0);
         cx.notify();
     }
@@ -38,20 +39,30 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(view) = self.tabs.get(index).map(|tab| tab.read(cx)) else {
+        let Some(tab) = self.tabs.get(index) else {
             return;
         };
-        let address = view.has_page().then(|| view.state.url.clone());
-        self.insert_tab(index + 1, address.as_deref(), window, cx);
+        match &tab.content {
+            TabContent::Web(webview) => {
+                let view = webview.read(cx);
+                let address = view.has_page().then(|| view.state.url.clone());
+                self.insert_tab(index + 1, address.as_deref(), window, cx);
+            }
+            TabContent::Page(page) => {
+                let page = page.definition;
+                self.insert_page(index + 1, page, window, cx);
+            }
+        }
     }
 
     pub(super) fn reload_tab(&mut self, index: usize, cx: &mut Context<Self>) {
-        if let Some(tab) = self.tabs.get(index) {
-            tab.update(cx, |view, cx| {
+        match self.tabs.get(index).and_then(|tab| tab.content.webview()) {
+            Some(tab) => tab.update(cx, |view, cx| {
                 if let Err(error) = view.execute(BrowserCommand::Reload, cx) {
                     super::super::super::trace(format_args!("reloading tab: {error:#}"));
                 }
-            });
+            }),
+            None => cx.notify(),
         }
     }
 
@@ -99,7 +110,6 @@ impl BrowserWindow {
     ) -> impl IntoElement + use<> {
         let count = self.tabs.len();
         let mut content = v_stack()
-            .gap(px(metrics::MENU_ITEM_GAP))
             .child(menu_action(
                 "tab-menu-reload",
                 "Reload Tab",

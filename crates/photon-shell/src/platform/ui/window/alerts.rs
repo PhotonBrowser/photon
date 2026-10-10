@@ -50,7 +50,12 @@ impl BrowserWindow {
     /// Shows the active tab's JavaScript dialog, if it has one, and returns
     /// focus to the page when it closes.
     pub(super) fn sync_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let webview = self.active_webview();
+        let Some(webview) = self.active_webview() else {
+            if let Some(dialog) = self.dialog.take() {
+                dialog.update(cx, |dialog, cx| dialog.leave(cx));
+            }
+            return;
+        };
         let open = webview.read(cx).dialogs.open().cloned();
         let shown = self
             .dialog
@@ -98,15 +103,17 @@ impl BrowserWindow {
             cx.notify();
             return true;
         }
-        self.active_webview().update(cx, |view, cx| {
-            let mut dismissed = view.crash_notice.take().is_some();
-            if view.state.error.take().is_some() {
-                dismissed = true;
-            }
-            if dismissed {
-                cx.notify();
-            }
-            dismissed
+        self.active_webview().is_some_and(|webview| {
+            webview.update(cx, |view, cx| {
+                let mut dismissed = view.crash_notice.take().is_some();
+                if view.state.error.take().is_some() {
+                    dismissed = true;
+                }
+                if dismissed {
+                    cx.notify();
+                }
+                dismissed
+            })
         })
     }
 
@@ -120,8 +127,9 @@ impl BrowserWindow {
     /// the active tab's crash or error.
     fn notice(&self, cx: &Context<Self>) -> Option<Notice> {
         let step = self.spinner_step;
+        let webview = self.active_webview();
         let zoom_notice = self.zoom_shown_at.and_then(|shown_at| {
-            let percent = self.active_webview().read(cx).zoom_percent();
+            let percent = webview.as_ref()?.read(cx).zoom_percent();
             Some(Notice {
                 id: "zoom",
                 icon: ChipIcon::Zoom,
@@ -134,26 +142,31 @@ impl BrowserWindow {
             Some(EngineNotice::Restarting) => Notice {
                 id: "engine-restarting",
                 icon: ChipIcon::Working(step),
-                message: SharedString::new_static("Photon Engine stopped. Restarting…"),
+                message: format!("{} stopped. Restarting…", photon_brand::ENGINE_NAME).into(),
                 expires_at: None,
                 action: None,
             },
             Some(EngineNotice::Restarted(at)) => Notice {
                 id: "engine-restarted",
                 icon: ChipIcon::Done,
-                message: SharedString::new_static("Photon Engine restarted"),
+                message: format!("{} restarted", photon_brand::ENGINE_NAME).into(),
                 expires_at: Some(at + RECOVERED_NOTICE_DURATION),
                 action: None,
             },
-            None if self.active_webview().read(cx).page_unresponsive => Notice {
-                id: "page-unresponsive",
-                icon: ChipIcon::Problem,
-                message: SharedString::new_static("Page isn’t responding"),
-                expires_at: None,
-                action: Some(NoticeAction::RestartPage),
-            },
+            None if webview
+                .as_ref()
+                .is_some_and(|view| view.read(cx).page_unresponsive) =>
+            {
+                Notice {
+                    id: "page-unresponsive",
+                    icon: ChipIcon::Problem,
+                    message: SharedString::new_static("Page isn’t responding"),
+                    expires_at: None,
+                    action: Some(NoticeAction::RestartPage),
+                }
+            }
             None if zoom_notice.is_some() => zoom_notice?,
-            None => match self.active_webview().read(cx).crash_notice {
+            None => match webview.as_ref()?.read(cx).crash_notice {
                 Some(CrashNotice::Reloading) => Notice {
                     id: "page-reloading",
                     icon: ChipIcon::Working(step),
@@ -176,7 +189,7 @@ impl BrowserWindow {
                     action: Some(NoticeAction::Reload),
                 },
                 None => {
-                    let error = self.active_webview().read(cx).state.error.clone()?;
+                    let error = webview.as_ref()?.read(cx).state.error.clone()?;
                     Notice {
                         id: "page-error",
                         icon: ChipIcon::Problem,
@@ -226,8 +239,9 @@ impl BrowserWindow {
             Some(NoticeAction::RestartPage) => {
                 let restart: ClickHandler = Box::new(cx.listener(|this, _, _, cx| {
                     cx.stop_propagation();
-                    this.active_webview()
-                        .update(cx, |view, _| view.restart_unresponsive_page());
+                    if let Some(webview) = this.active_webview() {
+                        webview.update(cx, |view, _| view.restart_unresponsive_page());
+                    }
                 }));
                 (Some(("Restart", restart)), None)
             }

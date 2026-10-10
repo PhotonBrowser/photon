@@ -3,6 +3,7 @@
 mod actions;
 mod alerts;
 mod app;
+mod content;
 mod find;
 mod menu;
 mod page_menu;
@@ -13,8 +14,8 @@ mod tabs;
 mod zoom;
 
 use gpui::{
-    AnyElement, App, ClickEvent, Context, Entity, EntityId, FocusHandle, MouseButton,
-    MouseDownEvent, Render, StyleRefinement, Subscription, WeakEntity, Window, div, prelude::*, px,
+    AnyElement, App, ClickEvent, Context, Entity, FocusHandle, MouseButton, MouseDownEvent, Render,
+    StyleRefinement, Subscription, WeakEntity, Window, div, prelude::*, px,
 };
 use photon_core::BrowserCommand;
 use std::cell::RefCell;
@@ -22,7 +23,7 @@ use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 use std::time::Instant;
 
-use super::super::engine::{EngineRuntime, EngineSession, UiWake};
+use super::super::engine::EngineRuntime;
 use super::super::trace;
 use super::super::window_observer::WindowObserver;
 use super::super::window_settings;
@@ -31,16 +32,18 @@ use super::js_dialog::JavaScriptDialog;
 use super::layout::v_stack;
 use super::modal::MODAL_MOTION;
 use super::motion::{AnimateIn, Presence};
-use super::omnibox::Omnibox;
+use super::omnibox::{Omnibox, OmniboxEvent};
+use super::pages::NEW_TAB;
+use super::settings::Settings;
 use super::tabs::RevealedIcon;
 use super::titlebar::titlebar;
 use super::toolbar::address_toolbar;
-use super::{PhotonWebView, WebViewEvent};
 use super::{
     metrics,
-    theme::{ThemeColors, ThemePreference},
+    theme::{ThemeColors, palette},
 };
 use alerts::{EngineNotice, NoticeExpiry};
+use content::{BrowserTab, TabContent, create_webview};
 use menu::{OpenMenu, toolbar_menu_anchor};
 use popups::PendingPopup;
 use tabs::ClosedTab;
@@ -48,16 +51,17 @@ use tabs::ClosedTab;
 pub use app::run;
 
 struct BrowserWindow {
-    tabs: Vec<Entity<PhotonWebView>>,
-    /// One per tab, in `tabs` order: re-renders the chrome on page state changes.
+    tabs: Vec<BrowserTab>,
+    /// One per tab, in `tabs` order: follows its web view or page.
     tab_subscriptions: Vec<Subscription>,
     /// Titlebar and toolbar, cached so Engine frames repaint only the page.
     chrome: Entity<BrowserChrome>,
     tab_focus_handles: Vec<FocusHandle>,
     active_tab: usize,
+    next_tab_id: u64,
     omnibox: Entity<Omnibox>,
+    _omnibox_subscription: Subscription,
     runtime: Rc<EngineRuntime>,
-    theme: ThemePreference,
     open_menu: Option<OpenMenu>,
     /// Keeps a closed menu drawn while it animates away.
     menu_presence: Presence<OpenMenu>,
@@ -84,11 +88,12 @@ struct BrowserWindow {
     notice_expiry: NoticeExpiry,
     /// The icon each tab last revealed and when, so an icon animates in once
     /// rather than whenever the tab redraws it after a spinner.
-    revealed_icons: RefCell<HashMap<EntityId, (RevealedIcon, Instant)>>,
+    revealed_icons: RefCell<HashMap<u64, (RevealedIcon, Instant)>>,
     /// Whether any part of the window is on screen. Engine renders the active
     /// tab only while it is, since GPUI-CE stops drawing an occluded window.
     window_visible: bool,
     _appearance_subscription: Subscription,
+    _settings_subscription: Subscription,
     _chrome_subscription: Subscription,
     _window_observer: Option<WindowObserver>,
 }
@@ -109,45 +114,8 @@ impl Render for BrowserChrome {
 }
 
 impl BrowserWindow {
-    fn active_webview(&self) -> Entity<PhotonWebView> {
-        self.tabs[self.active_tab].clone()
-    }
-
-    fn palette(&self, window: &Window) -> ThemeColors {
-        ThemeColors::for_appearance(self.theme.appearance(window.appearance()))
-    }
-
-    fn subscribe_to_tab(
-        webview: &Entity<PhotonWebView>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Subscription {
-        cx.subscribe_in(
-            webview,
-            window,
-            |this, webview, event: &WebViewEvent, window, cx| match event {
-                WebViewEvent::StateChanged => {
-                    webview.update(cx, |view, cx| view.record_history(cx));
-                    this.chrome.update(cx, |_, cx| cx.notify());
-                    this.animate_spinner(cx);
-                    this.sync_dialog(window, cx);
-                    cx.notify();
-                }
-                WebViewEvent::ContextMenuRequested if *webview == this.active_webview() => {
-                    this.open_page_menu(cx);
-                }
-                WebViewEvent::ContextMenuRequested => {}
-                WebViewEvent::OpenInNewTab { url, activate } => {
-                    this.open_tab_beside(webview, url, *activate, window, cx);
-                }
-                WebViewEvent::NewWebViewRequested(id) => {
-                    if let Some(request) = webview.update(cx, |view, _| view.take_new_web_view(*id))
-                    {
-                        this.handle_requested_web_view(webview, request, window, cx);
-                    }
-                }
-            },
-        )
+    fn palette(&self, window: &Window, cx: &App) -> ThemeColors {
+        palette(window, cx)
     }
 
     fn render_chrome(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
@@ -159,18 +127,26 @@ impl BrowserWindow {
     }
 
     fn address_toolbar(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let view = self.active_webview().read(cx);
-        let state = &view.state;
-        let loading = state.loading;
+        let (can_go_back, can_go_forward, can_reload, loading) =
+            self.active_webview()
+                .map_or((false, false, false, false), |webview| {
+                    let view = webview.read(cx);
+                    (
+                        view.state.can_go_back,
+                        view.state.can_go_forward,
+                        view.has_page(),
+                        view.state.loading,
+                    )
+                });
 
         address_toolbar(
             self.omnibox.clone(),
-            state.can_go_back,
-            state.can_go_forward,
-            view.has_page(),
+            can_go_back,
+            can_go_forward,
+            can_reload,
             loading,
             matches!(self.open_menu, Some(OpenMenu::Toolbar(_))),
-            self.palette(window),
+            self.palette(window, cx),
             Box::new(cx.listener(|this, _, window, cx| {
                 this.dispatch_command(BrowserCommand::Back, window, cx);
             })),
@@ -196,17 +172,27 @@ impl BrowserWindow {
         )
     }
 
+    /// Redraws the chrome and every tab for changed settings, such as the theme.
+    fn settings_changed(&mut self, cx: &mut Context<Self>) {
+        for webview in self.tabs.iter().filter_map(|tab| tab.content.webview()) {
+            webview.update(cx, |_, cx| cx.notify());
+        }
+        self.omnibox.update(cx, |_, cx| cx.notify());
+        cx.notify();
+    }
+
     fn window_changed(&mut self, visible: bool, display_changed: bool, cx: &mut Context<Self>) {
         trace(format_args!(
             "window visible={visible} display-changed={display_changed}"
         ));
         if self.window_visible != visible {
             self.window_visible = visible;
-            self.active_webview()
-                .update(cx, |view, _| view.session.set_visible(visible));
+            if let Some(webview) = self.active_webview() {
+                webview.update(cx, |view, _| view.session.set_visible(visible));
+            }
         }
         if display_changed {
-            for tab in self.tabs.clone() {
+            for tab in self.tabs.iter().filter_map(|tab| tab.content.webview()) {
                 tab.update(cx, |view, cx| {
                     view.session.forget_display();
                     cx.notify();
@@ -225,23 +211,22 @@ impl BrowserWindow {
         match command {
             BrowserCommand::NewTab => self.open_tab(window, cx),
             BrowserCommand::NewWindow => {
-                if let Err(error) = open_browser_window(
-                    self.runtime.clone(),
-                    app::initial_address(),
-                    self.theme.clone(),
-                    cx,
-                ) {
+                if let Err(error) =
+                    open_browser_window(self.runtime.clone(), app::initial_address(), cx)
+                {
                     trace(format_args!("new window: {error:#}"));
                 }
             }
+            BrowserCommand::Navigate(url) => self.navigate_active(&url, window, cx),
             command => {
-                let webview = self.active_webview();
-                if let Err(error) = webview.update(cx, |view, cx| {
-                    let result = view.execute(command, cx);
-                    cx.notify();
-                    result
-                }) {
-                    trace(format_args!("browser command: {error:#}"));
+                if let Some(webview) = self.active_webview() {
+                    if let Err(error) = webview.update(cx, |view, cx| {
+                        let result = view.execute(command, cx);
+                        cx.notify();
+                        result
+                    }) {
+                        trace(format_args!("browser command: {error:#}"));
+                    }
                 }
             }
         }
@@ -251,7 +236,7 @@ impl BrowserWindow {
 
 impl Render for BrowserWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let palette = self.palette(window);
+        let palette = self.palette(window, cx);
         let find_bar = self.find_bar_presence.sync(
             self.find_bar.as_ref().map(|(bar, _)| bar.clone()),
             FIND_BAR_MOTION,
@@ -287,9 +272,12 @@ impl Render for BrowserWindow {
                 div()
                     .relative()
                     .flex_1()
+                    // Keep tall pages inside the page area; they scroll themselves.
+                    .min_h_0()
+                    .overflow_hidden()
                     .w_full()
                     .p(px(metrics::PAGE_INSET))
-                    .child(self.active_webview())
+                    .child(self.active_view(palette))
                     // The find bar floats in the page's top-right corner.
                     .children(find_bar.map(|(bar, transition)| {
                         div()
@@ -322,40 +310,34 @@ impl Render for BrowserWindow {
 fn open_browser_window(
     runtime: Rc<EngineRuntime>,
     startup_address: Option<String>,
-    theme: ThemePreference,
     cx: &mut App,
 ) -> anyhow::Result<()> {
-    let is_blank_tab = startup_address.is_none();
-    let webview = create_webview(
-        cx,
-        runtime.clone(),
-        theme.clone(),
-        startup_address.as_deref(),
-        is_blank_tab,
-    );
+    let initial_webview = startup_address
+        .as_deref()
+        .map(|address| create_webview(cx, runtime.clone(), address));
     cx.open_window(window_settings::options(cx), move |window, cx| {
-        window.set_window_title("Photon");
-        webview.update(cx, |view, cx| {
-            view.update_color_scheme(theme.appearance(window.appearance()));
-            view.session.set_visible(true);
-            if !is_blank_tab {
-                window.focus(&view.focus_handle, cx);
-            }
-            view.track_engine_focus(window, cx);
-        });
-        let omnibox = cx.new(|cx| Omnibox::new(webview.clone(), window, cx));
-        if is_blank_tab {
-            omnibox.update(cx, |omnibox, cx| omnibox.focus(window, cx));
-        }
-        cx.new(move |cx| {
+        window.set_window_title(photon_brand::NAME);
+        let omnibox = cx.new(|cx| Omnibox::new(window, cx));
+        cx.new(move |cx: &mut Context<BrowserWindow>| {
             let appearance_subscription =
                 cx.observe_window_appearance(window, |_, _, cx| cx.notify());
+            // Follow settings changed here, in a settings page, or in another window.
+            let settings_subscription =
+                cx.observe_global::<Settings>(|this: &mut BrowserWindow, cx| {
+                    this.settings_changed(cx)
+                });
             let browser = cx.entity().downgrade();
             let chrome = cx.new(|_| BrowserChrome { browser });
             // Whatever re-renders the window's own state re-renders the chrome too.
             let chrome_subscription =
                 cx.observe_self(|this, cx| this.chrome.update(cx, |_, cx| cx.notify()));
-            let tab_subscriptions = vec![BrowserWindow::subscribe_to_tab(&webview, window, cx)];
+            let omnibox_subscription = cx.subscribe_in(
+                &omnibox,
+                window,
+                |this, _, event: &OmniboxEvent, window, cx| match event {
+                    OmniboxEvent::Navigate(url) => this.navigate_active(url, window, cx),
+                },
+            );
             let this = cx.entity().downgrade();
             let app = cx.to_async();
             let window_observer = WindowObserver::new(window, move |visible, display_changed| {
@@ -368,15 +350,16 @@ fn open_browser_window(
                 })
                 .detach();
             });
-            BrowserWindow {
-                tabs: vec![webview],
-                tab_subscriptions,
+            let mut browser = BrowserWindow {
+                tabs: Vec::new(),
+                tab_subscriptions: Vec::new(),
                 chrome,
-                tab_focus_handles: vec![cx.focus_handle().tab_stop(true)],
+                tab_focus_handles: Vec::new(),
                 active_tab: 0,
+                next_tab_id: 1,
                 omnibox,
+                _omnibox_subscription: omnibox_subscription,
                 runtime,
-                theme,
                 open_menu: None,
                 menu_presence: Presence::default(),
                 find_bar_presence: Presence::default(),
@@ -395,56 +378,19 @@ fn open_browser_window(
                 revealed_icons: RefCell::default(),
                 window_visible: true,
                 _appearance_subscription: appearance_subscription,
+                _settings_subscription: settings_subscription,
                 _chrome_subscription: chrome_subscription,
                 _window_observer: window_observer,
+            };
+            match initial_webview {
+                Some(webview) => {
+                    let content = TabContent::Web(webview);
+                    browser.insert_content(0, content, true, window, cx);
+                }
+                None => browser.insert_page(0, NEW_TAB, window, cx),
             }
+            browser
         })
     })?;
     Ok(())
-}
-
-/// Starts the Engine-backed WebView, wired to redraw on Engine frames and to drain
-/// GPU work before the app quits.
-fn create_webview(
-    cx: &mut App,
-    runtime: Rc<EngineRuntime>,
-    theme: ThemePreference,
-    startup_address: Option<&str>,
-    is_blank_tab: bool,
-) -> Entity<PhotonWebView> {
-    let startup_address = startup_address.map(str::to_owned);
-    let session =
-        EngineSession::create(runtime.clone(), 1200, 760, 1.0, startup_address.as_deref())
-            .unwrap_or_else(|error| panic!("could not start direct PhotonWebView: {error:#}"));
-    create_webview_from_session(cx, runtime, theme, session, is_blank_tab)
-}
-
-fn create_webview_from_session(
-    cx: &mut App,
-    runtime: Rc<EngineRuntime>,
-    theme: ThemePreference,
-    session: EngineSession,
-    is_blank_tab: bool,
-) -> Entity<PhotonWebView> {
-    let wake_runtime = runtime.clone();
-    let webview = cx.new(|cx| {
-        let mut webview = PhotonWebView::from_session(cx, theme, session, is_blank_tab);
-        let gpu_activity = webview.session.gpu_activity.clone();
-        webview._quit_subscription = Some(cx.on_app_quit(
-            move |view: &mut PhotonWebView, _cx: &mut Context<'_, PhotonWebView>| {
-                view.prepare_shutdown();
-                gpu_activity.wait_until_idle();
-                view.session.finish_shutdown();
-                async {}
-            },
-        ));
-        webview
-    });
-    let wake = UiWake {
-        app: cx.to_async(),
-        webview: webview.downgrade(),
-        runtime: wake_runtime,
-    };
-    webview.update(cx, |view, _| view.session.set_ui_wake(wake));
-    webview
 }

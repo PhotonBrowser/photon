@@ -10,25 +10,31 @@ mod panel;
 mod rows;
 
 use gpui::{
-    Context, Entity, Focusable, MouseButton, Render, Subscription, Window, prelude::*, px, rgb,
-    rgb_to_hsla, rgba,
+    Context, Entity, EventEmitter, Focusable, MouseButton, Render, Subscription, Window,
+    prelude::*, px, rgb, rgb_to_hsla, rgba,
 };
 use gpui_elements::editable_text::{
     EditableTextState, StringStorage, TextChanged,
     actions::{Enter, Escape},
 };
 use photon_core::Suggestion;
+use photon_omnibox::{OmniboxTarget, resolve_with};
 
-use super::super::trace;
+use super::history::BrowsingHistory;
 use super::layout::h_stack;
 use super::{PhotonWebView, WebViewEvent};
-use super::{metrics, theme::ThemeColors};
+use super::{metrics, settings::Settings, theme::ThemeColors};
 
 const INVALID_ADDRESS_DESCRIPTION: &str = "This address can't be opened";
 
 pub(super) struct Omnibox {
     input: Entity<EditableTextState>,
-    webview: Entity<PhotonWebView>,
+    /// The active tab's web view; `None` while it shows one of Photon's pages.
+    webview: Option<Entity<PhotonWebView>>,
+    /// The address of the active tab's Photon page, if it shows one.
+    page_address: Option<String>,
+    /// The page address the field shows while nobody is editing it.
+    current_url: String,
     /// The submitted text cannot be opened. Cleared by the next edit.
     invalid: bool,
     /// What the typed text could open. While there are any, the field opens
@@ -50,12 +56,16 @@ pub(super) struct Omnibox {
     _page_subscriptions: Vec<Subscription>,
 }
 
+/// What the omnibox asks its window to do.
+pub(super) enum OmniboxEvent {
+    /// Load this address in the active tab.
+    Navigate(String),
+}
+
+impl EventEmitter<OmniboxEvent> for Omnibox {}
+
 impl Omnibox {
-    pub(super) fn new(
-        webview: Entity<PhotonWebView>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Self {
+    pub(super) fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let input = cx.new(|cx| EditableTextState::new(StringStorage::default(), cx));
         let input_subscriptions = [
             cx.subscribe(&input, |this, _, _: &TextChanged, cx| this.text_changed(cx)),
@@ -66,7 +76,9 @@ impl Omnibox {
         ];
         let mut omnibox = Self {
             input,
-            webview: webview.clone(),
+            webview: None,
+            page_address: None,
+            current_url: String::new(),
             invalid: false,
             suggestions: Vec::new(),
             selected: 0,
@@ -78,7 +90,7 @@ impl Omnibox {
             _input_subscriptions: input_subscriptions,
             _page_subscriptions: Vec::new(),
         };
-        omnibox.set_webview(webview, window, cx);
+        omnibox.set_content(None, None, window, cx);
         omnibox
     }
 
@@ -87,30 +99,37 @@ impl Omnibox {
         self.input.update(cx, |input, cx| input.select_document(cx));
     }
 
-    /// Shows and follows `webview`'s address.
-    pub(super) fn set_webview(
+    /// Shows the active tab's address: its web view's, followed as it
+    /// changes, or `page_address` for one of Photon's pages, which is `None`
+    /// when the page leaves the field empty.
+    pub(super) fn set_content(
         &mut self,
-        webview: Entity<PhotonWebView>,
+        webview: Option<Entity<PhotonWebView>>,
+        page_address: Option<String>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.webview = webview;
+        self.page_address = page_address;
+        self.close_suggestions(cx);
+        self.invalid = false;
         let input_focus = self.input.focus_handle(cx);
         self._page_subscriptions = vec![
-            // Follow the page address, except while someone is editing it.
-            cx.subscribe_in(
-                &self.webview,
+            // An abandoned edit reverts to the page address.
+            cx.on_blur(&input_focus, window, |this, _, cx| this.show_page_url(cx)),
+            cx.observe_window_appearance(window, |_, _, cx| cx.notify()),
+        ];
+        if let Some(webview) = self.webview.as_ref() {
+            self._page_subscriptions.push(cx.subscribe_in(
+                webview,
                 window,
                 |this, _, _: &WebViewEvent, window, cx| {
                     if !this.is_editing(window, cx) {
                         this.show_page_url(cx);
                     }
                 },
-            ),
-            // An abandoned edit reverts to the page address.
-            cx.on_blur(&input_focus, window, |this, _, cx| this.show_page_url(cx)),
-            cx.observe_window_appearance(window, |_, _, cx| cx.notify()),
-        ];
+            ));
+        }
         self.show_page_url(cx);
         cx.notify();
     }
@@ -119,8 +138,12 @@ impl Omnibox {
         self.input.focus_handle(cx).is_focused(window)
     }
 
-    fn show_page_url(&self, cx: &mut Context<Self>) {
-        let url = self.webview.read(cx).omnibox_url();
+    fn show_page_url(&mut self, cx: &mut Context<Self>) {
+        let url = match self.webview.as_ref() {
+            Some(webview) => webview.read(cx).omnibox_url(),
+            None => self.page_address.clone().unwrap_or_default(),
+        };
+        self.current_url = url.clone();
         self.input.update(cx, |input, cx| {
             if input.as_str() != url {
                 input.emplace(&url, cx);
@@ -141,13 +164,18 @@ impl Omnibox {
         self.open(&text, window, cx);
     }
 
-    /// Loads typed text or an address in the page.
+    /// Resolves typed text and asks the browser window to open its URL.
     fn open(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
-        match self.webview.update(cx, |view, cx| view.navigate(text, cx)) {
-            Ok(()) => self.return_to_page(window, cx),
-            Err(error) => {
-                // Keep the text for correction and say why nothing opened.
-                trace(format_args!("omnibox: {error:#}"));
+        match resolve_with(text, &Settings::search_engines(cx)) {
+            Ok(target) => {
+                if let OmniboxTarget::Search { query, .. } = &target {
+                    BrowsingHistory::record_search(query, cx);
+                }
+                self.close_suggestions(cx);
+                cx.emit(OmniboxEvent::Navigate(target.url().to_owned()));
+                self.return_to_page(window, cx);
+            }
+            Err(_) => {
                 self.invalid = true;
                 cx.notify();
             }
@@ -161,14 +189,16 @@ impl Omnibox {
     }
 
     fn return_to_page(&self, window: &mut Window, cx: &mut Context<Self>) {
-        let page_focus = self.webview.read(cx).focus_handle.clone();
-        window.focus(&page_focus, cx);
+        if let Some(webview) = self.webview.as_ref() {
+            let focus_handle = webview.read(cx).focus_handle.clone();
+            window.focus(&focus_handle, cx);
+        }
     }
 }
 
 impl Render for Omnibox {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let appearance = self.webview.read(cx).theme.appearance(window.appearance());
+        let appearance = Settings::appearance(window.appearance(), cx);
         let palette = ThemeColors::for_appearance(appearance);
         let editing = self.is_editing(window, cx);
         let field = if editing {
@@ -181,7 +211,7 @@ impl Render for Omnibox {
             .relative()
             .items_center()
             .flex_1()
-            .min_w(px(0.0))
+            .min_w_0()
             .h(px(metrics::OMNIBOX_HEIGHT))
             .rounded(px(metrics::OMNIBOX_RADIUS))
             .bg(rgba(field))
