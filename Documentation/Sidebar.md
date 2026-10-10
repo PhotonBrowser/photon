@@ -37,7 +37,8 @@ horizontal tab strip above the page, which takes the whole width.
   surface fades as it does.
 - ⌘L shows the sidebar to focus the address field.
 - The address field shows only the page's site, such as `github.com`, until
-  it is clicked to edit the full address.
+  it is clicked to edit the full address, unless Settings → Search shows the
+  full address.
 
 The window draws the sidebar as a layer over itself and keeps room for it
 beside the page, both following one `Tween` from
