@@ -3,6 +3,7 @@
 //! The native C ABI is implemented in the separate `photon-ffi` crate.
 
 mod browsing_data;
+mod command_bar;
 mod crashes;
 mod dialogs;
 mod history;
@@ -13,6 +14,7 @@ mod sidebar;
 mod state;
 
 pub use browsing_data::ClearBrowsingData;
+pub use command_bar::{Command, CommandBarResult, OpenTab, command_bar_results};
 pub use crashes::{CrashResponse, EngineService, PageCrashes};
 pub use dialogs::{DialogKind, DialogReply, DialogRequest, PageDialogs};
 pub use history::{History, HistoryEntry, SearchEntry};

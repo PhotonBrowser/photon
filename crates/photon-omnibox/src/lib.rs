@@ -15,6 +15,6 @@ pub use resolve::{
     OmniboxError, OmniboxTarget, UrlKind, looks_like_address, resolve, resolve_with,
 };
 pub use suggest::{
-    PastSearch, Suggestion, SuggestionKind, Suggestions, VisitedPage, display_address, suggest,
-    suggest_with,
+    PastSearch, Suggestion, SuggestionKind, Suggestions, VisitedPage, display_address, match_words,
+    suggest, suggest_with,
 };

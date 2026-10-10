@@ -240,6 +240,15 @@ fn search_suggestion(text: &str, engines: &SearchEngines) -> Option<Suggestion> 
     }
 }
 
+/// Where each word of `query` starts a word of `text`, ignoring case, or
+/// `None` when one does not. An empty query matches with no ranges.
+pub fn match_words(text: &str, query: &str) -> Option<Vec<Range<usize>>> {
+    query
+        .split_whitespace()
+        .map(|term| word_start_match(text, &term.to_lowercase()))
+        .collect()
+}
+
 /// Where `term` starts a word of `haystack`, ignoring case: at its start or
 /// after a character that is not a letter or digit.
 fn word_start_match(haystack: &str, term: &str) -> Option<Range<usize>> {
@@ -416,5 +425,16 @@ mod tests {
             display_address("http://localhost:8080/"),
             "http://localhost:8080"
         );
+    }
+
+    #[test]
+    fn matches_every_word_at_word_starts() {
+        assert_eq!(
+            match_words("Find in Page", "find pa"),
+            Some(vec![0..4, 8..10])
+        );
+        assert_eq!(match_words("Find in Page", "age"), None);
+        assert_eq!(match_words("Find in Page", "find tab"), None);
+        assert_eq!(match_words("Anything", "  "), Some(Vec::new()));
     }
 }
