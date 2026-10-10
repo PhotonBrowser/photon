@@ -24,6 +24,11 @@ after GPU completion. During shutdown Photon disables new publications, waits
 for in-flight sampling command buffers, drains all leases, and reports/asserts
 zero outstanding frames.
 
+Shift-clicking a link opens it in a Peek: the Engine reports the click
+instead of following it, and the window shows the link in a new web view over
+the page. Keeping it as a tab moves that same web view into the tab list, so
+the page does not reload.
+
 Each web view records its visits, titles and icons in the shared
 [history](Profile.md#history), reporting only what changed. It follows the
 appearance chosen in settings, telling pages whether to use their dark

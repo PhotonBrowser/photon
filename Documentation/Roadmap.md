@@ -35,6 +35,7 @@ What the Photon shell does today and what comes next. Engine performance work is
 - [x] Page favicons from the Engine, a globe for pages without one, the brand logo for new tabs, and a symbol for each of the browser's own pages
 - [x] Icons scale in once when a new icon appears
 - [x] Reopen closed tabs (last 25 per window)
+- [x] Peek, as in Arc: Shift-click a link to preview it over the page, then close it (Escape or a click outside) or keep it as a tab without reloading
 - [x] Middle-click to close, drag to reorder, and a right-click menu: reload, duplicate, close, close others, close to the right
 
 ### Toolbar and omnibox
@@ -88,7 +89,6 @@ In order of priority.
 
 ### Arc and Zen feel
 
-- [ ] Peek: Shift- or Alt-click a link to preview it floating over the page
 - [ ] Split view: two or more tabs side by side
 - [ ] Tab folders among pinned tabs
 - [ ] Polish: the domain alone in the sidebar's address until clicked, ⌘⇧C to copy the address with a toast, a mini player for background audio, spring motion on tab rows
