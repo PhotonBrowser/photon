@@ -18,7 +18,7 @@ use gpui_elements::editable_text::{
     actions::{Enter, Escape},
 };
 use photon_core::Suggestion;
-use photon_omnibox::{OmniboxTarget, resolve_with};
+use photon_omnibox::{OmniboxTarget, display_address, resolve_with};
 
 use super::history::BrowsingHistory;
 use super::layout::h_stack;
@@ -33,7 +33,8 @@ pub(super) struct Omnibox {
     webview: Option<Entity<PhotonWebView>>,
     /// The address of the active tab's Photon page, if it shows one.
     page_address: Option<String>,
-    /// The page address the field shows while nobody is editing it.
+    /// The address the field shows for the page: short while idle, full
+    /// while editing. Text that differs from it is an edit.
     current_url: String,
     /// The submitted text cannot be opened. Cleared by the next edit.
     invalid: bool,
@@ -117,6 +118,8 @@ impl Omnibox {
         self._page_subscriptions = vec![
             // An abandoned edit reverts to the page address.
             cx.on_blur(&input_focus, window, |this, _, cx| this.show_page_url(cx)),
+            // Editing starts from the full address.
+            cx.on_focus(&input_focus, window, |this, _, cx| this.show_full_url(cx)),
             cx.observe_window_appearance(window, |_, _, cx| cx.notify()),
         ];
         if let Some(webview) = self.webview.as_ref() {
@@ -138,15 +141,38 @@ impl Omnibox {
         self.input.focus_handle(cx).is_focused(window)
     }
 
-    fn show_page_url(&mut self, cx: &mut Context<Self>) {
-        let url = match self.webview.as_ref() {
+    /// The active tab's full address.
+    fn page_url(&self, cx: &Context<Self>) -> String {
+        match self.webview.as_ref() {
             Some(webview) => webview.read(cx).omnibox_url(),
             None => self.page_address.clone().unwrap_or_default(),
+        }
+    }
+
+    /// Shows the page's address the short way, as people write it, while
+    /// nobody is editing it.
+    fn show_page_url(&mut self, cx: &mut Context<Self>) {
+        let url = self.page_url(cx);
+        let shown = if self.webview.is_some() {
+            display_address(&url)
+        } else {
+            url
         };
-        self.current_url = url.clone();
+        self.show(shown, cx);
+    }
+
+    /// Shows the full address, selected, as editing starts.
+    fn show_full_url(&mut self, cx: &mut Context<Self>) {
+        let url = self.page_url(cx);
+        self.show(url, cx);
+        self.input.update(cx, |input, cx| input.select_document(cx));
+    }
+
+    fn show(&mut self, text: String, cx: &mut Context<Self>) {
+        self.current_url = text.clone();
         self.input.update(cx, |input, cx| {
-            if input.as_str() != url {
-                input.emplace(&url, cx);
+            if input.as_str() != text {
+                input.emplace(&text, cx);
             }
         });
     }

@@ -76,6 +76,8 @@ impl Omnibox {
                 .top(border)
                 .left(border)
                 .right(border)
+                // A narrow field opens into a panel that reaches over the page.
+                .min_w(px(metrics::OMNIBOX_PANEL_MIN_WIDTH))
                 .rounded(px(metrics::OMNIBOX_RADIUS))
                 .border_1()
                 .border_color(rgba(palette.menu_border))

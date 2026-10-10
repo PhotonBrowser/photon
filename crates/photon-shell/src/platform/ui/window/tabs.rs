@@ -1,16 +1,15 @@
 //! Opening, closing and switching tabs, and the tab strip they show in.
 
-use gpui::{Context, KeyDownEvent, MouseDownEvent, MouseUpEvent, Window, prelude::*};
+use gpui::{Context, KeyDownEvent, Window};
 use std::time::{Duration, Instant};
 
 use super::super::icons::LOADING_SPINNER_STEPS;
-use super::super::pages::{NEW_TAB, PageDefinition, PageIcon};
-use super::super::tabs::{DraggedTab, ICON_ENTRANCE, TabIcon, TabItem, tab_strip};
+use super::super::pages::{NEW_TAB, PageDefinition};
+use super::super::sidebar::{ICON_ENTRANCE, TabIcon};
 use super::BrowserWindow;
 use super::content::{
     BrowserTab, TabContent, create_webview, create_webview_from_session, follow_appearance,
 };
-use super::menu::OpenMenu;
 use crate::platform::engine::RequestedWebView;
 
 /// A closed tab's page and position, for reopening.
@@ -338,104 +337,8 @@ impl BrowserWindow {
         .detach();
     }
 
-    pub(super) fn tab_strip(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let tabs = self
-            .tabs
-            .iter()
-            .enumerate()
-            .map(|(index, tab)| {
-                let (label, icon) = match &tab.content {
-                    TabContent::Page(page) => {
-                        let icon = match page.definition.icon {
-                            PageIcon::Logo => TabIcon::Logo,
-                            PageIcon::Symbol(symbol) => TabIcon::Symbol(symbol),
-                        };
-                        (page.definition.title.to_owned(), icon)
-                    }
-                    TabContent::Web(webview) => {
-                        let view = webview.read(cx);
-                        let icon = if view.audio_playing {
-                            TabIcon::Audio {
-                                favicon: view.favicon.clone(),
-                                muted: view.audio_muted,
-                            }
-                        } else if view.shows_spinner() {
-                            TabIcon::Loading(self.spinner_step)
-                        } else if let Some(favicon) = view.favicon.clone() {
-                            TabIcon::Favicon(favicon)
-                        } else {
-                            TabIcon::Page
-                        };
-                        let label = if !view.state.title.trim().is_empty() {
-                            view.state.title.clone()
-                        } else if view.state.url.is_empty() {
-                            "New Tab".to_owned()
-                        } else {
-                            view.state.url.clone()
-                        };
-                        (label, icon)
-                    }
-                };
-                TabItem {
-                    id: format!("browser-tab-{}", tab.id),
-                    label,
-                    icon_appearing: self.icon_appearing(tab.id, &icon),
-                    icon,
-                    active: index == self.active_tab,
-                    focus_handle: self.tab_focus_handles[index].clone(),
-                    on_select: Box::new(cx.listener(move |this, _, window, cx| {
-                        cx.stop_propagation();
-                        this.activate_tab(index, true, window, cx);
-                    })),
-                    on_key_down: Box::new(cx.listener(
-                        move |this, event: &KeyDownEvent, window, cx| {
-                            this.tab_key_down(index, event, window, cx);
-                        },
-                    )),
-                    on_close: Box::new(cx.listener(move |this, _, window, cx| {
-                        cx.stop_propagation();
-                        this.close_tab(index, window, cx);
-                    })),
-                    on_toggle_audio: Box::new(cx.listener(move |this, _, _, cx| {
-                        cx.stop_propagation();
-                        if let Some(webview) =
-                            this.tabs.get(index).and_then(|tab| tab.content.webview())
-                        {
-                            webview.update(cx, |view, cx| view.toggle_audio_mute(cx));
-                        }
-                    })),
-                    on_middle_click: Box::new(cx.listener(
-                        move |this, _: &MouseUpEvent, window, cx| {
-                            cx.stop_propagation();
-                            this.close_tab(index, window, cx);
-                        },
-                    )),
-                    on_context_menu: Box::new(cx.listener(
-                        move |this, event: &MouseDownEvent, _, cx| {
-                            cx.stop_propagation();
-                            this.open_menu = Some(OpenMenu::Tab(index, event.position));
-                            cx.notify();
-                        },
-                    )),
-                    on_drop: Box::new(cx.listener(move |this, dragged: &DraggedTab, _, cx| {
-                        this.move_tab(dragged.index, index, cx);
-                    })),
-                }
-            })
-            .collect();
-
-        tab_strip(
-            tabs,
-            Box::new(cx.listener(|this, _, window, cx| {
-                cx.stop_propagation();
-                this.open_tab(window, cx);
-            })),
-            self.palette(window, cx),
-        )
-    }
-
-    /// Left and right arrows move between tabs from a focused tab.
-    fn tab_key_down(
+    /// Up and down arrows move between tabs from a focused tab.
+    pub(super) fn tab_key_down(
         &mut self,
         index: usize,
         event: &KeyDownEvent,
@@ -447,8 +350,8 @@ impl BrowserWindow {
         }
         let count = self.tabs.len();
         let next_index = match event.keystroke.key.as_str() {
-            "left" => (index + count - 1) % count,
-            "right" => (index + 1) % count,
+            "up" => (index + count - 1) % count,
+            "down" => (index + 1) % count,
             _ => return,
         };
         self.move_tab_focus(next_index, window, cx);
@@ -458,7 +361,7 @@ impl BrowserWindow {
 
     /// Whether a tab's icon is still within its appear animation. A newly
     /// revealed icon starts it; the same icon shown again does not.
-    fn icon_appearing(&self, tab: u64, icon: &TabIcon) -> bool {
+    pub(super) fn icon_appearing(&self, tab: u64, icon: &TabIcon) -> bool {
         let Some(revealed) = icon.revealed() else {
             return false;
         };

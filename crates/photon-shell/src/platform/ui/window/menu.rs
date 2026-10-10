@@ -1,9 +1,9 @@
-//! The browser menu, opened from the toolbar or by right-clicking the titlebar,
-//! and the overlay that shows it or a tab's menu.
+//! The browser menu, opened from the sidebar's footer or by right-clicking
+//! its top row, and the overlay that shows it or another menu.
 
 use gpui::{
-    Anchor, ClickEvent, Context, MouseButton, MouseDownEvent, Point, SharedString, Window,
-    anchored, div, point, prelude::*, px,
+    Anchor, Context, MouseButton, MouseDownEvent, Point, SharedString, Window, anchored, div,
+    prelude::*,
 };
 use photon_core::BrowserCommand;
 
@@ -12,33 +12,22 @@ use super::super::layout::v_stack;
 use super::super::menu::{MENU_MOTION, menu_action, menu_checkbox, menu_stepper, menu_surface};
 use super::super::motion::Transition;
 use super::super::pages::SETTINGS;
-use super::super::{metrics, theme::ThemeColors};
+use super::super::theme::ThemeColors;
 use super::BrowserWindow;
 
 /// Where the open browser menu is anchored.
 #[derive(Clone, Copy, PartialEq)]
 pub(super) enum OpenMenu {
+    /// Right-clicking the sidebar's top row.
     Context(Point<gpui::Pixels>),
-    Toolbar(Point<gpui::Pixels>),
+    /// The sidebar footer's menu button; the menu opens above it.
+    Sidebar(Point<gpui::Pixels>),
+    /// The menu for the favourite at this index.
+    Favourite(usize, Point<gpui::Pixels>),
     /// The menu for the tab at this index.
     Tab(usize, Point<gpui::Pixels>),
     /// The active page's context menu.
     Page(Point<gpui::Pixels>),
-}
-
-/// Anchors the toolbar menu below the menu button's bottom-right corner.
-pub(super) fn toolbar_menu_anchor(event: &ClickEvent) -> Point<gpui::Pixels> {
-    match event {
-        ClickEvent::Keyboard(event) => event.bounds.bottom_right(),
-        ClickEvent::Mouse(_) | ClickEvent::Touch(_) => {
-            let position = event.position();
-            let button_center_offset = px(metrics::TOOLBAR_BUTTON_SIZE / 2.0);
-            point(
-                position.x + button_center_offset,
-                position.y + button_center_offset,
-            )
-        }
-    }
 }
 
 impl BrowserWindow {
@@ -51,17 +40,21 @@ impl BrowserWindow {
     ) -> Option<impl IntoElement + use<>> {
         let (open_menu, transition) = self.menu_presence.sync(self.open_menu, MENU_MOTION, cx)?;
         let (anchor, position) = match open_menu {
-            OpenMenu::Context(position) | OpenMenu::Tab(_, position) | OpenMenu::Page(position) => {
-                (Anchor::TopLeft, position)
-            }
-            OpenMenu::Toolbar(position) => (Anchor::TopRight, position),
+            OpenMenu::Context(position)
+            | OpenMenu::Tab(_, position)
+            | OpenMenu::Favourite(_, position)
+            | OpenMenu::Page(position) => (Anchor::TopLeft, position),
+            OpenMenu::Sidebar(position) => (Anchor::BottomRight, position),
         };
         let menu = match open_menu {
             OpenMenu::Tab(index, _) => self
                 .tab_menu(index, transition, palette, cx)
                 .into_any_element(),
             OpenMenu::Page(_) => self.page_menu(transition, palette, cx).into_any_element(),
-            OpenMenu::Context(_) | OpenMenu::Toolbar(_) => self
+            OpenMenu::Favourite(index, _) => self
+                .favourite_menu(index, transition, palette, cx)
+                .into_any_element(),
+            OpenMenu::Context(_) | OpenMenu::Sidebar(_) => self
                 .browser_menu(transition, palette, cx)
                 .into_any_element(),
         };

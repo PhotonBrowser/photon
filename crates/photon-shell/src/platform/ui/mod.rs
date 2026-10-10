@@ -15,11 +15,10 @@ mod motion;
 mod omnibox;
 mod pages;
 mod settings;
+mod sidebar;
 mod status_chip;
-mod tabs;
 pub(super) mod theme;
 mod titlebar;
-mod toolbar;
 mod webview;
 mod window;
 

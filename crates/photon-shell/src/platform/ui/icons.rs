@@ -59,6 +59,18 @@ pub(super) fn shield_icon(color: u32, size: f32) -> impl IntoElement {
         .text_color(rgb(color))
 }
 
+/// A window with a panel down its left side, for showing or hiding the
+/// sidebar.
+pub(super) fn sidebar_icon(color: u32, size: f32) -> impl IntoElement {
+    svg()
+        .data(
+            br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="M9.5 5v14"/></g></svg>"##,
+        )
+        .size(px(size))
+        .flex_shrink_0()
+        .text_color(rgb(color))
+}
+
 /// A pencil, for customising.
 pub(super) fn edit_icon(color: u32, size: f32) -> impl IntoElement {
     svg()

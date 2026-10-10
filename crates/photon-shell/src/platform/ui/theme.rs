@@ -42,7 +42,6 @@ impl SurfaceOpacity {
 
 mod opacity {
     pub(super) const TEXT_SECONDARY: f32 = 0.72;
-    pub(super) const TEXT_DISABLED: f32 = 0.42;
     pub(super) const PERFORMANCE_SURFACE: f32 = 0.95;
     pub(super) const MODAL_BACKDROP: f32 = 0.28;
     pub(super) const MENU_BORDER: f32 = 0.12;
@@ -95,7 +94,6 @@ pub(super) struct ThemeColors {
     pub page_background: u32,
     pub text_primary: u32,
     pub text_secondary: u32,
-    pub text_disabled: u32,
     pub selection: u32,
     pub field_error_border: u32,
     pub performance_palette: PerformancePalette,
@@ -142,14 +140,12 @@ impl ThemeColors {
 
     fn from_gpui(colors: Colors, error: Rgba, link: Rgba, surfaces: SurfaceOpacity) -> Self {
         let text_secondary = mix_colors(colors.text, colors.background, opacity::TEXT_SECONDARY);
-        let text_disabled = mix_colors(colors.text, colors.background, opacity::TEXT_DISABLED);
 
         Self {
             window_tint: to_rgba_token(colors.background.opacity(surfaces.window)),
             page_background: to_rgb_token(colors.background),
             text_primary: to_rgb_token(colors.text),
             text_secondary: to_rgb_token(text_secondary),
-            text_disabled: to_rgb_token(text_disabled),
             selection: to_rgba_token(colors.selected),
             field_error_border: to_rgba_token(error),
             performance_palette: PerformancePalette {

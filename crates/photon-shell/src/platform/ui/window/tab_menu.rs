@@ -1,11 +1,13 @@
-//! A tab's right-click menu and the tab actions behind it and drag-and-drop.
+//! A tab's and a favourite's right-click menus, and the tab actions behind
+//! them and drag-and-drop.
 
 use gpui::{Context, Window, prelude::*};
-use photon_core::BrowserCommand;
+use photon_core::{BrowserCommand, MAX_FAVOURITES, Shortcut};
 
 use super::super::layout::v_stack;
 use super::super::menu::{menu_action, menu_separator, menu_surface};
 use super::super::motion::Transition;
+use super::super::settings::Settings;
 use super::super::theme::ThemeColors;
 use super::BrowserWindow;
 use super::content::TabContent;
@@ -132,6 +134,7 @@ impl BrowserWindow {
                 })),
                 palette,
             ))
+            .children(self.favourite_action(index, palette, cx))
             .child(menu_separator(palette))
             .child(menu_action(
                 "tab-menu-close",
@@ -170,6 +173,78 @@ impl BrowserWindow {
                 palette,
             ));
         }
+        menu_surface(content, transition, palette)
+    }
+
+    /// Adds a web page's site to the favourites, or removes it.
+    fn favourite_action(
+        &self,
+        index: usize,
+        palette: ThemeColors,
+        cx: &mut Context<Self>,
+    ) -> Option<impl IntoElement + use<>> {
+        let view = self.tabs.get(index)?.content.webview()?.read(cx);
+        if !view.has_page() {
+            return None;
+        }
+        let shortcut = Shortcut {
+            title: view.state.title.clone(),
+            url: view.state.url.clone(),
+        };
+        let sidebar = &Settings::get(cx).sidebar;
+        let is_favourite = sidebar.favourite_for(&shortcut.url).is_some();
+        if !is_favourite && sidebar.favourites.len() >= MAX_FAVOURITES {
+            return None;
+        }
+        Some(menu_action(
+            "tab-menu-favourite",
+            if is_favourite {
+                "Remove from Favourites"
+            } else {
+                "Add to Favourites"
+            },
+            5,
+            Box::new(cx.listener(move |this, _, _, cx| {
+                cx.stop_propagation();
+                this.open_menu = None;
+                let shortcut = shortcut.clone();
+                Settings::update(cx, |settings| {
+                    if is_favourite {
+                        settings.sidebar.remove_favourite(&shortcut.url);
+                    } else {
+                        settings.sidebar.add_favourite(shortcut);
+                    }
+                });
+            })),
+            palette,
+        ))
+    }
+
+    /// The menu for the favourite at `index`.
+    pub(super) fn favourite_menu(
+        &self,
+        index: usize,
+        transition: Transition,
+        palette: ThemeColors,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
+        let url = Settings::get(cx)
+            .sidebar
+            .favourites
+            .get(index)
+            .map(|favourite| favourite.url.clone())
+            .unwrap_or_default();
+        let content = v_stack().child(menu_action(
+            "favourite-menu-remove",
+            "Remove from Favourites",
+            0,
+            Box::new(cx.listener(move |this, _, _, cx| {
+                cx.stop_propagation();
+                this.open_menu = None;
+                Settings::update(cx, |settings| settings.sidebar.remove_favourite(&url));
+            })),
+            palette,
+        ));
         menu_surface(content, transition, palette)
     }
 }

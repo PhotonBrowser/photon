@@ -6,7 +6,7 @@ use photon_shortcuts::{
     CloseTab, FindInPage, FindNext, FindPrevious, FocusOmnibox, GoBack, GoForward, NewTab,
     NewWindow, Reload, ReopenClosedTab, ResetZoom, SelectLastTab, SelectNextTab, SelectPreviousTab,
     SelectTab1, SelectTab2, SelectTab3, SelectTab4, SelectTab5, SelectTab6, SelectTab7, SelectTab8,
-    StopLoading, ZoomIn, ZoomOut,
+    StopLoading, ToggleSidebar, ZoomIn, ZoomOut,
 };
 
 use super::super::super::engine::ZoomStep;
@@ -17,9 +17,12 @@ impl BrowserWindow {
     pub(super) fn on_actions(&self, root: Div, cx: &mut Context<Self>) -> Div {
         root.on_key_down(cx.listener(Self::escape))
             .on_action(cx.listener(|this, _: &FocusOmnibox, window, cx| {
+                // The address field lives in the sidebar.
+                this.set_sidebar_visible(true, cx);
                 this.omnibox
                     .update(cx, |omnibox, cx| omnibox.focus(window, cx));
             }))
+            .on_action(cx.listener(|this, _: &ToggleSidebar, _, cx| this.toggle_sidebar(cx)))
             .on_action(cx.listener(|this, _: &FindInPage, window, cx| {
                 this.open_find_bar(window, cx);
             }))

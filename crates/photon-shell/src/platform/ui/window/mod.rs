@@ -9,13 +9,14 @@ mod menu;
 mod page_menu;
 mod popup_window;
 mod popups;
+mod sidebar;
 mod tab_menu;
 mod tabs;
 mod zoom;
 
 use gpui::{
-    AnyElement, App, ClickEvent, Context, Entity, FocusHandle, MouseButton, MouseDownEvent, Render,
-    StyleRefinement, Subscription, WeakEntity, Window, div, prelude::*, px,
+    App, Context, Entity, FocusHandle, Render, StyleRefinement, Subscription, WeakEntity, Window,
+    div, prelude::*, px,
 };
 use photon_core::BrowserCommand;
 use std::cell::RefCell;
@@ -29,22 +30,20 @@ use super::super::window_observer::WindowObserver;
 use super::super::window_settings;
 use super::find_bar::{FIND_BAR_MOTION, FindBar};
 use super::js_dialog::JavaScriptDialog;
-use super::layout::v_stack;
+use super::layout::{h_stack, v_stack};
 use super::modal::MODAL_MOTION;
 use super::motion::{AnimateIn, Presence};
 use super::omnibox::{Omnibox, OmniboxEvent};
 use super::pages::NEW_TAB;
 use super::settings::Settings;
-use super::tabs::RevealedIcon;
-use super::titlebar::titlebar;
-use super::toolbar::address_toolbar;
+use super::sidebar::RevealedIcon;
 use super::{
     metrics,
     theme::{ThemeColors, palette},
 };
 use alerts::{EngineNotice, NoticeExpiry};
 use content::{BrowserTab, TabContent, create_webview};
-use menu::{OpenMenu, toolbar_menu_anchor};
+use menu::OpenMenu;
 use popups::PendingPopup;
 use tabs::ClosedTab;
 
@@ -54,8 +53,12 @@ struct BrowserWindow {
     tabs: Vec<BrowserTab>,
     /// One per tab, in `tabs` order: follows its web view or page.
     tab_subscriptions: Vec<Subscription>,
-    /// Titlebar and toolbar, cached so Engine frames repaint only the page.
+    /// The sidebar, cached so Engine frames repaint only the page.
     chrome: Entity<BrowserChrome>,
+    /// Whether the sidebar is shown; hidden, the page takes the whole width.
+    sidebar_visible: bool,
+    /// When the sidebar was last shown, so it slides in only then.
+    sidebar_shown_at: Option<Instant>,
     tab_focus_handles: Vec<FocusHandle>,
     active_tab: usize,
     next_tab_id: u64,
@@ -98,7 +101,7 @@ struct BrowserWindow {
     _window_observer: Option<WindowObserver>,
 }
 
-/// The titlebar and address toolbar. A cached view re-renders only when it is
+/// The sidebar, or the slim bar shown while it is hidden. A cached view re-renders only when it is
 /// notified, so `BrowserWindow` notifies it whenever the window or a tab's page
 /// state changes; Engine frames, which notify only the page view, leave it be.
 struct BrowserChrome {
@@ -108,7 +111,7 @@ struct BrowserChrome {
 impl Render for BrowserChrome {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.browser
-            .update(cx, |browser, cx| browser.render_chrome(window, cx))
+            .update(cx, |browser, cx| browser.render_sidebar(window, cx))
             .unwrap_or_else(|_| div().into_any_element())
     }
 }
@@ -116,60 +119,6 @@ impl Render for BrowserChrome {
 impl BrowserWindow {
     fn palette(&self, window: &Window, cx: &App) -> ThemeColors {
         palette(window, cx)
-    }
-
-    fn render_chrome(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
-        v_stack()
-            .w_full()
-            .child(titlebar(self.tab_strip(window, cx)))
-            .child(self.address_toolbar(window, cx))
-            .into_any_element()
-    }
-
-    fn address_toolbar(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let (can_go_back, can_go_forward, can_reload, loading) =
-            self.active_webview()
-                .map_or((false, false, false, false), |webview| {
-                    let view = webview.read(cx);
-                    (
-                        view.state.can_go_back,
-                        view.state.can_go_forward,
-                        view.has_page(),
-                        view.state.loading,
-                    )
-                });
-
-        address_toolbar(
-            self.omnibox.clone(),
-            can_go_back,
-            can_go_forward,
-            can_reload,
-            loading,
-            matches!(self.open_menu, Some(OpenMenu::Toolbar(_))),
-            self.palette(window, cx),
-            Box::new(cx.listener(|this, _, window, cx| {
-                this.dispatch_command(BrowserCommand::Back, window, cx);
-            })),
-            Box::new(cx.listener(|this, _, window, cx| {
-                this.dispatch_command(BrowserCommand::Forward, window, cx);
-            })),
-            Box::new(cx.listener(move |this, _, window, cx| {
-                let command = if loading {
-                    BrowserCommand::StopLoading
-                } else {
-                    BrowserCommand::Reload
-                };
-                this.dispatch_command(command, window, cx);
-            })),
-            Box::new(cx.listener(|this, event: &ClickEvent, _, cx| {
-                cx.stop_propagation();
-                this.open_menu = match this.open_menu {
-                    Some(OpenMenu::Toolbar(_)) => None,
-                    _ => Some(OpenMenu::Toolbar(toolbar_menu_anchor(event))),
-                };
-                cx.notify();
-            })),
-        )
     }
 
     /// Redraws the chrome and every tab for changed settings, such as the theme.
@@ -246,59 +195,61 @@ impl Render for BrowserWindow {
         let dialog = self
             .dialog_presence
             .sync(self.dialog.clone(), MODAL_MOTION, cx);
-        let root = v_stack()
+        let page = div()
+            .relative()
+            .flex_1()
+            // Keep tall pages inside the page area; they scroll themselves.
+            .min_w_0()
+            .min_h_0()
+            .overflow_hidden()
+            .size_full()
+            .p(px(metrics::PAGE_INSET))
+            .child(self.active_view(palette))
+            // The find bar floats in the page's top-right corner.
+            .children(find_bar.map(|(bar, transition)| {
+                div()
+                    .absolute()
+                    .top(px(metrics::PAGE_INSET + metrics::CHIP_INSET))
+                    .right(px(metrics::PAGE_INSET + metrics::CHIP_INSET))
+                    .child(
+                        div()
+                            .child(bar)
+                            .animate("find-bar-motion", FIND_BAR_MOTION, transition),
+                    )
+            }))
+            // Crash and restart chips sit in the page's bottom-right corner.
+            .children(self.notice_chip(palette, cx).map(|chip| {
+                div()
+                    .absolute()
+                    .right(px(metrics::PAGE_INSET + metrics::CHIP_INSET))
+                    .bottom(px(metrics::PAGE_INSET + metrics::CHIP_INSET))
+                    .child(chip)
+            }));
+        // The sidebar sits beside the page; hidden, a slim bar with room for
+        // the window controls sits above it.
+        let chrome_style = if self.sidebar_visible {
+            StyleRefinement::default()
+                .w(px(metrics::SIDEBAR_WIDTH))
+                .h_full()
+                .flex_shrink_0()
+        } else {
+            StyleRefinement::default()
+                .w_full()
+                .h(px(metrics::TITLEBAR_HEIGHT))
+                .flex_shrink_0()
+        };
+        let chrome = self.chrome.clone().cached(chrome_style);
+        let body = if self.sidebar_visible {
+            h_stack().size_full().child(chrome).child(page)
+        } else {
+            v_stack().size_full().child(chrome).child(page)
+        };
+        let root = div()
             .size_full()
             .relative()
             .bg(gpui::rgba(palette.window_tint))
             .text_color(gpui::rgb(palette.text_primary))
-            .on_mouse_down(
-                MouseButton::Right,
-                cx.listener(|this, event: &MouseDownEvent, _, cx| {
-                    if f32::from(event.position.y) <= metrics::TITLEBAR_HEIGHT {
-                        this.open_menu = Some(OpenMenu::Context(event.position));
-                        cx.stop_propagation();
-                        cx.notify();
-                    }
-                }),
-            )
-            .child(
-                self.chrome.clone().cached(
-                    StyleRefinement::default()
-                        .w_full()
-                        .h(px(metrics::CHROME_HEIGHT)),
-                ),
-            )
-            .child(
-                div()
-                    .relative()
-                    .flex_1()
-                    // Keep tall pages inside the page area; they scroll themselves.
-                    .min_h_0()
-                    .overflow_hidden()
-                    .w_full()
-                    .p(px(metrics::PAGE_INSET))
-                    .child(self.active_view(palette))
-                    // The find bar floats in the page's top-right corner.
-                    .children(find_bar.map(|(bar, transition)| {
-                        div()
-                            .absolute()
-                            .top(px(metrics::PAGE_INSET + metrics::CHIP_INSET))
-                            .right(px(metrics::PAGE_INSET + metrics::CHIP_INSET))
-                            .child(div().child(bar).animate(
-                                "find-bar-motion",
-                                FIND_BAR_MOTION,
-                                transition,
-                            ))
-                    }))
-                    // Crash and restart chips sit in the page's bottom-right corner.
-                    .children(self.notice_chip(palette, cx).map(|chip| {
-                        div()
-                            .absolute()
-                            .right(px(metrics::PAGE_INSET + metrics::CHIP_INSET))
-                            .bottom(px(metrics::PAGE_INSET + metrics::CHIP_INSET))
-                            .child(chip)
-                    })),
-            )
+            .child(body)
             // A JavaScript dialog is modal to the whole window.
             .children(dialog.map(|(dialog, _)| dialog))
             .children(self.open_menu_overlay(palette, cx))
@@ -354,6 +305,8 @@ fn open_browser_window(
                 tabs: Vec::new(),
                 tab_subscriptions: Vec::new(),
                 chrome,
+                sidebar_visible: true,
+                sidebar_shown_at: None,
                 tab_focus_handles: Vec::new(),
                 active_tab: 0,
                 next_tab_id: 1,
