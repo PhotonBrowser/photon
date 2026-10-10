@@ -227,7 +227,9 @@ impl Render for BrowserWindow {
             .min_h_0()
             .overflow_hidden()
             .size_full()
-            .p(px(metrics::PAGE_INSET))
+            .px(px(metrics::PAGE_INSET))
+            .pb(px(metrics::PAGE_INSET))
+            .when(!vertical, |page| page.pt(px(metrics::PAGE_CHROME_GAP)))
             .when(vertical, |page| {
                 // Beside the sidebar, its own padding separates the two;
                 // with it hidden, the top bar above is gap enough.
