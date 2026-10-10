@@ -73,7 +73,7 @@ pub enum OmniboxError {
     InvalidAddress,
 }
 
-static BUILTIN_ENGINES: OnceLock<SearchEngines> = OnceLock::new();
+pub(crate) static BUILTIN_ENGINES: OnceLock<SearchEngines> = OnceLock::new();
 
 /// Resolves typed text with Photon's built-in engines.
 pub fn resolve(input: &str) -> Result<OmniboxTarget, OmniboxError> {
@@ -174,7 +174,7 @@ fn open_address(
     })
 }
 
-fn search(text: &str, engines: &SearchEngines) -> OmniboxTarget {
+pub(crate) fn search(text: &str, engines: &SearchEngines) -> OmniboxTarget {
     let query = collapse_whitespace(text);
     let engine = engines.default_engine();
     OmniboxTarget::Search {
