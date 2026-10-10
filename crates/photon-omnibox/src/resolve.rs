@@ -148,7 +148,11 @@ fn explicit_scheme(text: &str) -> Option<String> {
         return None;
     }
     let scheme = scheme.to_ascii_lowercase();
-    (is_web_scheme(&scheme) || OTHER_SCHEMES.contains(&scheme.as_str())).then_some(scheme)
+    // The browser's own pages, such as photon://settings, open as written too.
+    let known = is_web_scheme(&scheme)
+        || OTHER_SCHEMES.contains(&scheme.as_str())
+        || scheme == photon_brand::PAGE_SCHEME;
+    known.then_some(scheme)
 }
 
 fn is_web_scheme(scheme: &str) -> bool {
@@ -296,6 +300,13 @@ mod tests {
             OmniboxTarget::Url { kind, .. } => kind,
             OmniboxTarget::Search { .. } => panic!("{input} was read as a query"),
         }
+    }
+
+    #[test]
+    fn opens_the_browsers_own_pages_as_written() {
+        let address = format!("{}://settings", photon_brand::PAGE_SCHEME);
+        assert_eq!(url_of(&address), address);
+        assert_eq!(kind_of(&address), UrlKind::Other);
     }
 
     #[test]
