@@ -1,6 +1,6 @@
 //! A profile folder and what is kept in it.
 
-use photon_core::{ClearBrowsingData, History};
+use photon_core::{BrowserSettings, ClearBrowsingData, History};
 use std::collections::HashSet;
 use std::fs;
 use std::io;
@@ -10,21 +10,26 @@ use super::favicons::{self, FaviconPixels};
 use super::{atomic, history_file};
 
 const HISTORY_FILE: &str = "History.json";
+const SETTINGS_FILE: &str = "Settings.json";
 const FAVICONS_DIR: &str = "Favicons";
 const ENGINE_DIR: &str = "Engine";
+/// Where in its folder the Engine keeps its network cache.
+const ENGINE_CACHE_DIR: &str = "cache";
 
 /// How much disk a profile's data takes, in bytes.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct DataUsage {
     pub history: u64,
     pub favicons: u64,
-    /// The Engine's cookies, site storage and cache.
-    pub website_data: u64,
+    /// The Engine's network cache.
+    pub cache: u64,
+    /// The Engine's cookies and site storage.
+    pub site_data: u64,
 }
 
 impl DataUsage {
     pub fn total(&self) -> u64 {
-        self.history + self.favicons + self.website_data
+        self.history + self.favicons + self.cache + self.site_data
     }
 }
 
@@ -64,7 +69,7 @@ impl Profile {
                 .filter(|data| !data.is_empty())
                 .map_or_else(|| PathBuf::from(home).join(".local/share"), PathBuf::from)
         };
-        Ok(data.join("Photon").join("Default"))
+        Ok(data.join(photon_brand::DATA_FOLDER).join("Default"))
     }
 
     pub fn root(&self) -> &Path {
@@ -94,6 +99,22 @@ impl Profile {
             &self.root.join(HISTORY_FILE),
             &history_file::encode(history),
         )
+    }
+
+    /// The saved preferences, or defaults when there are none or they cannot
+    /// be read. Unknown fields are ignored so older builds can open newer
+    /// profiles safely.
+    pub fn load_settings(&self) -> BrowserSettings {
+        fs::read(self.root.join(SETTINGS_FILE))
+            .ok()
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+            .unwrap_or_default()
+    }
+
+    pub fn save_settings(&self, settings: &BrowserSettings) -> io::Result<()> {
+        let bytes = serde_json::to_vec_pretty(settings)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        atomic::write(&self.root.join(SETTINGS_FILE), &bytes)
     }
 
     pub fn load_favicon(&self, url: &str) -> Option<FaviconPixels> {
@@ -142,7 +163,9 @@ impl Profile {
         DataUsage {
             history: file_size(&self.root.join(HISTORY_FILE)),
             favicons: folder_size(&self.favicons_dir()),
-            website_data: folder_size(&self.engine_dir()),
+            cache: folder_size(&self.engine_dir().join(ENGINE_CACHE_DIR)),
+            site_data: folder_size(&self.engine_dir())
+                .saturating_sub(folder_size(&self.engine_dir().join(ENGINE_CACHE_DIR))),
         }
     }
 }
@@ -211,6 +234,17 @@ mod tests {
         history.record_search("photon browser", 6);
         profile.0.save_history(&history).expect("saves");
         assert_eq!(profile.0.load_history(), history);
+    }
+
+    #[test]
+    fn saves_and_loads_settings() {
+        let profile = TemporaryProfile::new("settings");
+        assert_eq!(profile.0.load_settings(), BrowserSettings::default());
+        let mut settings = BrowserSettings::default();
+        settings.theme = photon_core::ThemeMode::Dark;
+        settings.new_tab.remove("https://example.com/");
+        profile.0.save_settings(&settings).expect("saves");
+        assert_eq!(profile.0.load_settings(), settings);
     }
 
     #[test]
