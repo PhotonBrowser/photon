@@ -83,6 +83,19 @@ shell's shadows. Use `element.elevated(Elevation::…)`, not shadow sizes:
   a centered modal over a dimmed window.
 - Page layout and settings rows live in [`pages/`](Pages.md).
 
+## Icons
+
+[`icons.rs`](../crates/photon-shell/src/platform/ui/icons.rs) gives each icon
+a function taking a color and a size, such as `back_icon(color, size)`, so
+views never handle SVG data. Icons are [Lucide](https://lucide.dev) (ISC
+license), vendored unchanged from `lucide-static` 0.460.0 in
+[`assets/icons/lucide/`](../crates/photon-shell/assets/icons/lucide) with
+its license. Only the loading spinner, whose spokes fade behind the leading
+one, and the brand logo are drawn by Photon.
+
+To add an icon, download it from the same `lucide-static` version into that
+folder, then add a function that loads it with `lucide!("name")`.
+
 ## Motion
 
 [`motion.rs`](../crates/photon-shell/src/platform/ui/motion.rs) is the shell's
