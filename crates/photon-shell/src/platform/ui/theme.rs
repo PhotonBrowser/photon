@@ -11,13 +11,13 @@ use std::sync::OnceLock;
 
 use super::settings::Settings;
 
-/// How opaque each layer of surface is, for each transparency setting. The
-/// window shows the most of the desktop; controls on it a little less; menus
-/// and dialogs over a busy page the least, so their text stays readable.
+/// How opaque the window and raised surfaces are, for each transparency
+/// setting. Surfaces on the window are tints over it, so they are exactly as
+/// see-through as the window; menus and dialogs over a busy page are more
+/// opaque, so their text stays readable.
 #[derive(Clone, Copy)]
 struct SurfaceOpacity {
     window: f32,
-    control: f32,
     raised: f32,
 }
 
@@ -26,17 +26,14 @@ impl SurfaceOpacity {
         match transparency {
             Transparency::Off => Self {
                 window: 1.0,
-                control: 1.0,
                 raised: 1.0,
             },
             Transparency::Subtle => Self {
                 window: 0.88,
-                control: 0.8,
                 raised: 0.92,
             },
             Transparency::Clear => Self {
                 window: 0.7,
-                control: 0.6,
                 raised: 0.84,
             },
         }
@@ -106,7 +103,7 @@ pub(super) struct ThemeColors {
     pub menu_border: u32,
     /// The one surface the window's parts sit on: the browser's own pages,
     /// the omnibox field, the active tab, buttons and text fields. A light
-    /// tint of the window, as see-through as the transparency setting says.
+    /// tint over the window, exactly as see-through as the window is.
     pub surface: u32,
     /// A row or control under the pointer.
     pub hover_surface: u32,
@@ -144,7 +141,6 @@ impl ThemeColors {
     }
 
     fn from_gpui(colors: Colors, error: Rgba, link: Rgba, surfaces: SurfaceOpacity) -> Self {
-        let control = |color: Rgba| to_rgba_token(color.opacity(surfaces.control));
         let text_secondary = mix_colors(colors.text, colors.background, opacity::TEXT_SECONDARY);
         let text_disabled = mix_colors(colors.text, colors.background, opacity::TEXT_DISABLED);
 
@@ -171,11 +167,9 @@ impl ThemeColors {
             // A light hairline that separates raised surfaces from what is under
             // them without a dark outline.
             menu_border: to_rgba_token(colors.text.opacity(opacity::MENU_BORDER)),
-            surface: control(mix_colors(
-                colors.text,
-                colors.background,
-                opacity::SURFACE_TINT,
-            )),
+            // A tint over the window rather than a layer of its own, so stacking
+            // it never makes the window less see-through.
+            surface: to_rgba_token(colors.text.opacity(opacity::SURFACE_TINT)),
             hover_surface: to_rgba_token(colors.text.opacity(opacity::HOVER)),
             selected_surface: to_rgba_token(colors.text.opacity(opacity::SELECTED)),
             chosen: to_rgb_token(link),

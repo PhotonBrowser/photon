@@ -31,16 +31,18 @@ transparency, so renders never rebuild them.
 ### Transparency
 
 The transparency setting (off, subtle, clear) decides how much of the desktop
-shows through, in three layers set in `SurfaceOpacity`:
+shows through, set in `SurfaceOpacity`:
 
-| Transparency | Window | Controls on it (`surface`) | Menus and dialogs |
-| --- | --- | --- | --- |
-| Off | solid | solid | solid |
-| Subtle (default) | 88% | 80% | 92% |
-| Clear | 70% | 60% | 84% |
+| Transparency | Window | Menus and dialogs |
+| --- | --- | --- |
+| Off | solid | solid |
+| Subtle (default) | 88% | 92% |
+| Clear | 70% | 84% |
 
-Menus and dialogs stay the most opaque so they remain readable over a page.
-`surface` is the window color tinted by `SURFACE_TINT` of the text color.
+`surface`, `hover_surface` and `selected_surface` are tints of the text color
+over the window, not layers of their own, so everything on the window is
+exactly as see-through as the window. Menus and dialogs float over pages, so
+they are more opaque to stay readable.
 
 ## Dimensions and typography
 
