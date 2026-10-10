@@ -4,6 +4,9 @@
 //! visually consistent and can be tuned without searching individual views.
 
 pub(super) const TITLEBAR_HEIGHT: f32 = 36.0;
+/// The slim bar above the page while the sidebar is hidden: just room for
+/// the window controls and the sidebar toggle.
+pub(super) const COMPACT_TITLEBAR_HEIGHT: f32 = 28.0;
 pub(in crate::platform) const INITIAL_WINDOW_WIDTH: f32 = 1200.0;
 pub(in crate::platform) const INITIAL_WINDOW_HEIGHT: f32 = 760.0;
 pub(in crate::platform) const POPUP_WINDOW_WIDTH: f32 = 720.0;
@@ -15,7 +18,13 @@ pub(in crate::platform) const POPUP_MAX_WINDOW_HEIGHT: f32 = 1000.0;
 const WINDOW_CONTROLS_HEIGHT: f32 = 14.0;
 /// Vertically centered origin of the native window control buttons.
 pub(in crate::platform) const WINDOW_CONTROLS_ORIGIN: (f32, f32) =
-    (12.0, (TITLEBAR_HEIGHT - WINDOW_CONTROLS_HEIGHT) / 2.0);
+    window_controls_origin(TITLEBAR_HEIGHT);
+
+/// The origin that centers the native window controls in a titlebar
+/// `titlebar_height` tall.
+pub(in crate::platform) const fn window_controls_origin(titlebar_height: f32) -> (f32, f32) {
+    (12.0, (titlebar_height - WINDOW_CONTROLS_HEIGHT) / 2.0)
+}
 /// Space reserved at each side of the titlebar for native window controls.
 pub(super) const WINDOW_CONTROLS_INSET: f32 = 80.0;
 

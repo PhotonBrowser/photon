@@ -36,7 +36,11 @@ pub(in super::super) fn navigation_bar(
     let mut bar = window_drag_area(
         h_stack()
             .w_full()
-            .h(px(metrics::TITLEBAR_HEIGHT))
+            .h(px(if navigation.is_some() {
+                metrics::TITLEBAR_HEIGHT
+            } else {
+                metrics::COMPACT_TITLEBAR_HEIGHT
+            }))
             .flex_shrink_0()
             .items_center()
             .gap(px(metrics::SIDEBAR_CONTROL_GAP))
