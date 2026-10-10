@@ -57,7 +57,7 @@ impl BrowserWindow {
             .w_full()
             .flex()
             .flex_col()
-            .child(titlebar(strip).on_mouse_down(
+            .child(titlebar(strip, window).on_mouse_down(
                 gpui::MouseButton::Right,
                 cx.listener(|this, event: &MouseDownEvent, _, cx| {
                     cx.stop_propagation();
@@ -94,6 +94,7 @@ impl BrowserWindow {
                 self.navigation_state(cx),
                 out,
                 self.sidebar.visible,
+                window.is_fullscreen() || window.is_simple_fullscreen(),
                 self.navigation_actions(cx),
                 palette,
             ),

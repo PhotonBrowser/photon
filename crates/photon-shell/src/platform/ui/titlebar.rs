@@ -1,14 +1,18 @@
 //! Titlebar space: moves or zooms the window from empty space, like a native
 //! titlebar, around the shell UI it holds.
 
-use gpui::{Div, InteractiveElement, MouseButton, prelude::*, px};
+use gpui::{Div, InteractiveElement, MouseButton, Window, prelude::*, px};
 
 use super::layout::h_stack;
 use super::metrics;
 
-/// A centered titlebar strip between the native window controls, for windows
-/// without a sidebar.
-pub(super) fn titlebar(content: impl IntoElement) -> Div {
+/// A centered titlebar strip, with room for native controls while windowed.
+pub(super) fn titlebar(content: impl IntoElement, window: &Window) -> Div {
+    let controls_inset = if window.is_fullscreen() || window.is_simple_fullscreen() {
+        0.0
+    } else {
+        metrics::WINDOW_CONTROLS_INSET
+    };
     window_drag_area(
         h_stack()
             .w_full()
@@ -16,7 +20,7 @@ pub(super) fn titlebar(content: impl IntoElement) -> Div {
             .flex_shrink_0()
             .items_center()
             .justify_center()
-            .px(px(metrics::WINDOW_CONTROLS_INSET)),
+            .px(px(controls_inset)),
     )
     .child(content)
 }

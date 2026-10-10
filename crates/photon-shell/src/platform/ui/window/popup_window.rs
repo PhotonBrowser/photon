@@ -223,6 +223,7 @@ impl Render for MinimalPopupWindow {
                     .text_color(rgb(palette.text_secondary))
                     .truncate()
                     .child(url),
+                window,
             ))
             .child(
                 div()

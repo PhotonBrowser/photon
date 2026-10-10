@@ -16,7 +16,7 @@ const WINDOW_CONTROLS_HEIGHT: f32 = 14.0;
 /// Vertically centered origin of the native window control buttons.
 pub(in crate::platform) const WINDOW_CONTROLS_ORIGIN: (f32, f32) =
     (12.0, (TITLEBAR_HEIGHT - WINDOW_CONTROLS_HEIGHT) / 2.0);
-/// Space reserved at each side of the titlebar for native window controls.
+/// Space reserved at each side of the windowed titlebar for native controls.
 pub(super) const WINDOW_CONTROLS_INSET: f32 = 80.0;
 
 pub(super) const TAB_HEIGHT: f32 = 28.0;

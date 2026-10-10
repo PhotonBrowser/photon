@@ -32,10 +32,16 @@ pub(in super::super) fn navigation_bar(
     state: NavigationState,
     navigation_shown: f32,
     sidebar_visible: bool,
+    fullscreen: bool,
     actions: NavigationActions,
     palette: ThemeColors,
 ) -> gpui::Div {
     let (color, size) = (palette.text_secondary, metrics::TOOLBAR_ICON_SIZE);
+    let controls_inset = if fullscreen {
+        0.0
+    } else {
+        metrics::WINDOW_CONTROLS_INSET
+    };
     let bar = window_drag_area(
         h_stack()
             .w(px(metrics::SIDEBAR_WIDTH))
@@ -43,7 +49,7 @@ pub(in super::super) fn navigation_bar(
             .flex_shrink_0()
             .items_center()
             .gap(px(metrics::SIDEBAR_CONTROL_GAP))
-            .pl(px(metrics::WINDOW_CONTROLS_INSET))
+            .pl(px(controls_inset))
             .pr(px(metrics::SIDEBAR_PADDING))
             .tab_group(),
     )
