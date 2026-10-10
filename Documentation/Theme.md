@@ -47,7 +47,7 @@ they are more opaque to stay readable.
 ## Dimensions and typography
 
 [`metrics.rs`](../crates/photon-shell/src/platform/ui/metrics.rs) holds shared
-logical-pixel measurements: window geometry, the sidebar and its tabs, menus, the omnibox
+logical-pixel measurements: window geometry, the tab strip, toolbar, sidebar and its tabs, menus, the omnibox (with a larger size in the sidebar)
 and its suggestions, the page frame, chips, controls (segments, switches,
 checkboxes), settings rows and sidebar, and new tab tiles. It also holds type
 sizes, icon sizes and corner radii.
@@ -75,10 +75,11 @@ shell's shadows. Use `element.elevated(Elevation::…)`, not shadow sizes:
   standard menu. Rows include actions, checkboxes, switches, a stepper, small
   headings and blocks that line up embedded controls.
 - [`controls.rs`](../crates/photon-shell/src/platform/ui/controls.rs):
-  segmented `choices`, `switch` and `check_mark`, used by menus and pages, and
+  segmented `choices`, a `dropdown` that opens a menu of its options,
+  `switch` and `check_mark`, used by menus and pages, and
   `themed_text_input` for every text field's caret and selection.
 - [`button.rs`](../crates/photon-shell/src/platform/ui/button.rs): text and
-  icon buttons. [`modal.rs`](../crates/photon-shell/src/platform/ui/modal.rs):
+  icon buttons, and the toolbar and menu buttons both tab layouts share. [`modal.rs`](../crates/photon-shell/src/platform/ui/modal.rs):
   a centered modal over a dimmed window.
 - Page layout and settings rows live in [`pages/`](Pages.md).
 

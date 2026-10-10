@@ -17,7 +17,8 @@ What the Photon shell does today and what comes next. Engine performance work is
 
 ### Tabs and sidebar
 
-- [x] Vertical tab sidebar: navigation, address field, favourite sites, the current space's tabs and a footer, shown or hidden with ⌘S
+- [x] Horizontal tabs in the titlebar (the default) or a vertical sidebar, chosen in Settings → Appearance
+- [x] Vertical tab sidebar: navigation, a larger address field, favourite sites, tabs and a footer, shown or hidden with ⌘S
 - [x] Favourite sites: up to 12 in a grid, added from a tab's menu, opening or switching to the site's tab
 - [x] Tabs with new, close and select; up and down arrows move between tabs
 - [x] Optionally keep the window open on a new tab page when its last tab closes
@@ -34,7 +35,7 @@ What the Photon shell does today and what comes next. Engine performance work is
 - [x] Omnibox opens into a suggestion panel while typing: visited pages with their icons, past searches, the typed address and a search, with the best visited address completed inline
 - [x] History of visited pages and past searches, saved in the profile with page icons; rows can be removed from the omnibox
 - [x] Persistent profile for cookies, site storage and the cache (`PHOTON_TEMPORARY_PROFILE` for a throwaway one)
-- [x] Browser menu in the sidebar footer: new tab, new window, settings, find in page, zoom and the debug overlay
+- [x] Browser menu in the toolbar or sidebar footer: new tab, new window, settings, find in page, zoom and the debug overlay
 - [x] Titlebar right-click menu
 - [x] Performance diagnostics overlay
 - [x] Page zoom from the menu or ⌘+, ⌘−, ⌘0, shown in a chip with Reset; each site's zoom is remembered for the session
@@ -44,7 +45,7 @@ What the Photon shell does today and what comes next. Engine performance work is
 ### Internal pages and settings
 
 - [x] New tab page: logo and 4–12 site shortcuts in up to two rows (pinned, then most visited, one per site), with tiles removed on hover, shortcuts added by name and address, and a customise panel
-- [x] Settings page with a sidebar of sections: appearance, search, new tab page, sites (pop-ups), and privacy (clearing browsing data by time range, with disk usage)
+- [x] Settings page with a sidebar of sections: appearance (theme, transparency, tab layout), search, new tab page, tabs, sites (pop-ups), and privacy (clearing browsing data by time range, with disk usage)
 - [x] Settings saved in the profile and followed by every window at once
 - [x] Transparency setting (off, subtle, clear) applied to every surface: window, tabs, omnibox, buttons, menus and pages
 - [x] The browser's own pages live at `photon://` addresses, shown in the omnibox (the new tab page leaves it empty) and listed in one registry
@@ -77,7 +78,7 @@ In order of priority.
 
 ## Later
 
-- [ ] More spaces, each with its own tabs
+- [ ] Spaces in the sidebar, each with its own tabs
 - [ ] History page
 - [ ] Bookmarks
 - [ ] Downloads

@@ -3,8 +3,8 @@
 `PhotonWebView` is the shell's web page view. A browser tab shows either one
 web view, with its own Photon Engine session, or one of
 [the browser's own pages](Pages.md). The shell window provides the
-[sidebar](Sidebar.md) (navigation, omnibox, favourites, tabs and the browser
-menu) and an optional performance overlay around the active tab's view.
+[tab strip and toolbar, or sidebar](Sidebar.md) (navigation, omnibox, tabs
+and the browser menu) and an optional performance overlay around the active tab's view.
 
 Omnibox submissions and startup addresses use the same Rust
 [address and search rules](Omnibox.md). Browser state stays in Rust; there is no
