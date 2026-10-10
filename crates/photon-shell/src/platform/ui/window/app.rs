@@ -9,8 +9,10 @@ use std::time::Duration;
 
 use super::super::super::engine::EngineRuntime;
 use super::super::super::motion_observer::ReducedMotionObserver;
+use super::super::history::load_browsing_history;
 use super::super::theme::ThemePreference;
 use super::{BrowserWindow, open_browser_window};
+use photon_storage::Profile;
 
 /// Keeps the system reduced-motion preference flowing into GPUI.
 struct ReducedMotion {
@@ -29,16 +31,34 @@ pub fn run() {
         // Keep browser actions and their default bindings in the shortcuts crate.
         cx.bind_keys(browser_shortcuts());
         follow_reduced_motion(cx);
+        let profile = open_profile();
         let runtime = Rc::new(
-            EngineRuntime::create()
-                .unwrap_or_else(|error| panic!("could not start Photon Engine: {error:#}")),
+            EngineRuntime::create(
+                profile
+                    .as_ref()
+                    .map(|profile| profile.engine_dir())
+                    .as_deref(),
+            )
+            .unwrap_or_else(|error| panic!("could not start Photon Engine: {error:#}")),
         );
+        load_browsing_history(profile, cx);
         announce_service_restarts(&runtime, cx);
         quit_after_env_timeout(cx);
         cx.activate(true);
         open_browser_window(runtime, initial_address(), ThemePreference::default(), cx)
             .expect("open GPUI-CE Photon window");
     });
+}
+
+/// The profile Photon keeps history and website data in, or `None` for a
+/// temporary session that remembers nothing, as with PHOTON_TEMPORARY_PROFILE.
+fn open_profile() -> Option<Profile> {
+    if std::env::var_os("PHOTON_TEMPORARY_PROFILE").is_some() {
+        return None;
+    }
+    Profile::open_default()
+        .inspect_err(|error| eprintln!("Photon: using a temporary profile: {error}"))
+        .ok()
 }
 
 /// The address to open at startup, from PHOTON_URL.

@@ -116,8 +116,15 @@ struct PhotonViewCallbacks {
 #endif
 };
 
-void* photon_runtime_create(char const* helper_directory, char* error,
-    size_t error_capacity);
+// A null or empty `profile_path` uses a temporary profile.
+void* photon_runtime_create(char const* helper_directory,
+    char const* profile_path, char* error, size_t error_capacity);
+// Called once website data has been deleted.
+using PhotonBrowsingDataClearedCallback = void (*)(void*);
+// Deletes the cache and/or site data last used since `since_unix_seconds`.
+void photon_runtime_clear_browsing_data(void* runtime,
+    int64_t since_unix_seconds, bool cache, bool site_data, void* callback_data,
+    PhotonBrowsingDataClearedCallback callback);
 #if defined(__APPLE__)
 void photon_runtime_set_native_release_drain_callback(
     void* runtime, void* callback_data,

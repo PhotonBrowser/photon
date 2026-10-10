@@ -4,10 +4,11 @@ mod callbacks;
 
 use anyhow::Context as _;
 use gpui::{AsyncApp, WeakEntity};
-use photon_core::{BrowserCommand, DialogReply};
+use photon_core::{BrowserCommand, ClearBrowsingData, DialogReply};
 use photon_performance::PerformanceMonitor;
 use std::{
     ffi::{CStr, CString, c_char, c_void},
+    path::Path,
     rc::Rc,
     sync::{
         Arc, Mutex,
@@ -56,13 +57,25 @@ impl PopupPolicy {
 }
 
 impl EngineRuntime {
-    pub(super) fn create() -> anyhow::Result<Self> {
+    /// Starts the Engine, keeping website data in `profile_dir`, or in a
+    /// temporary profile when there is none.
+    pub(super) fn create(profile_dir: Option<&Path>) -> anyhow::Result<Self> {
         let helper = std::env::var("PHOTON_HELPER_DIRECTORY")
             .context("PHOTON_HELPER_DIRECTORY is not set")?;
         let helper = CString::new(helper)?;
+        let profile = profile_dir
+            .map(|dir| CString::new(dir.to_string_lossy().into_owned()))
+            .transpose()?;
         let mut error = [0_i8; 1024];
         let runtime = unsafe {
-            embedder::photon_runtime_create(helper.as_ptr(), error.as_mut_ptr(), error.len())
+            embedder::photon_runtime_create(
+                helper.as_ptr(),
+                profile
+                    .as_ref()
+                    .map_or(std::ptr::null(), |profile| profile.as_ptr()),
+                error.as_mut_ptr(),
+                error.len(),
+            )
         };
         anyhow::ensure!(
             !runtime.is_null(),
@@ -124,6 +137,32 @@ impl EngineRuntime {
             );
         }
         self.service_callback.replace(Some(callback));
+    }
+}
+
+impl EngineRuntime {
+    /// Deletes the website data `request` asks for, then calls `done` on the
+    /// main thread. `done` must not update GPUI entities synchronously.
+    pub(in crate::platform) fn clear_browsing_data(
+        &self,
+        request: &ClearBrowsingData,
+        done: impl FnOnce() + 'static,
+    ) {
+        if !request.touches_engine() {
+            done();
+            return;
+        }
+        let done: Box<BrowsingDataCleared> = Box::new(Box::new(done));
+        unsafe {
+            embedder::photon_runtime_clear_browsing_data(
+                self.runtime,
+                i64::try_from(request.since).unwrap_or(i64::MAX),
+                request.cache,
+                request.site_data,
+                Box::into_raw(done).cast(),
+                Some(on_engine_browsing_data_cleared),
+            );
+        }
     }
 }
 

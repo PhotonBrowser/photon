@@ -28,6 +28,9 @@ What the Photon shell does today and what comes next. Engine performance work is
 
 - [x] Back, forward, reload and stop buttons
 - [x] Omnibox: address-or-search resolution, search engine URLs, unopenable addresses flagged in place
+- [x] Omnibox opens into a suggestion panel while typing: visited pages with their icons, past searches, the typed address and a search, with the best visited address completed inline
+- [x] History of visited pages and past searches, saved in the profile with page icons; rows can be removed from the omnibox
+- [x] Persistent profile for cookies, site storage and the cache (`PHOTON_TEMPORARY_PROFILE` for a throwaway one), with clearing ready for settings
 - [x] Browser menu: new tab, new window, debug overlay, and a system, light or dark theme
 - [x] Titlebar right-click menu
 - [x] Performance diagnostics overlay
@@ -53,13 +56,12 @@ What the Photon shell does today and what comes next. Engine performance work is
 
 In order of priority.
 
-- [ ] Omnibox suggestions: "Search for" and "Go to" rows while typing
 - [ ] Profile slow Skia flushes on the first paint of heavy pages ([section 9](CompositorPerformance.md#9-slow-first-paint-on-heavy-pages--open))
 - [ ] Draw the page area without re-rendering the whole window on every Engine frame
 
 ## Later
 
-- [ ] History store, then history suggestions in the omnibox
+- [ ] Settings and internal pages: history, most visited sites, and clearing browsing data
 - [ ] Bookmarks
 - [ ] Downloads
 - [ ] File upload pickers and permission prompts

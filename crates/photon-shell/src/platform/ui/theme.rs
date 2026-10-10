@@ -35,6 +35,19 @@ mod error {
     }
 }
 
+/// Link-style blue for addresses, readable on each appearance.
+mod link {
+    use gpui::{Rgba, rgb};
+
+    pub(super) fn light() -> Rgba {
+        rgb(0x1a73e8)
+    }
+
+    pub(super) fn dark() -> Rgba {
+        rgb(0x8ab4f8)
+    }
+}
+
 /// The app's explicit theme preference. `None` follows the system appearance.
 #[derive(Clone, Default)]
 pub(super) struct ThemePreference(Rc<Cell<Option<WindowAppearance>>>);
@@ -74,6 +87,8 @@ pub(super) struct ThemeColors {
     pub menu_surface: u32,
     pub menu_border: u32,
     pub menu_hover: u32,
+    /// Addresses in omnibox suggestions, set apart from page titles.
+    pub suggestion_address: u32,
     /// Dims what a modal covers.
     pub modal_backdrop: u32,
 }
@@ -86,15 +101,14 @@ impl ThemeColors {
 
         match appearance {
             WindowAppearance::Dark | WindowAppearance::VibrantDark => {
-                *DARK.get_or_init(|| Self::from_gpui(Colors::dark(), error::dark()))
+                *DARK.get_or_init(|| Self::from_gpui(Colors::dark(), error::dark(), link::dark()))
             }
-            WindowAppearance::Light | WindowAppearance::VibrantLight => {
-                *LIGHT.get_or_init(|| Self::from_gpui(Colors::light(), error::light()))
-            }
+            WindowAppearance::Light | WindowAppearance::VibrantLight => *LIGHT
+                .get_or_init(|| Self::from_gpui(Colors::light(), error::light(), link::light())),
         }
     }
 
-    fn from_gpui(colors: Colors, error: Rgba) -> Self {
+    fn from_gpui(colors: Colors, error: Rgba, link: Rgba) -> Self {
         let text_secondary = mix_colors(colors.text, colors.background, opacity::TEXT_SECONDARY);
         let text_disabled = mix_colors(colors.text, colors.background, opacity::TEXT_DISABLED);
 
@@ -124,6 +138,7 @@ impl ThemeColors {
             menu_surface: to_rgba_token(colors.container),
             menu_border: to_rgba_token(colors.border.opacity(opacity::MENU_BORDER)),
             menu_hover: to_rgba_token(colors.text.opacity(opacity::MENU_HOVER)),
+            suggestion_address: to_rgb_token(link),
             modal_backdrop: to_rgba_token(Rgba::new(0.0, 0.0, 0.0, opacity::MODAL_BACKDROP)),
         }
     }

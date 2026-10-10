@@ -2,6 +2,7 @@
 
 mod button;
 mod find_bar;
+mod history;
 mod icons;
 mod input;
 mod js_dialog;

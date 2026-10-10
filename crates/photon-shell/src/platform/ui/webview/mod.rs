@@ -25,6 +25,7 @@ mod crashes;
 mod dialogs;
 mod favicon;
 mod find;
+mod history;
 mod zoom;
 
 pub(in crate::platform) use context_menu::{PageMenu, PageMenuItem};
@@ -50,6 +51,8 @@ pub(in crate::platform) struct PhotonWebView {
     zoom_level: f64,
     /// Whether page input has gone unanswered by WebContent.
     pub(in crate::platform) page_unresponsive: bool,
+    /// The address last recorded in the session's history.
+    recorded_url: Option<String>,
     /// The context menu the page last asked for.
     pub(in crate::platform) context_menu: Option<PageMenu>,
     /// The latest result of a find-in-page search.
@@ -250,6 +253,7 @@ impl PhotonWebView {
             performance_overlay_enabled: false,
             crash_notice: None,
             crashes: PageCrashes::default(),
+            recorded_url: None,
             context_menu: None,
             find_result: None,
             zoom_level: 1.0,

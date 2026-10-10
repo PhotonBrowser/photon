@@ -106,9 +106,18 @@ pub(super) mod embedder {
     unsafe extern "C" {
         pub fn photon_runtime_create(
             helper_directory: *const c_char,
+            profile_path: *const c_char,
             error: *mut c_char,
             capacity: usize,
         ) -> *mut c_void;
+        pub fn photon_runtime_clear_browsing_data(
+            runtime: *mut c_void,
+            since_unix_seconds: i64,
+            cache: bool,
+            site_data: bool,
+            callback_data: *mut c_void,
+            callback: Option<unsafe extern "C" fn(*mut c_void)>,
+        );
         pub fn photon_runtime_set_native_release_drain_callback(
             runtime: *mut c_void,
             context: *mut c_void,

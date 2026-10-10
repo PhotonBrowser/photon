@@ -15,6 +15,8 @@ photon-app
             IOSurface + MTLSharedEvent → GPUI-CE external Metal surface
 
 photon-ffi ── photon-core ── photon-omnibox
+                    ↑
+photon-shell ── photon-storage
 ```
 
 The desktop app uses the framework-independent Rust browser model directly.
@@ -26,8 +28,15 @@ API; it is not part of the desktop shell's internal state path.
 - `crates/photon-core` contains framework-independent browser state, commands,
   and address normalization. It has no GPUI, GPUI-CE, native, or Ladybird
   types.
-- `crates/photon-omnibox` owns address-versus-search classification and search
-  engine data. Core and the shell use the same rules.
+- `crates/photon-omnibox` owns address-versus-search classification, search
+  engine data, and how typed text is matched against visited pages and past
+  searches for suggestions. Core and the shell use the same rules.
+- `crates/photon-storage` owns the on-disk profile: the history file, saved
+  page icons, data usage, and the Engine's website data folder. It is plain
+  file access over core types, with no GPUI or Engine dependency, so settings
+  and internal pages can list and delete data through the same calls. Core
+  owns the history rules and `ClearBrowsingData`; the shell applies a clear
+  to both the profile and the Engine.
 - `crates/photon-ffi` adapts the safe core model to the exported
   `photon_browser_*` C ABI. It owns pointer validation, C strings, and ABI
   state, and builds as both an `rlib` and a static library.
@@ -87,7 +96,8 @@ crates/
 │           └── metrics.rs            # Shared UI dimensions and typography
 ├── photon-performance/               # Performance diagnostics model and overlay
 ├── photon-core/                      # Framework-independent browser model
-├── photon-omnibox/                   # Search engines and address resolution
+├── photon-omnibox/                   # Search engines, address resolution, suggestions
+├── photon-storage/                   # On-disk profile: history, icons, website data
 ├── photon-ffi/                       # Exported C API and static library
 ├── photon-shortcuts/                 # Browser actions and key bindings
 ├── photon-cli/                       # `./photon` developer commands
@@ -98,10 +108,11 @@ crates/
 | Package | Owns | Depends on |
 | --- | --- | --- |
 | `photon-app` | Runnable Photon entry point | `photon-shell` |
-| `photon-shell` | Window-bound GPUI views, Engine session adapter, native presentation lifecycle, browser input | GPUI-CE, `photon-core`, `photon-performance`, `photon-shortcuts`, `photon-presentation-ipc`, native embedder bridge |
+| `photon-shell` | Window-bound GPUI views, Engine session adapter, native presentation lifecycle, browser input | GPUI-CE, `photon-core`, `photon-performance`, `photon-shortcuts`, `photon-storage`, `photon-presentation-ipc`, native embedder bridge |
 | `photon-performance` | Performance snapshots, monitor state, timing accumulation, formatting, GPUI overlay | GPUI-CE |
-| `photon-core` | Browser state, commands, shared address normalization | `photon-omnibox` |
-| `photon-omnibox` | Search engine list and address/query resolution | URL parsing library |
+| `photon-core` | Browser state, commands, shared address normalization, history rules, clearing requests | `photon-omnibox` |
+| `photon-omnibox` | Search engine list, address/query resolution, suggestion matching | URL parsing library |
+| `photon-storage` | Profile folder, history file, saved page icons, data usage | `photon-core`, serde |
 | `photon-ffi` | `photon_browser_*` C ABI and static library | `photon-core` |
 | `photon-shortcuts` | Browser actions and default key bindings | GPUI-CE |
 | `photon-cli` | `./photon` developer and runtime commands | CLI and command-line support libraries |
@@ -134,6 +145,8 @@ owned by the shell; the presentation XPC implementation lives inside
 | Browser state and command rules | [`photon-core/src/state.rs`](../crates/photon-core/src/state.rs) |
 | C ABI exposed to native callers | [`photon-ffi/include/photon_ffi.h`](../crates/photon-ffi/include/photon_ffi.h) and [`photon-ffi/src/api.rs`](../crates/photon-ffi/src/api.rs) |
 | Search engines or address/query classification | [`photon-omnibox/src/`](../crates/photon-omnibox/src/lib.rs) |
+| Omnibox suggestions and their panel | [`photon-omnibox/src/suggest.rs`](../crates/photon-omnibox/src/suggest.rs), [`ui/omnibox.rs`](../crates/photon-shell/src/platform/ui/omnibox.rs), and [`ui/omnibox_suggestions.rs`](../crates/photon-shell/src/platform/ui/omnibox_suggestions.rs) |
+| History, saved data, and clearing it | [`photon-core/src/history.rs`](../crates/photon-core/src/history.rs), [`photon-storage`](../crates/photon-storage/src/lib.rs), and [`ui/history.rs`](../crates/photon-shell/src/platform/ui/history.rs) |
 | `./photon` command behavior | [`photon-cli/src/commands/`](../crates/photon-cli/src/commands/) |
 
 Keep window policy in `window_settings.rs`, shared presentation values in

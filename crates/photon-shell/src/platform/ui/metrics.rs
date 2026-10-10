@@ -97,11 +97,16 @@ pub(super) const MODAL_SURFACE_INSET: f32 = 16.0;
 pub(super) const DIALOG_MESSAGE_MAX_HEIGHT: f32 = 240.0;
 
 pub(super) const OMNIBOX_HEIGHT: f32 = 28.0;
+pub(super) const OMNIBOX_BORDER_WIDTH: f32 = 1.0;
 pub(super) const OMNIBOX_HORIZONTAL_PADDING: f32 = 10.0;
 pub(super) const OMNIBOX_GAP: f32 = 8.0;
 pub(super) const OMNIBOX_RADIUS: f32 = 8.0;
 pub(super) const OMNIBOX_FONT_SIZE: f32 = 13.0;
 pub(super) const OMNIBOX_ICON_SIZE: f32 = 13.0;
+/// Space around the suggestion rows in the open omnibox.
+pub(super) const OMNIBOX_SUGGESTIONS_INSET: f32 = 4.0;
+pub(super) const OMNIBOX_SUGGESTION_HEIGHT: f32 = 28.0;
+pub(super) const OMNIBOX_SUGGESTION_ICON_SIZE: f32 = 16.0;
 
 pub(super) const PAGE_INSET: f32 = 4.0;
 pub(super) const POPUP_URL_FONT_SIZE: f32 = 12.0;

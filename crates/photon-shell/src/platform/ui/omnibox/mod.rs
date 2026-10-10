@@ -1,10 +1,14 @@
-//! Address and search input in the native browser toolbar.
+//! The address and search field in the browser toolbar. While typing, it
+//! opens into a panel of suggestions over the page.
+//!
+//! - `editing`: typing, inline completion, choosing and removing suggestions.
+//! - `panel`: the field's content and the open panel.
+//! - `rows`: the suggestion rows.
 
-use super::super::trace;
-use super::icons::search_icon_sized;
-use super::layout::h_stack;
-use super::{PhotonWebView, WebViewEvent};
-use super::{metrics, theme::ThemeColors};
+mod editing;
+mod panel;
+mod rows;
+
 use gpui::{
     Context, Entity, Focusable, MouseButton, Render, Subscription, Window, prelude::*, px, rgb,
     rgb_to_hsla, rgba,
@@ -12,8 +16,13 @@ use gpui::{
 use gpui_elements::editable_text::{
     EditableTextState, StringStorage, TextChanged,
     actions::{Enter, Escape},
-    text_input,
 };
+use photon_core::Suggestion;
+
+use super::super::trace;
+use super::layout::h_stack;
+use super::{PhotonWebView, WebViewEvent};
+use super::{metrics, theme::ThemeColors};
 
 const INVALID_ADDRESS_DESCRIPTION: &str = "This address can't be opened";
 
@@ -22,8 +31,23 @@ pub(super) struct Omnibox {
     webview: Entity<PhotonWebView>,
     /// The submitted text cannot be opened. Cleared by the next edit.
     invalid: bool,
+    /// What the typed text could open. While there are any, the field opens
+    /// into a panel listing them.
+    suggestions: Vec<Suggestion>,
+    /// The suggestion Enter opens.
+    selected: usize,
+    /// The suggestion under the pointer.
+    hovered: Option<usize>,
+    /// The text as typed, without an inline completion.
+    typed: String,
+    /// The first suggestion's address, which continues the typed text.
+    completion: Option<String>,
+    /// Text the omnibox put in the field itself, which is not an edit.
+    filled: Option<String>,
+    /// The next edit removes text, so it is not completed again.
+    deleting: bool,
     _input_subscriptions: [Subscription; 2],
-    _subscriptions: Vec<Subscription>,
+    _page_subscriptions: Vec<Subscription>,
 }
 
 impl Omnibox {
@@ -33,38 +57,28 @@ impl Omnibox {
         cx: &mut Context<Self>,
     ) -> Self {
         let input = cx.new(|cx| EditableTextState::new(StringStorage::default(), cx));
-        let input_focus = input.focus_handle(cx);
-        let subscriptions = vec![
-            // Follow the page address, except while someone is editing it.
-            cx.subscribe_in(&webview, window, |this, _, _: &WebViewEvent, window, cx| {
-                if !this.is_editing(window, cx) {
-                    this.show_page_url(cx);
-                }
-            }),
-            // An abandoned edit reverts to the page address.
-            cx.on_blur(&input_focus, window, |this, _, cx| this.show_page_url(cx)),
-            cx.observe_window_appearance(window, |_, _, cx| cx.notify()),
-        ];
         let input_subscriptions = [
-            cx.subscribe(&input, |this, _, _: &TextChanged, cx| {
-                if this.invalid {
-                    this.invalid = false;
-                    cx.notify();
-                }
-            }),
+            cx.subscribe(&input, |this, _, _: &TextChanged, cx| this.text_changed(cx)),
             // The field lives in the cached chrome, which redraws only when a
             // view inside it is notified, so redraw for every edit, caret move
             // and blink.
             cx.observe(&input, |_, _, cx| cx.notify()),
         ];
-        let omnibox = Self {
+        let mut omnibox = Self {
             input,
-            webview,
+            webview: webview.clone(),
             invalid: false,
+            suggestions: Vec::new(),
+            selected: 0,
+            hovered: None,
+            typed: String::new(),
+            completion: None,
+            filled: None,
+            deleting: false,
             _input_subscriptions: input_subscriptions,
-            _subscriptions: subscriptions,
+            _page_subscriptions: Vec::new(),
         };
-        omnibox.show_page_url(cx);
+        omnibox.set_webview(webview, window, cx);
         omnibox
     }
 
@@ -73,6 +87,7 @@ impl Omnibox {
         self.input.update(cx, |input, cx| input.select_document(cx));
     }
 
+    /// Shows and follows `webview`'s address.
     pub(super) fn set_webview(
         &mut self,
         webview: Entity<PhotonWebView>,
@@ -81,7 +96,8 @@ impl Omnibox {
     ) {
         self.webview = webview;
         let input_focus = self.input.focus_handle(cx);
-        self._subscriptions = vec![
+        self._page_subscriptions = vec![
+            // Follow the page address, except while someone is editing it.
             cx.subscribe_in(
                 &self.webview,
                 window,
@@ -91,6 +107,7 @@ impl Omnibox {
                     }
                 },
             ),
+            // An abandoned edit reverts to the page address.
             cx.on_blur(&input_focus, window, |this, _, cx| this.show_page_url(cx)),
             cx.observe_window_appearance(window, |_, _, cx| cx.notify()),
         ];
@@ -113,11 +130,20 @@ impl Omnibox {
 
     fn submit(&mut self, _: &Enter, window: &mut Window, cx: &mut Context<Self>) {
         cx.stop_propagation();
+        if !self.suggestions.is_empty() {
+            self.choose(self.selected, window, cx);
+            return;
+        }
         let text = self.input.read(cx).as_str().to_owned();
         if text.trim().is_empty() {
             return;
         }
-        match self.webview.update(cx, |view, cx| view.navigate(&text, cx)) {
+        self.open(&text, window, cx);
+    }
+
+    /// Loads typed text or an address in the page.
+    fn open(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
+        match self.webview.update(cx, |view, cx| view.navigate(text, cx)) {
             Ok(()) => self.return_to_page(window, cx),
             Err(error) => {
                 // Keep the text for correction and say why nothing opened.
@@ -130,6 +156,7 @@ impl Omnibox {
 
     fn cancel(&mut self, _: &Escape, window: &mut Window, cx: &mut Context<Self>) {
         cx.stop_propagation();
+        self.close_suggestions(cx);
         self.return_to_page(window, cx);
     }
 
@@ -149,15 +176,13 @@ impl Render for Omnibox {
         } else {
             palette.field
         };
-        let input_focus = self.input.focus_handle(cx).tab_index(3).tab_stop(true);
-        let mut field_box = h_stack()
+        let field_box = h_stack()
             .id("titlebar-omnibox")
+            .relative()
             .items_center()
-            .gap(px(metrics::OMNIBOX_GAP))
             .flex_1()
             .min_w(px(0.0))
             .h(px(metrics::OMNIBOX_HEIGHT))
-            .px(px(metrics::OMNIBOX_HORIZONTAL_PADDING))
             .rounded(px(metrics::OMNIBOX_RADIUS))
             .bg(rgba(field))
             .border_1()
@@ -178,25 +203,14 @@ impl Render for Omnibox {
                 }),
             )
             .capture_action(cx.listener(Self::submit))
-            .capture_action(cx.listener(Self::cancel))
-            .child(search_icon_sized(
-                palette.text_primary,
-                metrics::OMNIBOX_ICON_SIZE,
-            ))
-            .child(
-                text_input("titlebar-omnibox-input")
-                    .state(self.input.downgrade())
-                    .track_focus(&input_focus)
-                    .placeholder("Search or enter address")
-                    .placeholder_color(rgb(palette.text_primary))
-                    .caret_color(rgb_to_hsla(rgb(palette.accent)))
-                    .selection_color(rgb_to_hsla(rgba(palette.selection)))
-                    .caret_blink_interval_500ms()
-                    .flex_1()
-                    .min_w_0()
-                    .whitespace_nowrap()
-                    .overflow_x_scroll(),
-            );
+            .capture_action(cx.listener(Self::cancel));
+        let mut field_box = self.handle_editing_keys(field_box, cx);
+        // The open panel draws the field's content itself, in the same place.
+        field_box = if editing && !self.suggestions.is_empty() {
+            field_box.child(self.open_panel(palette, cx))
+        } else {
+            field_box.child(self.field_content(palette, cx))
+        };
         if self.invalid {
             field_box = field_box.aria_description(INVALID_ADDRESS_DESCRIPTION);
         }

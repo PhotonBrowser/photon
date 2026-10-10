@@ -414,6 +414,16 @@ pub(super) unsafe extern "C" fn on_engine_new_web_view(
         .detach();
 }
 
+/// Called once with the Engine's website data deleted.
+pub(super) type BrowsingDataCleared = Box<dyn FnOnce()>;
+
+pub(super) unsafe extern "C" fn on_engine_browsing_data_cleared(context: *mut c_void) {
+    if !context.is_null() {
+        let done = unsafe { Box::from_raw(context.cast::<BrowsingDataCleared>()) };
+        done();
+    }
+}
+
 /// Called on the main thread with an Engine service's stop or restart.
 pub(super) type ServiceCallback = Box<dyn Fn(EngineService, bool)>;
 

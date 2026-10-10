@@ -13,6 +13,7 @@ gpui_elements = { package = "gpui_ce_elements", path = "../../vendor/gpui-ce/cra
 photon-core = { path = "../photon-core" }
 photon-performance = { path = "../photon-performance" }
 photon-shortcuts = { path = "../photon-shortcuts" }
+photon-storage = { path = "../photon-storage" }
 photon-presentation-ipc = { path = "../photon-presentation-ipc" }
 anyhow = "1"
 image = { version = "0.25", default-features = false }

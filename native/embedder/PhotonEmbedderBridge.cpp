@@ -199,11 +199,12 @@ Photon::ViewCallbacks make_view_callbacks(
 } // namespace
 
 extern "C" void* photon_runtime_create(char const* helper_directory,
-    char* error, size_t error_capacity)
+    char const* profile_path, char* error, size_t error_capacity)
 {
     std::string message;
     auto runtime = Photon::Runtime::create(
-        helper_directory ? helper_directory : "", message);
+        helper_directory ? helper_directory : "",
+        profile_path ? profile_path : "", message);
     if (!runtime) {
         copy_error(error, error_capacity, message);
         return nullptr;
@@ -459,6 +460,19 @@ photon_runtime_set_system_reduced_motion_preference(void* runtime,
     if (runtime)
         static_cast<RuntimeHandle*>(runtime)
             ->runtime->set_system_reduced_motion_preference(reduce_motion);
+}
+
+extern "C" void photon_runtime_clear_browsing_data(void* runtime,
+    int64_t since_unix_seconds, bool cache, bool site_data, void* callback_data,
+    PhotonBrowsingDataClearedCallback callback)
+{
+    if (!runtime)
+        return;
+    static_cast<RuntimeHandle*>(runtime)->runtime->clear_browsing_data(
+        { since_unix_seconds, cache, site_data }, [=] {
+            if (callback)
+                callback(callback_data);
+        });
 }
 
 #if defined(__APPLE__)

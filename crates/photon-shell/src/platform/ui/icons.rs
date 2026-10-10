@@ -109,6 +109,17 @@ pub(super) fn check_icon(color: u32, size: f32) -> impl IntoElement {
         .text_color(rgb(color))
 }
 
+/// A clock with a turning-back arrow, for past searches.
+pub(super) fn history_icon(color: u32, size: f32) -> impl IntoElement {
+    svg()
+        .data(
+            br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.7"/><path d="M4 4v4.7h4.7M12 8v4.5l3 2"/></g></svg>"##,
+        )
+        .size(px(size))
+        .flex_shrink_0()
+        .text_color(rgb(color))
+}
+
 pub(super) fn globe_icon(color: u32, size: f32) -> gpui::Svg {
     svg()
         .data(
