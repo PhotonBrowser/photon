@@ -13,6 +13,7 @@ What the Photon shell does today and what comes next. Engine performance work is
 - [x] Engine stops rendering while the window is occluded or the tab is hidden
 - [x] Heavy pages no longer freeze scrolling while they first paint: the GPU programs they need are compiled at startup ([section 9](CompositorPerformance.md#9-slow-first-paint-on-heavy-pages--fixed))
 - [x] Keyboard, pointer, scroll and cursor forwarding to the page; page focus follows window focus
+- [x] Swipe back and forward with two fingers, as in Safari: once a sideways scroll reaches the page's edge the page slides away with an arrow, and lets go to go through the tab's history or settle back; pages can opt out with CSS `overscroll-behavior`. Mouse back and forward buttons go through history too
 - [x] Crash recovery: a crashed page reloads in a fresh process, a page that keeps crashing offers a Reload, and Engine service restarts are announced, all in a chip at the bottom right
 - [x] JavaScript `alert`, `confirm` and `prompt` as a window modal; dialogs are dismissed and held off while the browser navigates away
 - [x] Pages follow the shell theme through `prefers-color-scheme`

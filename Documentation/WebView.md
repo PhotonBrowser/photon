@@ -24,6 +24,13 @@ after GPU completion. During shutdown Photon disables new publications, waits
 for in-flight sampling command buffers, drains all leases, and reports/asserts
 zero outstanding frames.
 
+A two-finger swipe sideways goes back or forward through the tab's history.
+The Engine's compositor scrolls the page first, and only a sideways scroll
+left over at the viewport's edge, where the page's `overscroll-behavior`
+allows it, becomes a swipe: the view then slides the page with the fingers,
+shows an arrow in the uncovered edge, and on release either navigates or
+springs back. Mouse back and forward buttons navigate too.
+
 Shift-clicking a link opens it in a Peek: the Engine reports the click
 instead of following it, and the window shows the link in a new web view over
 the page. Keeping it as a tab moves that same web view into the tab list, so
