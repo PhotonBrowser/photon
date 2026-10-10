@@ -93,7 +93,7 @@ In order of priority.
 
 ### Engine
 
-- [ ] Profile slow Skia flushes on the first paint of heavy pages ([section 9](CompositorPerformance.md#9-slow-first-paint-on-heavy-pages--open))
+- [ ] Stop slow first paints of heavy pages blocking scrolling while they load: their Skia flushes take 150–460 ms ([sections 9 and 10](CompositorPerformance.md#9-slow-first-paint-on-heavy-pages--open))
 - [ ] Draw the page area without re-rendering the whole window on every Engine frame
 
 ## Later

@@ -119,6 +119,22 @@ A verbose run (`./photon run --verbose`) searching Google on a 60 Hz display, 20
 
 The Ganesh persistent cache reported hits throughout, so this is not one-time shader compilation; it is the cost of drawing the page. The shell side of the same run was healthy: every Engine frame was drawn and its backing released in order, and repeated draws of one frame came from the tab loading spinner. This is the first-load stutter on heavy pages, and needs an Engine compositor investigation (what the slow flushes draw, and whether rasterization can be split across frames or cached).
 
+## 10. Freezes while interacting with loading pages — measured, 2026-10-10
+
+Reported: pages stutter and sometimes freeze when scrolled while they load, mostly on script-heavy sites (GitHub, YouTube, Google search). Measured with a temporary shell hook that fed trackpad-style wheel events (12–24 px every 8 ms, in gestures with a start and an end) into the active page through the same `send_pointer` path as real input, with `PHOTON_VERBOSE`, and in one run `PHOTON_CORE_RUNLOOP_TRACE`, on a 60 Hz display:
+
+| Run | Result |
+|---|---|
+| Shell main thread under load (8 ms timer, 125 ticks) | 1093–1114 ms per 125 ticks: no stalls in the shell |
+| Long GitHub file, scrolled after load | 60 fps, frame interval max 17.7 ms |
+| YouTube (a playing Short), scrolled | 52–56 fps, p95 33 ms, max 80–200 ms per 5 s; ~1 s once while content arrived |
+| Wikipedia article, scrolled from 2.5 s after launch | Smooth once painted; every wheel event scrolled by the Compositor; forced layout per wheel event p50 0.00 ms, max 0.56 ms |
+| Wikipedia's first paints, before scrolling | Skia flushes of 265 and 150 ms; a 1.87 s gap before the first full frame |
+
+The shell, input routing and the Compositor's asynchronous scrolling all keep up. What stalls while a heavy page loads is the Compositor rasterizing its first frames: each slow flush blocks every frame behind it, including scroll frames, so input during that window shows as a stutter or a freeze of up to a couple of seconds. This is the cost in section 9; fixing it needs Engine work to cache rasterized content or spread a large first raster over several frames.
+
+Pitfalls for this measurement: repeated test loads of GitHub got its error page, and Google served a short script-free page, neither of which scrolls, and a page that does not move presents no frames, which reads like a freeze. Confirm the page scrolls with a screenshot, and scroll in one direction on a long page so the test never sits at an end.
+
 ## Commits
 
 - Engine `864c2a0892` LibPhotonEmbedder: Accept display metadata from the embedder
@@ -148,6 +164,8 @@ The Ganesh persistent cache reported hits throughout, so this is not one-time sh
 - [x] Cache the browser chrome and stop refreshing the window per Engine frame: UI-thread draw 1.26 → 0.84 ms p50, 1.76 → 1.03 ms p90
 - [x] Stop idle pages rendering at display rate (video paint facts; SVG image load broadcasts)
 - [x] Purge Skia's unused GPU cache after the page goes idle (Compositor 230 → 122 MB on idle Wikipedia)
+- [x] Measure freezes while interacting with loading pages: shell and input keep up; slow first-paint rasterization stalls frames (section 10)
+- [ ] Cache rasterized content, or spread a large first raster across frames, so first paints of heavy pages do not block scrolling
 - [ ] Send the video and SVG fixes upstream to Ladybird: branches are on `TheoSlater/ladybird`; opening PRs from the CLI was refused by GitHub, so open them from the web
 - [ ] Cache rasterized scroll content so 4K scrolling fits the 120 Hz GPU budget
 - [x] Profile scrolling (section 7)
