@@ -16,7 +16,7 @@ pub enum ThemeMode {
 }
 
 /// How much of the desktop shows through the browser's surfaces.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Transparency {
     /// Solid surfaces.
@@ -26,6 +26,51 @@ pub enum Transparency {
     Subtle,
     /// More of the desktop shows through.
     Clear,
+}
+
+/// The colour the window is tinted with, as in Arc and Zen.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum WindowColor {
+    /// The system's grey.
+    #[default]
+    System,
+    Blue,
+    Purple,
+    Pink,
+    Red,
+    Orange,
+    Yellow,
+    Green,
+    Teal,
+}
+
+impl WindowColor {
+    pub const ALL: [Self; 9] = [
+        Self::System,
+        Self::Blue,
+        Self::Purple,
+        Self::Pink,
+        Self::Red,
+        Self::Orange,
+        Self::Yellow,
+        Self::Green,
+        Self::Teal,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::System => "System",
+            Self::Blue => "Blue",
+            Self::Purple => "Purple",
+            Self::Pink => "Pink",
+            Self::Red => "Red",
+            Self::Orange => "Orange",
+            Self::Yellow => "Yellow",
+            Self::Green => "Green",
+            Self::Teal => "Teal",
+        }
+    }
 }
 
 /// Where the window shows its tabs.
@@ -56,6 +101,9 @@ pub enum PopupPolicy {
 pub struct BrowserSettings {
     pub theme: ThemeMode,
     pub transparency: Transparency,
+    pub window_color: WindowColor,
+    /// Whether the window colour fades into a neighbouring one.
+    pub window_gradient: bool,
     pub tab_layout: TabLayout,
     pub default_search_engine: String,
     pub popup_policy: PopupPolicy,
@@ -71,6 +119,8 @@ impl Default for BrowserSettings {
         Self {
             theme: ThemeMode::System,
             transparency: Transparency::default(),
+            window_color: WindowColor::default(),
+            window_gradient: false,
             tab_layout: TabLayout::default(),
             default_search_engine: "google".to_owned(),
             popup_policy: PopupPolicy::Ask,
