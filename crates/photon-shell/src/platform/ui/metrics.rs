@@ -44,18 +44,20 @@ pub(super) const TOOLBAR_CONTROL_GAP: f32 = 8.0;
 pub(super) const TOOLBAR_BUTTON_SIZE: f32 = 28.0;
 pub(super) const TOOLBAR_ICON_SIZE: f32 = 14.0;
 
-pub(super) const MENU_WIDTH: f32 = 196.0;
+pub(super) const MENU_WIDTH: f32 = 220.0;
+/// Space above the first and below the last menu row.
 pub(super) const MENU_PADDING: f32 = 4.0;
 pub(super) const SURFACE_RADIUS: f32 = 8.0;
 pub(super) const MENU_FONT_SIZE: f32 = 13.0;
-pub(super) const MENU_ITEM_HEIGHT: f32 = 30.0;
-pub(super) const MENU_ITEM_HORIZONTAL_PADDING: f32 = 8.0;
+pub(super) const MENU_ITEM_HEIGHT: f32 = 28.0;
+pub(super) const MENU_ITEM_HORIZONTAL_PADDING: f32 = 12.0;
 pub(super) const MENU_ITEM_RADIUS: f32 = 5.0;
 pub(super) const MENU_ITEM_GAP: f32 = 2.0;
-pub(super) const MENU_SECTION_INSET: f32 = 6.0;
 /// Room for "100%" between a menu stepper's buttons.
 pub(super) const MENU_STEPPER_VALUE_WIDTH: f32 = 48.0;
 pub(super) const MENU_SEPARATOR_HEIGHT: f32 = 1.0;
+/// Space above and below a menu separator.
+pub(super) const MENU_SEPARATOR_MARGIN: f32 = 4.0;
 
 pub(super) const FIND_BAR_HEIGHT: f32 = 34.0;
 pub(super) const FIND_BAR_PADDING: f32 = 10.0;
@@ -111,3 +113,30 @@ pub(super) const OMNIBOX_SUGGESTION_ICON_SIZE: f32 = 16.0;
 pub(super) const PAGE_INSET: f32 = 4.0;
 pub(super) const POPUP_URL_FONT_SIZE: f32 = 12.0;
 pub(super) const WEBVIEW_CORNER_RADIUS: f32 = 12.0;
+pub(super) const INTERNAL_PAGE_INSET: f32 = 32.0;
+pub(super) const INTERNAL_PAGE_MAX_WIDTH: f32 = 620.0;
+pub(super) const INTERNAL_PAGE_SECTION_GAP: f32 = 28.0;
+pub(super) const INTERNAL_PAGE_GROUP_GAP: f32 = 12.0;
+pub(super) const INTERNAL_PAGE_SECTION_SIZE: f32 = 18.0;
+pub(super) const INTERNAL_PAGE_BODY_SIZE: f32 = 14.0;
+pub(super) const SWITCH_WIDTH: f32 = 34.0;
+pub(super) const SWITCH_KNOB_SIZE: f32 = 16.0;
+pub(super) const SWITCH_INSET: f32 = 2.0;
+pub(super) const CHECKBOX_SIZE: f32 = 16.0;
+pub(super) const CHECKBOX_RADIUS: f32 = 4.0;
+pub(super) const CHECKBOX_ICON_SIZE: f32 = 12.0;
+pub(super) const NEW_TAB_LOGO_SIZE: f32 = 64.0;
+pub(super) const SHORTCUT_TILE_WIDTH: f32 = 104.0;
+pub(super) const SHORTCUT_ICON_BOX_SIZE: f32 = 48.0;
+pub(super) const SHORTCUT_ICON_SIZE: f32 = 24.0;
+pub(super) const SHORTCUT_GAP: f32 = 8.0;
+pub(super) const SHORTCUT_REMOVE_INSET: f32 = 4.0;
+pub(super) const SEGMENT_HEIGHT: f32 = 26.0;
+pub(super) const SEGMENT_HORIZONTAL_PADDING: f32 = 12.0;
+pub(super) const SEGMENT_RADIUS: f32 = 5.0;
+pub(super) const SEGMENT_GAP: f32 = 2.0;
+pub(super) const SEGMENT_INSET: f32 = 2.0;
+pub(super) const SETTINGS_ROW_HEIGHT: f32 = 34.0;
+pub(super) const SETTINGS_SIDEBAR_WIDTH: f32 = 200.0;
+pub(super) const SETTINGS_SIDEBAR_ITEM_HEIGHT: f32 = 30.0;
+pub(super) const SETTINGS_SIDEBAR_ICON_SIZE: f32 = 14.0;

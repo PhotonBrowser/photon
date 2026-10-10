@@ -4,9 +4,11 @@
 //! light and dark palettes come from GPUI-CE; adjust token derivation here when
 //! the shell needs a different role mapping.
 
-use gpui::{ColorExt, Rgba, WindowAppearance, colors::Colors};
+use gpui::{App, ColorExt, Rgba, Window, WindowAppearance, colors::Colors, rgb};
 use photon_performance::PerformancePalette;
-use std::{cell::Cell, rc::Rc, sync::OnceLock};
+use std::sync::OnceLock;
+
+use super::settings::Settings;
 
 mod opacity {
     pub(super) const WINDOW_TINT: f32 = 0.88;
@@ -17,8 +19,11 @@ mod opacity {
     pub(super) const CONTROL_HOVER: f32 = 0.18;
     pub(super) const PERFORMANCE_SURFACE: f32 = 0.95;
     pub(super) const MODAL_BACKDROP: f32 = 0.28;
-    pub(super) const MENU_BORDER: f32 = 0.55;
-    pub(super) const MENU_HOVER: f32 = 0.16;
+    pub(super) const MENU_BORDER: f32 = 0.12;
+    pub(super) const HOVER: f32 = 0.07;
+    pub(super) const INTERNAL_PAGE: f32 = 0.04;
+    pub(super) const RAISED_SURFACE: f32 = 0.92;
+    pub(super) const SELECTED: f32 = 0.12;
 }
 
 /// GPUI-CE's palettes have no error role, so the shell uses the macOS system
@@ -48,23 +53,9 @@ mod link {
     }
 }
 
-/// The app's explicit theme preference. `None` follows the system appearance.
-#[derive(Clone, Default)]
-pub(super) struct ThemePreference(Rc<Cell<Option<WindowAppearance>>>);
-
-impl ThemePreference {
-    pub(super) fn appearance(&self, system_appearance: WindowAppearance) -> WindowAppearance {
-        self.0.get().unwrap_or(system_appearance)
-    }
-
-    /// The chosen appearance, or `None` to follow the system.
-    pub(super) fn get(&self) -> Option<WindowAppearance> {
-        self.0.get()
-    }
-
-    pub(super) fn set(&self, appearance: Option<WindowAppearance>) {
-        self.0.set(appearance);
-    }
+/// The colors for `window`, in the appearance the settings choose.
+pub(super) fn palette(window: &Window, cx: &App) -> ThemeColors {
+    ThemeColors::for_appearance(Settings::appearance(window.appearance(), cx))
 }
 
 /// Semantic colors used by the shell's controls and surfaces.
@@ -75,7 +66,6 @@ pub(super) struct ThemeColors {
     pub text_primary: u32,
     pub text_secondary: u32,
     pub text_disabled: u32,
-    pub accent: u32,
     pub selection: u32,
     pub field: u32,
     pub field_focused: u32,
@@ -86,7 +76,17 @@ pub(super) struct ThemeColors {
     pub performance_palette: PerformancePalette,
     pub menu_surface: u32,
     pub menu_border: u32,
-    pub menu_hover: u32,
+    /// The background of the browser's own pages: a subtle translucent tint
+    /// set apart from the window.
+    pub internal_page_surface: u32,
+    /// A row or control under the pointer.
+    pub hover_surface: u32,
+    /// The selected row, such as the open settings section.
+    pub selected_surface: u32,
+    /// What is chosen or on: a chosen option, a switch that is on, a checked box.
+    pub chosen: u32,
+    /// Text and marks drawn on `chosen`.
+    pub on_chosen: u32,
     /// Addresses in omnibox suggestions, set apart from page titles.
     pub suggestion_address: u32,
     /// Dims what a modal covers.
@@ -118,7 +118,6 @@ impl ThemeColors {
             text_primary: to_rgb_token(colors.text),
             text_secondary: to_rgb_token(text_secondary),
             text_disabled: to_rgb_token(text_disabled),
-            accent: to_rgb_token(colors.selected),
             selection: to_rgba_token(colors.selected),
             field: to_rgba_token(colors.container),
             field_focused: to_rgba_token(mix_colors(
@@ -135,9 +134,19 @@ impl ThemeColors {
                 text: to_rgb_token(colors.text),
                 secondary_text: to_rgb_token(text_secondary),
             },
-            menu_surface: to_rgba_token(colors.container),
-            menu_border: to_rgba_token(colors.border.opacity(opacity::MENU_BORDER)),
-            menu_hover: to_rgba_token(colors.text.opacity(opacity::MENU_HOVER)),
+            // Raised surfaces let the window's frosted background show through,
+            // but stay opaque enough to read over a busy page.
+            menu_surface: to_rgba_token(colors.container.opacity(opacity::RAISED_SURFACE)),
+            // A light hairline that separates raised surfaces from what is under
+            // them without a dark outline.
+            menu_border: to_rgba_token(colors.text.opacity(opacity::MENU_BORDER)),
+            // A light tint over the window's frosted background, like the
+            // rest of the window.
+            internal_page_surface: to_rgba_token(colors.text.opacity(opacity::INTERNAL_PAGE)),
+            hover_surface: to_rgba_token(colors.text.opacity(opacity::HOVER)),
+            selected_surface: to_rgba_token(colors.text.opacity(opacity::SELECTED)),
+            chosen: to_rgb_token(link),
+            on_chosen: to_rgb_token(rgb(0xffffff)),
             suggestion_address: to_rgb_token(link),
             modal_backdrop: to_rgba_token(Rgba::new(0.0, 0.0, 0.0, opacity::MODAL_BACKDROP)),
         }
