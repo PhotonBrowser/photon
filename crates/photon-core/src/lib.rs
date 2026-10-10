@@ -12,6 +12,7 @@ mod new_tab;
 mod settings;
 mod sidebar;
 mod state;
+mod tabs;
 
 pub use browsing_data::ClearBrowsingData;
 pub use command_bar::{Command, CommandBarResult, OpenTab, command_bar_results};
@@ -29,3 +30,4 @@ pub use sidebar::{
     MAX_FAVOURITES, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH, SidebarResize, SidebarSettings,
 };
 pub use state::{BrowserCommand, BrowserState, EngineEvent, normalize_url};
+pub use tabs::{ARCHIVE_AFTER, pinned_after_drop, should_archive};

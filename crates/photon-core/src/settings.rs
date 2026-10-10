@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::new_tab::NewTabSettings;
+use super::new_tab::{NewTabSettings, Shortcut};
 use super::sidebar::SidebarSettings;
 
 /// The shell's selected appearance.
@@ -112,6 +112,11 @@ pub struct BrowserSettings {
     /// Whether closing the last tab closes its window. When not, the window
     /// stays open on a new tab page.
     pub close_window_with_last_tab: bool,
+    /// Tabs pinned above the others, at the addresses they were pinned at,
+    /// opened again at launch.
+    pub pinned_tabs: Vec<Shortcut>,
+    /// Whether unpinned tabs left unused for twelve hours are closed.
+    pub archive_tabs: bool,
 }
 
 impl Default for BrowserSettings {
@@ -127,6 +132,56 @@ impl Default for BrowserSettings {
             new_tab: NewTabSettings::default(),
             sidebar: SidebarSettings::default(),
             close_window_with_last_tab: true,
+            pinned_tabs: Vec::new(),
+            archive_tabs: false,
         }
+    }
+}
+
+impl BrowserSettings {
+    /// Returns every preference to its default, keeping the sites people
+    /// saved themselves: the sidebar's favourites, the new tab page's
+    /// shortcuts and the pinned tabs.
+    pub fn reset_preferences(&mut self) {
+        let favourites = std::mem::take(&mut self.sidebar.favourites);
+        let shortcuts = std::mem::take(&mut self.new_tab.pinned);
+        let pinned_tabs = std::mem::take(&mut self.pinned_tabs);
+        *self = Self::default();
+        self.sidebar.favourites = favourites;
+        self.new_tab.pinned = shortcuts;
+        self.pinned_tabs = pinned_tabs;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Shortcut;
+
+    #[test]
+    fn reset_keeps_saved_sites_only() {
+        let site = Shortcut {
+            title: "Example".to_owned(),
+            url: "https://example.com/".to_owned(),
+        };
+        let mut settings = BrowserSettings {
+            theme: ThemeMode::Dark,
+            window_color: WindowColor::Teal,
+            tab_layout: TabLayout::Vertical,
+            ..BrowserSettings::default()
+        };
+        settings.sidebar.width = 400;
+        settings.sidebar.favourites.push(site.clone());
+        settings.new_tab.pinned.push(site.clone());
+        settings.new_tab.hidden.push("example.org".to_owned());
+        settings.pinned_tabs.push(site.clone());
+        settings.archive_tabs = true;
+        settings.reset_preferences();
+
+        let mut expected = BrowserSettings::default();
+        expected.sidebar.favourites.push(site.clone());
+        expected.new_tab.pinned.push(site.clone());
+        expected.pinned_tabs.push(site);
+        assert_eq!(settings, expected);
     }
 }
