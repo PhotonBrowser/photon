@@ -28,6 +28,17 @@ pub enum Transparency {
     Clear,
 }
 
+/// Where the window shows its tabs.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TabLayout {
+    /// A tab strip in the titlebar, over an address toolbar.
+    #[default]
+    Horizontal,
+    /// A sidebar beside the page.
+    Vertical,
+}
+
 /// How Photon handles pages that ask to open a separate window.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[repr(u8)]
@@ -45,6 +56,7 @@ pub enum PopupPolicy {
 pub struct BrowserSettings {
     pub theme: ThemeMode,
     pub transparency: Transparency,
+    pub tab_layout: TabLayout,
     pub default_search_engine: String,
     pub popup_policy: PopupPolicy,
     pub new_tab: NewTabSettings,
@@ -59,6 +71,7 @@ impl Default for BrowserSettings {
         Self {
             theme: ThemeMode::System,
             transparency: Transparency::default(),
+            tab_layout: TabLayout::default(),
             default_search_engine: "google".to_owned(),
             popup_policy: PopupPolicy::Ask,
             new_tab: NewTabSettings::default(),

@@ -1,4 +1,4 @@
-//! What the sidebar holds besides tabs: favourite sites and spaces.
+//! What the sidebar holds besides tabs: favourite sites.
 
 use serde::{Deserialize, Serialize};
 
@@ -7,54 +7,15 @@ use super::new_tab::{Shortcut, site_name};
 /// How many favourites the sidebar holds.
 pub const MAX_FAVOURITES: usize = 12;
 
-/// A space that groups tabs. Photon has one for now; the model is ready for
-/// more.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct Space {
-    pub name: String,
-    /// An emoji or short symbol shown beside the name.
-    pub icon: String,
-}
-
-impl Default for Space {
-    fn default() -> Self {
-        Self {
-            name: "Personal".to_owned(),
-            icon: "🌝".to_owned(),
-        }
-    }
-}
-
-/// The sidebar's favourite sites and spaces.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+/// The sidebar's favourite sites.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default)]
 pub struct SidebarSettings {
     /// Sites kept at the top of the sidebar, in this order.
     pub favourites: Vec<Shortcut>,
-    pub spaces: Vec<Space>,
-    /// The index of the space shown.
-    pub active_space: usize,
-}
-
-impl Default for SidebarSettings {
-    fn default() -> Self {
-        Self {
-            favourites: Vec::new(),
-            spaces: vec![Space::default()],
-            active_space: 0,
-        }
-    }
 }
 
 impl SidebarSettings {
-    /// The space shown, or the default one when the saved index is stale.
-    pub fn active_space(&self) -> Space {
-        self.spaces
-            .get(self.active_space)
-            .cloned()
-            .unwrap_or_default()
-    }
-
     /// The favourite for `url`'s site, if there is one.
     pub fn favourite_for(&self, url: &str) -> Option<&Shortcut> {
         let site = site_name(url);
@@ -110,14 +71,5 @@ mod tests {
             sidebar.add_favourite(shortcut(&format!("https://{index}.example/")));
         }
         assert_eq!(sidebar.favourites.len(), MAX_FAVOURITES);
-    }
-
-    #[test]
-    fn falls_back_to_the_default_space() {
-        let sidebar = SidebarSettings {
-            active_space: 5,
-            ..SidebarSettings::default()
-        };
-        assert_eq!(sidebar.active_space(), Space::default());
     }
 }
