@@ -280,6 +280,25 @@ pub fn display_address(url: &str) -> String {
     address.strip_suffix('/').unwrap_or(address).to_owned()
 }
 
+/// Just the site an address is on: its host without `www.`, and its port if
+/// it names one. An address without a host, such as `about:blank`, is written
+/// as [`display_address`] would.
+pub fn display_domain(url: &str) -> String {
+    let parsed = url::Url::parse(url).ok();
+    let Some((parsed, host)) = parsed
+        .as_ref()
+        .and_then(|parsed| Some((parsed, parsed.host_str()?)))
+        .filter(|(_, host)| !host.is_empty())
+    else {
+        return display_address(url);
+    };
+    let host = host.strip_prefix("www.").unwrap_or(host);
+    match parsed.port() {
+        Some(port) => format!("{host}:{port}"),
+        None => host.to_owned(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -412,6 +431,24 @@ mod tests {
         assert_eq!(suggestions.rows[1].text, "dog names");
         assert_eq!(suggestions.rows[1].text_matches, vec![0..2]);
         assert!(suggestions.rows[1].url.contains("dog"));
+    }
+
+    #[test]
+    fn writes_just_the_site_of_an_address() {
+        assert_eq!(
+            display_domain("https://www.example.com/docs?page=2#intro"),
+            "example.com"
+        );
+        assert_eq!(display_domain("https://docs.rs/gpui"), "docs.rs");
+        assert_eq!(
+            display_domain("http://localhost:8080/admin"),
+            "localhost:8080"
+        );
+        assert_eq!(display_domain("about:blank"), "about:blank");
+        assert_eq!(
+            display_domain("file:///Users/me/page.html"),
+            "file:///Users/me/page.html"
+        );
     }
 
     #[test]
