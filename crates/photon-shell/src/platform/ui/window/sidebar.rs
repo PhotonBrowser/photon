@@ -1,18 +1,16 @@
 //! Builds the window's chrome from its state: the horizontal tab strip and
 //! address toolbar, or the sidebar (navigation, address field, favourites,
-//! tabs and footer) with the slim bar shown while it is hidden.
+//! tabs and footer), shown beside the page or revealed over it.
 
 use gpui::{
     AnyElement, ClickEvent, Context, ImageSource, KeyDownEvent, MouseDownEvent, MouseUpEvent,
-    ObjectFit, Window, img, point, prelude::*, px,
+    ObjectFit, Window, img, point, prelude::*, px, rgba,
 };
 use photon_core::{BrowserCommand, Shortcut, TabLayout, site_name};
-use std::time::Instant;
 
 use super::super::history::BrowsingHistory;
 use super::super::icons::globe_icon;
-use super::super::layout::h_stack;
-use super::super::motion::{AnimateIn, Edge, Entrance};
+use super::super::layout::{Elevated, Elevation, Raised};
 use super::super::pages::{PageIcon, SETTINGS};
 use super::super::settings::Settings;
 use super::super::sidebar::{
@@ -20,15 +18,12 @@ use super::super::sidebar::{
     favourites_grid, footer, navigation_bar, sidebar,
 };
 use super::super::tabs::{DraggedTab, TabIcon, TabItem, tab_list, tab_strip};
-use super::super::titlebar::{titlebar, window_drag_area};
+use super::super::titlebar::titlebar;
 use super::super::toolbar::address_toolbar;
 use super::super::{metrics, theme::ThemeColors};
 use super::BrowserWindow;
 use super::content::TabContent;
 use super::menu::OpenMenu;
-
-/// How the sidebar slides in when shown.
-const SIDEBAR_MOTION: Entrance = Entrance::slide_in(Edge::Left);
 
 impl BrowserWindow {
     /// The chrome for the chosen tab layout.
@@ -75,7 +70,7 @@ impl BrowserWindow {
     }
 
     /// Opens the browser menu on a right-click in empty titlebar space.
-    fn with_titlebar_menu(&self, bar: gpui::Div, cx: &mut Context<Self>) -> gpui::Div {
+    pub(super) fn with_titlebar_menu(&self, bar: gpui::Div, cx: &mut Context<Self>) -> gpui::Div {
         bar.on_mouse_down(
             gpui::MouseButton::Right,
             cx.listener(|this, event: &MouseDownEvent, _, cx| {
@@ -86,71 +81,100 @@ impl BrowserWindow {
         )
     }
 
-    /// The sidebar, or just its top row while it is hidden.
+    /// The sidebar as a layer over the window: its navigation row, which
+    /// stays put, and the rest, which slides in from the left edge as it
+    /// shows or is revealed. Shown, the page narrows beside it in step;
+    /// revealed, it sits on a raised surface over the page.
     fn render_sidebar(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let palette = self.palette(window, cx);
-        let navigation = navigation_bar(
-            self.navigation_state(cx),
-            self.sidebar_visible,
-            self.navigation_actions(cx),
-            palette,
-        );
-        if !self.sidebar_visible {
-            // The same row, with the rest of the bar free to move the window.
-            return self
-                .with_titlebar_menu(
-                    window_drag_area(h_stack().size_full()).child(navigation),
-                    cx,
-                )
-                .into_any_element();
-        }
-        let sidebar_settings = Settings::get(cx).sidebar.clone();
-        let favourites = self.favourite_tiles(&sidebar_settings.favourites, palette, cx);
-        let sections = SidebarSections {
-            navigation: self.with_titlebar_menu(navigation, cx).into_any_element(),
-            address: self.omnibox.clone().into_any_element(),
-            favourites: (!favourites.is_empty())
-                .then(|| favourites_grid(favourites, palette).into_any_element()),
-            tabs: tab_list(self.tab_items(cx), self.new_tab_handler(cx), palette)
-                .into_any_element(),
-            footer: footer(
-                matches!(self.open_menu, Some(OpenMenu::Sidebar(_))),
-                FooterActions {
-                    settings: Box::new(cx.listener(|this, _, window, cx| {
-                        this.open_page_tab(SETTINGS, window, cx);
-                    })),
-                    menu: Box::new(cx.listener(|this, event: &ClickEvent, _, cx| {
-                        cx.stop_propagation();
-                        this.open_menu = match this.open_menu {
-                            Some(OpenMenu::Sidebar(_)) => None,
-                            _ => Some(OpenMenu::Sidebar(footer_menu_anchor(event))),
-                        };
-                        cx.notify();
-                    })),
-                },
+        let shown = self.sidebar.shown();
+        let out = shown.max(self.sidebar.revealed());
+        let navigation = self.with_titlebar_menu(
+            navigation_bar(
+                self.navigation_state(cx),
+                out,
+                self.sidebar.visible,
+                self.navigation_actions(cx),
                 palette,
-            )
-            .into_any_element(),
-        };
-        let sidebar = sidebar(sections, palette);
-        // The sidebar slides in just after it is shown; drawn again later, as
-        // when the window redraws, it appears at once.
-        match self.sidebar_shown_at {
-            Some(shown) if shown.elapsed() < SIDEBAR_MOTION.total_duration() => gpui::div()
-                .size_full()
-                .child(sidebar)
-                .animate_in("sidebar-motion", SIDEBAR_MOTION)
-                .into_any_element(),
-            _ => sidebar.into_any_element(),
+            ),
+            cx,
+        );
+        let mut layer = gpui::div().size_full().relative();
+        if out > 0.0 {
+            let width = metrics::SIDEBAR_WIDTH;
+            let mut panel = gpui::div()
+                .id("sidebar-panel")
+                .absolute()
+                .top_0()
+                .bottom_0()
+                .left(px((out - 1.0) * width))
+                .w(px(width))
+                .occlude();
+            if self.sidebar.over_page() {
+                // Over the page it needs a surface, which fades as the page
+                // makes room for it when it is kept shown.
+                panel = panel
+                    .child(
+                        gpui::div()
+                            .absolute()
+                            .inset_0()
+                            .raised(palette)
+                            .border_r_1()
+                            .border_color(rgba(palette.menu_border))
+                            .elevated(Elevation::High)
+                            .opacity(1.0 - shown),
+                    )
+                    .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
+                        this.revealed_sidebar_hovered(*hovered, cx);
+                    }));
+            }
+            layer = layer.child(
+                panel.child(
+                    gpui::div()
+                        .relative()
+                        .size_full()
+                        .pt(px(metrics::TITLEBAR_HEIGHT))
+                        .child(self.sidebar_body(palette, cx)),
+                ),
+            );
         }
+        layer
+            .child(gpui::div().absolute().top_0().left_0().child(navigation))
+            .into_any_element()
     }
 
-    /// Shows or hides the sidebar. Hidden, the page takes the whole width.
-    /// The horizontal layout has no sidebar to hide.
-    pub(super) fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
-        if Settings::get(cx).tab_layout == TabLayout::Vertical {
-            self.set_sidebar_visible(!self.sidebar_visible, cx);
-        }
+    /// Everything in the sidebar below its navigation row.
+    fn sidebar_body(&self, palette: ThemeColors, cx: &mut Context<Self>) -> impl IntoElement {
+        let sidebar_settings = Settings::get(cx).sidebar.clone();
+        let favourites = self.favourite_tiles(&sidebar_settings.favourites, palette, cx);
+        sidebar(
+            SidebarSections {
+                address: self.omnibox.clone().into_any_element(),
+                favourites: (!favourites.is_empty())
+                    .then(|| favourites_grid(favourites, palette).into_any_element()),
+                tabs: tab_list(self.tab_items(cx), self.new_tab_handler(cx), palette)
+                    .into_any_element(),
+                footer: footer(
+                    matches!(self.open_menu, Some(OpenMenu::Sidebar(_))),
+                    FooterActions {
+                        settings: Box::new(cx.listener(|this, _, window, cx| {
+                            this.open_page_tab(SETTINGS, window, cx);
+                        })),
+                        menu: Box::new(cx.listener(|this, event: &ClickEvent, _, cx| {
+                            cx.stop_propagation();
+                            this.open_menu = match this.open_menu {
+                                Some(OpenMenu::Sidebar(_)) => None,
+                                _ => Some(OpenMenu::Sidebar(footer_menu_anchor(event))),
+                            };
+                            cx.notify();
+                        })),
+                    },
+                    palette,
+                )
+                .into_any_element(),
+            },
+            palette,
+        )
     }
 
     fn new_tab_handler(&self, cx: &mut Context<Self>) -> super::super::ClickHandler {
@@ -158,16 +182,6 @@ impl BrowserWindow {
             cx.stop_propagation();
             this.open_tab(window, cx);
         }))
-    }
-
-    pub(super) fn set_sidebar_visible(&mut self, visible: bool, cx: &mut Context<Self>) {
-        if self.sidebar_visible == visible {
-            return;
-        }
-        self.sidebar_visible = visible;
-        self.sidebar_shown_at = visible.then(Instant::now);
-        self.open_menu = None;
-        cx.notify();
     }
 
     fn navigation_state(&self, cx: &Context<Self>) -> NavigationState {

@@ -1,5 +1,6 @@
 //! The vertical tab sidebar: navigation, the address field, favourite sites,
-//! the tabs, and a footer.
+//! the tabs, and a footer. The navigation row stays put above the rest,
+//! which slides in and out.
 //!
 //! These are views of state the browser window owns; the window builds them
 //! in `window/sidebar.rs`.
@@ -22,9 +23,8 @@ pub(super) use favourites::{FavouriteTile, favourites_grid};
 pub(super) use footer::{FooterActions, footer};
 pub(super) use navigation::{NavigationActions, NavigationState, navigation_bar};
 
-/// The sidebar's sections.
+/// The sidebar's sections below its navigation row.
 pub(super) struct SidebarSections {
-    pub(super) navigation: AnyElement,
     pub(super) address: AnyElement,
     /// The favourites grid, when there are favourites.
     pub(super) favourites: Option<AnyElement>,
@@ -32,8 +32,8 @@ pub(super) struct SidebarSections {
     pub(super) footer: AnyElement,
 }
 
-/// Lays the sections out top to bottom: navigation, address and favourites
-/// stay put, the tabs scroll, and the footer stays at the bottom.
+/// Lays the sections out top to bottom: address and favourites stay put, the
+/// tabs scroll, and the footer stays at the bottom.
 pub(super) fn sidebar(sections: SidebarSections, palette: ThemeColors) -> impl IntoElement {
     let inset = |content: AnyElement| {
         h_stack()
@@ -52,7 +52,6 @@ pub(super) fn sidebar(sections: SidebarSections, palette: ThemeColors) -> impl I
     v_stack()
         .id("sidebar")
         .size_full()
-        .child(sections.navigation)
         .child(top)
         .child(
             div()

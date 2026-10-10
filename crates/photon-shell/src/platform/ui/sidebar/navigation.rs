@@ -25,16 +25,18 @@ pub(in super::super) struct NavigationActions {
     pub(in super::super) reload: ClickHandler,
 }
 
-/// The top row, the sidebar's width. While the sidebar is hidden it stays
-/// in place at the left of the bar above the page.
+/// The top row, the sidebar's width: the sidebar toggle, and back, forward
+/// and reload drawn at `navigation_shown` opacity. They fade out as the
+/// sidebar hides, leaving the toggle in place above the page.
 pub(in super::super) fn navigation_bar(
     state: NavigationState,
+    navigation_shown: f32,
     sidebar_visible: bool,
     actions: NavigationActions,
     palette: ThemeColors,
 ) -> gpui::Div {
     let (color, size) = (palette.text_secondary, metrics::TOOLBAR_ICON_SIZE);
-    let mut bar = window_drag_area(
+    let bar = window_drag_area(
         h_stack()
             .w(px(metrics::SIDEBAR_WIDTH))
             .h(px(metrics::TITLEBAR_HEIGHT))
@@ -58,13 +60,17 @@ pub(in super::super) fn navigation_bar(
         palette,
         actions.toggle_sidebar,
     ));
+    if navigation_shown <= 0.0 {
+        return bar;
+    }
     let (reload_label, reload_icon) = if state.loading {
         ("Stop loading", close_icon(color, size).into_any_element())
     } else {
         ("Reload page", reload_icon(color, size).into_any_element())
     };
-    bar = bar
-        .child(gpui::div().flex_1())
+    let buttons = h_stack()
+        .gap(px(metrics::SIDEBAR_CONTROL_GAP))
+        .opacity(navigation_shown)
         .child(toolbar_button(
             "toolbar-back",
             "Go back",
@@ -92,5 +98,5 @@ pub(in super::super) fn navigation_bar(
             palette,
             actions.reload,
         ));
-    bar
+    bar.child(gpui::div().flex_1()).child(buttons)
 }

@@ -10,6 +10,7 @@ mod page_menu;
 mod popup_window;
 mod popups;
 mod sidebar;
+mod sidebar_state;
 mod tab_menu;
 mod tabs;
 mod zoom;
@@ -32,11 +33,12 @@ use super::find_bar::{FIND_BAR_MOTION, FindBar};
 use super::js_dialog::JavaScriptDialog;
 use super::layout::{h_stack, v_stack};
 use super::modal::MODAL_MOTION;
-use super::motion::{AnimateIn, Presence};
+use super::motion::{AnimateIn, Presence, mix};
 use super::omnibox::{Omnibox, OmniboxEvent};
 use super::pages::{NEW_TAB, find_page};
 use super::settings::Settings;
 use super::tabs::RevealedIcon;
+use super::titlebar::window_drag_area;
 use super::{
     metrics,
     theme::{ThemeColors, palette},
@@ -45,6 +47,7 @@ use alerts::{EngineNotice, NoticeExpiry};
 use content::{BrowserTab, TabContent, create_webview};
 use menu::OpenMenu;
 use popups::PendingPopup;
+use sidebar_state::SidebarState;
 use tabs::ClosedTab;
 
 pub use app::run;
@@ -55,10 +58,8 @@ struct BrowserWindow {
     tab_subscriptions: Vec<Subscription>,
     /// The sidebar, cached so Engine frames repaint only the page.
     chrome: Entity<BrowserChrome>,
-    /// Whether the sidebar is shown; hidden, the page takes the whole width.
-    sidebar_visible: bool,
-    /// When the sidebar was last shown, so it slides in only then.
-    sidebar_shown_at: Option<Instant>,
+    /// Where the sidebar is, in the vertical layout.
+    sidebar: SidebarState,
     tab_focus_handles: Vec<FocusHandle>,
     active_tab: usize,
     next_tab_id: u64,
@@ -119,24 +120,6 @@ impl Render for BrowserChrome {
 impl BrowserWindow {
     fn palette(&self, window: &Window, cx: &App) -> ThemeColors {
         palette(window, cx)
-    }
-
-    /// Whether the chrome is a sidebar beside the page, rather than bars above it.
-    fn sidebar_beside_page(&self, cx: &App) -> bool {
-        Settings::get(cx).tab_layout == TabLayout::Vertical && self.sidebar_visible
-    }
-
-    /// Whether the sidebar's top row sits above the page, the sidebar hidden.
-    fn sidebar_hidden(&self, cx: &App) -> bool {
-        Settings::get(cx).tab_layout == TabLayout::Vertical && !self.sidebar_visible
-    }
-
-    /// The height of the chrome above the page.
-    fn chrome_height(&self, cx: &App) -> f32 {
-        match Settings::get(cx).tab_layout {
-            TabLayout::Horizontal => metrics::CHROME_HEIGHT,
-            TabLayout::Vertical => metrics::TITLEBAR_HEIGHT,
-        }
     }
 
     /// Redraws the chrome and every tab for changed settings, such as the theme.
@@ -213,8 +196,14 @@ impl Render for BrowserWindow {
         let dialog = self
             .dialog_presence
             .sync(self.dialog.clone(), MODAL_MOTION, cx);
-        let beside = self.sidebar_beside_page(cx);
-        let sidebar_hidden = self.sidebar_hidden(cx);
+        let vertical = Settings::get(cx).tab_layout == TabLayout::Vertical;
+        self.sidebar.settle();
+        if self.sidebar.is_moving() {
+            window.request_animation_frame();
+        }
+        // How far the sidebar is shown beside the page: the page's left edge
+        // follows the sidebar's, and its top rises from below the top bar.
+        let shown = if vertical { self.sidebar.shown() } else { 0.0 };
         let page = div()
             .relative()
             .flex_1()
@@ -224,10 +213,15 @@ impl Render for BrowserWindow {
             .overflow_hidden()
             .size_full()
             .p(px(metrics::PAGE_INSET))
-            // Beside the sidebar, its own padding already separates the two.
-            .when(beside, |page| page.pl_0())
-            // The bar above, the sidebar's top row, is gap enough.
-            .when(sidebar_hidden, |page| page.pt_0())
+            .when(vertical, |page| {
+                // Beside the sidebar, its own padding separates the two;
+                // with it hidden, the top bar above is gap enough.
+                page.pl(px(mix(metrics::PAGE_INSET, 0.0, shown))).pt(px(mix(
+                    metrics::TITLEBAR_HEIGHT,
+                    metrics::PAGE_INSET,
+                    shown,
+                )))
+            })
             .child(self.active_view(palette))
             // The find bar floats in the page's top-right corner.
             .children(find_bar.map(|(bar, transition)| {
@@ -249,24 +243,44 @@ impl Render for BrowserWindow {
                     .bottom(px(metrics::PAGE_INSET + metrics::CHIP_INSET))
                     .child(chip)
             }));
-        // The sidebar sits beside the page. The tab strip and toolbar sit
-        // above it, as does the slim bar shown while the sidebar is hidden.
-        let chrome_style = if beside {
-            StyleRefinement::default()
-                .w(px(metrics::SIDEBAR_WIDTH))
-                .h_full()
-                .flex_shrink_0()
+        // The tab strip and toolbar sit above the page. The sidebar is a
+        // layer over the window, with room made for it beside the page.
+        let (body, edge) = if vertical {
+            let chrome = self.chrome.clone().cached(
+                StyleRefinement::default()
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .size_full(),
+            );
+            let room = div().flex_shrink_0().w(px(metrics::SIDEBAR_WIDTH * shown));
+            // Empty space across the top moves the window.
+            let titlebar = self.with_titlebar_menu(
+                window_drag_area(
+                    div()
+                        .absolute()
+                        .top_0()
+                        .left_0()
+                        .w_full()
+                        .h(px(metrics::TITLEBAR_HEIGHT)),
+                ),
+                cx,
+            );
+            let body = div()
+                .size_full()
+                .relative()
+                .child(titlebar)
+                .child(h_stack().size_full().child(room).child(page))
+                .child(chrome);
+            (body, (!self.sidebar.visible).then(|| self.reveal_edge(cx)))
         } else {
-            StyleRefinement::default()
-                .w_full()
-                .h(px(self.chrome_height(cx)))
-                .flex_shrink_0()
-        };
-        let chrome = self.chrome.clone().cached(chrome_style);
-        let body = if beside {
-            h_stack().size_full().child(chrome).child(page)
-        } else {
-            v_stack().size_full().child(chrome).child(page)
+            let chrome = self.chrome.clone().cached(
+                StyleRefinement::default()
+                    .w_full()
+                    .h(px(metrics::CHROME_HEIGHT))
+                    .flex_shrink_0(),
+            );
+            (v_stack().size_full().child(chrome).child(page), None)
         };
         let root = div()
             .size_full()
@@ -274,6 +288,7 @@ impl Render for BrowserWindow {
             .bg(gpui::rgba(palette.window_tint))
             .text_color(gpui::rgb(palette.text_primary))
             .child(body)
+            .children(edge)
             // A JavaScript dialog is modal to the whole window.
             .children(dialog.map(|(dialog, _)| dialog))
             .children(self.open_menu_overlay(palette, cx))
@@ -332,8 +347,7 @@ fn open_browser_window(
                 tabs: Vec::new(),
                 tab_subscriptions: Vec::new(),
                 chrome,
-                sidebar_visible: true,
-                sidebar_shown_at: None,
+                sidebar: SidebarState::new(),
                 tab_focus_handles: Vec::new(),
                 active_tab: 0,
                 next_tab_id: 1,
