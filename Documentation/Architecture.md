@@ -81,7 +81,9 @@ crates/
 │           │   ├── sidebar.rs        # Builds the tab strip and toolbar or the sidebar; shows or hides it
 │           │   ├── command_bar.rs    # Opening the command bar and carrying out its choice
 │           │   ├── sidebar_state.rs  # Where the sidebar is: shown, hidden or revealed from the left edge
+│           │   ├── tab_items.rs      # The tabs as both layouts draw them
 │           │   ├── tab_menu.rs       # Tab menu, reordering and bulk tab actions
+│           │   ├── favourites.rs     # Favourite tiles with their own tabs, and their menus
 │           │   ├── pinned.rs         # Pinned tabs, saved and reopened, and closing unused tabs
 │           │   ├── spaces.rs         # Switching spaces, and creating, changing and removing them
 │           │   ├── content.rs        # What a tab shows: a web view or one of the browser's pages

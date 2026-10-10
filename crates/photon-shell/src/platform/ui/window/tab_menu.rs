@@ -2,12 +2,11 @@
 //! them and drag-and-drop.
 
 use gpui::{Context, Window, prelude::*};
-use photon_core::{BrowserCommand, MAX_FAVOURITES, Shortcut, site_name};
+use photon_core::BrowserCommand;
 
 use super::super::layout::v_stack;
 use super::super::menu::{menu_action, menu_separator, menu_surface};
 use super::super::motion::Transition;
-use super::super::settings::Settings;
 use super::super::theme::ThemeColors;
 use super::BrowserWindow;
 use super::content::TabContent;
@@ -200,134 +199,5 @@ impl BrowserWindow {
             })),
             palette,
         ))
-    }
-
-    /// Adds a web page's site to the favourites, or removes it.
-    fn favourite_action(
-        &self,
-        index: usize,
-        palette: ThemeColors,
-        cx: &mut Context<Self>,
-    ) -> Option<impl IntoElement + use<>> {
-        let view = self.tabs.get(index)?.content.webview()?.read(cx);
-        if !view.has_page() {
-            return None;
-        }
-        let shortcut = Shortcut {
-            title: view.state.title.clone(),
-            url: view.state.url.clone(),
-        };
-        let sidebar = &Settings::get(cx).sidebar;
-        let is_favourite = sidebar.favourite_for(&shortcut.url).is_some();
-        if !is_favourite && sidebar.favourites.len() >= MAX_FAVOURITES {
-            return None;
-        }
-        Some(menu_action(
-            "tab-menu-favourite",
-            if is_favourite {
-                "Remove from Favourites"
-            } else {
-                "Add to Favourites"
-            },
-            5,
-            Box::new(cx.listener(move |this, _, _, cx| {
-                cx.stop_propagation();
-                this.open_menu = None;
-                if is_favourite {
-                    this.remove_favourite(&shortcut.url, cx);
-                } else {
-                    this.add_favourite(index, shortcut.clone(), cx);
-                }
-            })),
-            palette,
-        ))
-    }
-
-    /// Adds the tab at `index` to the favourites as `shortcut`. The tab
-    /// becomes the favourite's own, shown as its tile, so it leaves the tab
-    /// list and the pinned tabs.
-    fn add_favourite(&mut self, index: usize, shortcut: Shortcut, cx: &mut Context<Self>) {
-        let url = shortcut.url.clone();
-        let mut added = false;
-        Settings::update(cx, |settings| {
-            added = settings.sidebar.add_favourite(shortcut)
-        });
-        if !added {
-            return;
-        }
-        // Marked first, as unpinning moves the tab.
-        self.tabs[index].favourite = Some(url);
-        if self.tabs[index].pin.is_some() {
-            self.toggle_pin(index, cx);
-        }
-        cx.notify();
-    }
-
-    /// Removes the favourite for `url`'s site. Its tab returns to the tab
-    /// list.
-    fn remove_favourite(&mut self, url: &str, cx: &mut Context<Self>) {
-        let site = site_name(url);
-        for tab in &mut self.tabs {
-            if tab
-                .favourite
-                .as_deref()
-                .is_some_and(|owner| site_name(owner) == site)
-            {
-                tab.favourite = None;
-            }
-        }
-        Settings::update(cx, |settings| settings.sidebar.remove_favourite(url));
-        cx.notify();
-    }
-
-    /// The tab that belongs to the favourite at `url`, if it is open.
-    pub(super) fn favourite_tab(&self, url: &str) -> Option<usize> {
-        self.tabs
-            .iter()
-            .position(|tab| tab.favourite.as_deref() == Some(url))
-    }
-
-    /// The menu for the favourite at `index`: close its tab while open, or
-    /// remove it.
-    pub(super) fn favourite_menu(
-        &self,
-        index: usize,
-        transition: Transition,
-        palette: ThemeColors,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement + use<> {
-        let url = Settings::get(cx)
-            .sidebar
-            .favourites
-            .get(index)
-            .map(|favourite| favourite.url.clone())
-            .unwrap_or_default();
-        let open_tab = self.favourite_tab(&url);
-        let content = v_stack()
-            .children(open_tab.map(|tab| {
-                menu_action(
-                    "favourite-menu-close",
-                    "Close Tab",
-                    0,
-                    Box::new(cx.listener(move |this, _, window, cx| {
-                        cx.stop_propagation();
-                        this.open_menu = None;
-                        this.close_tab(tab, window, cx);
-                    })),
-                    palette,
-                )
-            }))
-            .child(menu_action(
-                "favourite-menu-remove",
-                "Remove from Favourites",
-                1,
-                Box::new(cx.listener(move |this, _, _, cx| {
-                    cx.stop_propagation();
-                    this.open_menu = None;
-                    this.remove_favourite(&url, cx);
-                })),
-                palette,
-            ));
-        menu_surface(content, transition, palette)
     }
 }

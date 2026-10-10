@@ -2,28 +2,22 @@
 //! address toolbar, or the sidebar (navigation, address field, favourites,
 //! tabs and footer), shown beside the page or revealed over it.
 
-use gpui::{
-    AnyElement, ClickEvent, Context, ImageSource, KeyDownEvent, MouseDownEvent, MouseUpEvent,
-    ObjectFit, Window, img, point, prelude::*, px, rgba,
-};
-use photon_core::{BrowserCommand, Shortcut, TabLayout, site_name};
+use gpui::{AnyElement, ClickEvent, Context, MouseDownEvent, Window, point, prelude::*, px, rgba};
+use photon_core::{BrowserCommand, TabLayout};
 
-use super::super::history::BrowsingHistory;
-use super::super::icons::globe_icon;
 use super::super::layout::{Elevated, Elevation, Raised};
 use super::super::motion::{AnimateIn, Edge, Entrance};
-use super::super::pages::{PageIcon, SETTINGS};
+use super::super::pages::SETTINGS;
 use super::super::settings::Settings;
 use super::super::sidebar::{
-    FavouriteTile, FooterActions, NavigationActions, NavigationState, SidebarSections,
-    favourites_grid, footer, navigation_bar, sidebar,
+    FooterActions, NavigationActions, NavigationState, SidebarSections, favourites_grid, footer,
+    navigation_bar, sidebar,
 };
-use super::super::tabs::{DraggedTab, TabIcon, TabItem, tab_list, tab_strip};
+use super::super::tabs::{DraggedTab, tab_list, tab_strip};
 use super::super::titlebar::titlebar;
 use super::super::toolbar::address_toolbar;
 use super::super::{metrics, theme::ThemeColors};
 use super::BrowserWindow;
-use super::content::TabContent;
 use super::menu::OpenMenu;
 
 impl BrowserWindow {
@@ -260,166 +254,6 @@ impl BrowserWindow {
                 this.dispatch_command(command, window, cx);
             })),
         }
-    }
-
-    fn favourite_tiles(
-        &self,
-        favourites: &[Shortcut],
-        palette: ThemeColors,
-        cx: &mut Context<Self>,
-    ) -> Vec<FavouriteTile> {
-        let active_favourite = self.tabs[self.active_tab].favourite.clone();
-        favourites
-            .iter()
-            .enumerate()
-            .map(|(index, favourite)| {
-                let icon = match BrowsingHistory::favicon(&favourite.url, cx) {
-                    Some(favicon) => img(ImageSource::Render(favicon.image))
-                        .size(px(metrics::SIDEBAR_FAVOURITE_ICON_SIZE))
-                        .object_fit(ObjectFit::Contain)
-                        .into_any_element(),
-                    None => {
-                        globe_icon(palette.text_secondary, metrics::SIDEBAR_FAVOURITE_ICON_SIZE)
-                            .into_any_element()
-                    }
-                };
-                let url = favourite.url.clone();
-                FavouriteTile {
-                    label: if favourite.title.trim().is_empty() {
-                        site_name(&favourite.url)
-                    } else {
-                        favourite.title.clone()
-                    },
-                    icon,
-                    active: active_favourite.as_deref() == Some(favourite.url.as_str()),
-                    on_open: Box::new(cx.listener(move |this, _, window, cx| {
-                        this.open_favourite(&url, window, cx);
-                    })),
-                    on_context_menu: Box::new(cx.listener(
-                        move |this, event: &MouseDownEvent, _, cx| {
-                            cx.stop_propagation();
-                            this.open_menu = Some(OpenMenu::Favourite(index, event.position));
-                            cx.notify();
-                        },
-                    )),
-                }
-            })
-            .collect()
-    }
-
-    /// Switches to the favourite's tab, or opens the favourite in a tab of
-    /// its own.
-    fn open_favourite(&mut self, url: &str, window: &mut Window, cx: &mut Context<Self>) {
-        match self.favourite_tab(url) {
-            Some(index) => self.activate_tab(index, true, window, cx),
-            None => {
-                let index = self.tabs.len();
-                self.insert_tab(index, Some(url), window, cx);
-                // The new tab is the tile's, so it never shows in the list.
-                self.tabs[self.active_tab].favourite = Some(url.to_owned());
-                cx.notify();
-            }
-        }
-    }
-
-    fn tab_items(&self, cx: &mut Context<Self>) -> Vec<TabItem> {
-        self.tabs
-            .iter()
-            .enumerate()
-            .map(|(index, tab)| {
-                let (label, icon) = match &tab.content {
-                    TabContent::Page(page) => {
-                        let icon = match page.definition.icon {
-                            PageIcon::Logo => TabIcon::Logo,
-                            PageIcon::Symbol(symbol) => TabIcon::Symbol(symbol),
-                        };
-                        (page.definition.title.to_owned(), icon)
-                    }
-                    // A pinned tab that has not loaded yet, as when it opens in
-                    // the background at launch, shows what it was pinned as.
-                    TabContent::Web(webview)
-                        if !webview.read(cx).has_page()
-                            && let Some(pin) = &tab.pin =>
-                    {
-                        let icon = match BrowsingHistory::favicon(&pin.url, cx) {
-                            Some(favicon) => TabIcon::Favicon(favicon),
-                            None => TabIcon::Page,
-                        };
-                        (pin.title.clone(), icon)
-                    }
-                    TabContent::Web(webview) => {
-                        let view = webview.read(cx);
-                        let icon = if view.audio_playing {
-                            TabIcon::Audio {
-                                favicon: view.favicon.clone(),
-                                muted: view.audio_muted,
-                            }
-                        } else if view.shows_spinner() {
-                            TabIcon::Loading(self.spinner_step)
-                        } else if let Some(favicon) = view.favicon.clone() {
-                            TabIcon::Favicon(favicon)
-                        } else {
-                            TabIcon::Page
-                        };
-                        let label = if !view.state.title.trim().is_empty() {
-                            view.state.title.clone()
-                        } else if view.state.url.is_empty() {
-                            "New Tab".to_owned()
-                        } else {
-                            view.state.url.clone()
-                        };
-                        (label, icon)
-                    }
-                };
-                TabItem {
-                    id: format!("browser-tab-{}", tab.id),
-                    label,
-                    icon_appearing: self.icon_appearing(tab.id, &icon),
-                    icon,
-                    index,
-                    pinned: tab.pin.is_some(),
-                    active: index == self.active_tab,
-                    focus_handle: self.tab_focus_handles[index].clone(),
-                    on_select: Box::new(cx.listener(move |this, _, window, cx| {
-                        cx.stop_propagation();
-                        this.activate_tab(index, true, window, cx);
-                    })),
-                    on_key_down: Box::new(cx.listener(
-                        move |this, event: &KeyDownEvent, window, cx| {
-                            this.tab_key_down(index, event, window, cx);
-                        },
-                    )),
-                    on_close: Box::new(cx.listener(move |this, _, window, cx| {
-                        cx.stop_propagation();
-                        this.close_tab(index, window, cx);
-                    })),
-                    on_toggle_audio: Box::new(cx.listener(move |this, _, _, cx| {
-                        cx.stop_propagation();
-                        if let Some(webview) =
-                            this.tabs.get(index).and_then(|tab| tab.content.webview())
-                        {
-                            webview.update(cx, |view, cx| view.toggle_audio_mute(cx));
-                        }
-                    })),
-                    on_middle_click: Box::new(cx.listener(
-                        move |this, _: &MouseUpEvent, window, cx| {
-                            cx.stop_propagation();
-                            this.close_tab(index, window, cx);
-                        },
-                    )),
-                    on_context_menu: Box::new(cx.listener(
-                        move |this, event: &MouseDownEvent, _, cx| {
-                            cx.stop_propagation();
-                            this.open_menu = Some(OpenMenu::Tab(index, event.position));
-                            cx.notify();
-                        },
-                    )),
-                    on_drop: Box::new(cx.listener(move |this, dragged: &DraggedTab, _, cx| {
-                        this.drop_tab(dragged.index, index, cx);
-                    })),
-                }
-            })
-            .collect()
     }
 }
 
