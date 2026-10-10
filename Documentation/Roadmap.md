@@ -25,6 +25,7 @@ What the Photon shell does today and what comes next. Engine performance work is
 - [x] Drag the sidebar's edge to widen it (remembered in the profile); narrower than its default hides it
 - [x] Pinned tabs above a divider, as in Arc: pinned from the tab menu or by dragging, saved and reopened at launch, icons only in the horizontal strip
 - [x] Optionally close today's tabs left unused for 12 hours
+- [x] Spaces, as in Arc: separate sets of tabs, each with its own name, window colour and pinned tabs, switched by the footer's dots, swiping or the keyboard, and created, edited or deleted from the footer
 - [x] Favourite sites: up to 12 in a grid, added from a tab's menu; as in Arc, a favourite's tab lives in its tile, not the tab list
 - [x] Tabs with new, close and select; up and down arrows move between tabs
 - [x] Optionally keep the window open on a new tab page when its last tab closes
@@ -67,6 +68,7 @@ What the Photon shell does today and what comes next. Engine performance work is
 - [x] ⌘F, ⌘G, ⌘⇧G
 - [x] ⌘+, ⌘−, ⌘0
 - [x] ⌘S shows or hides the sidebar
+- [x] ⌘⌥← and ⌘⌥→ switch spaces
 
 ### Accessibility and motion
 
@@ -86,7 +88,6 @@ In order of priority.
 
 - [ ] Peek: Shift- or Alt-click a link to preview it floating over the page
 - [ ] Split view: two or more tabs side by side
-- [ ] Spaces in the sidebar, each with its own name, icon, colour and tabs, switched by swiping
 - [ ] Tab folders among pinned tabs
 - [ ] Polish: the domain alone in the sidebar's address until clicked, ⌘⇧C to copy the address with a toast, a mini player for background audio, spring motion on tab rows
 

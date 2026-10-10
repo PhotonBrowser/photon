@@ -86,9 +86,9 @@ the menu's New Tab still open a new tab page.
 Choosing an address or search opens it in a new tab, a `photon://` address
 opens that page, an open tab is switched to, and a command runs. The commands
 are New Tab, New Window, Reopen Closed Tab, Close Tab, Reload Page, Find in
-Page, Copy Address, Show or Hide Sidebar and Settings, each offered only where
-it applies (page commands with a web page showing, the sidebar in the vertical
-layout). They match by name or by keywords such as "refresh" or
+Page, Copy Address, Show or Hide Sidebar, New Space, Next Space, Previous
+Space and Settings, each offered only where it applies (page commands with a
+web page showing, the sidebar and spaces in the vertical layout). They match by name or by keywords such as "refresh" or
 "preferences". Typed words match where words start, as in the omnibox. The
 arrow keys move through the rows, pointing selects one, Enter or a click
 chooses it, and Escape or a click outside closes the bar.

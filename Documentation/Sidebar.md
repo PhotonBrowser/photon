@@ -21,7 +21,7 @@ change applies at once, in every window.
 | Favourites | A three-column grid of favourite sites with their icons, up to 12. As in Arc, each has a tab of its own, shown as its tile rather than in the tab list: adding a tab from its menu ("Add to Favourites") moves it into the tile, and a click switches to the favourite's tab or opens it. The tile is highlighted while its tab is in use. Right-click to close its tab or remove the favourite, which returns its tab to the list. |
 | Pinned tabs | Tabs pinned from their menu ("Pin Tab"), above a divider. See [Pinned tabs](#pinned-tabs). |
 | Tabs | "+ New Tab", which opens the [command bar](Omnibox.md#command-bar), then one row per tab of today's tabs: icon or loading spinner, title, and a close button on the active tab and on the row under the pointer. Click to switch, middle-click or the close button to close, drag to reorder, right-click for the tab menu, and the up and down arrows move between focused tabs. The list scrolls. |
-| Footer | Settings and the browser menu, which opens above it. |
+| Footer | Settings, the spaces as dots with a button to add one, and the browser menu, which opens above it. |
 
 ⌘S or the sidebar button shows or hides the sidebar. Its top row, with the
 window controls and the sidebar button, stays where it is; the rest slides in
@@ -55,8 +55,9 @@ the drag rests and applies to every window. The limits and the snap are in
 ## Pinned tabs
 
 As in Arc, a tab's menu pins it above today's tabs, and unpins it. Pinned
-tabs keep the address they were pinned at and open again, in the background,
-in the first window at launch; if several windows pin tabs, the one changed
+tabs belong to their space, keep the address they were pinned at, and open
+again, in the background, in the first window at launch, showing what they
+were pinned as until they load; if several windows pin tabs, the one changed
 last is what is saved. In the horizontal strip they show only their icons, at
 the start.
 
@@ -67,6 +68,30 @@ tabs can be reopened with ⌘⇧T. The rules are in
 [`photon-core/src/tabs.rs`](../crates/photon-core/src/tabs.rs), and the
 window's side in
 [`window/pinned.rs`](../crates/photon-shell/src/platform/ui/window/pinned.rs).
+
+## Spaces
+
+As in Arc, spaces are separate sets of tabs, each with its own name, window
+colour and pinned tabs; favourites are shared by every space. The sidebar
+shows the tabs of the space shown, and new tabs join it.
+
+- Switch with the footer's dots, a two-finger swipe sideways across the
+  sidebar, ⌘⌥← and ⌘⌥→, or the command bar. The tabs slide in from the side
+  the space lies on, and the window takes its colour. Choosing a tab of
+  another space, as from the command bar, switches to that space.
+- A space shows its most recent tab, or a new tab page when it has none.
+- The footer's + creates a space, in a dialog asking for its name and colour.
+  Right-click a dot to edit its space, or delete it and close its tabs; the
+  last space stays.
+- Settings → Appearance changes the colour of the space shown.
+
+The space shown is shared by every window, as the window colour follows it.
+The tab strip of the horizontal layout shows every space's tabs. The model is
+in [`photon-core/src/spaces.rs`](../crates/photon-core/src/spaces.rs), the
+window's side in
+[`window/spaces.rs`](../crates/photon-shell/src/platform/ui/window/spaces.rs),
+and the dialog in
+[`space_editor.rs`](../crates/photon-shell/src/platform/ui/space_editor.rs).
 
 ## Closing the last tab
 

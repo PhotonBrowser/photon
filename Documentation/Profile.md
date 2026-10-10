@@ -25,12 +25,13 @@ file.
 ## Settings
 
 `BrowserSettings` in [`photon-core`](../crates/photon-core/src/settings.rs)
-holds the theme, transparency, window colour and gradient, tab layout
-(horizontal or vertical), search engine, pop-up policy, the new tab page's
-layout, the sidebar's favourites and width, the pinned tabs, whether closing
-the last tab closes the window, and whether unused tabs close. Fields have
-serde defaults, so a profile saved by an older build still loads.
-`reset_preferences` returns everything but the saved sites to its default.
+holds the theme, transparency, tab layout (horizontal or vertical), search
+engine, pop-up policy, the new tab page's layout, the sidebar's favourites
+and width, the spaces (each with its name, window colour and pinned tabs) and
+the one shown, whether closing the last tab closes the window, and whether
+unused tabs close. Fields have serde defaults, so a profile saved by an older
+build still loads. `reset_preferences` returns everything to its default but
+the favourites, shortcuts and spaces, whose colours reset.
 
 In the shell, [`ui/settings.rs`](../crates/photon-shell/src/platform/ui/settings.rs)
 keeps one app-wide `Settings` global:

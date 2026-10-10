@@ -31,9 +31,11 @@ transparency and window colour, so renders never rebuild them.
 
 ### Window colour
 
-Settings → Appearance tints the window, as in Arc and Zen: the system grey,
-or blue, purple, pink, red, orange, yellow, green or teal, optionally as a
-gradient into the neighbouring hue from the top left. Each colour is a hue in
+Each [space](Sidebar.md#spaces) tints the window, as in Arc and Zen: the
+system grey, or blue, purple, pink, red, orange, yellow, green or teal,
+optionally as a gradient into the neighbouring hue from the top left, chosen
+in Settings → Appearance or the space's dialog with the shared
+`color_picker`. Each colour is a hue in
 the `window_color` group of `theme.rs`, toned for light and dark windows and
 as see-through as the transparency setting makes the window. Draw the
 window's background with `palette.window_background()`, which is the tint or

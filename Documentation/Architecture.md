@@ -83,6 +83,7 @@ crates/
 │           │   ├── sidebar_state.rs  # Where the sidebar is: shown, hidden or revealed from the left edge
 │           │   ├── tab_menu.rs       # Tab menu, reordering and bulk tab actions
 │           │   ├── pinned.rs         # Pinned tabs, saved and reopened, and closing unused tabs
+│           │   ├── spaces.rs         # Switching spaces, and creating, changing and removing them
 │           │   ├── content.rs        # What a tab shows: a web view or one of the browser's pages
 │           │   ├── menu.rs           # Browser menu and the menu overlay
 │           │   ├── page_menu.rs      # Page right-click menus
@@ -111,6 +112,8 @@ crates/
 │           ├── sidebar/              # Vertical tab sidebar: navigation, favourites, footer
 │           ├── omnibox/              # Address field and its suggestion panel
 │           ├── command_bar/          # The ⌘T command bar: field and result rows
+│           ├── space_editor.rs       # The dialog for a space's name and colour
+│           ├── color_picker.rs       # Window colour swatches and the gradient switch
 │           ├── history.rs            # Shared browsing history, saved to the profile
 │           ├── settings.rs           # Shared settings, saved to the profile
 │           ├── js_dialog.rs          # JavaScript alert, confirm and prompt
