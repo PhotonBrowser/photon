@@ -16,7 +16,7 @@ mod zoom;
 
 use gpui::{
     App, Context, Entity, FocusHandle, Render, StyleRefinement, Subscription, WeakEntity, Window,
-    div, point, prelude::*, px,
+    div, prelude::*, px,
 };
 use photon_core::{BrowserCommand, TabLayout};
 use std::cell::RefCell;
@@ -59,8 +59,6 @@ struct BrowserWindow {
     sidebar_visible: bool,
     /// When the sidebar was last shown, so it slides in only then.
     sidebar_shown_at: Option<Instant>,
-    /// The titlebar height the native window controls are centered in.
-    window_controls_height: f32,
     tab_focus_handles: Vec<FocusHandle>,
     active_tab: usize,
     next_tab_id: u64,
@@ -128,8 +126,8 @@ impl BrowserWindow {
         Settings::get(cx).tab_layout == TabLayout::Vertical && self.sidebar_visible
     }
 
-    /// Whether only the slim bar sits above the page, the sidebar hidden.
-    fn compact_titlebar(&self, cx: &App) -> bool {
+    /// Whether the sidebar's top row sits above the page, the sidebar hidden.
+    fn sidebar_hidden(&self, cx: &App) -> bool {
         Settings::get(cx).tab_layout == TabLayout::Vertical && !self.sidebar_visible
     }
 
@@ -137,24 +135,8 @@ impl BrowserWindow {
     fn chrome_height(&self, cx: &App) -> f32 {
         match Settings::get(cx).tab_layout {
             TabLayout::Horizontal => metrics::CHROME_HEIGHT,
-            TabLayout::Vertical => metrics::COMPACT_TITLEBAR_HEIGHT,
+            TabLayout::Vertical => metrics::TITLEBAR_HEIGHT,
         }
-    }
-
-    /// Centers the native window controls in the titlebar, which is shorter
-    /// while the sidebar is hidden. Moves them only when that changes.
-    fn place_window_controls(&mut self, window: &Window, cx: &App) {
-        let height = if self.compact_titlebar(cx) {
-            metrics::COMPACT_TITLEBAR_HEIGHT
-        } else {
-            metrics::TITLEBAR_HEIGHT
-        };
-        if self.window_controls_height == height {
-            return;
-        }
-        self.window_controls_height = height;
-        let (x, y) = metrics::window_controls_origin(height);
-        window.set_traffic_light_position(point(px(x), px(y)));
     }
 
     /// Redraws the chrome and every tab for changed settings, such as the theme.
@@ -231,9 +213,8 @@ impl Render for BrowserWindow {
         let dialog = self
             .dialog_presence
             .sync(self.dialog.clone(), MODAL_MOTION, cx);
-        self.place_window_controls(window, cx);
         let beside = self.sidebar_beside_page(cx);
-        let compact = self.compact_titlebar(cx);
+        let sidebar_hidden = self.sidebar_hidden(cx);
         let page = div()
             .relative()
             .flex_1()
@@ -245,8 +226,8 @@ impl Render for BrowserWindow {
             .p(px(metrics::PAGE_INSET))
             // Beside the sidebar, its own padding already separates the two.
             .when(beside, |page| page.pl_0())
-            // The slim bar above is gap enough.
-            .when(compact, |page| page.pt_0())
+            // The bar above, the sidebar's top row, is gap enough.
+            .when(sidebar_hidden, |page| page.pt_0())
             .child(self.active_view(palette))
             // The find bar floats in the page's top-right corner.
             .children(find_bar.map(|(bar, transition)| {
@@ -353,7 +334,6 @@ fn open_browser_window(
                 chrome,
                 sidebar_visible: true,
                 sidebar_shown_at: None,
-                window_controls_height: metrics::TITLEBAR_HEIGHT,
                 tab_focus_handles: Vec::new(),
                 active_tab: 0,
                 next_tab_id: 1,

@@ -25,22 +25,19 @@ pub(in super::super) struct NavigationActions {
     pub(in super::super) reload: ClickHandler,
 }
 
-/// The top row. With `navigation` it shows the navigation buttons too, as in
-/// the sidebar; without, it is the slim bar shown while the sidebar is hidden.
+/// The top row, the sidebar's width. While the sidebar is hidden it stays
+/// in place at the left of the bar above the page.
 pub(in super::super) fn navigation_bar(
-    navigation: Option<NavigationState>,
+    state: NavigationState,
+    sidebar_visible: bool,
     actions: NavigationActions,
     palette: ThemeColors,
 ) -> gpui::Div {
     let (color, size) = (palette.text_secondary, metrics::TOOLBAR_ICON_SIZE);
     let mut bar = window_drag_area(
         h_stack()
-            .w_full()
-            .h(px(if navigation.is_some() {
-                metrics::TITLEBAR_HEIGHT
-            } else {
-                metrics::COMPACT_TITLEBAR_HEIGHT
-            }))
+            .w(px(metrics::SIDEBAR_WIDTH))
+            .h(px(metrics::TITLEBAR_HEIGHT))
             .flex_shrink_0()
             .items_center()
             .gap(px(metrics::SIDEBAR_CONTROL_GAP))
@@ -50,7 +47,7 @@ pub(in super::super) fn navigation_bar(
     )
     .child(toolbar_button(
         "toolbar-sidebar",
-        if navigation.is_some() {
+        if sidebar_visible {
             "Hide sidebar"
         } else {
             "Show sidebar"
@@ -61,9 +58,6 @@ pub(in super::super) fn navigation_bar(
         palette,
         actions.toggle_sidebar,
     ));
-    let Some(state) = navigation else {
-        return bar;
-    };
     let (reload_label, reload_icon) = if state.loading {
         ("Stop loading", close_icon(color, size).into_any_element())
     } else {

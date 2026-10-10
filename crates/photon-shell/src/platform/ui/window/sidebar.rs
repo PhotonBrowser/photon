@@ -11,6 +11,7 @@ use std::time::Instant;
 
 use super::super::history::BrowsingHistory;
 use super::super::icons::globe_icon;
+use super::super::layout::h_stack;
 use super::super::motion::{AnimateIn, Edge, Entrance};
 use super::super::pages::{PageIcon, SETTINGS};
 use super::super::settings::Settings;
@@ -19,7 +20,7 @@ use super::super::sidebar::{
     favourites_grid, footer, navigation_bar, sidebar,
 };
 use super::super::tabs::{DraggedTab, TabIcon, TabItem, tab_list, tab_strip};
-use super::super::titlebar::titlebar;
+use super::super::titlebar::{titlebar, window_drag_area};
 use super::super::toolbar::address_toolbar;
 use super::super::{metrics, theme::ThemeColors};
 use super::BrowserWindow;
@@ -73,29 +74,40 @@ impl BrowserWindow {
             .into_any_element()
     }
 
-    /// The sidebar, or the slim bar shown while it is hidden.
+    /// Opens the browser menu on a right-click in empty titlebar space.
+    fn with_titlebar_menu(&self, bar: gpui::Div, cx: &mut Context<Self>) -> gpui::Div {
+        bar.on_mouse_down(
+            gpui::MouseButton::Right,
+            cx.listener(|this, event: &MouseDownEvent, _, cx| {
+                cx.stop_propagation();
+                this.open_menu = Some(OpenMenu::Context(event.position));
+                cx.notify();
+            }),
+        )
+    }
+
+    /// The sidebar, or just its top row while it is hidden.
     fn render_sidebar(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let palette = self.palette(window, cx);
+        let navigation = navigation_bar(
+            self.navigation_state(cx),
+            self.sidebar_visible,
+            self.navigation_actions(cx),
+            palette,
+        );
         if !self.sidebar_visible {
-            return navigation_bar(None, self.navigation_actions(cx), palette).into_any_element();
+            // The same row, with the rest of the bar free to move the window.
+            return self
+                .with_titlebar_menu(
+                    window_drag_area(h_stack().size_full()).child(navigation),
+                    cx,
+                )
+                .into_any_element();
         }
         let sidebar_settings = Settings::get(cx).sidebar.clone();
         let favourites = self.favourite_tiles(&sidebar_settings.favourites, palette, cx);
         let sections = SidebarSections {
-            navigation: navigation_bar(
-                Some(self.navigation_state(cx)),
-                self.navigation_actions(cx),
-                palette,
-            )
-            .on_mouse_down(
-                gpui::MouseButton::Right,
-                cx.listener(|this, event: &MouseDownEvent, _, cx| {
-                    cx.stop_propagation();
-                    this.open_menu = Some(OpenMenu::Context(event.position));
-                    cx.notify();
-                }),
-            )
-            .into_any_element(),
+            navigation: self.with_titlebar_menu(navigation, cx).into_any_element(),
             address: self.omnibox.clone().into_any_element(),
             favourites: (!favourites.is_empty())
                 .then(|| favourites_grid(favourites, palette).into_any_element()),

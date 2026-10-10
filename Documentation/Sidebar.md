@@ -22,9 +22,10 @@ change applies at once, in every window.
 | Tabs | "+ New Tab", then one row per tab: icon or loading spinner, title, and a close button on the active tab and on the row under the pointer. Click to switch, middle-click or the close button to close, drag to reorder, right-click for the tab menu, and the up and down arrows move between focused tabs. The list scrolls. |
 | Footer | Settings and the browser menu, which opens above it. |
 
-⌘S shows or hides the sidebar. Hidden, a slim bar keeps room for the window
-controls and the toggle, and the page takes the whole width; ⌘L shows the
-sidebar again to focus the address field. The sidebar slides in when shown.
+⌘S shows or hides the sidebar. Hidden, its top row stays where it was, in
+a bar as tall as the horizontal tab strip, and the page takes the whole width
+below it; ⌘L shows the sidebar again to focus the address field. The
+sidebar slides in when shown.
 
 ## Closing the last tab
 
