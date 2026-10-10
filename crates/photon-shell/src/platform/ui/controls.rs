@@ -1,19 +1,17 @@
 //! Small controls shared by menus and Photon's own pages: segmented choices,
-//! dropdowns, colour swatches, switches and checkbox marks. Each shows hover, chosen and focus the same
-//! way, using the theme's roles.
-
-use std::rc::Rc;
+//! colour swatches, switches, checkbox marks and text fields, each showing
+//! hover, chosen and focus the same way with the theme's roles. The dropdown
+//! is in `dropdown`.
 
 use gpui::{
-    App, ElementId, MouseButton, Role, SharedString, Toggled, Window, deferred, div, prelude::*,
-    px, rgb, rgb_to_hsla, rgba,
+    App, ElementId, MouseButton, Role, SharedString, Toggled, Window, div, prelude::*, px, rgb,
+    rgb_to_hsla, rgba,
 };
 use gpui_elements::editable_text::EditableTextElement;
 
-use super::icons::{check_icon, chevron_down_icon};
-use super::layout::{Elevated, Elevation, h_stack, v_stack};
-use super::menu::{menu_checkbox, popover_surface};
-use super::motion::{AnimateIn, Edge, Entrance, Speed, Transition};
+use super::icons::check_icon;
+use super::layout::{Elevated, Elevation, h_stack};
+use super::motion::{AnimateIn, Edge, Entrance, Speed};
 use super::{ClickHandler, metrics, theme::ThemeColors};
 
 /// One option in [`choices`].
@@ -124,123 +122,6 @@ pub(super) fn swatches(
         .flex_wrap()
         .gap(px(metrics::SWATCH_GAP))
         .children(options)
-}
-
-/// A button showing the chosen option, which opens a menu of the options
-/// below it.
-pub(super) fn dropdown(
-    id: &'static str,
-    label: &'static str,
-    options: Vec<Choice>,
-    palette: ThemeColors,
-) -> Dropdown {
-    Dropdown {
-        id,
-        label,
-        options,
-        palette,
-    }
-}
-
-#[derive(IntoElement)]
-pub(super) struct Dropdown {
-    id: &'static str,
-    label: &'static str,
-    options: Vec<Choice>,
-    palette: ThemeColors,
-}
-
-impl RenderOnce for Dropdown {
-    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let Self {
-            id,
-            label,
-            options,
-            palette,
-        } = self;
-        let open_state = window.use_keyed_state(ElementId::from(id), cx, |_, _| false);
-        let open = *open_state.read(cx);
-        let set_open = {
-            let open_state = open_state.clone();
-            move |open: bool, cx: &mut App| {
-                open_state.update(cx, |state, cx| {
-                    *state = open;
-                    cx.notify();
-                })
-            }
-        };
-        let chosen = options
-            .iter()
-            .find(|option| option.chosen)
-            .map(|option| option.label.clone())
-            .unwrap_or_default();
-        let menu = open.then(|| {
-            let set_open = Rc::new(set_open.clone());
-            let rows = options.into_iter().enumerate().map(|(index, option)| {
-                let set_open = set_open.clone();
-                let on_choose = option.on_choose;
-                menu_checkbox(
-                    (id, index),
-                    option.label,
-                    0,
-                    option.chosen,
-                    Box::new(move |event, window, cx| {
-                        on_choose(event, window, cx);
-                        set_open(false, cx);
-                    }),
-                    palette,
-                )
-            });
-            let close = set_open.clone();
-            deferred(
-                div()
-                    .absolute()
-                    .left_0()
-                    .top(px(metrics::SEGMENT_HEIGHT + metrics::MENU_ITEM_GAP))
-                    .occlude()
-                    .on_mouse_down_out(move |_, _, cx| close(false, cx))
-                    .child(popover_surface(
-                        label,
-                        Role::ListBox,
-                        metrics::DROPDOWN_WIDTH,
-                        v_stack().children(rows),
-                        Transition::Enter,
-                        palette,
-                    )),
-            )
-            .priority(1)
-        });
-        h_stack()
-            .id(id)
-            .relative()
-            .role(Role::ComboBox)
-            .aria_label(label)
-            .aria_expanded(open)
-            .tab_index(0)
-            .focus_visible(|style| style.border_1().border_color(rgb(palette.chosen)))
-            .w(px(metrics::DROPDOWN_WIDTH))
-            .h(px(metrics::SEGMENT_HEIGHT))
-            .px(px(metrics::SEGMENT_HORIZONTAL_PADDING))
-            .items_center()
-            .justify_between()
-            .rounded(px(metrics::CONTROL_RADIUS))
-            .bg(rgba(if open {
-                palette.selected_surface
-            } else {
-                palette.surface
-            }))
-            .hover(|style| style.bg(rgba(palette.selected_surface)))
-            .text_size(px(metrics::BUTTON_FONT_SIZE))
-            .text_color(rgb(palette.text_primary))
-            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .on_click(move |_, _, cx| set_open(!open, cx))
-            .child(chosen)
-            .child(chevron_down_icon(
-                palette.text_secondary,
-                metrics::TOOLBAR_ICON_SIZE,
-            ))
-            .children(menu)
-    }
 }
 
 /// An on/off switch whose knob slides across when it changes. Its row owns

@@ -7,7 +7,8 @@ use photon_core::{TabLayout, ThemeMode, Transparency};
 use std::rc::Rc;
 
 use super::super::super::color_picker::color_picker;
-use super::super::super::controls::{Choice, choices, dropdown};
+use super::super::super::controls::{Choice, choices};
+use super::super::super::dropdown::dropdown;
 use super::super::super::layout::v_stack;
 use super::super::super::metrics;
 use super::super::super::settings::Settings;

@@ -4,6 +4,7 @@ mod button;
 mod color_picker;
 mod command_bar;
 mod controls;
+mod dropdown;
 mod find_bar;
 mod history;
 mod icons;
