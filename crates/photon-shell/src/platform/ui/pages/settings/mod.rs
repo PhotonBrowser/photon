@@ -3,10 +3,12 @@
 //!
 //! Each section lives in its own module and draws from the shared
 //! [`Settings`]; only clearing browsing data keeps state of its own.
+//! `reset` returns every setting to its default, after asking.
 
 mod appearance;
 mod new_tab;
 mod privacy;
+mod reset;
 mod search;
 mod sites;
 mod tabs;
@@ -16,14 +18,14 @@ use super::super::icons::{
     sidebar_icon,
 };
 use super::super::layout::{h_stack, v_stack};
-use super::super::motion::{AnimateIn, Entrance};
+use super::super::motion::{AnimateIn, Entrance, Presence};
 use super::super::settings::Settings;
 use super::super::{metrics, theme::ThemeColors, theme::palette};
 use super::layout::{heading, scrolling_column, secondary_text};
 use super::{PageContext, PageDefinition, PageIcon};
 use gpui::{
-    AnyElement, Context, ElementId, FontWeight, MouseButton, Render, Role, Subscription, Window,
-    div, prelude::*, px, rgb, rgba,
+    AnyElement, Context, ElementId, FocusHandle, FontWeight, MouseButton, Render, Role,
+    Subscription, Window, div, prelude::*, px, rgb, rgba,
 };
 use privacy::ClearForm;
 use std::time::Instant;
@@ -115,6 +117,10 @@ pub(in super::super) struct SettingsPage {
     /// When a section was last picked from the sidebar.
     section_picked_at: Option<Instant>,
     clearing: ClearForm,
+    /// Whether the dialog asking to reset every setting is open.
+    confirming_reset: bool,
+    reset_presence: Presence<()>,
+    reset_focus: FocusHandle,
     _settings_observer: Subscription,
 }
 
@@ -125,6 +131,9 @@ impl SettingsPage {
             section: Section::Appearance,
             section_picked_at: None,
             clearing: ClearForm::new(cx),
+            confirming_reset: false,
+            reset_presence: Presence::default(),
+            reset_focus: cx.focus_handle(),
             // Follow changes made here, on the new tab page, or in another window.
             _settings_observer: cx.observe_global::<Settings>(|_, cx| cx.notify()),
         }
@@ -172,7 +181,9 @@ impl Render for SettingsPage {
                 .into_any_element(),
             _ => content.into_any_element(),
         };
+        let reset_dialog = self.reset_dialog(palette, cx);
         h_stack()
+            .relative()
             .size_full()
             .items_start()
             .child(self.sidebar(palette, cx))
@@ -183,6 +194,7 @@ impl Render for SettingsPage {
                     .min_w_0()
                     .child(scrolling_column("settings-content", content)),
             )
+            .children(reset_dialog)
     }
 }
 
@@ -248,8 +260,11 @@ impl SettingsPage {
             .children(items)
             .child(div().flex_1())
             .child(
-                div()
+                v_stack()
+                    .items_start()
+                    .gap(px(metrics::MENU_ITEM_GAP))
                     .px(px(metrics::MENU_ITEM_HORIZONTAL_PADDING))
+                    .child(self.reset_button(palette, cx))
                     .child(secondary_text(saved_note, palette)),
             )
     }
