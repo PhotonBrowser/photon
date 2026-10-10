@@ -1,4 +1,4 @@
-//! Photon's motion system: how shell elements animate in.
+//! Photon's motion system: how shell elements animate in and out.
 //!
 //! An [`Entrance`] describes how an element appears: any mix of fading,
 //! sliding in from an edge, sharpening from a blur and growing to its size,
@@ -10,8 +10,18 @@
 //! panel.animate_in("dialog-panel", Entrance::rise().delay(Speed::Quick))
 //! ```
 //!
-//! Every entrance respects the system's reduced-motion setting: the element
-//! appears in its final state at once.
+//! The same entrance played backwards and a little faster is the element's
+//! exit. A removed element is gone at once, so keep it with [`Presence`] while
+//! it leaves, and play the exit with [`Animate::animate`]:
+//!
+//! ```ignore
+//! if let Some((menu, transition)) = self.menu_presence.sync(self.open_menu, Entrance::popover(), cx) {
+//!     surface.animate("menu", Entrance::popover(), transition)
+//! }
+//! ```
+//!
+//! Every entrance and exit respects the system's reduced-motion setting: the
+//! element appears in its final state, and disappears, at once.
 //!
 //! GPUI has no transforms, so a slide offsets the element from its laid-out
 //! position (without moving its siblings), and growing changes its size; use
@@ -22,10 +32,10 @@
 #![allow(dead_code)]
 
 use gpui::{
-    Animation, AnimationElement, AnimationExt, ElementId, IntoElement, Motion, SpringConfig,
-    Styled, ease_in_out, ease_out_quint, linear, px,
+    Animation, AnimationElement, AnimationExt, Context, ElementId, IntoElement, Motion,
+    SpringConfig, Styled, Task, ease_in_out, ease_out_quint, linear, px,
 };
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// How far an element moves as it enters, in pixels.
 pub(super) mod distance {
@@ -275,8 +285,18 @@ impl Entrance {
         self.delay + self.duration
     }
 
+    /// How long the exit takes: quicker than the entrance, with no delay.
+    pub(super) fn exit_duration(&self) -> Duration {
+        self.duration * 3 / 4
+    }
+
     fn animation(&self) -> Animation {
         Animation::new(self.curve.motion(self.duration).with_delay(self.delay))
+    }
+
+    /// The exit accelerates away rather than settling, whatever the entrance's curve.
+    fn exit_animation(&self) -> Animation {
+        Animation::new(Motion::new(self.exit_duration()).with_easing(ease_in_cubic))
     }
 
     /// Styles `element` at `progress` through the entrance, from 0 to 1.
@@ -308,7 +328,23 @@ impl Default for Entrance {
     }
 }
 
-/// Animates any styled element in with an [`Entrance`].
+/// Whether an element is arriving or leaving.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Transition {
+    Enter,
+    Exit,
+}
+
+impl Transition {
+    const fn name(self) -> &'static str {
+        match self {
+            Self::Enter => "enter",
+            Self::Exit => "exit",
+        }
+    }
+}
+
+/// Animates any styled element in or out with an [`Entrance`].
 pub(super) trait AnimateIn: Styled + IntoElement + Sized + 'static {
     /// Plays `entrance` the first time the element is shown under `id`.
     /// A new `id` plays it again.
@@ -317,9 +353,92 @@ pub(super) trait AnimateIn: Styled + IntoElement + Sized + 'static {
             entrance.apply(element, progress)
         })
     }
+
+    /// Plays `entrance` backwards, so the element leaves the way it came.
+    /// Use an `id` distinct from the entrance's, so the exit starts afresh.
+    fn animate_out(self, id: impl Into<ElementId>, entrance: Entrance) -> AnimationElement<Self> {
+        self.with_animation(id, entrance.exit_animation(), move |element, progress| {
+            entrance.apply(element, 1.0 - progress)
+        })
+    }
+
+    /// Animates in or out by `transition`, under an id for each.
+    fn animate(
+        self,
+        id: impl Into<ElementId>,
+        entrance: Entrance,
+        transition: Transition,
+    ) -> AnimationElement<Self> {
+        let id = ElementId::from((id.into(), transition.name()));
+        match transition {
+            Transition::Enter => self.animate_in(id, entrance),
+            Transition::Exit => self.animate_out(id, entrance),
+        }
+    }
 }
 
 impl<E: Styled + IntoElement + 'static> AnimateIn for E {}
+
+/// Keeps a value on screen while it animates out after its owner drops it.
+///
+/// Each render, pass the owner's current value to [`Presence::sync`] and draw
+/// what it returns: the current value entering, or the last one leaving until
+/// its exit finishes.
+pub(super) struct Presence<T> {
+    shown: Option<T>,
+    leaving: Option<(T, Instant)>,
+    /// Redraws the owner once the exit ends, so the value disappears.
+    _expiry: Option<Task<()>>,
+}
+
+impl<T> Default for Presence<T> {
+    fn default() -> Self {
+        Self {
+            shown: None,
+            leaving: None,
+            _expiry: None,
+        }
+    }
+}
+
+impl<T: Clone + 'static> Presence<T> {
+    /// What to draw now, and whether it is entering or leaving `entrance`'s way.
+    pub(super) fn sync<V: 'static>(
+        &mut self,
+        current: Option<T>,
+        entrance: Entrance,
+        cx: &mut Context<V>,
+    ) -> Option<(T, Transition)> {
+        if let Some(current) = current {
+            self.shown = Some(current.clone());
+            self.leaving = None;
+            self._expiry = None;
+            return Some((current, Transition::Enter));
+        }
+        let exit = entrance.exit_duration();
+        if let Some(last) = self.shown.take()
+            && !cx.reduce_motion()
+        {
+            self.leaving = Some((last, Instant::now()));
+            self._expiry = Some(cx.spawn(async move |this, cx| {
+                cx.background_executor().timer(exit).await;
+                this.update(cx, |_, cx| cx.notify()).ok();
+            }));
+        }
+        match &self.leaving {
+            Some((last, since)) if since.elapsed() < exit => Some((last.clone(), Transition::Exit)),
+            _ => {
+                self.leaving = None;
+                None
+            }
+        }
+    }
+}
+
+/// Starts slowly and accelerates away.
+fn ease_in_cubic(delta: f32) -> f32 {
+    delta * delta * delta
+}
 
 /// Eases out past the target and settles back.
 fn ease_out_back(delta: f32) -> f32 {
