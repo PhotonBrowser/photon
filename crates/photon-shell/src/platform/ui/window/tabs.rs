@@ -265,9 +265,9 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let count = self.tabs.len() as isize;
-        let index = (self.active_tab as isize + offset).rem_euclid(count) as usize;
-        self.activate_tab(index, true, window, cx);
+        if let Some(index) = self.listed_tab_after(self.active_tab, offset, cx) {
+            self.activate_tab(index, true, window, cx);
+        }
     }
 
     pub(super) fn close_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
@@ -405,13 +405,14 @@ impl BrowserWindow {
         if event.keystroke.modifiers.modified() {
             return;
         }
-        let count = self.tabs.len();
-        let next_index = match event.keystroke.key.as_str() {
-            "up" => (index + count - 1) % count,
-            "down" => (index + 1) % count,
+        let offset = match event.keystroke.key.as_str() {
+            "up" => -1,
+            "down" => 1,
             _ => return,
         };
-        self.move_tab_focus(next_index, window, cx);
+        if let Some(next_index) = self.listed_tab_after(index, offset, cx) {
+            self.move_tab_focus(next_index, window, cx);
+        }
         window.prevent_default();
         cx.stop_propagation();
     }

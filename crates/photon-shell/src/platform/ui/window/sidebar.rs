@@ -153,13 +153,13 @@ impl BrowserWindow {
         let space = self.current_space(cx);
         // The space's own tabs; a favourite's tab shows as its tile instead.
         let tabs = tab_list(
-            self.tab_items(cx)
-                .into_iter()
-                .filter(|item| {
-                    let tab = &self.tabs[item.index];
-                    tab.space == space && tab.favourite.is_none()
-                })
-                .collect(),
+            {
+                let listed = self.listed_tabs(cx);
+                self.tab_items(cx)
+                    .into_iter()
+                    .filter(|item| listed.contains(&item.index))
+                    .collect()
+            },
             // As in Arc, a new tab starts from the command bar.
             Box::new(cx.listener(|this, _, window, cx| {
                 cx.stop_propagation();

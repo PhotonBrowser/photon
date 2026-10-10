@@ -1,7 +1,7 @@
 //! The window's tabs as both tab layouts draw them: label, icon and what
 //! each interaction does.
 
-use gpui::{Context, KeyDownEvent, MouseDownEvent, MouseUpEvent};
+use gpui::{App, Context, KeyDownEvent, MouseDownEvent, MouseUpEvent};
 
 use super::super::history::BrowsingHistory;
 use super::super::pages::PageIcon;
@@ -11,6 +11,35 @@ use super::content::TabContent;
 use super::menu::OpenMenu;
 
 impl BrowserWindow {
+    /// The tabs the layout lists, in order: in the sidebar, the space's own
+    /// tabs but not favourites' tabs, which show as tiles; in the strip,
+    /// every tab.
+    pub(super) fn listed_tabs(&self, cx: &App) -> Vec<usize> {
+        let space = self.shows_spaces(cx).then(|| self.current_space(cx));
+        (0..self.tabs.len())
+            .filter(|&index| {
+                let tab = &self.tabs[index];
+                space.is_none_or(|space| tab.space == space && tab.favourite.is_none())
+            })
+            .collect()
+    }
+
+    /// The listed tab `offset` places from the tab at `index`, wrapping at
+    /// the ends; from a tab that is not listed, the first or last.
+    pub(super) fn listed_tab_after(&self, index: usize, offset: isize, cx: &App) -> Option<usize> {
+        let listed = self.listed_tabs(cx);
+        let count = listed.len() as isize;
+        if count == 0 {
+            return None;
+        }
+        let next = match listed.iter().position(|&listed| listed == index) {
+            Some(position) => (position as isize + offset).rem_euclid(count),
+            None if offset > 0 => 0,
+            None => count - 1,
+        };
+        Some(listed[next as usize])
+    }
+
     pub(super) fn tab_items(&self, cx: &mut Context<Self>) -> Vec<TabItem> {
         self.tabs
             .iter()

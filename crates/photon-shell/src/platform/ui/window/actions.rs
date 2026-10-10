@@ -82,7 +82,9 @@ impl BrowserWindow {
             .on_action(cx.listener(select_tab_at::<SelectTab7>(6)))
             .on_action(cx.listener(select_tab_at::<SelectTab8>(7)))
             .on_action(cx.listener(|this, _: &SelectLastTab, window, cx| {
-                this.activate_tab(this.tabs.len() - 1, true, window, cx);
+                if let Some(&last) = this.listed_tabs(cx).last() {
+                    this.activate_tab(last, true, window, cx);
+                }
             }))
     }
 
@@ -100,9 +102,14 @@ impl BrowserWindow {
     }
 }
 
-/// An action handler that activates the tab at `index`, if there is one.
+/// An action handler that activates the listed tab at `position`, if there
+/// is one.
 fn select_tab_at<A>(
-    index: usize,
+    position: usize,
 ) -> impl Fn(&mut BrowserWindow, &A, &mut Window, &mut Context<BrowserWindow>) {
-    move |this, _, window, cx| this.activate_tab(index, true, window, cx)
+    move |this, _, window, cx| {
+        if let Some(&index) = this.listed_tabs(cx).get(position) {
+            this.activate_tab(index, true, window, cx);
+        }
+    }
 }
