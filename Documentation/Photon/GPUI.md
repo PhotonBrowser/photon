@@ -21,6 +21,24 @@ surface shader. GPUI-CE exposes submission and GPU-completion callbacks;
 Photon uses them to track command buffers and return presentation leases only
 after the GPU has finished sampling the surface.
 
+The macOS window API also exposes
+`Window::set_traffic_light_hover_behavior`. Photon enables it for browser and
+popup windows. While windowed, the native buttons stay enabled at their
+AppKit positions. GPUI-CE fades their layers out while idle and draws muted
+circles underneath them; a padded tracking area fades in the real buttons
+before the pointer reaches them, so AppKit supplies the hover glyphs and
+native actions. The overlay does not intercept hit tests or change the
+buttons' enabled/highlighted state.
+
+In fullscreen, GPUI-CE restores the native controls and leaves titlebar
+reveal, placement, and hover handling to AppKit. Photon-configured placement
+is restored after exiting fullscreen. The shell removes titlebar insets
+reserved for window controls in native and borderless fullscreen, so its
+content can use that space when the controls are hidden. It configures the
+behavior in
+[`platform/window_settings.rs`](../../crates/photon-shell/src/platform/window_settings.rs);
+the generic AppKit integration stays in the GPUI-CE submodule.
+
 Photon owns XPC presentation, frame ordering, generations, retirement, release
 forwarding, Engine thread affinity, browser input, and application startup.
 `./photon run` is the direct GPUI-CE application route. Runtime proof and

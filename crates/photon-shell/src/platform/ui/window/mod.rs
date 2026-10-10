@@ -330,6 +330,7 @@ fn open_browser_window(
         .filter(|_| startup_page.is_none())
         .map(|address| create_webview(cx, runtime.clone(), address));
     cx.open_window(window_settings::options(cx), move |window, cx| {
+        window_settings::configure_traffic_lights(window);
         window.set_window_title(photon_brand::NAME);
         let omnibox = cx.new(|cx| Omnibox::new(window, cx));
         cx.new(move |cx: &mut Context<BrowserWindow>| {

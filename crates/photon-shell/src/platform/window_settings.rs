@@ -1,11 +1,22 @@
 //! GPUI-CE window defaults. Edit this file to change native window behavior.
 
 use gpui::{
-    App, Bounds, MacosWindowBackground, TitlebarOptions, WindowBounds, WindowOptions, point, px,
-    size,
+    App, Bounds, MacosWindowBackground, TitlebarOptions, Window, WindowBounds, WindowOptions,
+    point, px, size,
 };
 
 use crate::platform::ui::metrics;
+
+#[cfg(target_os = "macos")]
+const TRAFFIC_LIGHTS_ENABLED_ON_HOVER: bool = true;
+
+/// Applies Photon-specific interaction styling to native window controls.
+pub(super) fn configure_traffic_lights(window: &Window) {
+    #[cfg(target_os = "macos")]
+    window.set_traffic_light_hover_behavior(TRAFFIC_LIGHTS_ENABLED_ON_HOVER);
+    #[cfg(not(target_os = "macos"))]
+    let _ = window;
+}
 
 /// Select with PHOTON_WINDOW_BACKGROUND=opaque|blurred|liquid-glass.
 /// The system controls the strength of both native materials.

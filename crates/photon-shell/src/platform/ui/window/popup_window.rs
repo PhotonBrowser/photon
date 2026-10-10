@@ -42,6 +42,7 @@ pub(super) fn open_minimal_window(
     let options = window_settings::popup_options(cx, request.width, request.height);
     let webview = create_webview_from_session(cx, runtime.clone(), request.session);
     if let Err(error) = cx.open_window(options, move |window, cx| {
+        window_settings::configure_traffic_lights(window);
         window.set_window_title(photon_brand::NAME);
         follow_appearance(&webview, window, cx);
         webview.update(cx, |view, cx| {

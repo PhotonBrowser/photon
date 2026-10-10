@@ -7,6 +7,7 @@ What the Photon shell does today and what comes next. Engine performance work is
 ### Window and page
 
 - [x] Native macOS window with opaque, blurred or Liquid Glass background (`PHOTON_WINDOW_BACKGROUND`)
+- [x] Native macOS traffic lights use their disabled idle appearance while windowed and remain interactive in fullscreen
 - [x] In native and borderless fullscreen the shell uses the space the hidden window controls leave
 - [x] Engine pages drawn from shared IOSurfaces through Metal, paced to the window's display and refresh rate
 - [x] Engine stops rendering while the window is occluded or the tab is hidden
