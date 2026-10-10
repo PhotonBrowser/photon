@@ -5,7 +5,7 @@
 //! independent of clocks and storage. `photon-storage` saves a history and
 //! loads it back with [`History::from_parts`].
 
-use photon_omnibox::{PastSearch, Suggestions, VisitedPage, suggest};
+use photon_omnibox::{PastSearch, SearchEngines, Suggestions, VisitedPage, suggest_with};
 
 use super::browsing_data::ClearBrowsingData;
 
@@ -149,6 +149,11 @@ impl History {
 
     /// What the omnibox offers for `input` from this history.
     pub fn omnibox_suggestions(&self, input: &str) -> Suggestions {
+        self.omnibox_suggestions_with(input, &SearchEngines::builtin())
+    }
+
+    /// What the omnibox offers for `input` using `engines` for search rows.
+    pub fn omnibox_suggestions_with(&self, input: &str, engines: &SearchEngines) -> Suggestions {
         let pages: Vec<VisitedPage> = self
             .pages
             .iter()
@@ -168,7 +173,7 @@ impl History {
                 last_used: entry.last_used,
             })
             .collect();
-        suggest(input, &pages, &searches)
+        suggest_with(input, engines, &pages, &searches)
     }
 }
 
