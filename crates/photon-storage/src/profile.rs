@@ -1,6 +1,6 @@
 //! A profile folder and what is kept in it.
 
-use photon_core::{BrowserSettings, ClearBrowsingData, History};
+use photon_core::{BrowserSettings, ClearBrowsingData, History, WorkspaceSettings};
 use std::collections::HashSet;
 use std::fs;
 use std::io;
@@ -105,10 +105,27 @@ impl Profile {
     /// be read. Unknown fields are ignored so older builds can open newer
     /// profiles safely.
     pub fn load_settings(&self) -> BrowserSettings {
-        fs::read(self.root.join(SETTINGS_FILE))
-            .ok()
-            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-            .unwrap_or_default()
+        let Ok(bytes) = fs::read(self.root.join(SETTINGS_FILE)) else {
+            return BrowserSettings::default();
+        };
+        let Ok(mut document) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+            return BrowserSettings::default();
+        };
+        let saved_workspace = document
+            .as_object_mut()
+            .and_then(|settings| settings.remove("workspace"))
+            .filter(|workspace| {
+                workspace.as_object().is_some_and(|workspace| {
+                    workspace.contains_key("default_preset_id") && workspace.contains_key("presets")
+                })
+            });
+        let mut settings = serde_json::from_value::<BrowserSettings>(document).unwrap_or_default();
+        settings.workspace = saved_workspace
+            .and_then(|workspace| serde_json::from_value::<WorkspaceSettings>(workspace).ok())
+            .filter(WorkspaceSettings::is_valid)
+            .unwrap_or_else(|| WorkspaceSettings::for_tab_layout(settings.tab_layout));
+        settings.spaces.validate_layout_overrides();
+        settings
     }
 
     pub fn save_settings(&self, settings: &BrowserSettings) -> io::Result<()> {
@@ -243,8 +260,146 @@ mod tests {
         let mut settings = BrowserSettings::default();
         settings.theme = photon_core::ThemeMode::Dark;
         settings.new_tab.remove("https://example.com/");
+        let layout = settings.workspace.default_preset().unwrap().layout.clone();
+        settings
+            .workspace
+            .presets
+            .push(photon_core::WorkspacePreset {
+                id: "research".to_owned(),
+                name: "Research".to_owned(),
+                layout,
+            });
+        let space_id = settings.spaces.add(
+            Some("Work".to_owned()),
+            photon_core::WindowColor::Blue,
+            false,
+        );
+        assert!(
+            settings
+                .spaces
+                .set_layout_override(space_id, &photon_core::WorkspaceLayout::vertical())
+        );
         profile.0.save_settings(&settings).expect("saves");
         assert_eq!(profile.0.load_settings(), settings);
+    }
+
+    #[test]
+    fn migrates_a_legacy_vertical_layout_to_its_matching_preset() {
+        let profile = TemporaryProfile::new("legacy-vertical-layout");
+        fs::write(
+            profile.0.root().join(SETTINGS_FILE),
+            br#"{"theme":"dark","tab_layout":"vertical"}"#,
+        )
+        .expect("writes legacy settings");
+
+        let settings = profile.0.load_settings();
+        assert_eq!(settings.theme, photon_core::ThemeMode::Dark);
+        assert_eq!(settings.tab_layout, photon_core::TabLayout::Vertical);
+        assert_eq!(
+            settings.workspace.default_preset_id,
+            photon_core::VERTICAL_PRESET_ID
+        );
+        profile
+            .0
+            .save_settings(&settings)
+            .expect("saves migrated settings");
+        assert_eq!(profile.0.load_settings(), settings);
+    }
+
+    #[test]
+    fn retains_legacy_workspace_presets_for_shell_expansion() {
+        let profile = TemporaryProfile::new("legacy-workspace-presets");
+        fs::write(
+            profile.0.root().join(SETTINGS_FILE),
+            br#"{
+                "tab_layout":"vertical",
+                "workspace":{
+                    "default_preset_id":"vertical",
+                    "presets":[
+                        {"id":"horizontal","name":"Horizontal","layout":{"components":[
+                            {"id":"tab-strip","region":"top","order":0,"visible":true},
+                            {"id":"address-toolbar","region":"top","order":1,"visible":true},
+                            {"id":"sidebar","region":"leading","order":0,"visible":false}
+                        ]}},
+                        {"id":"vertical","name":"Vertical","layout":{"components":[
+                            {"id":"tab-strip","region":"top","order":0,"visible":false},
+                            {"id":"address-toolbar","region":"top","order":1,"visible":false},
+                            {"id":"sidebar","region":"leading","order":0,"visible":true}
+                        ]}}
+                    ]
+                }
+            }"#,
+        )
+        .expect("writes the older workspace shape");
+
+        let settings = profile.0.load_settings();
+        assert_eq!(
+            settings.workspace.default_preset_id,
+            photon_core::VERTICAL_PRESET_ID
+        );
+        assert!(settings.workspace.is_valid());
+        assert!(
+            settings
+                .workspace
+                .default_preset()
+                .unwrap()
+                .layout
+                .component(photon_core::SIDEBAR_COMPONENT_ID)
+                .unwrap()
+                .visible
+        );
+    }
+
+    #[test]
+    fn invalid_workspace_data_falls_back_without_losing_other_settings() {
+        let profile = TemporaryProfile::new("invalid-workspace");
+        fs::write(
+            profile.0.root().join(SETTINGS_FILE),
+            br#"{"theme":"dark","tab_layout":"vertical","workspace":{"default_preset_id":"missing","presets":[]}}"#,
+        )
+        .expect("writes settings");
+
+        let settings = profile.0.load_settings();
+        assert_eq!(settings.theme, photon_core::ThemeMode::Dark);
+        assert_eq!(
+            settings.workspace.default_preset_id,
+            photon_core::VERTICAL_PRESET_ID
+        );
+    }
+
+    #[test]
+    fn incomplete_workspace_data_migrates_the_legacy_layout() {
+        let profile = TemporaryProfile::new("incomplete-workspace");
+        fs::write(
+            profile.0.root().join(SETTINGS_FILE),
+            br#"{"theme":"dark","tab_layout":"vertical","workspace":{"presets":[]}}"#,
+        )
+        .expect("writes settings");
+
+        let settings = profile.0.load_settings();
+        assert_eq!(settings.theme, photon_core::ThemeMode::Dark);
+        assert_eq!(
+            settings.workspace.default_preset_id,
+            photon_core::VERTICAL_PRESET_ID
+        );
+    }
+
+    #[test]
+    fn invalid_space_layout_falls_back_to_the_profile_default() {
+        let profile = TemporaryProfile::new("invalid-space-layout");
+        let mut settings = BrowserSettings::default();
+        let space_id = settings.spaces.active().id;
+        let mut invalid = photon_core::WorkspaceLayout::vertical();
+        invalid.components[0].order = 1;
+        settings.spaces.get_mut(space_id).unwrap().layout_override = Some(invalid);
+        profile.0.save_settings(&settings).expect("saves settings");
+
+        let loaded = profile.0.load_settings();
+        assert_eq!(loaded.spaces.get(space_id).unwrap().layout_override, None);
+        assert_eq!(
+            loaded.workspace.default_preset_id,
+            photon_core::HORIZONTAL_PRESET_ID
+        );
     }
 
     #[test]

@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use super::new_tab::Shortcut;
 use super::settings::WindowColor;
+use super::workspace::WorkspaceLayout;
 
 /// A space's identity, which stays the same as spaces are added and removed.
 pub type SpaceId = u64;
@@ -22,6 +23,8 @@ pub struct Space {
     /// Tabs pinned in this space, at the addresses they were pinned at,
     /// opened again at launch.
     pub pinned_tabs: Vec<Shortcut>,
+    /// A copied layout for this space, or `None` to follow the profile default.
+    pub layout_override: Option<WorkspaceLayout>,
 }
 
 impl Default for Space {
@@ -32,6 +35,7 @@ impl Default for Space {
             color: WindowColor::default(),
             gradient: false,
             pinned_tabs: Vec::new(),
+            layout_override: None,
         }
     }
 }
@@ -118,8 +122,30 @@ impl Spaces {
             color,
             gradient,
             pinned_tabs: Vec::new(),
+            layout_override: None,
         });
         id
+    }
+
+    /// Copies a saved layout into `id`, so later preset edits do not affect it.
+    pub fn set_layout_override(&mut self, id: SpaceId, layout: &WorkspaceLayout) -> bool {
+        if !layout.is_valid() {
+            return false;
+        }
+        let Some(space) = self.get_mut(id) else {
+            return false;
+        };
+        space.layout_override = Some(layout.clone());
+        true
+    }
+
+    /// Makes `id` follow the profile's default workspace layout again.
+    pub fn clear_layout_override(&mut self, id: SpaceId) -> bool {
+        let Some(space) = self.get_mut(id) else {
+            return false;
+        };
+        space.layout_override = None;
+        true
     }
 
     /// Removes the space `id`, unless it is the last. A removed space that
@@ -145,6 +171,26 @@ impl Spaces {
         for space in &mut self.spaces {
             space.color = WindowColor::default();
             space.gradient = false;
+        }
+    }
+
+    /// Removes every space-specific layout so spaces follow the profile default.
+    pub fn reset_layout_overrides(&mut self) {
+        for space in &mut self.spaces {
+            space.layout_override = None;
+        }
+    }
+
+    /// Drops malformed per-space layouts loaded from older or edited profile data.
+    pub fn validate_layout_overrides(&mut self) {
+        for space in &mut self.spaces {
+            if space
+                .layout_override
+                .as_ref()
+                .is_some_and(|layout| !layout.is_valid())
+            {
+                space.layout_override = None;
+            }
         }
     }
 
@@ -203,5 +249,31 @@ mod tests {
                 .iter()
                 .all(|space| space.color == WindowColor::System)
         );
+    }
+
+    #[test]
+    fn spaces_copy_layout_overrides_and_can_follow_the_profile_default_again() {
+        let mut spaces = Spaces::default();
+        let id = spaces.active().id;
+        let layout = WorkspaceLayout::vertical();
+
+        assert!(spaces.set_layout_override(id, &layout));
+        assert_eq!(spaces.get(id).unwrap().layout_override, Some(layout));
+        assert!(spaces.clear_layout_override(id));
+        assert_eq!(spaces.get(id).unwrap().layout_override, None);
+        assert!(!spaces.clear_layout_override(999));
+    }
+
+    #[test]
+    fn malformed_layout_overrides_are_cleared() {
+        let mut spaces = Spaces::default();
+        let id = spaces.active().id;
+        let mut invalid = WorkspaceLayout::vertical();
+        invalid.components[0].order = 1;
+        assert!(spaces.set_layout_override(id, &WorkspaceLayout::horizontal()));
+        spaces.spaces[0].layout_override = Some(invalid);
+
+        spaces.validate_layout_overrides();
+        assert_eq!(spaces.get(id).unwrap().layout_override, None);
     }
 }

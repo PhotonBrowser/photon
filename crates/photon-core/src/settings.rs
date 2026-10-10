@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use super::new_tab::NewTabSettings;
 use super::sidebar::SidebarSettings;
 use super::spaces::Spaces;
+use super::workspace::WorkspaceSettings;
 
 /// The shell's selected appearance.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -103,6 +104,9 @@ pub struct BrowserSettings {
     pub theme: ThemeMode,
     pub transparency: Transparency,
     pub tab_layout: TabLayout,
+    /// Saved workspace presets and the profile default used by spaces without
+    /// their own layout override.
+    pub workspace: WorkspaceSettings,
     pub default_search_engine: String,
     /// Whether the address bar shows a page's full address while idle. When
     /// not, it shows only the site until clicked.
@@ -126,6 +130,7 @@ impl Default for BrowserSettings {
             theme: ThemeMode::System,
             transparency: Transparency::default(),
             tab_layout: TabLayout::default(),
+            workspace: WorkspaceSettings::default(),
             default_search_engine: "google".to_owned(),
             show_full_address: false,
             popup_policy: PopupPolicy::Ask,
@@ -147,6 +152,7 @@ impl BrowserSettings {
         let shortcuts = std::mem::take(&mut self.new_tab.pinned);
         let mut spaces = std::mem::take(&mut self.spaces);
         spaces.reset_colors();
+        spaces.reset_layout_overrides();
         *self = Self::default();
         self.sidebar.favourites = favourites;
         self.new_tab.pinned = shortcuts;
@@ -170,6 +176,7 @@ mod tests {
             tab_layout: TabLayout::Vertical,
             ..BrowserSettings::default()
         };
+        settings.workspace.set_builtin_layout(TabLayout::Vertical);
         let work = settings
             .spaces
             .add(Some("Work".to_owned()), WindowColor::Teal, true);
@@ -179,6 +186,7 @@ mod tests {
         settings.new_tab.hidden.push("example.org".to_owned());
         let space = settings.spaces.get_mut(work).unwrap();
         space.pinned_tabs.push(site.clone());
+        space.layout_override = Some(crate::WorkspaceLayout::vertical());
         settings.archive_tabs = true;
         settings.reset_preferences();
 

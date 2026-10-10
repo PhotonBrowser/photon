@@ -14,6 +14,7 @@ mod sidebar;
 mod spaces;
 mod state;
 mod tabs;
+mod workspace;
 
 pub use browsing_data::ClearBrowsingData;
 pub use command_bar::{Command, CommandBarResult, OpenTab, command_bar_results};
@@ -33,3 +34,11 @@ pub use sidebar::{
 pub use spaces::{Space, SpaceId, Spaces};
 pub use state::{BrowserCommand, BrowserState, EngineEvent, normalize_url};
 pub use tabs::{ARCHIVE_AFTER, pinned_after_drop, should_archive};
+pub use workspace::{
+    ADDRESS_FIELD_COMPONENT_ID, ADDRESS_TOOLBAR_COMPONENT_ID, BACK_BUTTON_COMPONENT_ID,
+    BROWSER_MENU_BUTTON_COMPONENT_ID, DockRegion, FAVOURITES_PANEL_COMPONENT_ID,
+    FORWARD_BUTTON_COMPONENT_ID, HORIZONTAL_PRESET_ID, LayoutComponent, RELOAD_BUTTON_COMPONENT_ID,
+    SIDEBAR_COMPONENT_ID, SIDEBAR_FOOTER_COMPONENT_ID, SIDEBAR_TOGGLE_COMPONENT_ID,
+    TAB_STRIP_COMPONENT_ID, VERTICAL_PRESET_ID, VERTICAL_TABS_COMPONENT_ID, WorkspaceLayout,
+    WorkspacePreset, WorkspaceSettings,
+};
