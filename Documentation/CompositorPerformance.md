@@ -107,7 +107,7 @@ Each scroll frame re-rasterizes the whole viewport, so GPU time scales with pixe
 
 20 launches (12 with a local page, 8 with Wikipedia) all presented frames.
 
-## 9. Slow first paint on heavy pages — open
+## 9. Slow first paint on heavy pages — fixed
 
 A verbose run (`./photon run --verbose`) searching Google on a 60 Hz display, 2026-10-09. While the results page first painted, the Compositor's Skia flush was very slow:
 
@@ -117,7 +117,18 @@ A verbose run (`./photon run --verbose`) searching Google on a 60 Hz display, 20
 | Later flush spikes | 21–84 ms |
 | Compositor over that window | 34.3 fps; frame interval p50 16.7 ms, p95 100 ms, max 217 ms |
 
-The Ganesh persistent cache reported hits throughout, so this is not one-time shader compilation; it is the cost of drawing the page. The shell side of the same run was healthy: every Engine frame was drawn and its backing released in order, and repeated draws of one frame came from the tab loading spinner. This is the first-load stutter on heavy pages, and needs an Engine compositor investigation (what the slow flushes draw, and whether rasterization can be split across frames or cached).
+The Ganesh persistent cache reported hits throughout, so this is not one-time shader compilation; it is the cost of drawing the page. The shell side of the same run was healthy: every Engine frame was drawn and its backing released in order, and repeated draws of one frame came from the tab loading spinner. This is the first-load stutter on heavy pages.
+
+**Cause, found 2026-10-10:** sampling the Compositor during a 303 ms flush showed it was not drawing but compiling. Each program Skia had not built yet in the Compositor process compiled its Metal shader library (`newLibraryWithSource`, waiting on the system compiler) and pipeline state inside the flush. The persistent cache only saves Skia translating the shaders; Metal compiles them again in every new process.
+
+**Fix** (Engine `d47e8bacce`): the persistent cache records the programs each session asks for, in first-use order (up to 256, kept with the cache as `warm-list`), and the Compositor precompiles them with `GrDirectContext::precompileShader` when it starts, one per event loop turn, while the first page loads. A session keeps the programs it warmed ahead of the ones it adds, so the list settles on what browsing needs.
+
+| | Before | After |
+|---|---|---|
+| Long Wikipedia table, first paint's slowest flushes | 290–360 ms | about 8 ms (23 programs warmed in 260 ms at startup) |
+| YouTube, second visit, slowest flush | 341 ms | 41 ms (53 programs warmed) |
+
+A kind of page not seen before still compiles its new programs once, which adds them to the list. The pipeline state is still created at first use, which is quick next to the shader compile.
 
 ## 10. Freezes while interacting with loading pages — measured, 2026-10-10
 
@@ -131,7 +142,7 @@ Reported: pages stutter and sometimes freeze when scrolled while they load, most
 | Wikipedia article, scrolled from 2.5 s after launch | Smooth once painted; every wheel event scrolled by the Compositor; forced layout per wheel event p50 0.00 ms, max 0.56 ms |
 | Wikipedia's first paints, before scrolling | Skia flushes of 265 and 150 ms; a 1.87 s gap before the first full frame |
 
-The shell, input routing and the Compositor's asynchronous scrolling all keep up. What stalls while a heavy page loads is the Compositor rasterizing its first frames: each slow flush blocks every frame behind it, including scroll frames, so input during that window shows as a stutter or a freeze of up to a couple of seconds. This is the cost in section 9; fixing it needs Engine work to cache rasterized content or spread a large first raster over several frames.
+The shell, input routing and the Compositor's asynchronous scrolling all keep up. What stalled while a heavy page loaded was the Compositor's first frames: each slow flush blocked every frame behind it, including scroll frames, so input during that window showed as a stutter or a freeze of up to a couple of seconds. The slow flushes turned out to be GPU program compiles, now done ahead of time (section 9).
 
 Pitfalls for this measurement: repeated test loads of GitHub got its error page, and Google served a short script-free page, neither of which scrolls, and a page that does not move presents no frames, which reads like a freeze. Confirm the page scrolls with a screenshot, and scroll in one direction on a long page so the test never sits at an end.
 
@@ -165,7 +176,8 @@ Pitfalls for this measurement: repeated test loads of GitHub got its error page,
 - [x] Stop idle pages rendering at display rate (video paint facts; SVG image load broadcasts)
 - [x] Purge Skia's unused GPU cache after the page goes idle (Compositor 230 → 122 MB on idle Wikipedia)
 - [x] Measure freezes while interacting with loading pages: shell and input keep up; slow first-paint rasterization stalls frames (section 10)
-- [ ] Cache rasterized content, or spread a large first raster across frames, so first paints of heavy pages do not block scrolling
+- [x] Compile recently used GPU programs at Compositor startup, so first paints of heavy pages do not block scrolling (section 9)
+- [ ] Also create pipeline states ahead of first use, which Skia's precompile leaves for then
 - [ ] Send the video and SVG fixes upstream to Ladybird: branches are on `TheoSlater/ladybird`; opening PRs from the CLI was refused by GitHub, so open them from the web
 - [ ] Cache rasterized scroll content so 4K scrolling fits the 120 Hz GPU budget
 - [x] Profile scrolling (section 7)

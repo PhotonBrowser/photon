@@ -11,6 +11,7 @@ What the Photon shell does today and what comes next. Engine performance work is
 - [x] In native and borderless fullscreen the shell uses the space the hidden window controls leave
 - [x] Engine pages drawn from shared IOSurfaces through Metal, paced to the window's display and refresh rate
 - [x] Engine stops rendering while the window is occluded or the tab is hidden
+- [x] Heavy pages no longer freeze scrolling while they first paint: the GPU programs they need are compiled at startup ([section 9](CompositorPerformance.md#9-slow-first-paint-on-heavy-pages--fixed))
 - [x] Keyboard, pointer, scroll and cursor forwarding to the page; page focus follows window focus
 - [x] Crash recovery: a crashed page reloads in a fresh process, a page that keeps crashing offers a Reload, and Engine service restarts are announced, all in a chip at the bottom right
 - [x] JavaScript `alert`, `confirm` and `prompt` as a window modal; dialogs are dismissed and held off while the browser navigates away
@@ -94,7 +95,6 @@ In order of priority.
 
 ### Engine
 
-- [ ] Stop slow first paints of heavy pages blocking scrolling while they load: their Skia flushes take 150–460 ms ([sections 9 and 10](CompositorPerformance.md#9-slow-first-paint-on-heavy-pages--open))
 - [ ] Draw the page area without re-rendering the whole window on every Engine frame
 
 ## Later
