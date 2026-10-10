@@ -48,5 +48,7 @@ gpui::actions!(
         ZoomOut,
         /// Return the page to 100%.
         ResetZoom,
+        /// Show or hide the sidebar.
+        ToggleSidebar,
     ]
 );
