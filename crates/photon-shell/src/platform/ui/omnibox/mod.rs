@@ -20,7 +20,7 @@ use gpui_elements::editable_text::{
     actions::{Enter, Escape},
 };
 use photon_core::Suggestion;
-use photon_omnibox::{OmniboxTarget, display_address, resolve_with};
+use photon_omnibox::{OmniboxTarget, display_address, display_domain, resolve_with};
 
 use super::history::BrowsingHistory;
 use super::layout::h_stack;
@@ -89,7 +89,7 @@ pub(super) struct Omnibox {
     filled: Option<String>,
     /// The next edit removes text, so it is not completed again.
     deleting: bool,
-    _input_subscriptions: [Subscription; 2],
+    _input_subscriptions: [Subscription; 3],
     _page_subscriptions: Vec<Subscription>,
 }
 
@@ -110,6 +110,12 @@ impl Omnibox {
             // view inside it is notified, so redraw for every edit, caret move
             // and blink.
             cx.observe(&input, |_, _, cx| cx.notify()),
+            // The idle address is shorter in the sidebar than in the toolbar.
+            cx.observe_global_in::<Settings>(window, |this, window, cx| {
+                if !this.is_editing(window, cx) {
+                    this.show_page_url(cx);
+                }
+            }),
         ];
         let mut omnibox = Self {
             input,
@@ -185,14 +191,17 @@ impl Omnibox {
         }
     }
 
-    /// Shows the page's address the short way, as people write it, while
-    /// nobody is editing it.
+    /// Shows the page's address the short way while nobody is editing it:
+    /// as people write it in the toolbar, and just its site in the sidebar,
+    /// as in Arc.
     fn show_page_url(&mut self, cx: &mut Context<Self>) {
         let url = self.page_url(cx);
-        let shown = if self.webview.is_some() {
-            display_address(&url)
-        } else {
+        let shown = if self.webview.is_none() {
             url
+        } else if WorkspaceLayout::current(cx).omnibox_placement() == OmniboxPlacement::Sidebar {
+            display_domain(&url)
+        } else {
+            display_address(&url)
         };
         self.show(shown, cx);
     }
