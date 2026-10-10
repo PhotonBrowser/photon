@@ -79,6 +79,16 @@ pub(super) fn add_icon(color: u32, size: f32) -> impl IntoElement {
         .text_color(rgb(color))
 }
 
+pub(super) fn minus_icon(color: u32, size: f32) -> impl IntoElement {
+    svg()
+        .data(
+            br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>"##,
+        )
+        .size(px(size))
+        .flex_shrink_0()
+        .text_color(rgb(color))
+}
+
 pub(super) fn more_icon(color: u32, size: f32) -> impl IntoElement {
     svg()
         .data(

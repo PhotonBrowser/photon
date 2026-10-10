@@ -2,26 +2,30 @@
 //! and the overlay that shows it or a tab's menu.
 
 use gpui::{
-    Anchor, ClickEvent, Context, MouseButton, MouseDownEvent, Point, Window, WindowAppearance,
-    anchored, div, point, prelude::*, px,
+    Anchor, ClickEvent, Context, MouseButton, MouseDownEvent, Point, SharedString, Window,
+    WindowAppearance, anchored, div, point, prelude::*, px,
 };
 use photon_core::BrowserCommand;
 
-use super::super::super::engine::PopupPolicy;
+use super::super::super::engine::{PopupPolicy, ZoomStep};
 use super::super::layout::v_stack;
 use super::super::menu::{
-    menu_action, menu_checkbox, menu_radio, menu_section, menu_separator, menu_surface,
+    MENU_MOTION, menu_action, menu_checkbox, menu_radio, menu_section, menu_separator,
+    menu_stepper, menu_surface,
 };
+use super::super::motion::Transition;
 use super::super::{metrics, theme::ThemeColors};
 use super::BrowserWindow;
 
 /// Where the open browser menu is anchored.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub(super) enum OpenMenu {
     Context(Point<gpui::Pixels>),
     Toolbar(Point<gpui::Pixels>),
     /// The menu for the tab at this index.
     Tab(usize, Point<gpui::Pixels>),
+    /// The active page's context menu.
+    Page(Point<gpui::Pixels>),
 }
 
 /// Anchors the toolbar menu below the menu button's bottom-right corner.
@@ -40,36 +44,44 @@ pub(super) fn toolbar_menu_anchor(event: &ClickEvent) -> Point<gpui::Pixels> {
 }
 
 impl BrowserWindow {
-    /// The open menu over a click-away backdrop that closes it.
+    /// The open menu over a click-away backdrop that closes it, or the menu
+    /// that just closed as it animates away.
     pub(super) fn open_menu_overlay(
-        &self,
+        &mut self,
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> Option<impl IntoElement + use<>> {
-        let open_menu = self.open_menu?;
+        let (open_menu, transition) = self.menu_presence.sync(self.open_menu, MENU_MOTION, cx)?;
         let (anchor, position) = match open_menu {
-            OpenMenu::Context(position) | OpenMenu::Tab(_, position) => (Anchor::TopLeft, position),
+            OpenMenu::Context(position) | OpenMenu::Tab(_, position) | OpenMenu::Page(position) => {
+                (Anchor::TopLeft, position)
+            }
             OpenMenu::Toolbar(position) => (Anchor::TopRight, position),
         };
         let menu = match open_menu {
-            OpenMenu::Tab(index, _) => self.tab_menu(index, palette, cx).into_any_element(),
-            OpenMenu::Context(_) | OpenMenu::Toolbar(_) => {
-                self.browser_menu(palette, cx).into_any_element()
-            }
+            OpenMenu::Tab(index, _) => self
+                .tab_menu(index, transition, palette, cx)
+                .into_any_element(),
+            OpenMenu::Page(_) => self.page_menu(transition, palette, cx).into_any_element(),
+            OpenMenu::Context(_) | OpenMenu::Toolbar(_) => self
+                .browser_menu(transition, palette, cx)
+                .into_any_element(),
         };
-        Some(
-            div()
-                .absolute()
-                .inset_0()
+        let mut overlay = div().absolute().inset_0();
+        // A closing menu lets clicks through to what is beneath.
+        if transition == Transition::Enter {
+            overlay = overlay
                 .on_mouse_down(MouseButton::Left, cx.listener(Self::close_menu))
-                .on_mouse_down(MouseButton::Right, cx.listener(Self::close_menu))
-                .child(
-                    anchored()
-                        .anchor(anchor)
-                        .position(position)
-                        .snap_to_window()
-                        .child(menu),
-                ),
+                .on_mouse_down(MouseButton::Right, cx.listener(Self::close_menu));
+        }
+        Some(
+            overlay.child(
+                anchored()
+                    .anchor(anchor)
+                    .position(position)
+                    .snap_to_window()
+                    .child(menu),
+            ),
         )
     }
 
@@ -81,11 +93,13 @@ impl BrowserWindow {
 
     fn browser_menu(
         &self,
+        transition: Transition,
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
         let performance_overlay_enabled =
             self.active_webview().read(cx).performance_overlay_enabled;
+        let zoom_percent = self.active_webview().read(cx).zoom_percent();
         let theme = self.theme.get();
         let popup_policy = self.runtime.popup_policy();
         let theme_radio = |id, label, tab_index, appearance: Option<WindowAppearance>| {
@@ -151,6 +165,23 @@ impl BrowserWindow {
                 })),
                 palette,
             ))
+            .child(menu_stepper(
+                "Zoom",
+                SharedString::from(format!("{zoom_percent}%")),
+                Box::new(cx.listener(|this, _, _, cx| {
+                    cx.stop_propagation();
+                    this.zoom(ZoomStep::Out, cx);
+                })),
+                Box::new(cx.listener(|this, _, _, cx| {
+                    cx.stop_propagation();
+                    this.zoom(ZoomStep::Reset, cx);
+                })),
+                Box::new(cx.listener(|this, _, _, cx| {
+                    cx.stop_propagation();
+                    this.zoom(ZoomStep::In, cx);
+                })),
+                palette,
+            ))
             .child(menu_checkbox(
                 "menu-debug-info",
                 "Debug info",
@@ -193,7 +224,7 @@ impl BrowserWindow {
                 PopupPolicy::Block,
             ));
 
-        menu_surface(content, palette)
+        menu_surface(content, transition, palette)
     }
 
     /// Applies a light or dark theme, or follows the system for `None`.

@@ -1,11 +1,12 @@
-//! Notices over the page: crash and restart chips, and JavaScript dialogs.
+//! Notices over the page: crash, restart and zoom chips, and JavaScript dialogs.
 
 use gpui::{Context, ElementId, SharedString, Task, Window, prelude::*};
 use photon_core::BrowserCommand;
 use std::time::{Duration, Instant};
 
+use super::super::super::engine::ZoomStep;
 use super::super::js_dialog::JavaScriptDialog;
-use super::super::status_chip::{ChipIcon, status_chip};
+use super::super::status_chip::{CHIP_MOTION, ChipIcon, status_chip};
 use super::super::theme::ThemeColors;
 use super::super::{ClickHandler, CrashNotice};
 use super::BrowserWindow;
@@ -20,16 +21,29 @@ pub(super) enum EngineNotice {
 
 /// How long a chip announcing a recovery stays up.
 const RECOVERED_NOTICE_DURATION: Duration = Duration::from_secs(3);
+/// How long the zoom chip stays up after the last zoom change.
+const ZOOM_NOTICE_DURATION: Duration = Duration::from_secs(2);
+
+/// What a chip's button does.
+#[derive(Clone, Copy)]
+enum NoticeAction {
+    /// Reload the page; the chip can also be dismissed.
+    Reload,
+    /// Stop and restart the WebContent process holding the page's pending input.
+    RestartPage,
+    /// Return the page to 100%.
+    ResetZoom,
+}
 
 /// A chip's content.
-struct Notice {
+#[derive(Clone)]
+pub(super) struct Notice {
     id: &'static str,
     icon: ChipIcon,
     message: SharedString,
-    /// When a recovery notice was shown, so it can expire.
-    recovered_at: Option<Instant>,
-    /// The page keeps crashing, so offer to reload it and to dismiss.
-    actionable: bool,
+    /// When the chip goes away by itself, if it does.
+    expires_at: Option<Instant>,
+    action: Option<NoticeAction>,
 }
 
 impl BrowserWindow {
@@ -45,10 +59,13 @@ impl BrowserWindow {
         if open == shown {
             return;
         }
-        let had_focus = self
-            .dialog
-            .take()
+        let closed = self.dialog.take();
+        let had_focus = closed
+            .as_ref()
             .is_some_and(|dialog| dialog.read(cx).contains_focus(window, cx));
+        if let Some(closed) = closed {
+            closed.update(cx, |dialog, cx| dialog.leave(cx));
+        }
         match open {
             Some(request) => {
                 let dialog = cx.new(|cx| JavaScriptDialog::new(webview, request, cx));
@@ -77,7 +94,7 @@ impl BrowserWindow {
 
     /// Dismisses the shown notice, returning whether there was one.
     pub(super) fn dismiss_notice(&mut self, cx: &mut Context<Self>) -> bool {
-        if self.engine_notice.take().is_some() {
+        if self.engine_notice.take().is_some() || self.zoom_shown_at.take().is_some() {
             cx.notify();
             return true;
         }
@@ -99,45 +116,64 @@ impl BrowserWindow {
             .is_some_and(|notice| matches!(notice.icon, ChipIcon::Working(_)))
     }
 
-    /// The notice to show: an Engine restart first, then the active tab's crash.
+    /// The notice to show: an Engine restart first, then a zoom change, then
+    /// the active tab's crash or error.
     fn notice(&self, cx: &Context<Self>) -> Option<Notice> {
         let step = self.spinner_step;
+        let zoom_notice = self.zoom_shown_at.and_then(|shown_at| {
+            let percent = self.active_webview().read(cx).zoom_percent();
+            Some(Notice {
+                id: "zoom",
+                icon: ChipIcon::Zoom,
+                message: SharedString::from(format!("{percent}%")),
+                expires_at: Some(shown_at + ZOOM_NOTICE_DURATION),
+                action: (percent != 100).then_some(NoticeAction::ResetZoom),
+            })
+        });
         let notice = match self.engine_notice {
             Some(EngineNotice::Restarting) => Notice {
                 id: "engine-restarting",
                 icon: ChipIcon::Working(step),
                 message: SharedString::new_static("Photon Engine stopped. Restarting…"),
-                recovered_at: None,
-                actionable: false,
+                expires_at: None,
+                action: None,
             },
             Some(EngineNotice::Restarted(at)) => Notice {
                 id: "engine-restarted",
                 icon: ChipIcon::Done,
                 message: SharedString::new_static("Photon Engine restarted"),
-                recovered_at: Some(at),
-                actionable: false,
+                expires_at: Some(at + RECOVERED_NOTICE_DURATION),
+                action: None,
             },
+            None if self.active_webview().read(cx).page_unresponsive => Notice {
+                id: "page-unresponsive",
+                icon: ChipIcon::Problem,
+                message: SharedString::new_static("Page isn’t responding"),
+                expires_at: None,
+                action: Some(NoticeAction::RestartPage),
+            },
+            None if zoom_notice.is_some() => zoom_notice?,
             None => match self.active_webview().read(cx).crash_notice {
                 Some(CrashNotice::Reloading) => Notice {
                     id: "page-reloading",
                     icon: ChipIcon::Working(step),
                     message: SharedString::new_static("This page crashed. Reloading…"),
-                    recovered_at: None,
-                    actionable: false,
+                    expires_at: None,
+                    action: None,
                 },
                 Some(CrashNotice::Reloaded(at)) => Notice {
                     id: "page-reloaded",
                     icon: ChipIcon::Done,
                     message: SharedString::new_static("Page reloaded"),
-                    recovered_at: Some(at),
-                    actionable: false,
+                    expires_at: Some(at + RECOVERED_NOTICE_DURATION),
+                    action: None,
                 },
                 Some(CrashNotice::KeepsCrashing) => Notice {
                     id: "page-keeps-crashing",
                     icon: ChipIcon::Problem,
                     message: SharedString::new_static("This page keeps crashing"),
-                    recovered_at: None,
-                    actionable: true,
+                    expires_at: None,
+                    action: Some(NoticeAction::Reload),
                 },
                 None => {
                     let error = self.active_webview().read(cx).state.error.clone()?;
@@ -145,15 +181,15 @@ impl BrowserWindow {
                         id: "page-error",
                         icon: ChipIcon::Problem,
                         message: SharedString::from(format!("Page error: {error}")),
-                        recovered_at: None,
-                        actionable: true,
+                        expires_at: None,
+                        action: Some(NoticeAction::Reload),
                     }
                 }
             },
         };
         let expired = notice
-            .recovered_at
-            .is_some_and(|at| at.elapsed() >= RECOVERED_NOTICE_DURATION);
+            .expires_at
+            .is_some_and(|deadline| Instant::now() >= deadline);
         (!expired).then_some(notice)
     }
 
@@ -163,25 +199,43 @@ impl BrowserWindow {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> Option<impl IntoElement + use<>> {
-        let notice = self.notice(cx)?;
-        if let Some(at) = notice.recovered_at {
-            self.expire_notice_at(at + RECOVERED_NOTICE_DURATION, cx);
+        let notice = self.notice(cx);
+        if let Some(deadline) = notice.as_ref().and_then(|notice| notice.expires_at) {
+            self.expire_notice_at(deadline, cx);
         }
-        let (action, on_dismiss) = if notice.actionable {
-            let reload: ClickHandler = Box::new(cx.listener(|this, _, window, cx| {
-                cx.stop_propagation();
-                this.dispatch_command(BrowserCommand::Reload, window, cx);
-            }));
-            let dismiss: ClickHandler = Box::new(cx.listener(|this, _, _, cx| {
-                cx.stop_propagation();
-                this.dismiss_notice(cx);
-            }));
-            (Some(("Reload", reload)), Some(dismiss))
-        } else {
-            (None, None)
+        let (notice, transition) = self.notice_presence.sync(notice, CHIP_MOTION, cx)?;
+        let (action, on_dismiss) = match notice.action {
+            Some(NoticeAction::Reload) => {
+                let reload: ClickHandler = Box::new(cx.listener(|this, _, window, cx| {
+                    cx.stop_propagation();
+                    this.dispatch_command(BrowserCommand::Reload, window, cx);
+                }));
+                let dismiss: ClickHandler = Box::new(cx.listener(|this, _, _, cx| {
+                    cx.stop_propagation();
+                    this.dismiss_notice(cx);
+                }));
+                (Some(("Reload", reload)), Some(dismiss))
+            }
+            Some(NoticeAction::ResetZoom) => {
+                let reset: ClickHandler = Box::new(cx.listener(|this, _, _, cx| {
+                    cx.stop_propagation();
+                    this.zoom(ZoomStep::Reset, cx);
+                }));
+                (Some(("Reset", reset)), None)
+            }
+            Some(NoticeAction::RestartPage) => {
+                let restart: ClickHandler = Box::new(cx.listener(|this, _, _, cx| {
+                    cx.stop_propagation();
+                    this.active_webview()
+                        .update(cx, |view, _| view.restart_unresponsive_page());
+                }));
+                (Some(("Restart", restart)), None)
+            }
+            None => (None, None),
         };
         Some(status_chip(
             ElementId::Name(notice.id.into()),
+            transition,
             palette,
             notice.icon,
             notice.message,
@@ -202,6 +256,12 @@ impl BrowserWindow {
                 this.notice_expiry = None;
                 if matches!(this.engine_notice, Some(EngineNotice::Restarted(_))) {
                     this.engine_notice = None;
+                }
+                if this
+                    .zoom_shown_at
+                    .is_some_and(|shown_at| shown_at.elapsed() >= ZOOM_NOTICE_DURATION)
+                {
+                    this.zoom_shown_at = None;
                 }
                 cx.notify();
             })

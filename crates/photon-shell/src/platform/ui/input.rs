@@ -17,6 +17,14 @@ impl WebViewInput {
         self.viewport_origin = (x, y);
     }
 
+    /// Where the page's top-left corner is in the window.
+    pub(super) fn viewport_origin(&self) -> gpui::Point<gpui::Pixels> {
+        gpui::point(
+            gpui::px(self.viewport_origin.0),
+            gpui::px(self.viewport_origin.1),
+        )
+    }
+
     pub(super) fn mouse_down(&mut self, session: &mut EngineSession, event: &MouseDownEvent) {
         let (button, buttons) = mouse_button(event.button);
         let (x, y) = self.content_position(event.position);

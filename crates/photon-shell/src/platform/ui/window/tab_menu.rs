@@ -5,6 +5,7 @@ use photon_core::BrowserCommand;
 
 use super::super::layout::v_stack;
 use super::super::menu::{menu_action, menu_separator, menu_surface};
+use super::super::motion::Transition;
 use super::super::{metrics, theme::ThemeColors};
 use super::BrowserWindow;
 
@@ -92,6 +93,7 @@ impl BrowserWindow {
     pub(super) fn tab_menu(
         &self,
         index: usize,
+        transition: Transition,
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
@@ -158,6 +160,6 @@ impl BrowserWindow {
                 palette,
             ));
         }
-        menu_surface(content, palette)
+        menu_surface(content, transition, palette)
     }
 }

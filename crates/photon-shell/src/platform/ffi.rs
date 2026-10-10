@@ -42,6 +42,18 @@ pub(super) mod embedder {
     );
 
     #[repr(C)]
+    pub(crate) struct ContextMenuItem {
+        pub separator: bool,
+        pub text: *const c_char,
+        pub enabled: bool,
+        pub checkable: bool,
+        pub checked: bool,
+    }
+
+    pub(crate) type ContextMenuCallback =
+        unsafe extern "C" fn(*mut c_void, f64, f64, *const ContextMenuItem, usize);
+
+    #[repr(C)]
     pub(crate) struct ViewCallbacks {
         pub callback_data: *mut c_void,
         pub state_callback: Option<
@@ -76,6 +88,11 @@ pub(super) mod embedder {
         pub crash_recovered_callback: Option<unsafe extern "C" fn(*mut c_void)>,
         pub new_web_view_callback: Option<NewWebViewCallback>,
         pub find_result_callback: Option<unsafe extern "C" fn(*mut c_void, usize, bool, usize)>,
+        pub zoom_callback: Option<unsafe extern "C" fn(*mut c_void, f64)>,
+        pub page_unresponsive_callback: Option<unsafe extern "C" fn(*mut c_void, bool)>,
+        pub context_menu_callback: Option<ContextMenuCallback>,
+        pub open_in_new_tab_callback:
+            Option<unsafe extern "C" fn(*mut c_void, *const c_char, bool)>,
         #[cfg(target_os = "macos")]
         pub native_metal_presentation: bool,
         #[cfg(target_os = "macos")]
@@ -99,6 +116,8 @@ pub(super) mod embedder {
         );
         pub fn photon_runtime_schedule_native_release_drain(runtime: *mut c_void);
         pub fn photon_runtime_destroy(runtime: *mut c_void);
+        #[cfg(target_os = "macos")]
+        pub fn photon_runtime_use_system_clipboard(runtime: *mut c_void);
         pub fn photon_view_create(
             runtime: *mut c_void,
             width: i32,
@@ -124,6 +143,7 @@ pub(super) mod embedder {
             refresh_rate: f64,
         );
         pub fn photon_view_set_focus(view: *mut c_void, focused: bool);
+        pub fn photon_view_activate_context_menu_item(view: *mut c_void, index: usize);
         pub fn photon_view_notify_state(view: *mut c_void);
         pub fn photon_view_copy_window_handle(
             view: *mut c_void,
@@ -139,6 +159,8 @@ pub(super) mod embedder {
         );
         pub fn photon_view_find_in_page_step(view: *mut c_void, forward: bool);
         pub fn photon_view_find_in_page_end(view: *mut c_void);
+        pub fn photon_view_zoom(view: *mut c_void, step: i32);
+        pub fn photon_view_restart_unresponsive_page(view: *mut c_void);
         pub fn photon_view_close_dialog(
             view: *mut c_void,
             dialog_type: i32,

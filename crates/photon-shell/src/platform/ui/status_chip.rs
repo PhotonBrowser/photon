@@ -3,23 +3,30 @@
 use gpui::{ElementId, MouseButton, Role, SharedString, prelude::*, px, rgb, rgba};
 
 use super::button::{ButtonSize, button, icon_button};
-use super::icons::{check_icon, close_icon, loading_spinner, warning_icon};
+use super::icons::{check_icon, close_icon, loading_spinner, search_icon_sized, warning_icon};
 use super::layout::h_stack;
-use super::motion::{AnimateIn, Entrance};
+use super::motion::{AnimateIn, Entrance, Transition};
 use super::{ClickHandler, metrics, theme::ThemeColors};
 
+/// How chips appear and disappear.
+pub(super) const CHIP_MOTION: Entrance = Entrance::fade();
+
 /// What a chip's leading icon shows.
+#[derive(Clone)]
 pub(super) enum ChipIcon {
     /// Work in progress; the value is the spinner's animation step.
     Working(usize),
     Done,
     Problem,
+    /// The page's zoom level.
+    Zoom,
 }
 
 /// A compact chip with an icon and message, an optional action button and
 /// an optional close button. A new `id` fades the chip in again.
 pub(super) fn status_chip(
     id: ElementId,
+    transition: Transition,
     palette: ThemeColors,
     icon: ChipIcon,
     message: SharedString,
@@ -33,6 +40,7 @@ pub(super) fn status_chip(
         }
         ChipIcon::Done => check_icon(palette.text_secondary, icon_size).into_any_element(),
         ChipIcon::Problem => warning_icon(palette.text_primary, icon_size).into_any_element(),
+        ChipIcon::Zoom => search_icon_sized(palette.text_secondary, icon_size).into_any_element(),
     };
 
     let mut chip = h_stack()
@@ -81,5 +89,5 @@ pub(super) fn status_chip(
         ));
     }
 
-    chip.animate_in(id, Entrance::fade())
+    chip.animate(id, CHIP_MOTION, transition)
 }

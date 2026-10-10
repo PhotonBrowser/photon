@@ -4,11 +4,12 @@ use gpui::{Context, Div, KeyDownEvent, Window, prelude::*};
 use photon_core::BrowserCommand;
 use photon_shortcuts::{
     CloseTab, FindInPage, FindNext, FindPrevious, FocusOmnibox, GoBack, GoForward, NewTab,
-    NewWindow, Reload, ReopenClosedTab, SelectLastTab, SelectNextTab, SelectPreviousTab,
+    NewWindow, Reload, ReopenClosedTab, ResetZoom, SelectLastTab, SelectNextTab, SelectPreviousTab,
     SelectTab1, SelectTab2, SelectTab3, SelectTab4, SelectTab5, SelectTab6, SelectTab7, SelectTab8,
-    StopLoading,
+    StopLoading, ZoomIn, ZoomOut,
 };
 
+use super::super::super::engine::ZoomStep;
 use super::BrowserWindow;
 
 impl BrowserWindow {
@@ -28,6 +29,9 @@ impl BrowserWindow {
             .on_action(cx.listener(|this, _: &FindPrevious, window, cx| {
                 this.find_step(false, window, cx);
             }))
+            .on_action(cx.listener(|this, _: &ZoomIn, _, cx| this.zoom(ZoomStep::In, cx)))
+            .on_action(cx.listener(|this, _: &ZoomOut, _, cx| this.zoom(ZoomStep::Out, cx)))
+            .on_action(cx.listener(|this, _: &ResetZoom, _, cx| this.zoom(ZoomStep::Reset, cx)))
             .on_action(cx.listener(|this, _: &NewTab, window, cx| {
                 this.dispatch_command(BrowserCommand::NewTab, window, cx);
             }))

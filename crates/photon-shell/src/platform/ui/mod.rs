@@ -23,6 +23,6 @@ mod window;
 pub(super) type ClickHandler = Box<dyn Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App)>;
 
 pub(in crate::platform) use webview::{
-    CrashNotice, Favicon, FindResult, PhotonWebView, WebViewEvent,
+    CrashNotice, Favicon, FindResult, PageMenuItem, PhotonWebView, WebViewEvent,
 };
 pub use window::run;

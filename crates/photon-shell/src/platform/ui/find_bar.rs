@@ -13,8 +13,11 @@ use gpui_elements::editable_text::{
 use super::button::icon_button;
 use super::icons::{chevron_down_icon, chevron_up_icon, close_icon, search_icon_sized};
 use super::layout::h_stack;
-use super::motion::{AnimateIn, Entrance};
+use super::motion::Entrance;
 use super::{PhotonWebView, WebViewEvent, metrics, theme::ThemeColors};
+
+/// How the bar drops in and lifts away.
+pub(super) const FIND_BAR_MOTION: Entrance = Entrance::fall();
 
 /// Asks the window to close the bar.
 pub(super) struct CloseFindBar;
@@ -173,6 +176,5 @@ impl Render for FindBar {
                 palette,
                 Box::new(cx.listener(|_, _, _, cx| cx.emit(CloseFindBar))),
             ))
-            .animate_in("find-bar-appear", Entrance::fall())
     }
 }

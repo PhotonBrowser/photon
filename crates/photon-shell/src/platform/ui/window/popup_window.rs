@@ -10,6 +10,7 @@ use crate::platform::engine::{EngineRuntime, RequestedWebView};
 
 use super::super::layout::v_stack;
 use super::super::modal::{modal, modal_panel};
+use super::super::motion::Transition;
 use super::super::titlebar::titlebar;
 use super::super::{PhotonWebView, WebViewEvent, metrics, theme::ThemeColors};
 use super::{create_webview_from_session, window_settings};
@@ -59,6 +60,8 @@ pub(super) fn open_minimal_window(
                                 this.handle_requested_web_view(webview, request, window, cx);
                             }
                         }
+                        // A site window has no menus or tabs of its own.
+                        WebViewEvent::ContextMenuRequested | WebViewEvent::OpenInNewTab { .. } => {}
                     }
                 },
             );
@@ -162,7 +165,12 @@ impl MinimalPopupWindow {
                         })),
                     )),
             );
-        Some(modal("popup-confirmation", palette, panel))
+        Some(modal(
+            "popup-confirmation",
+            Transition::Enter,
+            palette,
+            panel,
+        ))
     }
 
     fn allow_pending_popup(&mut self, window: &mut Window, cx: &mut Context<Self>) {

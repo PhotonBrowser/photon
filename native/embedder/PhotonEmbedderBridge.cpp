@@ -1,4 +1,7 @@
 #include "PhotonEmbedderBridge.h"
+#if defined(__APPLE__)
+#    include "SystemClipboard.h"
+#endif
 
 #include <LibPhotonEmbedder/PhotonEmbedder.h>
 
@@ -6,6 +9,7 @@
 #include <cstdio>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -43,6 +47,10 @@ Photon::ViewCallbacks make_view_callbacks(
     auto crash_recovered_callback = callbacks.crash_recovered_callback;
     auto new_web_view_callback = callbacks.new_web_view_callback;
     auto find_result_callback = callbacks.find_result_callback;
+    auto zoom_callback = callbacks.zoom_callback;
+    auto page_unresponsive_callback = callbacks.page_unresponsive_callback;
+    auto context_menu_callback = callbacks.context_menu_callback;
+    auto open_in_new_tab_callback = callbacks.open_in_new_tab_callback;
 
     Photon::ViewCallbacks result;
     result.state_changed = [=](Photon::ViewState const& state) {
@@ -155,6 +163,30 @@ Photon::ViewCallbacks make_view_callbacks(
     result.crash_recovered = [=] {
         if (crash_recovered_callback)
             crash_recovered_callback(callback_data);
+    };
+    result.zoom_changed = [=](double zoom_level) {
+        if (zoom_callback)
+            zoom_callback(callback_data, zoom_level);
+    };
+    result.page_unresponsive_changed = [=](bool unresponsive) {
+        if (page_unresponsive_callback)
+            page_unresponsive_callback(callback_data, unresponsive);
+    };
+    result.context_menu_requested = [=](Photon::ContextMenuRequest const& request) {
+        if (!context_menu_callback)
+            return;
+        std::vector<PhotonContextMenuItem> items;
+        items.reserve(request.items.size());
+        for (auto const& item : request.items) {
+            items.push_back({ item.separator, item.text.c_str(), item.enabled,
+                item.checkable, item.checked });
+        }
+        context_menu_callback(callback_data, request.x, request.y, items.data(),
+            items.size());
+    };
+    result.open_in_new_tab_requested = [=](std::string const& url, bool activate) {
+        if (open_in_new_tab_callback)
+            open_in_new_tab_callback(callback_data, url.c_str(), activate);
     };
     result.find_result = [=](size_t current, std::optional<size_t> total) {
         if (find_result_callback)
@@ -357,6 +389,31 @@ extern "C" void photon_view_find_in_page_step(void* view, bool forward)
         engine_view.find_in_page_previous_match();
 }
 
+extern "C" void photon_view_activate_context_menu_item(void* view, size_t index)
+{
+    if (view)
+        static_cast<ViewHandle*>(view)->view->activate_context_menu_item(index);
+}
+
+extern "C" void photon_view_zoom(void* view, int step)
+{
+    if (!view)
+        return;
+    auto& engine_view = *static_cast<ViewHandle*>(view)->view;
+    if (step > 0)
+        engine_view.zoom_in();
+    else if (step < 0)
+        engine_view.zoom_out();
+    else
+        engine_view.reset_zoom();
+}
+
+extern "C" void photon_view_restart_unresponsive_page(void* view)
+{
+    if (view)
+        static_cast<ViewHandle*>(view)->view->restart_unresponsive_page();
+}
+
 extern "C" void photon_view_find_in_page_end(void* view)
 {
     if (view)
@@ -403,6 +460,26 @@ photon_runtime_set_system_reduced_motion_preference(void* runtime,
         static_cast<RuntimeHandle*>(runtime)
             ->runtime->set_system_reduced_motion_preference(reduce_motion);
 }
+
+#if defined(__APPLE__)
+extern "C" void photon_runtime_use_system_clipboard(void* runtime)
+{
+    if (!runtime)
+        return;
+    static_cast<RuntimeHandle*>(runtime)->runtime->set_clipboard({
+        .read = [] {
+            std::vector<Photon::ClipboardEntry> entries;
+            for (auto& [mime_type, data] : photon_system_clipboard_read())
+                entries.push_back({ std::move(mime_type), std::move(data) });
+            return entries; },
+        .write = [](std::vector<Photon::ClipboardEntry> const& entries) {
+            SystemClipboardEntries contents;
+            for (auto const& entry : entries)
+                contents.emplace_back(entry.mime_type, entry.data);
+            photon_system_clipboard_write(contents); },
+    });
+}
+#endif
 
 extern "C" void photon_runtime_set_service_callback(void* runtime,
     void* callback_data, PhotonServiceCallback callback)

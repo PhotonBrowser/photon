@@ -20,11 +20,14 @@ use std::time::{Duration, Instant};
 
 use super::super::trace;
 
+mod context_menu;
 mod crashes;
 mod dialogs;
 mod favicon;
 mod find;
+mod zoom;
 
+pub(in crate::platform) use context_menu::{PageMenu, PageMenuItem};
 pub(in crate::platform) use crashes::CrashNotice;
 pub(in crate::platform) use favicon::Favicon;
 pub(in crate::platform) use find::FindResult;
@@ -43,6 +46,12 @@ pub(in crate::platform) struct PhotonWebView {
     /// What the tab's crash chip says, if anything.
     pub(in crate::platform) crash_notice: Option<CrashNotice>,
     crashes: PageCrashes,
+    /// The page's zoom level as a factor, 1.0 being 100%.
+    zoom_level: f64,
+    /// Whether page input has gone unanswered by WebContent.
+    pub(in crate::platform) page_unresponsive: bool,
+    /// The context menu the page last asked for.
+    pub(in crate::platform) context_menu: Option<PageMenu>,
     /// The latest result of a find-in-page search.
     pub(in crate::platform) find_result: Option<FindResult>,
     /// The page's icon, shown in its tab while the page is not loading.
@@ -72,6 +81,13 @@ pub(in crate::platform) struct PhotonWebView {
 pub(in crate::platform) enum WebViewEvent {
     StateChanged,
     NewWebViewRequested(u64),
+    /// The page asked for its context menu, now in `context_menu`.
+    ContextMenuRequested,
+    /// A context menu action opened a link in a new tab.
+    OpenInNewTab {
+        url: String,
+        activate: bool,
+    },
 }
 
 impl EventEmitter<WebViewEvent> for PhotonWebView {}
@@ -117,6 +133,18 @@ impl PhotonWebView {
         self.state_changed(cx);
     }
 
+    pub(in crate::platform) fn set_page_unresponsive(
+        &mut self,
+        unresponsive: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if self.page_unresponsive == unresponsive {
+            return;
+        }
+        self.page_unresponsive = unresponsive;
+        self.state_changed(cx);
+    }
+
     pub(in crate::platform) fn set_audio_state(
         &mut self,
         playing: bool,
@@ -134,6 +162,10 @@ impl PhotonWebView {
     pub(super) fn toggle_audio_mute(&mut self, cx: &mut Context<Self>) {
         self.audio_muted = self.session.toggle_audio_mute();
         self.state_changed(cx);
+    }
+
+    pub(super) fn restart_unresponsive_page(&mut self) {
+        self.session.restart_unresponsive_page();
     }
 
     /// Whether the tab should show a loading spinner instead of its icon.
@@ -176,6 +208,14 @@ impl PhotonWebView {
         }
     }
 
+    /// Takes another tab's page size, so a tab opened in the background
+    /// lays out and starts loading before it is first shown.
+    pub(super) fn adopt_viewport(&mut self, viewport: Option<(i32, i32, u32)>) {
+        if let Some((width, height, scale)) = viewport {
+            self.update_viewport(width as f32, height as f32, f32::from_bits(scale));
+        }
+    }
+
     fn update_viewport(&mut self, width: f32, height: f32, scale: f32) {
         let width = width.round() as i32;
         let height = height.round() as i32;
@@ -210,7 +250,10 @@ impl PhotonWebView {
             performance_overlay_enabled: false,
             crash_notice: None,
             crashes: PageCrashes::default(),
+            context_menu: None,
             find_result: None,
+            zoom_level: 1.0,
+            page_unresponsive: false,
             favicon: None,
             audio_playing: false,
             audio_muted: false,

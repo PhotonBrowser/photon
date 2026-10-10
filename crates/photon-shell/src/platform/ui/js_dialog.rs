@@ -14,6 +14,7 @@ use photon_core::{DialogKind, DialogRequest};
 use super::button::{ButtonSize, button};
 use super::layout::h_stack;
 use super::modal::{modal, modal_panel};
+use super::motion::Transition;
 use super::{PhotonWebView, metrics, theme::ThemeColors};
 
 pub(super) struct JavaScriptDialog {
@@ -22,10 +23,19 @@ pub(super) struct JavaScriptDialog {
     /// The prompt's text field; alerts and confirms have none.
     input: Option<Entity<EditableTextState>>,
     focus_handle: FocusHandle,
+    /// Whether the dialog is open or closing after being answered.
+    transition: Transition,
     _input_subscription: Option<Subscription>,
 }
 
 impl JavaScriptDialog {
+    /// Marks the dialog answered, so it animates away while the window keeps
+    /// it drawn.
+    pub(super) fn leave(&mut self, cx: &mut Context<Self>) {
+        self.transition = Transition::Exit;
+        cx.notify();
+    }
+
     pub(super) fn new(
         webview: Entity<PhotonWebView>,
         request: DialogRequest,
@@ -48,6 +58,7 @@ impl JavaScriptDialog {
             request,
             input,
             focus_handle: cx.focus_handle(),
+            transition: Transition::Enter,
             _input_subscription: input_subscription,
         }
     }
@@ -192,6 +203,11 @@ impl Render for JavaScriptDialog {
         }
 
         // The page waits for an answer, so the modal blocks it until then.
-        modal("javascript-dialog", palette, panel.child(buttons))
+        modal(
+            "javascript-dialog",
+            self.transition,
+            palette,
+            panel.child(buttons),
+        )
     }
 }

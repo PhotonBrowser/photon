@@ -42,6 +42,24 @@ using PhotonCrashRecoveredCallback = void (*)(void*);
 // Called with a find-in-page result: the current match's index, whether the
 // match count is known, and the count.
 using PhotonFindResultCallback = void (*)(void*, size_t, bool, size_t);
+// Called with the page's zoom level as a factor, 1.0 being 100%.
+using PhotonZoomCallback = void (*)(void*, double);
+using PhotonPageUnresponsiveCallback = void (*)(void*, bool);
+// One context menu item. A separator has no text.
+struct PhotonContextMenuItem {
+    bool separator;
+    char const* text;
+    bool enabled;
+    bool checkable;
+    bool checked;
+};
+// Called with where the page asked for a context menu, in logical pixels in
+// the view, and its items. Answer with photon_view_activate_context_menu_item.
+using PhotonContextMenuCallback = void (*)(void*, double, double,
+    PhotonContextMenuItem const*, size_t);
+// Called with a URL a context menu action opens in a new tab, and whether to
+// switch to it.
+using PhotonOpenInNewTabCallback = void (*)(void*, char const*, bool);
 struct PhotonNewWebViewRequest {
     bool popup;
     bool activate;
@@ -87,6 +105,10 @@ struct PhotonViewCallbacks {
     PhotonCrashRecoveredCallback crash_recovered_callback;
     PhotonNewWebViewCallback new_web_view_callback;
     PhotonFindResultCallback find_result_callback;
+    PhotonZoomCallback zoom_callback;
+    PhotonPageUnresponsiveCallback page_unresponsive_callback;
+    PhotonContextMenuCallback context_menu_callback;
+    PhotonOpenInNewTabCallback open_in_new_tab_callback;
 #if defined(__APPLE__)
     bool native_metal_presentation;
     PhotonNativeBackingCallback native_backing_callback;
@@ -103,6 +125,10 @@ void photon_runtime_set_native_release_drain_callback(
 void photon_runtime_schedule_native_release_drain(void* runtime);
 #endif
 void photon_runtime_destroy(void* runtime);
+#if defined(__APPLE__)
+// Copy and paste through the macOS pasteboard.
+void photon_runtime_use_system_clipboard(void* runtime);
+#endif
 void* photon_view_create(void* runtime, int width, int height, double dpr,
     PhotonViewCallbacks const* callbacks);
 void* photon_view_create_for_traversable(void* runtime, void* parent_view,
@@ -125,6 +151,8 @@ void photon_view_go_back(void* view);
 void photon_view_go_forward(void* view);
 bool photon_view_toggle_audio_mute(void* view);
 void photon_view_set_focus(void* view, bool focused);
+// Runs an item of the context menu most recently requested, by index.
+void photon_view_activate_context_menu_item(void* view, size_t index);
 void photon_view_notify_state(void* view);
 void photon_view_copy_window_handle(void* view, char* handle, size_t capacity);
 // 0 follows the engine default, 1 prefers dark, 2 prefers light.
@@ -140,6 +168,10 @@ void photon_view_find_in_page(void* view, char const* query,
 void photon_view_find_in_page_step(void* view, bool forward);
 // Ends the search and removes its highlights.
 void photon_view_find_in_page_end(void* view);
+// Zooms in (step > 0), out (step < 0), or back to 100% (step == 0).
+void photon_view_zoom(void* view, int step);
+// Restarts the WebContent process currently holding unresponsive input.
+void photon_view_restart_unresponsive_page(void* view);
 void photon_runtime_set_system_reduced_motion_preference(void* runtime,
     bool reduce_motion);
 void photon_runtime_set_service_callback(void* runtime, void* callback_data,

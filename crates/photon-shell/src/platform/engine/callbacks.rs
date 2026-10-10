@@ -13,7 +13,7 @@ use std::{
 };
 
 use super::super::presentation::{LeaseLedger, MachPortGuard, PresentationRuntime};
-use super::super::ui::{Favicon, FindResult, PhotonWebView};
+use super::super::ui::{Favicon, FindResult, PageMenuItem, PhotonWebView};
 use super::super::{ffi::embedder, trace};
 use super::{EngineSession, PopupPolicy, RequestedWebView, UiWake};
 
@@ -83,6 +83,14 @@ impl CallbackState {
 
     pub(super) fn set_find_result(&self, result: FindResult) {
         self.update_webview(move |view, cx| view.set_find_result(result, cx));
+    }
+
+    pub(super) fn set_zoom_level(&self, zoom_level: f64) {
+        self.update_webview(move |view, cx| view.set_zoom_level(zoom_level, cx));
+    }
+
+    pub(super) fn set_page_unresponsive(&self, unresponsive: bool) {
+        self.update_webview(move |view, cx| view.set_page_unresponsive(unresponsive, cx));
     }
 
     pub(super) fn crash_recovered(&self) {
@@ -275,6 +283,69 @@ pub(super) unsafe extern "C" fn on_engine_find_result(
         total_match_count: has_total.then_some(total_match_count),
     };
     unsafe { &*(context.cast::<CallbackState>()) }.set_find_result(result);
+}
+
+pub(super) unsafe extern "C" fn on_engine_zoom(context: *mut c_void, zoom_level: f64) {
+    if !context.is_null() {
+        unsafe { &*(context.cast::<CallbackState>()) }.set_zoom_level(zoom_level);
+    }
+}
+
+pub(super) unsafe extern "C" fn on_engine_page_unresponsive(
+    context: *mut c_void,
+    unresponsive: bool,
+) {
+    if !context.is_null() {
+        unsafe { &*(context.cast::<CallbackState>()) }.set_page_unresponsive(unresponsive);
+    }
+}
+
+pub(super) unsafe extern "C" fn on_engine_context_menu(
+    context: *mut c_void,
+    x: f64,
+    y: f64,
+    items: *const embedder::ContextMenuItem,
+    count: usize,
+) {
+    if context.is_null() || (items.is_null() && count > 0) {
+        return;
+    }
+    let items = if count == 0 {
+        &[][..]
+    } else {
+        unsafe { std::slice::from_raw_parts(items, count) }
+    };
+    let items = items
+        .iter()
+        .map(|item| {
+            if item.separator || item.text.is_null() {
+                return PageMenuItem::Separator;
+            }
+            let label = unsafe { CStr::from_ptr(item.text) }.to_string_lossy();
+            PageMenuItem::Action {
+                label: label.into_owned().into(),
+                enabled: item.enabled,
+                checked: item.checkable.then_some(item.checked),
+            }
+        })
+        .collect();
+    unsafe { &*(context.cast::<CallbackState>()) }
+        .update_webview(move |view, cx| view.show_context_menu(x, y, items, cx));
+}
+
+pub(super) unsafe extern "C" fn on_engine_open_in_new_tab(
+    context: *mut c_void,
+    url: *const c_char,
+    activate: bool,
+) {
+    if context.is_null() || url.is_null() {
+        return;
+    }
+    let url = unsafe { CStr::from_ptr(url) }
+        .to_string_lossy()
+        .into_owned();
+    unsafe { &*(context.cast::<CallbackState>()) }
+        .update_webview(move |view, cx| view.open_in_new_tab(url, activate, cx));
 }
 
 pub(super) unsafe extern "C" fn on_engine_crash_recovered(context: *mut c_void) {

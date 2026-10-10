@@ -78,6 +78,10 @@ impl EngineRuntime {
                 Some(on_system_reduced_motion_changed),
             )
         };
+        #[cfg(target_os = "macos")]
+        unsafe {
+            embedder::photon_runtime_use_system_clipboard(runtime);
+        }
         unsafe {
             embedder::photon_runtime_set_native_release_drain_callback(
                 runtime,
@@ -143,6 +147,14 @@ impl Drop for EngineRuntime {
             }
         }
     }
+}
+
+/// A change to a page's zoom level.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::platform) enum ZoomStep {
+    In,
+    Out,
+    Reset,
 }
 
 pub(super) struct EngineSession {
@@ -253,6 +265,10 @@ impl EngineSession {
             crash_recovered_callback: Some(on_engine_crash_recovered),
             new_web_view_callback: Some(on_engine_new_web_view),
             find_result_callback: Some(on_engine_find_result),
+            zoom_callback: Some(on_engine_zoom),
+            page_unresponsive_callback: Some(on_engine_page_unresponsive),
+            context_menu_callback: Some(on_engine_context_menu),
+            open_in_new_tab_callback: Some(on_engine_open_in_new_tab),
             #[cfg(target_os = "macos")]
             native_metal_presentation: true,
             #[cfg(target_os = "macos")]
@@ -375,6 +391,25 @@ impl EngineSession {
     /// Moves to the next match, or the previous one when `forward` is false.
     pub(super) fn find_in_page_step(&mut self, forward: bool) {
         unsafe { embedder::photon_view_find_in_page_step(self.view, forward) }
+    }
+
+    /// Zooms in a step, out a step, or back to 100%.
+    pub(super) fn zoom(&mut self, step: ZoomStep) {
+        let step = match step {
+            ZoomStep::In => 1,
+            ZoomStep::Out => -1,
+            ZoomStep::Reset => 0,
+        };
+        unsafe { embedder::photon_view_zoom(self.view, step) }
+    }
+
+    pub(super) fn restart_unresponsive_page(&mut self) {
+        unsafe { embedder::photon_view_restart_unresponsive_page(self.view) }
+    }
+
+    /// Runs an item of the context menu the page last asked for.
+    pub(super) fn activate_context_menu_item(&mut self, index: usize) {
+        unsafe { embedder::photon_view_activate_context_menu_item(self.view, index) }
     }
 
     /// Ends the search and removes its highlights.

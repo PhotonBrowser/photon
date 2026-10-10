@@ -89,6 +89,31 @@ impl BrowserWindow {
         self.insert_webview(index, webview, true, window, cx);
     }
 
+    /// Opens `address` in a new tab after `opener`'s, as a link opened from
+    /// that page does.
+    pub(super) fn open_tab_beside(
+        &mut self,
+        opener: &gpui::Entity<super::super::PhotonWebView>,
+        address: &str,
+        activate: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let index = self
+            .tabs
+            .iter()
+            .position(|tab| tab == opener)
+            .map_or(self.tabs.len(), |index| index + 1);
+        let webview = create_webview(
+            cx,
+            self.runtime.clone(),
+            self.theme.clone(),
+            Some(address),
+            false,
+        );
+        self.insert_webview(index, webview, activate, window, cx);
+    }
+
     pub(super) fn open_requested_tab(
         &mut self,
         request: RequestedWebView,
@@ -114,6 +139,8 @@ impl BrowserWindow {
         cx: &mut Context<Self>,
     ) {
         let index = index.min(self.tabs.len());
+        let viewport = self.active_webview().read(cx).last_viewport;
+        webview.update(cx, |view, _| view.adopt_viewport(viewport));
         self.tab_subscriptions
             .insert(index, Self::subscribe_to_tab(&webview, window, cx));
         self.tabs.insert(index, webview.clone());

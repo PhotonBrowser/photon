@@ -53,6 +53,8 @@ pub(super) const MENU_ITEM_HORIZONTAL_PADDING: f32 = 8.0;
 pub(super) const MENU_ITEM_RADIUS: f32 = 5.0;
 pub(super) const MENU_ITEM_GAP: f32 = 2.0;
 pub(super) const MENU_SECTION_INSET: f32 = 6.0;
+/// Room for "100%" between a menu stepper's buttons.
+pub(super) const MENU_STEPPER_VALUE_WIDTH: f32 = 48.0;
 pub(super) const MENU_SEPARATOR_HEIGHT: f32 = 1.0;
 
 pub(super) const FIND_BAR_HEIGHT: f32 = 34.0;

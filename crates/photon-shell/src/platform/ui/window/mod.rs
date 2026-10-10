@@ -5,10 +5,12 @@ mod alerts;
 mod app;
 mod find;
 mod menu;
+mod page_menu;
 mod popup_window;
 mod popups;
 mod tab_menu;
 mod tabs;
+mod zoom;
 
 use gpui::{
     AnyElement, App, ClickEvent, Context, Entity, EntityId, FocusHandle, MouseButton,
@@ -24,9 +26,11 @@ use super::super::engine::{EngineRuntime, EngineSession, UiWake};
 use super::super::trace;
 use super::super::window_observer::WindowObserver;
 use super::super::window_settings;
-use super::find_bar::FindBar;
+use super::find_bar::{FIND_BAR_MOTION, FindBar};
 use super::js_dialog::JavaScriptDialog;
 use super::layout::v_stack;
+use super::modal::MODAL_MOTION;
+use super::motion::{AnimateIn, Presence};
 use super::omnibox::Omnibox;
 use super::tabs::RevealedIcon;
 use super::titlebar::titlebar;
@@ -55,6 +59,11 @@ struct BrowserWindow {
     runtime: Rc<EngineRuntime>,
     theme: ThemePreference,
     open_menu: Option<OpenMenu>,
+    /// Keeps a closed menu drawn while it animates away.
+    menu_presence: Presence<OpenMenu>,
+    find_bar_presence: Presence<Entity<FindBar>>,
+    dialog_presence: Presence<Entity<JavaScriptDialog>>,
+    notice_presence: Presence<alerts::Notice>,
     /// Pages of closed tabs, most recent last, for reopening.
     closed_tabs: Vec<ClosedTab>,
     /// The loading spinners' animation step, shared by every loading tab.
@@ -69,6 +78,8 @@ struct BrowserWindow {
     popup_confirmation_focus: FocusHandle,
     /// The last Engine service stop or restart, shown in a chip.
     engine_notice: Option<EngineNotice>,
+    /// When the zoom chip was last shown, after a zoom change.
+    zoom_shown_at: Option<Instant>,
     /// Redraws when a recovery chip expires.
     notice_expiry: NoticeExpiry,
     /// The icon each tab last revealed and when, so an icon animates in once
@@ -120,6 +131,13 @@ impl BrowserWindow {
                     this.animate_spinner(cx);
                     this.sync_dialog(window, cx);
                     cx.notify();
+                }
+                WebViewEvent::ContextMenuRequested if *webview == this.active_webview() => {
+                    this.open_page_menu(cx);
+                }
+                WebViewEvent::ContextMenuRequested => {}
+                WebViewEvent::OpenInNewTab { url, activate } => {
+                    this.open_tab_beside(webview, url, *activate, window, cx);
                 }
                 WebViewEvent::NewWebViewRequested(id) => {
                     if let Some(request) = webview.update(cx, |view, _| view.take_new_web_view(*id))
@@ -233,6 +251,15 @@ impl BrowserWindow {
 impl Render for BrowserWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.palette(window);
+        let find_bar = self.find_bar_presence.sync(
+            self.find_bar.as_ref().map(|(bar, _)| bar.clone()),
+            FIND_BAR_MOTION,
+            cx,
+        );
+        // The dialog animates itself; this keeps a closed one drawn while it does.
+        let dialog = self
+            .dialog_presence
+            .sync(self.dialog.clone(), MODAL_MOTION, cx);
         let root = v_stack()
             .size_full()
             .relative()
@@ -263,12 +290,16 @@ impl Render for BrowserWindow {
                     .p(px(metrics::PAGE_INSET))
                     .child(self.active_webview())
                     // The find bar floats in the page's top-right corner.
-                    .children(self.find_bar.as_ref().map(|(bar, _)| {
+                    .children(find_bar.map(|(bar, transition)| {
                         div()
                             .absolute()
                             .top(px(metrics::PAGE_INSET + metrics::CHIP_INSET))
                             .right(px(metrics::PAGE_INSET + metrics::CHIP_INSET))
-                            .child(bar.clone())
+                            .child(div().child(bar).animate(
+                                "find-bar-motion",
+                                FIND_BAR_MOTION,
+                                transition,
+                            ))
                     }))
                     // Crash and restart chips sit in the page's bottom-right corner.
                     .children(self.notice_chip(palette, cx).map(|chip| {
@@ -280,7 +311,7 @@ impl Render for BrowserWindow {
                     })),
             )
             // A JavaScript dialog is modal to the whole window.
-            .children(self.dialog.clone())
+            .children(dialog.map(|(dialog, _)| dialog))
             .children(self.open_menu_overlay(palette, cx))
             .children(self.popup_confirmation(palette, cx));
         self.on_actions(root, cx)
@@ -345,6 +376,10 @@ fn open_browser_window(
                 runtime,
                 theme,
                 open_menu: None,
+                menu_presence: Presence::default(),
+                find_bar_presence: Presence::default(),
+                dialog_presence: Presence::default(),
+                notice_presence: Presence::default(),
                 closed_tabs: Vec::new(),
                 spinner_step: 0,
                 spinner_running: false,
@@ -354,6 +389,7 @@ fn open_browser_window(
                 popup_confirmation_focus: cx.focus_handle(),
                 engine_notice: None,
                 notice_expiry: None,
+                zoom_shown_at: None,
                 revealed_icons: RefCell::default(),
                 window_visible: true,
                 _appearance_subscription: appearance_subscription,

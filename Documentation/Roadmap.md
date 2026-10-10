@@ -31,6 +31,8 @@ What the Photon shell does today and what comes next. Engine performance work is
 - [x] Browser menu: new tab, new window, debug overlay, and a system, light or dark theme
 - [x] Titlebar right-click menu
 - [x] Performance diagnostics overlay
+- [x] Page zoom from the menu or ⌘+, ⌘−, ⌘0, shown in a chip with Reset; each site's zoom is remembered for the session
+- [x] Page right-click menus from the Engine for pages, links, selections, images and media, with Copy, Cut and Paste through the macOS pasteboard
 - [x] Find in page: a floating bar in the page's corner with match count and highlights (⌘F, ⌘G, ⌘⇧G)
 
 ### Keyboard shortcuts
@@ -39,19 +41,19 @@ What the Photon shell does today and what comes next. Engine performance work is
 - [x] ⌃Tab / ⌃⇧Tab, ⌘⇧] / ⌘⇧[, ⌘1–⌘8, ⌘9
 - [x] ⌘R, ⌘., ⌘[, ⌘], ⌘L
 - [x] ⌘F, ⌘G, ⌘⇧G
+- [x] ⌘+, ⌘−, ⌘0
 
 ### Accessibility and motion
 
 - [x] Accessibility roles and labels on tabs, buttons, menus, the omnibox and alerts
 - [x] System reduced-motion preference passed to the Engine and to shell animations
+- [x] Menus, chips, the find bar and JavaScript dialogs animate in and back out
 
 ## Next
 
 In order of priority.
 
 - [ ] Omnibox suggestions: "Search for" and "Go to" rows while typing
-- [ ] Page right-click menus
-- [ ] Page zoom (⌘+, ⌘−, ⌘0)
 - [ ] Profile slow Skia flushes on the first paint of heavy pages ([section 9](CompositorPerformance.md#9-slow-first-paint-on-heavy-pages--open))
 - [ ] Draw the page area without re-rendering the whole window on every Engine frame
 

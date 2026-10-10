@@ -1,17 +1,25 @@
 //! Shared surface and items for browser menus.
 
-use gpui::{MouseButton, Role, Toggled, div, prelude::*, px, rgb, rgba};
+use gpui::{ElementId, MouseButton, Role, SharedString, Toggled, div, prelude::*, px, rgb, rgba};
 
-use super::icons::check_icon;
+use super::button::icon_button;
+use super::icons::{add_icon, check_icon, minus_icon};
 use super::layout::{h_stack, v_stack};
-use super::motion::{AnimateIn, Entrance};
+use super::motion::{AnimateIn, Entrance, Transition};
 use super::{metrics, theme::ThemeColors};
 
 use super::ClickHandler;
 
-/// A menu's raised surface. It animates in each time it opens, so every
-/// popover, dropdown and context menu built on it does too.
-pub(super) fn menu_surface(content: impl IntoElement, palette: ThemeColors) -> impl IntoElement {
+/// How menus open and close.
+pub(super) const MENU_MOTION: Entrance = Entrance::popover();
+
+/// A menu's raised surface. It animates in each time it opens and out as it
+/// closes, so every popover, dropdown and context menu built on it does too.
+pub(super) fn menu_surface(
+    content: impl IntoElement,
+    transition: Transition,
+    palette: ThemeColors,
+) -> impl IntoElement {
     v_stack()
         .id("browser-menu")
         .role(Role::Menu)
@@ -28,7 +36,7 @@ pub(super) fn menu_surface(content: impl IntoElement, palette: ThemeColors) -> i
         .text_color(rgb(palette.text_primary))
         .shadow_lg()
         .child(content)
-        .animate_in("browser-menu-appear", Entrance::popover())
+        .animate("browser-menu-motion", MENU_MOTION, transition)
 }
 
 pub(super) fn menu_section(label: &'static str, palette: ThemeColors) -> impl IntoElement {
@@ -55,8 +63,8 @@ pub(super) fn menu_separator(palette: ThemeColors) -> impl IntoElement {
 }
 
 pub(super) fn menu_action(
-    id: &'static str,
-    label: &'static str,
+    id: impl Into<ElementId>,
+    label: impl Into<SharedString>,
     tab_index: isize,
     on_click: ClickHandler,
     palette: ThemeColors,
@@ -65,8 +73,8 @@ pub(super) fn menu_action(
 }
 
 pub(super) fn menu_checkbox(
-    id: &'static str,
-    label: &'static str,
+    id: impl Into<ElementId>,
+    label: impl Into<SharedString>,
     tab_index: isize,
     checked: bool,
     on_click: ClickHandler,
@@ -90,8 +98,8 @@ pub(super) fn menu_checkbox(
 }
 
 pub(super) fn menu_radio(
-    id: &'static str,
-    label: &'static str,
+    id: impl Into<ElementId>,
+    label: impl Into<SharedString>,
     tab_index: isize,
     selected: bool,
     on_click: ClickHandler,
@@ -109,26 +117,111 @@ pub(super) fn menu_radio(
         .on_click(on_click)
 }
 
+/// A menu action that cannot be chosen right now.
+pub(super) fn menu_disabled(
+    id: impl Into<ElementId>,
+    label: impl Into<SharedString>,
+    palette: ThemeColors,
+) -> impl IntoElement {
+    menu_row(id, label.into(), Role::MenuItem)
+        .aria_disabled(true)
+        .text_color(rgb(palette.text_secondary))
+}
+
 fn menu_item(
-    id: &'static str,
-    label: &'static str,
+    id: impl Into<ElementId>,
+    label: impl Into<SharedString>,
     tab_index: isize,
     role: Role,
     palette: ThemeColors,
 ) -> gpui::Stateful<gpui::Div> {
+    menu_row(id, label.into(), role)
+        .tab_index(tab_index)
+        .focus_visible(|style| style.border_1().border_color(rgb(palette.accent)))
+        .hover(|style| style.bg(rgba(palette.menu_hover)))
+}
+
+/// A menu row's layout, with a label that is cut short when too long.
+fn menu_row(
+    id: impl Into<ElementId>,
+    label: SharedString,
+    role: Role,
+) -> gpui::Stateful<gpui::Div> {
     h_stack()
         .id(id)
         .role(role)
-        .aria_label(label)
-        .tab_index(tab_index)
-        .focus_visible(|style| style.border_1().border_color(rgb(palette.accent)))
+        .aria_label(label.clone())
         .items_center()
         .justify_between()
+        .gap(px(metrics::MENU_ITEM_GAP))
         .w_full()
         .h(px(metrics::MENU_ITEM_HEIGHT))
         .px(px(metrics::MENU_ITEM_HORIZONTAL_PADDING))
         .rounded(px(metrics::MENU_ITEM_RADIUS))
-        .hover(|style| style.bg(rgba(palette.menu_hover)))
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .child(div().min_w_0().truncate().child(label))
+}
+
+/// A menu row that steps a value down or up, showing the value between the
+/// steppers; clicking the value resets it.
+pub(super) fn menu_stepper(
+    label: &'static str,
+    value: SharedString,
+    on_decrease: ClickHandler,
+    on_reset: ClickHandler,
+    on_increase: ClickHandler,
+    palette: ThemeColors,
+) -> impl IntoElement {
+    let icon_size = metrics::ICON_BUTTON_ICON_SIZE;
+    h_stack()
+        .id(label)
+        .role(Role::Group)
+        .aria_label(label)
+        .items_center()
+        .justify_between()
+        .w_full()
+        .h(px(metrics::MENU_ITEM_HEIGHT))
+        .pl(px(metrics::MENU_ITEM_HORIZONTAL_PADDING))
         .child(label)
+        .child(
+            h_stack()
+                .items_center()
+                .gap(px(metrics::MENU_ITEM_GAP))
+                .child(icon_button(
+                    "menu-stepper-decrease",
+                    "Decrease",
+                    true,
+                    metrics::ICON_BUTTON_SIZE,
+                    minus_icon(palette.text_primary, icon_size),
+                    palette,
+                    on_decrease,
+                ))
+                .child(
+                    h_stack()
+                        .id("menu-stepper-value")
+                        .role(Role::Button)
+                        .aria_label("Reset")
+                        .tab_index(0)
+                        .focus_visible(|style| style.border_1().border_color(rgb(palette.accent)))
+                        .justify_center()
+                        .min_w(px(metrics::MENU_STEPPER_VALUE_WIDTH))
+                        .h(px(metrics::ICON_BUTTON_SIZE))
+                        .items_center()
+                        .rounded(px(metrics::MENU_ITEM_RADIUS))
+                        .text_color(rgb(palette.text_secondary))
+                        .hover(|style| style.bg(rgba(palette.menu_hover)))
+                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                        .on_click(on_reset)
+                        .child(value),
+                )
+                .child(icon_button(
+                    "menu-stepper-increase",
+                    "Increase",
+                    true,
+                    metrics::ICON_BUTTON_SIZE,
+                    add_icon(palette.text_primary, icon_size),
+                    palette,
+                    on_increase,
+                )),
+        )
 }

@@ -7,6 +7,7 @@ use crate::platform::engine::RequestedWebView;
 use super::super::button::{ButtonSize, button};
 use super::super::layout::h_stack;
 use super::super::modal::{modal, modal_panel};
+use super::super::motion::Transition;
 use super::super::{PhotonWebView, metrics, theme::ThemeColors};
 use super::BrowserWindow;
 use super::popup_window::open_minimal_window;
@@ -107,7 +108,12 @@ impl BrowserWindow {
                         })),
                     )),
             );
-        Some(modal("popup-confirmation", palette, panel))
+        Some(modal(
+            "popup-confirmation",
+            Transition::Enter,
+            palette,
+            panel,
+        ))
     }
 
     fn allow_pending_popup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
