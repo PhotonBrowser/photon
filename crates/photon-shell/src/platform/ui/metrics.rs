@@ -139,6 +139,7 @@ pub(super) const SHORTCUT_ICON_SIZE: f32 = 24.0;
 pub(super) const SHORTCUT_GAP: f32 = 8.0;
 pub(super) const SHORTCUT_REMOVE_INSET: f32 = 4.0;
 pub(super) const SEGMENT_HEIGHT: f32 = 26.0;
+pub(super) const DROPDOWN_WIDTH: f32 = 160.0;
 pub(super) const SEGMENT_HORIZONTAL_PADDING: f32 = 12.0;
 pub(super) const SEGMENT_RADIUS: f32 = 5.0;
 pub(super) const SEGMENT_GAP: f32 = 2.0;
