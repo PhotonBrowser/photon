@@ -77,7 +77,8 @@ crates/
 │       └── ui/
 │           ├── window/               # Browser window: layout, commands, rendering
 │           │   ├── app.rs            # App startup and the first window
-│           │   ├── tabs.rs           # Tab lifecycle and the tab strip
+│           │   ├── tabs.rs           # Tab lifecycle
+│           │   ├── sidebar.rs        # Builds the sidebar from tabs and settings; shows or hides it
 │           │   ├── tab_menu.rs       # Tab menu, reordering and bulk tab actions
 │           │   ├── content.rs        # What a tab shows: a web view or one of the browser's pages
 │           │   ├── menu.rs           # Browser menu and the menu overlay
@@ -102,6 +103,7 @@ crates/
 │           │   ├── settings/         # Sidebar and one module per section
 │           │   ├── layout.rs         # Page columns, headings and groups
 │           │   └── controls.rs       # Choices, switches and checkboxes
+│           ├── sidebar/              # Vertical tab sidebar: navigation, favourites, tabs, footer
 │           ├── omnibox/              # Address field and its suggestion panel
 │           ├── history.rs            # Shared browsing history, saved to the profile
 │           ├── settings.rs           # Shared settings, saved to the profile
@@ -173,6 +175,7 @@ owned by the shell; the presentation XPC implementation lives inside
 | Browser settings and profile persistence | [`photon-core/src/settings.rs`](../crates/photon-core/src/settings.rs), [`ui/settings.rs`](../crates/photon-shell/src/platform/ui/settings.rs), and [`photon-storage/src/profile.rs`](../crates/photon-storage/src/profile.rs) |
 | New tab page, settings page, and their controls | [`ui/pages/`](../crates/photon-shell/src/platform/ui/pages/mod.rs) and the rules in [`photon-core/src/new_tab.rs`](../crates/photon-core/src/new_tab.rs) |
 | A new `photon://` page | A module in [`ui/pages/`](../crates/photon-shell/src/platform/ui/pages/mod.rs) with its view and `PageDefinition`, listed in [`pages/registry.rs`](../crates/photon-shell/src/platform/ui/pages/registry.rs) |
+| The sidebar, its tabs and favourites | [`ui/sidebar/`](../crates/photon-shell/src/platform/ui/sidebar/mod.rs), [`ui/window/sidebar.rs`](../crates/photon-shell/src/platform/ui/window/sidebar.rs), and [`photon-core/src/sidebar.rs`](../crates/photon-core/src/sidebar.rs) |
 | What a tab shows (web view or Photon page) | [`ui/window/content.rs`](../crates/photon-shell/src/platform/ui/window/content.rs) |
 | C ABI exposed to native callers | [`photon-ffi/include/photon_ffi.h`](../crates/photon-ffi/include/photon_ffi.h) and [`photon-ffi/src/api.rs`](../crates/photon-ffi/src/api.rs) |
 | Search engines or address/query classification | [`photon-omnibox/src/`](../crates/photon-omnibox/src/lib.rs) |
@@ -204,7 +207,7 @@ Photon UI code never receives page pixel buffers. Normal rendering uses native
 Metal sampling with no CPU full-frame copies or GPUI image uploads. The app
 currently targets macOS for external IOSurface presentation.
 
-See [PhotonWebView](WebView.md), [the browser's own pages](Pages.md),
+See [the sidebar](Sidebar.md), [PhotonWebView](WebView.md), [the browser's own pages](Pages.md),
 [profile, settings, history and branding](Profile.md), [the omnibox](Omnibox.md),
 [native GPU presentation](NativeGpuPresentation.md),
 [theme and style tokens](Theme.md), and [upstream maintenance](Upstream.md).

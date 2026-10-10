@@ -15,9 +15,11 @@ What the Photon shell does today and what comes next. Engine performance work is
 - [x] Pages follow the shell theme through `prefers-color-scheme`
 - [x] Multiple windows
 
-### Tabs
+### Tabs and sidebar
 
-- [x] Tab strip with new, close and select; arrow keys move between tabs
+- [x] Vertical tab sidebar: navigation, address field, favourite sites, the current space's tabs and a footer, shown or hidden with ⌘S
+- [x] Favourite sites: up to 12 in a grid, added from a tab's menu, opening or switching to the site's tab
+- [x] Tabs with new, close and select; up and down arrows move between tabs
 - [x] Loading spinner after a load has run for 150 ms
 - [x] Page favicons from the Engine, a globe for pages without one, the brand logo for new tabs, and a symbol for each of the browser's own pages
 - [x] Icons scale in once when a new icon appears
@@ -31,7 +33,7 @@ What the Photon shell does today and what comes next. Engine performance work is
 - [x] Omnibox opens into a suggestion panel while typing: visited pages with their icons, past searches, the typed address and a search, with the best visited address completed inline
 - [x] History of visited pages and past searches, saved in the profile with page icons; rows can be removed from the omnibox
 - [x] Persistent profile for cookies, site storage and the cache (`PHOTON_TEMPORARY_PROFILE` for a throwaway one)
-- [x] Browser menu: new tab, new window, settings, find in page, zoom and the debug overlay
+- [x] Browser menu in the sidebar footer: new tab, new window, settings, find in page, zoom and the debug overlay
 - [x] Titlebar right-click menu
 - [x] Performance diagnostics overlay
 - [x] Page zoom from the menu or ⌘+, ⌘−, ⌘0, shown in a chip with Reset; each site's zoom is remembered for the session
@@ -53,6 +55,7 @@ What the Photon shell does today and what comes next. Engine performance work is
 - [x] ⌘R, ⌘., ⌘[, ⌘], ⌘L
 - [x] ⌘F, ⌘G, ⌘⇧G
 - [x] ⌘+, ⌘−, ⌘0
+- [x] ⌘S shows or hides the sidebar
 
 ### Accessibility and motion
 
@@ -73,6 +76,7 @@ In order of priority.
 
 ## Later
 
+- [ ] More spaces, each with its own tabs
 - [ ] History page
 - [ ] Bookmarks
 - [ ] Downloads

@@ -47,7 +47,7 @@ they are more opaque to stay readable.
 ## Dimensions and typography
 
 [`metrics.rs`](../crates/photon-shell/src/platform/ui/metrics.rs) holds shared
-logical-pixel measurements: window geometry, tabs, toolbar, menus, the omnibox
+logical-pixel measurements: window geometry, the sidebar and its tabs, menus, the omnibox
 and its suggestions, the page frame, chips, controls (segments, switches,
 checkboxes), settings rows and sidebar, and new tab tiles. It also holds type
 sizes, icon sizes and corner radii.
