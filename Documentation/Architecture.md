@@ -79,6 +79,8 @@ crates/
 │           │   ├── app.rs            # App startup and the first window
 │           │   ├── tabs.rs           # Tab lifecycle
 │           │   ├── sidebar.rs        # Builds the tab strip and toolbar or the sidebar; shows or hides it
+│           │   ├── command_bar.rs    # Opening the command bar and carrying out its choice
+│           │   ├── sidebar_state.rs  # Where the sidebar is: shown, hidden or revealed from the left edge
 │           │   ├── tab_menu.rs       # Tab menu, reordering and bulk tab actions
 │           │   ├── content.rs        # What a tab shows: a web view or one of the browser's pages
 │           │   ├── menu.rs           # Browser menu and the menu overlay
@@ -107,6 +109,7 @@ crates/
 │           ├── toolbar.rs            # The horizontal layout's toolbar
 │           ├── sidebar/              # Vertical tab sidebar: navigation, favourites, footer
 │           ├── omnibox/              # Address field and its suggestion panel
+│           ├── command_bar/          # The ⌘T command bar: field and result rows
 │           ├── history.rs            # Shared browsing history, saved to the profile
 │           ├── settings.rs           # Shared settings, saved to the profile
 │           ├── js_dialog.rs          # JavaScript alert, confirm and prompt
@@ -138,8 +141,8 @@ crates/
 | `photon-app` | Runnable Photon entry point | `photon-shell` |
 | `photon-shell` | Window-bound GPUI views, Engine session adapter, native presentation lifecycle, browser input | GPUI-CE, `photon-core`, `photon-performance`, `photon-shortcuts`, `photon-storage`, `photon-brand`, `photon-presentation-ipc`, native embedder bridge |
 | `photon-performance` | Performance snapshots, monitor state, timing accumulation, formatting, GPUI overlay | GPUI-CE |
-| `photon-core` | Browser state, commands, shared address normalization, history rules, settings, clearing requests | `photon-omnibox`, `photon-brand`, serde |
-| `photon-omnibox` | Search engine list, address/query resolution, suggestion matching | `photon-brand`, URL parsing library |
+| `photon-core` | Browser state, commands, shared address normalization, history rules, settings, clearing requests, command bar results | `photon-omnibox`, `photon-brand`, serde |
+| `photon-omnibox` | Search engine list, address/query resolution, suggestion and word matching | `photon-brand`, URL parsing library |
 | `photon-storage` | Profile folder, history and settings files, saved page icons, data usage | `photon-core`, `photon-brand`, serde |
 | `photon-brand` | Browser name, engine name, internal page scheme, profile folder name, logo | none |
 | `photon-ffi` | `photon_browser_*` C ABI and static library | `photon-core` |
@@ -182,6 +185,7 @@ owned by the shell; the presentation XPC implementation lives inside
 | C ABI exposed to native callers | [`photon-ffi/include/photon_ffi.h`](../crates/photon-ffi/include/photon_ffi.h) and [`photon-ffi/src/api.rs`](../crates/photon-ffi/src/api.rs) |
 | Search engines or address/query classification | [`photon-omnibox/src/`](../crates/photon-omnibox/src/lib.rs) |
 | Omnibox suggestions and their panel | [`photon-omnibox/src/suggest.rs`](../crates/photon-omnibox/src/suggest.rs), and [`ui/omnibox/`](../crates/photon-shell/src/platform/ui/omnibox/mod.rs) |
+| The ⌘T command bar | [`photon-core/src/command_bar.rs`](../crates/photon-core/src/command_bar.rs), [`ui/command_bar/`](../crates/photon-shell/src/platform/ui/command_bar/mod.rs), and [`ui/window/command_bar.rs`](../crates/photon-shell/src/platform/ui/window/command_bar.rs) |
 | History, saved data, and clearing it | [`photon-core/src/history.rs`](../crates/photon-core/src/history.rs), [`photon-storage`](../crates/photon-storage/src/lib.rs), and [`ui/history.rs`](../crates/photon-shell/src/platform/ui/history.rs) |
 | `./photon` command behavior | [`photon-cli/src/commands/`](../crates/photon-cli/src/commands/) |
 

@@ -19,13 +19,28 @@ change applies at once, in every window.
 | Top row | Room for the native window controls, the sidebar toggle, and back, forward and reload or stop. Empty space moves the window; right-clicking it opens the browser menu. |
 | Address field | The [omnibox](Omnibox.md), larger than in the toolbar: the page's address the short way while idle, the full address while editing, and suggestions in a panel that reaches over the page. |
 | Favourites | A three-column grid of favourite sites with their icons. A click switches to a tab already showing the site, or opens it in a new tab. Right-click to remove; add one from a tab's menu ("Add to Favourites"). Up to 12. |
-| Tabs | "+ New Tab", then one row per tab: icon or loading spinner, title, and a close button on the active tab and on the row under the pointer. Click to switch, middle-click or the close button to close, drag to reorder, right-click for the tab menu, and the up and down arrows move between focused tabs. The list scrolls. |
+| Tabs | "+ New Tab", which opens the [command bar](Omnibox.md#command-bar), then one row per tab: icon or loading spinner, title, and a close button on the active tab and on the row under the pointer. Click to switch, middle-click or the close button to close, drag to reorder, right-click for the tab menu, and the up and down arrows move between focused tabs. The list scrolls. |
 | Footer | Settings and the browser menu, which opens above it. |
 
-⌘S shows or hides the sidebar. Hidden, its top row stays where it was, in
-a bar as tall as the horizontal tab strip, and the page takes the whole width
-below it; ⌘L shows the sidebar again to focus the address field. The
-sidebar slides in when shown.
+⌘S or the sidebar button shows or hides the sidebar. Its top row, with the
+window controls and the sidebar button, stays where it is; the rest slides in
+from the left edge or back out, and the page narrows or widens beside it in
+step, so the page resizes smoothly rather than jumping. Back, forward and
+reload fade with the sidebar. Hidden, the top row is a bar as tall as the
+horizontal tab strip above the page, which takes the whole width.
+
+- Pointing at the window's left edge slides the sidebar in over the page, on
+  a raised surface. It slides away once the pointer has left the edge and the
+  sidebar for a moment, unless a menu opened from it is still open.
+- Its sidebar button keeps it shown: the page makes room beside it, and the
+  surface fades as it does.
+- ⌘L shows the sidebar to focus the address field.
+
+The window draws the sidebar as a layer over itself and keeps room for it
+beside the page, both following one `Tween` from
+[`motion.rs`](../crates/photon-shell/src/platform/ui/motion.rs).
+[`window/sidebar_state.rs`](../crates/photon-shell/src/platform/ui/window/sidebar_state.rs)
+keeps where the sidebar is and handles the left edge.
 
 ## Closing the last tab
 

@@ -71,6 +71,34 @@ keys move through rows and show each in the field; Enter or a click opens
 one; a visited page or past search can be forgotten with its close button.
 Choosing a search records it in the history.
 
+## Command bar
+
+⌘T opens the command bar, as in Arc and Zen: a large field centred over the
+page on frosted glass, rather than an empty new tab. In the vertical layout,
+the sidebar's "+ New Tab" opens it too; the horizontal strip's + button and
+the menu's New Tab still open a new tab page.
+
+| With | It offers |
+| --- | --- |
+| Nothing typed | The open tabs, to switch to |
+| Typed text | What Enter would open in the omnibox first, then matching open tabs (up to 4), matching commands (up to 3), then the omnibox's other suggestions |
+
+Choosing an address or search opens it in a new tab, a `photon://` address
+opens that page, an open tab is switched to, and a command runs. The commands
+are New Tab, New Window, Reopen Closed Tab, Close Tab, Reload Page, Find in
+Page, Copy Address, Show or Hide Sidebar and Settings, each offered only where
+it applies (page commands with a web page showing, the sidebar in the vertical
+layout). They match by name or by keywords such as "refresh" or
+"preferences". Typed words match where words start, as in the omnibox. The
+arrow keys move through the rows, pointing selects one, Enter or a click
+chooses it, and Escape or a click outside closes the bar.
+
+The rules are in [`photon-core/src/command_bar.rs`](../crates/photon-core/src/command_bar.rs)
+(with `match_words` from `photon-omnibox`), the view in
+[`ui/command_bar/`](../crates/photon-shell/src/platform/ui/command_bar/mod.rs),
+and carrying out the choice in
+[`ui/window/command_bar.rs`](../crates/photon-shell/src/platform/ui/window/command_bar.rs).
+
 ## Who calls it
 
 - `crates/photon-shell`'s omnibox
