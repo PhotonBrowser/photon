@@ -292,7 +292,9 @@ impl BrowserWindow {
             None => {
                 let index = self.tabs.len();
                 self.insert_tab(index, Some(url), window, cx);
+                // The new tab is the tile's, so it never shows in the list.
                 self.tabs[self.active_tab].favourite = Some(url.to_owned());
+                cx.notify();
             }
         }
     }
