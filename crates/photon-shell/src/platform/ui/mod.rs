@@ -1,6 +1,7 @@
 //! GPUI views and window composition.
 
 mod button;
+mod command_bar;
 mod controls;
 mod find_bar;
 mod history;

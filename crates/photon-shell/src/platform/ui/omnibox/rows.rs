@@ -80,7 +80,7 @@ pub(super) fn suggestion_rows(
 }
 
 /// The icon a suggestion shows: the page's icon when known.
-pub(super) fn suggestion_icon(
+pub(in super::super) fn suggestion_icon(
     suggestion: &Suggestion,
     palette: ThemeColors,
     cx: &mut App,
@@ -105,7 +105,7 @@ pub(super) fn suggestion_icon(
 
 /// Centers an icon in the space every row and the field give their icons,
 /// so text lines up whatever the icon.
-pub(super) fn icon_slot(icon: impl IntoElement) -> AnyElement {
+pub(in super::super) fn icon_slot(icon: impl IntoElement) -> AnyElement {
     h_stack()
         .flex_shrink_0()
         .size(px(metrics::OMNIBOX_SUGGESTION_ICON_SIZE))
@@ -151,9 +151,19 @@ fn suggestion_row(
     row
 }
 
+/// `text` with `matches` in bold, for rows that show matched words.
+pub(in super::super) fn matched_text(
+    text: &str,
+    matches: &[Range<usize>],
+) -> (SharedString, Vec<(Range<usize>, HighlightStyle)>) {
+    let (mut shown, mut highlights) = (String::new(), Vec::new());
+    push(&mut shown, &mut highlights, text, matches, None);
+    (shown.into(), highlights)
+}
+
 /// A row's text, such as "Discord - discord.com/channels/me" or
 /// "rust - Google Search", with the typed words in bold and addresses tinted.
-fn row_text(
+pub(in super::super) fn row_text(
     suggestion: &Suggestion,
     palette: ThemeColors,
 ) -> (SharedString, Vec<(Range<usize>, HighlightStyle)>) {

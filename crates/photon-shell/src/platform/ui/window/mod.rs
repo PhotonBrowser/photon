@@ -3,6 +3,7 @@
 mod actions;
 mod alerts;
 mod app;
+mod command_bar;
 mod content;
 mod find;
 mod menu;
@@ -29,6 +30,7 @@ use super::super::engine::EngineRuntime;
 use super::super::trace;
 use super::super::window_observer::WindowObserver;
 use super::super::window_settings;
+use super::command_bar::CommandBar;
 use super::find_bar::{FIND_BAR_MOTION, FindBar};
 use super::js_dialog::JavaScriptDialog;
 use super::layout::{h_stack, v_stack};
@@ -70,6 +72,10 @@ struct BrowserWindow {
     /// Keeps a closed menu drawn while it animates away.
     menu_presence: Presence<OpenMenu>,
     find_bar_presence: Presence<Entity<FindBar>>,
+    /// The command bar, while open.
+    command_bar: Option<Entity<CommandBar>>,
+    command_bar_presence: Presence<Entity<CommandBar>>,
+    _command_bar_subscription: Option<Subscription>,
     dialog_presence: Presence<Entity<JavaScriptDialog>>,
     notice_presence: Presence<alerts::Notice>,
     /// Pages of closed tabs, most recent last, for reopening.
@@ -289,6 +295,7 @@ impl Render for BrowserWindow {
             .text_color(gpui::rgb(palette.text_primary))
             .child(body)
             .children(edge)
+            .children(self.command_bar_overlay(cx))
             // A JavaScript dialog is modal to the whole window.
             .children(dialog.map(|(dialog, _)| dialog))
             .children(self.open_menu_overlay(palette, cx))
@@ -357,6 +364,9 @@ fn open_browser_window(
                 open_menu: None,
                 menu_presence: Presence::default(),
                 find_bar_presence: Presence::default(),
+                command_bar: None,
+                command_bar_presence: Presence::default(),
+                _command_bar_subscription: None,
                 dialog_presence: Presence::default(),
                 notice_presence: Presence::default(),
                 closed_tabs: Vec::new(),

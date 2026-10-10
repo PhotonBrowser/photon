@@ -152,8 +152,16 @@ impl BrowserWindow {
                 address: self.omnibox.clone().into_any_element(),
                 favourites: (!favourites.is_empty())
                     .then(|| favourites_grid(favourites, palette).into_any_element()),
-                tabs: tab_list(self.tab_items(cx), self.new_tab_handler(cx), palette)
-                    .into_any_element(),
+                // As in Arc, a new tab starts from the command bar.
+                tabs: tab_list(
+                    self.tab_items(cx),
+                    Box::new(cx.listener(|this, _, window, cx| {
+                        cx.stop_propagation();
+                        this.open_command_bar(window, cx);
+                    })),
+                    palette,
+                )
+                .into_any_element(),
                 footer: footer(
                     matches!(self.open_menu, Some(OpenMenu::Sidebar(_))),
                     FooterActions {

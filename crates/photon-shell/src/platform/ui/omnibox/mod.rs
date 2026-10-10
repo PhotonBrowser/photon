@@ -9,6 +9,8 @@ mod editing;
 mod panel;
 mod rows;
 
+pub(super) use rows::{icon_slot, matched_text, row_text, suggestion_icon};
+
 use gpui::{
     Context, Entity, EventEmitter, Focusable, MouseButton, Render, Subscription, Window,
     prelude::*, px, rgb, rgb_to_hsla, rgba,

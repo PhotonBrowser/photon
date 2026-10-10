@@ -7,7 +7,7 @@ use crate::actions::*;
 /// Returns the browser's default keyboard shortcuts.
 pub fn browser_shortcuts() -> Vec<KeyBinding> {
     vec![
-        KeyBinding::new("secondary-t", NewTab, None),
+        KeyBinding::new("secondary-t", OpenCommandBar, None),
         KeyBinding::new("secondary-n", NewWindow, None),
         KeyBinding::new("secondary-w", CloseTab, None),
         KeyBinding::new("secondary-shift-t", ReopenClosedTab, None),

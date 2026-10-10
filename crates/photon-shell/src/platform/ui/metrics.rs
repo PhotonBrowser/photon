@@ -172,3 +172,16 @@ pub(super) const SIDEBAR_FAVOURITE_HEIGHT: f32 = 50.0;
 pub(super) const SIDEBAR_FAVOURITE_ICON_SIZE: f32 = 20.0;
 pub(super) const SIDEBAR_FOOTER_HEIGHT: f32 = 40.0;
 pub(super) const SIDEBAR_SEPARATOR_MARGIN: f32 = 8.0;
+
+/// The command bar ⌘T opens over the page.
+pub(super) const COMMAND_BAR_WIDTH: f32 = 640.0;
+/// Space above the command bar, from the top of the window.
+pub(super) const COMMAND_BAR_TOP: f32 = 120.0;
+pub(super) const COMMAND_BAR_RADIUS: f32 = 14.0;
+pub(super) const COMMAND_BAR_FIELD_HEIGHT: f32 = 52.0;
+pub(super) const COMMAND_BAR_FIELD_PADDING: f32 = 16.0;
+pub(super) const COMMAND_BAR_FONT_SIZE: f32 = 18.0;
+pub(super) const COMMAND_BAR_ICON_SIZE: f32 = 18.0;
+pub(super) const COMMAND_BAR_ROW_HEIGHT: f32 = 40.0;
+pub(super) const COMMAND_BAR_ROWS_INSET: f32 = 6.0;
+pub(super) const COMMAND_BAR_DETAIL_FONT_SIZE: f32 = 12.0;

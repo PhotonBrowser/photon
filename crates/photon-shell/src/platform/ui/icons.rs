@@ -125,6 +125,16 @@ pub(super) fn chevron_down_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("chevron-down"), color, size)
 }
 
+/// Two overlapping pages, for copying.
+pub(super) fn copy_icon(color: u32, size: f32) -> impl IntoElement {
+    icon(lucide!("copy"), color, size)
+}
+
+/// A window, for opening a new one.
+pub(super) fn window_icon(color: u32, size: f32) -> impl IntoElement {
+    icon(lucide!("app-window"), color, size)
+}
+
 /// A speaker, crossed out when `muted`.
 pub(super) fn audio_icon(color: u32, size: f32, muted: bool) -> impl IntoElement {
     let data: &'static [u8] = if muted {
