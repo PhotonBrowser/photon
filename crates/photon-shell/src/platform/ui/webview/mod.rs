@@ -5,8 +5,9 @@ use super::super::presentation::PresentedSurface;
 use super::input::WebViewInput;
 use super::{metrics::PAGE_RADIUS, settings::Settings, theme::palette};
 use gpui::{
-    Context, EventEmitter, FocusHandle, InteractiveElement, KeyDownEvent, KeyUpEvent, ObjectFit,
-    Render, Subscription, SurfaceSource, Window, WindowAppearance, div, prelude::*, px, surface,
+    Context, EventEmitter, FocusHandle, InteractiveElement, KeyDownEvent, KeyUpEvent, MouseButton,
+    NavigationDirection, ObjectFit, Render, Subscription, SurfaceSource, Window, WindowAppearance,
+    div, prelude::*, px, surface,
 };
 use photon_core::{BrowserCommand, BrowserState, EngineEvent, PageCrashes, PageDialogs};
 use photon_performance::{PerformanceDiagnostics, performance_overlay};
@@ -387,7 +388,19 @@ impl Render for PhotonWebView {
                 weak_mouse_down
                     .update(app, |this, cx| {
                         window.focus(&this.focus_handle, cx);
-                        this.input.mouse_down(&mut this.session, event);
+                        match event.button {
+                            MouseButton::Navigate(NavigationDirection::Back)
+                                if this.state.can_go_back =>
+                            {
+                                let _ = this.execute(BrowserCommand::Back, cx);
+                            }
+                            MouseButton::Navigate(NavigationDirection::Forward)
+                                if this.state.can_go_forward =>
+                            {
+                                let _ = this.execute(BrowserCommand::Forward, cx);
+                            }
+                            _ => this.input.mouse_down(&mut this.session, event),
+                        }
                     })
                     .ok();
             })
