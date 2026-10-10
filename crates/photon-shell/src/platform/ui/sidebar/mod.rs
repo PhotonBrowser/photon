@@ -55,7 +55,7 @@ pub(super) fn sidebar(sections: SidebarSections, palette: ThemeColors) -> impl I
         .child(top)
         .child(
             div()
-                .mx(px(metrics::SIDEBAR_PADDING + metrics::SIDEBAR_TAB_PADDING))
+                .mx(px(metrics::SIDEBAR_SEPARATOR_INSET))
                 .my(px(metrics::SIDEBAR_SEPARATOR_MARGIN))
                 .h(px(metrics::MENU_SEPARATOR_HEIGHT))
                 .bg(rgba(palette.menu_border)),
