@@ -26,17 +26,20 @@ API; it is not part of the desktop shell's internal state path.
 ## Ownership
 
 - `crates/photon-core` contains framework-independent browser state, commands,
-  and address normalization. It has no GPUI, GPUI-CE, native, or Ladybird
-  types.
+  address normalization, browser settings, history, and the new tab page's
+  rules. It has no GPUI, GPUI-CE, native, or Ladybird types.
 - `crates/photon-omnibox` owns address-versus-search classification, search
   engine data, and how typed text is matched against visited pages and past
   searches for suggestions. Core and the shell use the same rules.
-- `crates/photon-storage` owns the on-disk profile: the history file, saved
-  page icons, data usage, and the Engine's website data folder. It is plain
-  file access over core types, with no GPUI or Engine dependency, so settings
-  and internal pages can list and delete data through the same calls. Core
-  owns the history rules and `ClearBrowsingData`; the shell applies a clear
-  to both the profile and the Engine.
+- `crates/photon-brand` owns the browser's name, engine name, internal page
+  scheme, profile folder name and logo. Anything people see that names the
+  browser comes from it, so renaming is one edit there.
+- `crates/photon-storage` owns the on-disk profile: the history and settings
+  files, saved page icons, data usage, and the Engine's website data folder.
+  It is plain file access over core types, with no GPUI or Engine dependency,
+  so settings and internal pages can list and delete data through the same
+  calls. Core owns the history rules and `ClearBrowsingData`; the shell applies
+  a clear to both the profile and the Engine.
 - `crates/photon-ffi` adapts the safe core model to the exported
   `photon_browser_*` C ABI. It owns pointer validation, C strings, and ABI
   state, and builds as both an `rlib` and a static library.
@@ -85,6 +88,15 @@ crates/
 │           │   ├── crashes.rs        # Crash recovery notices
 │           │   ├── dialogs.rs        # JavaScript dialog requests and replies
 │           │   └── find.rs           # Find-in-page state
+│           ├── pages/                # Photon's own pages at photon:// addresses, drawn natively in a tab
+│           │   ├── registry.rs       # Every page, found by its photon:// name
+│           │   ├── new_tab/          # Logo, shortcut tiles, customise panel, adding a shortcut
+│           │   ├── settings/         # Sidebar and one module per section
+│           │   ├── layout.rs         # Page columns, headings and groups
+│           │   └── controls.rs       # Choices, switches and checkboxes
+│           ├── omnibox/              # Address field and its suggestion panel
+│           ├── history.rs            # Shared browsing history, saved to the profile
+│           ├── settings.rs           # Shared settings, saved to the profile
 │           ├── js_dialog.rs          # JavaScript alert, confirm and prompt
 │           ├── modal.rs              # Reusable centered modal
 │           ├── motion.rs             # Entrance animations and presets
@@ -98,6 +110,7 @@ crates/
 ├── photon-core/                      # Framework-independent browser model
 ├── photon-omnibox/                   # Search engines, address resolution, suggestions
 ├── photon-storage/                   # On-disk profile: history, icons, website data
+├── photon-brand/                     # Browser name, page scheme, profile folder and logo
 ├── photon-ffi/                       # Exported C API and static library
 ├── photon-shortcuts/                 # Browser actions and key bindings
 ├── photon-cli/                       # `./photon` developer commands
@@ -108,11 +121,12 @@ crates/
 | Package | Owns | Depends on |
 | --- | --- | --- |
 | `photon-app` | Runnable Photon entry point | `photon-shell` |
-| `photon-shell` | Window-bound GPUI views, Engine session adapter, native presentation lifecycle, browser input | GPUI-CE, `photon-core`, `photon-performance`, `photon-shortcuts`, `photon-storage`, `photon-presentation-ipc`, native embedder bridge |
+| `photon-shell` | Window-bound GPUI views, Engine session adapter, native presentation lifecycle, browser input | GPUI-CE, `photon-core`, `photon-performance`, `photon-shortcuts`, `photon-storage`, `photon-brand`, `photon-presentation-ipc`, native embedder bridge |
 | `photon-performance` | Performance snapshots, monitor state, timing accumulation, formatting, GPUI overlay | GPUI-CE |
-| `photon-core` | Browser state, commands, shared address normalization, history rules, clearing requests | `photon-omnibox` |
-| `photon-omnibox` | Search engine list, address/query resolution, suggestion matching | URL parsing library |
-| `photon-storage` | Profile folder, history file, saved page icons, data usage | `photon-core`, serde |
+| `photon-core` | Browser state, commands, shared address normalization, history rules, settings, clearing requests | `photon-omnibox`, `photon-brand`, serde |
+| `photon-omnibox` | Search engine list, address/query resolution, suggestion matching | `photon-brand`, URL parsing library |
+| `photon-storage` | Profile folder, history and settings files, saved page icons, data usage | `photon-core`, `photon-brand`, serde |
+| `photon-brand` | Browser name, engine name, internal page scheme, profile folder name, logo | none |
 | `photon-ffi` | `photon_browser_*` C ABI and static library | `photon-core` |
 | `photon-shortcuts` | Browser actions and default key bindings | GPUI-CE |
 | `photon-cli` | `./photon` developer and runtime commands | CLI and command-line support libraries |
@@ -143,9 +157,13 @@ owned by the shell; the presentation XPC implementation lives inside
 | Engine frame pacing or pausing Engine while the window is occluded | [`platform/display.rs`](../crates/photon-shell/src/platform/display.rs), [`platform/window_observer.rs`](../crates/photon-shell/src/platform/window_observer.rs), then [`ui/window/`](../crates/photon-shell/src/platform/ui/window/mod.rs) |
 | Rust declarations for native embedder functions | [`platform/ffi.rs`](../crates/photon-shell/src/platform/ffi.rs) and [`PhotonEmbedderBridge.h`](../native/embedder/PhotonEmbedderBridge.h) |
 | Browser state and command rules | [`photon-core/src/state.rs`](../crates/photon-core/src/state.rs) |
+| Browser settings and profile persistence | [`photon-core/src/settings.rs`](../crates/photon-core/src/settings.rs), [`ui/settings.rs`](../crates/photon-shell/src/platform/ui/settings.rs), and [`photon-storage/src/profile.rs`](../crates/photon-storage/src/profile.rs) |
+| New tab page, settings page, and their controls | [`ui/pages/`](../crates/photon-shell/src/platform/ui/pages/mod.rs) and the rules in [`photon-core/src/new_tab.rs`](../crates/photon-core/src/new_tab.rs) |
+| A new `photon://` page | A module in [`ui/pages/`](../crates/photon-shell/src/platform/ui/pages/mod.rs) with its view and `PageDefinition`, listed in [`pages/registry.rs`](../crates/photon-shell/src/platform/ui/pages/registry.rs) |
+| What a tab shows (web view or Photon page) | [`ui/window/content.rs`](../crates/photon-shell/src/platform/ui/window/content.rs) |
 | C ABI exposed to native callers | [`photon-ffi/include/photon_ffi.h`](../crates/photon-ffi/include/photon_ffi.h) and [`photon-ffi/src/api.rs`](../crates/photon-ffi/src/api.rs) |
 | Search engines or address/query classification | [`photon-omnibox/src/`](../crates/photon-omnibox/src/lib.rs) |
-| Omnibox suggestions and their panel | [`photon-omnibox/src/suggest.rs`](../crates/photon-omnibox/src/suggest.rs), [`ui/omnibox.rs`](../crates/photon-shell/src/platform/ui/omnibox.rs), and [`ui/omnibox_suggestions.rs`](../crates/photon-shell/src/platform/ui/omnibox_suggestions.rs) |
+| Omnibox suggestions and their panel | [`photon-omnibox/src/suggest.rs`](../crates/photon-omnibox/src/suggest.rs), and [`ui/omnibox/`](../crates/photon-shell/src/platform/ui/omnibox/mod.rs) |
 | History, saved data, and clearing it | [`photon-core/src/history.rs`](../crates/photon-core/src/history.rs), [`photon-storage`](../crates/photon-storage/src/lib.rs), and [`ui/history.rs`](../crates/photon-shell/src/platform/ui/history.rs) |
 | `./photon` command behavior | [`photon-cli/src/commands/`](../crates/photon-cli/src/commands/) |
 

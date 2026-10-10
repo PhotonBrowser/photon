@@ -5,6 +5,9 @@
 - `photon-core` contains browser state and rules without UI, native, or Engine
   types, including the history and requests to clear browsing data.
   `photon-omnibox` owns address and search resolution and suggestion matching.
+- `photon-brand` owns the browser's name and marks: name, engine name,
+  internal page scheme, profile folder and logo. Never write the browser's
+  name in UI text, addresses or file paths; read it from `photon-brand`.
 - `photon-storage` owns the on-disk profile: saving and loading the history,
   page icons, data usage, and the Engine's website data folder. Keep it plain
   file access over core types, with no GPUI or Engine dependency, so settings

@@ -38,6 +38,13 @@ What the Photon shell does today and what comes next. Engine performance work is
 - [x] Page right-click menus from the Engine for pages, links, selections, images and media, with Copy, Cut and Paste through the macOS pasteboard
 - [x] Find in page: a floating bar in the page's corner with match count and highlights (⌘F, ⌘G, ⌘⇧G)
 
+### Internal pages and settings
+
+- [x] New tab page: logo and 4–12 site shortcuts in up to two rows (pinned, then most visited, one per site), with tiles removed on hover, shortcuts added by name and address, and a customise panel
+- [x] Settings page with a sidebar of sections: appearance, search, new tab page, sites (pop-ups), and privacy (clearing browsing data by time range, with disk usage)
+- [x] Settings saved in the profile and followed by every window at once
+- [x] Photon's pages live at `photon://` addresses, shown in the omnibox (the new tab page leaves it empty) and listed in one registry
+
 ### Keyboard shortcuts
 
 - [x] ⌘T, ⌘N, ⌘W, ⌘⇧T
@@ -61,12 +68,11 @@ In order of priority.
 
 ## Later
 
-- [ ] Settings and internal pages: history, most visited sites, and clearing browsing data
+- [ ] History page
 - [ ] Bookmarks
 - [ ] Downloads
 - [ ] File upload pickers and permission prompts
 - [ ] Hover link status
 - [ ] Session restore
-- [ ] Settings page, including the default search engine
 - [ ] Private windows
 - [ ] Full-screen pages and video
