@@ -24,7 +24,7 @@ What the Photon shell does today and what comes next. Engine performance work is
 
 - [x] Horizontal tabs in the titlebar (the default) or a vertical sidebar, chosen in Settings → Appearance
 - [x] Vertical tab sidebar: navigation, a larger address field, favourite sites, tabs and a footer, shown or hidden with ⌘S
-- [x] The sidebar's address field shows only the page's site, as in Arc, and the full address once clicked
+- [x] The address bar shows only the page's site, as in Arc, and the full address once clicked; Settings → Search can show the full address instead
 - [x] The sidebar slides in and out while the page resizes beside it in step; hidden, pointing at the window's left edge reveals it over the page until the pointer leaves
 - [x] Drag the sidebar's edge to widen it (remembered in the profile); narrower than its default hides it
 - [x] Pinned tabs above a divider, as in Arc: pinned from the tab menu or by dragging, saved and reopened at launch, icons only in the horizontal strip

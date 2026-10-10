@@ -104,6 +104,9 @@ pub struct BrowserSettings {
     pub transparency: Transparency,
     pub tab_layout: TabLayout,
     pub default_search_engine: String,
+    /// Whether the address bar shows a page's full address while idle. When
+    /// not, it shows only the site until clicked.
+    pub show_full_address: bool,
     pub popup_policy: PopupPolicy,
     pub new_tab: NewTabSettings,
     pub sidebar: SidebarSettings,
@@ -124,6 +127,7 @@ impl Default for BrowserSettings {
             transparency: Transparency::default(),
             tab_layout: TabLayout::default(),
             default_search_engine: "google".to_owned(),
+            show_full_address: false,
             popup_policy: PopupPolicy::Ask,
             new_tab: NewTabSettings::default(),
             sidebar: SidebarSettings::default(),

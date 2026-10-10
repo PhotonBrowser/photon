@@ -110,7 +110,7 @@ impl Omnibox {
             // view inside it is notified, so redraw for every edit, caret move
             // and blink.
             cx.observe(&input, |_, _, cx| cx.notify()),
-            // The idle address is shorter in the sidebar than in the toolbar.
+            // The idle address follows the full address setting.
             cx.observe_global_in::<Settings>(window, |this, window, cx| {
                 if !this.is_editing(window, cx) {
                     this.show_page_url(cx);
@@ -192,16 +192,16 @@ impl Omnibox {
     }
 
     /// Shows the page's address the short way while nobody is editing it:
-    /// as people write it in the toolbar, and just its site in the sidebar,
-    /// as in Arc.
+    /// just its site, as in Arc, or as people write it when the full address
+    /// is chosen in settings.
     fn show_page_url(&mut self, cx: &mut Context<Self>) {
         let url = self.page_url(cx);
         let shown = if self.webview.is_none() {
             url
-        } else if WorkspaceLayout::current(cx).omnibox_placement() == OmniboxPlacement::Sidebar {
-            display_domain(&url)
-        } else {
+        } else if Settings::get(cx).show_full_address {
             display_address(&url)
+        } else {
+            display_domain(&url)
         };
         self.show(shown, cx);
     }

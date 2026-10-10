@@ -80,7 +80,9 @@ impl Section {
         let name = photon_brand::NAME;
         match self {
             Self::Appearance => format!("How {name} looks."),
-            Self::Search => "Where searches from the address bar go.".to_owned(),
+            Self::Search => {
+                "Where searches from the address bar go, and how it shows addresses.".to_owned()
+            }
             Self::NewTab => "What new tabs show.".to_owned(),
             Self::Tabs => "How tabs open and close.".to_owned(),
             Self::Sites => "What sites may do.".to_owned(),
