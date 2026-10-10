@@ -3,7 +3,7 @@
 
 use gpui::{
     Context, Entity, EventEmitter, FocusHandle, Focusable, KeyDownEvent, Render, Role,
-    Subscription, Window, div, prelude::*, px, rgb, rgba,
+    Subscription, Window, div, prelude::*, px, rgb,
 };
 use gpui_elements::editable_text::{EditableTextState, StringStorage, text_input};
 use photon_core::{Space, WindowColor};
@@ -11,7 +11,7 @@ use std::rc::Rc;
 
 use super::button::{ButtonSize, button};
 use super::color_picker::color_picker;
-use super::controls::themed_text_input;
+use super::controls::text_field;
 use super::layout::h_stack;
 use super::modal::modal_panel;
 use super::{metrics, theme::palette};
@@ -115,20 +115,14 @@ impl Render for SpaceEditor {
                 cx.stop_propagation();
             }))
             .child(div().font_weight(gpui::FontWeight::SEMIBOLD).child(title))
-            .child(
-                themed_text_input(text_input("space-editor-name"), palette)
+            .child(text_field(
+                text_input("space-editor-name")
                     .state(self.name.downgrade())
                     .track_focus(&self.name.focus_handle(cx))
                     .placeholder("Name")
-                    .placeholder_color(rgb(palette.text_secondary))
-                    .w_full()
-                    .h(px(metrics::BUTTON_HEIGHT))
-                    .px(px(metrics::MENU_ITEM_HORIZONTAL_PADDING))
-                    .rounded(px(metrics::CONTROL_RADIUS))
-                    .bg(rgba(palette.surface))
-                    .whitespace_nowrap()
-                    .overflow_x_scroll(),
-            )
+                    .placeholder_color(rgb(palette.text_secondary)),
+                palette,
+            ))
             .child(colors)
             .child(
                 h_stack()

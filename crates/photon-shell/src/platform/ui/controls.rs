@@ -358,6 +358,25 @@ fn changes_since_shown(id: ElementId, value: bool, window: &mut Window, cx: &mut
     changes + 1
 }
 
+/// A dialog's text field: its box, with the text centred in it and
+/// scrolling sideways when long.
+pub(super) fn text_field(input: EditableTextElement, palette: ThemeColors) -> gpui::Div {
+    h_stack()
+        .items_center()
+        .w_full()
+        .h(px(metrics::BUTTON_HEIGHT))
+        .px(px(metrics::MENU_ITEM_HORIZONTAL_PADDING))
+        .rounded(px(metrics::CONTROL_RADIUS))
+        .bg(rgba(palette.surface))
+        .child(
+            themed_text_input(input, palette)
+                .flex_1()
+                .min_w_0()
+                .whitespace_nowrap()
+                .overflow_x_scroll(),
+        )
+}
+
 /// Applies the theme's caret, selection and blink to a text field.
 pub(super) fn themed_text_input(
     input: EditableTextElement,

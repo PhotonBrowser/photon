@@ -2,7 +2,7 @@
 
 use gpui::{
     App, Context, Entity, FocusHandle, Focusable, KeyDownEvent, Render, Role, Subscription, Window,
-    div, prelude::*, px, rgb, rgba,
+    div, prelude::*, px, rgb,
 };
 use gpui_elements::editable_text::{
     EditableTextState, StringStorage,
@@ -12,7 +12,7 @@ use gpui_elements::editable_text::{
 use photon_core::{DialogKind, DialogRequest};
 
 use super::button::{ButtonSize, button};
-use super::controls::themed_text_input;
+use super::controls::text_field;
 use super::layout::h_stack;
 use super::modal::{modal, modal_panel};
 use super::motion::Transition;
@@ -178,24 +178,15 @@ impl Render for JavaScriptDialog {
 
         if let Some(input) = &self.input {
             panel = panel.child(
-                h_stack()
-                    .items_center()
-                    .h(px(metrics::OMNIBOX_HEIGHT))
-                    .px(px(metrics::OMNIBOX_HORIZONTAL_PADDING))
-                    .rounded(px(metrics::MENU_ITEM_RADIUS))
-                    .bg(rgba(palette.surface))
-                    .text_size(px(metrics::MENU_FONT_SIZE))
-                    .capture_action(cx.listener(Self::accept_from_field))
-                    .capture_action(cx.listener(Self::cancel_from_field))
-                    .child(
-                        themed_text_input(text_input("javascript-dialog-input"), palette)
-                            .state(input.downgrade())
-                            .track_focus(&input.focus_handle(cx))
-                            .flex_1()
-                            .min_w_0()
-                            .whitespace_nowrap()
-                            .overflow_x_scroll(),
-                    ),
+                text_field(
+                    text_input("javascript-dialog-input")
+                        .state(input.downgrade())
+                        .track_focus(&input.focus_handle(cx)),
+                    palette,
+                )
+                .text_size(px(metrics::MENU_FONT_SIZE))
+                .capture_action(cx.listener(Self::accept_from_field))
+                .capture_action(cx.listener(Self::cancel_from_field)),
             );
         }
 

@@ -98,7 +98,8 @@ tab all use it, so they frost alike and follow the transparency setting.
 - [`controls.rs`](../crates/photon-shell/src/platform/ui/controls.rs):
   segmented `choices`, a `dropdown` that opens a menu of its options, colour
   `swatches`,
-  `switch` and `check_mark`, used by menus and pages, and
+  `switch` and `check_mark`, used by menus and pages, `text_field` for a
+  dialog's text field with its text centred, and
   `themed_text_input` for every text field's caret and selection.
 - [`button.rs`](../crates/photon-shell/src/platform/ui/button.rs): text and
   icon buttons, and the toolbar and menu buttons both tab layouts share. [`modal.rs`](../crates/photon-shell/src/platform/ui/modal.rs):
