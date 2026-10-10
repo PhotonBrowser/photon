@@ -9,7 +9,7 @@ mod rows;
 
 use gpui::{
     Context, Entity, EventEmitter, FocusHandle, Focusable, MouseButton, Render, Subscription,
-    Window, div, prelude::*, px, rgb, rgba,
+    Window, div, prelude::*, px, relative, rgb, rgba,
 };
 use gpui_elements::editable_text::{
     EditableTextState, StringStorage, TextChanged,
@@ -218,8 +218,9 @@ impl Render for CommandBar {
         };
         let panel = v_stack()
             .id("command-bar")
-            .w(px(metrics::COMMAND_BAR_WIDTH))
-            .max_w_full()
+            .absolute()
+            .top_0()
+            .w_full()
             .rounded(px(metrics::COMMAND_BAR_RADIUS))
             .border_1()
             .border_color(rgba(palette.menu_border))
@@ -235,20 +236,32 @@ impl Render for CommandBar {
             .capture_action(cx.listener(Self::select_next))
             .child(field)
             .children(rows);
-        // Clicking anywhere else closes it.
+        // The field sits a little above the middle of the window, and results
+        // grow down from it, so it stays put as they change. Clicking anywhere
+        // else closes it.
+        let anchor = div()
+            .relative()
+            .w(px(metrics::COMMAND_BAR_WIDTH))
+            .max_w_full()
+            .h(px(metrics::COMMAND_BAR_FIELD_HEIGHT))
+            .child(panel);
         div()
             .absolute()
             .inset_0()
             .flex()
             .flex_col()
             .items_center()
-            .pt(px(metrics::COMMAND_BAR_TOP))
             .px(px(metrics::PAGE_INSET))
             .occlude()
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|_, _, _, cx| cx.emit(CommandBarEvent::Dismiss)),
             )
-            .child(panel)
+            .child(
+                div()
+                    .flex_shrink_0()
+                    .h(relative(metrics::COMMAND_BAR_TOP_FRACTION)),
+            )
+            .child(anchor)
     }
 }

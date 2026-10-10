@@ -197,8 +197,9 @@ pub(super) const PEEK_CONTROL_GAP: f32 = 6.0;
 
 /// The command bar ⌘T opens over the page.
 pub(super) const COMMAND_BAR_WIDTH: f32 = 640.0;
-/// Space above the command bar, from the top of the window.
-pub(super) const COMMAND_BAR_TOP: f32 = 120.0;
+/// How far down the window the command bar's field starts, as a fraction of
+/// its height: a little above the middle.
+pub(super) const COMMAND_BAR_TOP_FRACTION: f32 = 0.36;
 pub(super) const COMMAND_BAR_RADIUS: f32 = 14.0;
 pub(super) const COMMAND_BAR_FIELD_HEIGHT: f32 = 52.0;
 pub(super) const COMMAND_BAR_FIELD_PADDING: f32 = 16.0;
