@@ -51,4 +51,9 @@ impl PhotonWebView {
     ) {
         cx.emit(WebViewEvent::OpenInNewTab { url, activate });
     }
+
+    /// A shift-clicked link, for the window to show in a preview.
+    pub(in crate::platform) fn peek(&mut self, url: String, cx: &mut Context<Self>) {
+        cx.emit(WebViewEvent::Peek(url));
+    }
 }

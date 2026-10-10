@@ -130,6 +130,11 @@ pub(super) fn copy_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("copy"), color, size)
 }
 
+/// Two arrows pointing apart, for opening a preview in a tab.
+pub(super) fn open_in_tab_icon(color: u32, size: f32) -> impl IntoElement {
+    icon(lucide!("maximize-2"), color, size)
+}
+
 /// A window, for opening a new one.
 pub(super) fn window_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("app-window"), color, size)

@@ -190,6 +190,11 @@ pub(super) const SPACE_DOT_BUTTON_SIZE: f32 = 22.0;
 pub(super) const SPACE_DOT_GAP: f32 = 2.0;
 pub(super) const SPACE_DOT_IDLE_OPACITY: f32 = 0.7;
 
+/// Peek: the space around the preview, as a fraction of the window, and
+/// between its buttons and the page.
+pub(super) const PEEK_INSET_FRACTION: f32 = 0.08;
+pub(super) const PEEK_CONTROL_GAP: f32 = 6.0;
+
 /// The command bar ⌘T opens over the page.
 pub(super) const COMMAND_BAR_WIDTH: f32 = 640.0;
 /// Space above the command bar, from the top of the window.

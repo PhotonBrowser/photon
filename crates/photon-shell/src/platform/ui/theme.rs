@@ -54,6 +54,7 @@ mod opacity {
     pub(super) const TEXT_SECONDARY: f32 = 0.72;
     pub(super) const PERFORMANCE_SURFACE: f32 = 0.95;
     pub(super) const MODAL_BACKDROP: f32 = 0.28;
+    pub(super) const PEEK_BACKDROP: f32 = 0.16;
     pub(super) const MENU_BORDER: f32 = 0.12;
     pub(super) const HOVER: f32 = 0.07;
     /// How much of the text color tints the shared surface.
@@ -188,6 +189,8 @@ pub(super) struct ThemeColors {
     pub suggestion_address: u32,
     /// Dims what a modal covers.
     pub modal_backdrop: u32,
+    /// Dims the page under a link preview, lightly, so it stays in view.
+    pub peek_backdrop: u32,
 }
 
 impl ThemeColors {
@@ -290,6 +293,7 @@ impl ThemeColors {
             on_chosen: to_rgb_token(rgb(0xffffff)),
             suggestion_address: to_rgb_token(link),
             modal_backdrop: to_rgba_token(Rgba::new(0.0, 0.0, 0.0, opacity::MODAL_BACKDROP)),
+            peek_backdrop: to_rgba_token(Rgba::new(0.0, 0.0, 0.0, opacity::PEEK_BACKDROP)),
         }
     }
 }

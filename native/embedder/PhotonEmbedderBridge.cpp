@@ -51,6 +51,7 @@ Photon::ViewCallbacks make_view_callbacks(
     auto page_unresponsive_callback = callbacks.page_unresponsive_callback;
     auto context_menu_callback = callbacks.context_menu_callback;
     auto open_in_new_tab_callback = callbacks.open_in_new_tab_callback;
+    auto peek_callback = callbacks.peek_callback;
 
     Photon::ViewCallbacks result;
     result.state_changed = [=](Photon::ViewState const& state) {
@@ -187,6 +188,10 @@ Photon::ViewCallbacks make_view_callbacks(
     result.open_in_new_tab_requested = [=](std::string const& url, bool activate) {
         if (open_in_new_tab_callback)
             open_in_new_tab_callback(callback_data, url.c_str(), activate);
+    };
+    result.peek_requested = [=](std::string const& url) {
+        if (peek_callback)
+            peek_callback(callback_data, url.c_str());
     };
     result.find_result = [=](size_t current, std::optional<size_t> total) {
         if (find_result_callback)

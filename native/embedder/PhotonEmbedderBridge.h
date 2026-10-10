@@ -60,6 +60,7 @@ using PhotonContextMenuCallback = void (*)(void*, double, double,
 // Called with a URL a context menu action opens in a new tab, and whether to
 // switch to it.
 using PhotonOpenInNewTabCallback = void (*)(void*, char const*, bool);
+using PhotonPeekCallback = void (*)(void*, char const*);
 struct PhotonNewWebViewRequest {
     bool popup;
     bool activate;
@@ -109,6 +110,7 @@ struct PhotonViewCallbacks {
     PhotonPageUnresponsiveCallback page_unresponsive_callback;
     PhotonContextMenuCallback context_menu_callback;
     PhotonOpenInNewTabCallback open_in_new_tab_callback;
+    PhotonPeekCallback peek_callback;
 #if defined(__APPLE__)
     bool native_metal_presentation;
     PhotonNativeBackingCallback native_backing_callback;

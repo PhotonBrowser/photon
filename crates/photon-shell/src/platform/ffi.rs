@@ -93,6 +93,7 @@ pub(super) mod embedder {
         pub context_menu_callback: Option<ContextMenuCallback>,
         pub open_in_new_tab_callback:
             Option<unsafe extern "C" fn(*mut c_void, *const c_char, bool)>,
+        pub peek_callback: Option<unsafe extern "C" fn(*mut c_void, *const c_char)>,
         #[cfg(target_os = "macos")]
         pub native_metal_presentation: bool,
         #[cfg(target_os = "macos")]

@@ -86,6 +86,8 @@ pub(in crate::platform) enum WebViewEvent {
         url: String,
         activate: bool,
     },
+    /// A link was shift-clicked, to show in a preview over the page.
+    Peek(String),
 }
 
 impl EventEmitter<WebViewEvent> for PhotonWebView {}

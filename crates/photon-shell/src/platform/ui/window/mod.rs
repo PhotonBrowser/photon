@@ -9,6 +9,7 @@ mod favourites;
 mod find;
 mod menu;
 mod page_menu;
+mod peek;
 mod pinned;
 mod popup_window;
 mod popups;
@@ -52,6 +53,7 @@ use super::{
 use alerts::{EngineNotice, NoticeExpiry};
 use content::{BrowserTab, TabContent, create_webview};
 use menu::OpenMenu;
+use peek::PeekState;
 use popups::PendingPopup;
 use sidebar_state::SidebarState;
 use spaces::SpacesState;
@@ -83,6 +85,8 @@ struct BrowserWindow {
     /// Keeps a closed menu drawn while it animates away.
     menu_presence: Presence<OpenMenu>,
     find_bar_presence: Presence<Entity<FindBar>>,
+    /// A link previewed over the page.
+    peek: PeekState,
     /// The command bar, while open.
     command_bar: Option<Entity<CommandBar>>,
     command_bar_presence: Presence<Entity<CommandBar>>,
@@ -339,6 +343,7 @@ impl BrowserWindow {
             .sync(self.dialog.clone(), MODAL_MOTION, cx);
         div()
             .size_full()
+            .children(self.peek_overlay(palette, cx))
             .children(self.command_bar_overlay(cx))
             .children(self.space_editor_overlay(palette, cx))
             // A JavaScript dialog is modal to the whole window.
@@ -424,6 +429,7 @@ fn open_browser_window(
                 open_menu: None,
                 menu_presence: Presence::default(),
                 find_bar_presence: Presence::default(),
+                peek: PeekState::default(),
                 command_bar: None,
                 command_bar_presence: Presence::default(),
                 _command_bar_subscription: None,

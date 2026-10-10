@@ -294,6 +294,7 @@ impl EngineSession {
             page_unresponsive_callback: Some(on_engine_page_unresponsive),
             context_menu_callback: Some(on_engine_context_menu),
             open_in_new_tab_callback: Some(on_engine_open_in_new_tab),
+            peek_callback: Some(on_engine_peek),
             #[cfg(target_os = "macos")]
             native_metal_presentation: true,
             #[cfg(target_os = "macos")]
