@@ -4259,6 +4259,7 @@ dependencies = [
  "photon-performance",
  "photon-presentation-ipc",
  "photon-shortcuts",
+ "photon-storage",
  "raw-window-handle",
 ]
 
@@ -4267,6 +4268,15 @@ name = "photon-shortcuts"
 version = "0.1.0"
 dependencies = [
  "gpui-ce",
+]
+
+[[package]]
+name = "photon-storage"
+version = "0.1.0"
+dependencies = [
+ "photon-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
