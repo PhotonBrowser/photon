@@ -128,6 +128,9 @@ where
 
 pub(super) struct TabItem {
     pub id: String,
+    /// The tab's place among the window's tabs, which a list may not show
+    /// all of.
+    pub index: usize,
     pub label: String,
     pub icon: TabIcon,
     /// Whether the icon is still growing in after it first appeared.
@@ -162,12 +165,12 @@ struct TabParts {
 }
 
 impl TabParts {
-    /// Builds a tab's parts with its icon `icon_size` across. `focus_index`
-    /// is the tab's place in keyboard order; its audio and close buttons
-    /// follow it.
+    /// Builds a tab's parts with its icon `icon_size` across. `position` is
+    /// its place among the tabs shown, and `focus_index` its place in
+    /// keyboard order; its audio and close buttons follow it.
     fn new(
         tab: TabItem,
-        index: usize,
+        position: usize,
         tab_count: usize,
         focus_index: isize,
         icon_size: f32,
@@ -184,7 +187,7 @@ impl TabParts {
             .role(Role::Tab)
             .aria_label(tab.label.clone())
             .aria_selected(tab.active)
-            .aria_position_in_set(index + 1)
+            .aria_position_in_set(position + 1)
             .aria_size_of_set(tab_count)
             .track_focus(&focus_handle)
             .focus_visible(|style| style.bg(rgba(palette.hover_surface)))
@@ -199,7 +202,7 @@ impl TabParts {
             .on_key_down(tab.on_key_down)
             .on_mouse_up(MouseButton::Middle, tab.on_middle_click)
             .on_mouse_down(MouseButton::Right, tab.on_context_menu)
-            .on_drag(DraggedTab { index }, {
+            .on_drag(DraggedTab { index: tab.index }, {
                 let label = SharedString::from(tab.label.clone());
                 move |_, _, _, cx| {
                     let label = label.clone();

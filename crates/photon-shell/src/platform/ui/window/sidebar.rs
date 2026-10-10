@@ -159,8 +159,12 @@ impl BrowserWindow {
                 favourites: (!favourites.is_empty())
                     .then(|| favourites_grid(favourites, palette).into_any_element()),
                 // As in Arc, a new tab starts from the command bar.
+                // A favourite's tab shows as its tile instead.
                 tabs: tab_list(
-                    self.tab_items(cx),
+                    self.tab_items(cx)
+                        .into_iter()
+                        .filter(|item| self.tabs[item.index].favourite.is_none())
+                        .collect(),
                     Box::new(cx.listener(|this, _, window, cx| {
                         cx.stop_propagation();
                         this.open_command_bar(window, cx);
@@ -241,9 +245,7 @@ impl BrowserWindow {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> Vec<FavouriteTile> {
-        let active_site = self
-            .active_webview()
-            .map(|webview| site_name(&webview.read(cx).state.url));
+        let active_favourite = self.tabs[self.active_tab].favourite.clone();
         favourites
             .iter()
             .enumerate()
@@ -266,7 +268,7 @@ impl BrowserWindow {
                         favourite.title.clone()
                     },
                     icon,
-                    active: active_site.as_deref() == Some(site_name(&favourite.url).as_str()),
+                    active: active_favourite.as_deref() == Some(favourite.url.as_str()),
                     on_open: Box::new(cx.listener(move |this, _, window, cx| {
                         this.open_favourite(&url, window, cx);
                     })),
@@ -282,20 +284,15 @@ impl BrowserWindow {
             .collect()
     }
 
-    /// Switches to a tab already showing the favourite's site, or opens it
-    /// in a new tab.
+    /// Switches to the favourite's tab, or opens the favourite in a tab of
+    /// its own.
     fn open_favourite(&mut self, url: &str, window: &mut Window, cx: &mut Context<Self>) {
-        let site = site_name(url);
-        let open = self.tabs.iter().position(|tab| {
-            tab.content
-                .webview()
-                .is_some_and(|webview| site_name(&webview.read(cx).state.url) == site)
-        });
-        match open {
+        match self.favourite_tab(url) {
             Some(index) => self.activate_tab(index, true, window, cx),
             None => {
                 let index = self.tabs.len();
                 self.insert_tab(index, Some(url), window, cx);
+                self.tabs[self.active_tab].favourite = Some(url.to_owned());
             }
         }
     }
@@ -342,6 +339,7 @@ impl BrowserWindow {
                     label,
                     icon_appearing: self.icon_appearing(tab.id, &icon),
                     icon,
+                    index,
                     pinned: tab.pin.is_some(),
                     active: index == self.active_tab,
                     focus_handle: self.tab_focus_handles[index].clone(),

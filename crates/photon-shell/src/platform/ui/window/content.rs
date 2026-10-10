@@ -52,6 +52,9 @@ pub(super) struct BrowserTab {
     pub(super) content: TabContent,
     /// Where a pinned tab was pinned; `None` for today's tabs.
     pub(super) pin: Option<Shortcut>,
+    /// The address of the favourite the tab belongs to. In the sidebar it
+    /// shows as that favourite's tile rather than in the tab list.
+    pub(super) favourite: Option<String>,
     /// When the tab was last in use, for closing tabs left unused.
     pub(super) last_active: Instant,
 }
@@ -62,6 +65,7 @@ impl BrowserTab {
             id,
             content,
             pin,
+            favourite: None,
             last_active: Instant::now(),
         }
     }

@@ -25,7 +25,7 @@ What the Photon shell does today and what comes next. Engine performance work is
 - [x] Drag the sidebar's edge to widen it (remembered in the profile); narrower than its default hides it
 - [x] Pinned tabs above a divider, as in Arc: pinned from the tab menu or by dragging, saved and reopened at launch, icons only in the horizontal strip
 - [x] Optionally close today's tabs left unused for 12 hours
-- [x] Favourite sites: up to 12 in a grid, added from a tab's menu, opening or switching to the site's tab
+- [x] Favourite sites: up to 12 in a grid, added from a tab's menu; as in Arc, a favourite's tab lives in its tile, not the tab list
 - [x] Tabs with new, close and select; up and down arrows move between tabs
 - [x] Optionally keep the window open on a new tab page when its last tab closes
 - [x] Loading spinner after a load has run for 150 ms

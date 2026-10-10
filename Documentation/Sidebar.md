@@ -18,7 +18,7 @@ change applies at once, in every window.
 | --- | --- |
 | Top row | Room for the native window controls, the sidebar toggle, and back, forward and reload or stop. Empty space moves the window; right-clicking it opens the browser menu. |
 | Address field | The [omnibox](Omnibox.md), larger than in the toolbar: the page's address the short way while idle, the full address while editing, and suggestions in a panel that reaches over the page. |
-| Favourites | A three-column grid of favourite sites with their icons. A click switches to a tab already showing the site, or opens it in a new tab. Right-click to remove; add one from a tab's menu ("Add to Favourites"). Up to 12. |
+| Favourites | A three-column grid of favourite sites with their icons, up to 12. As in Arc, each has a tab of its own, shown as its tile rather than in the tab list: adding a tab from its menu ("Add to Favourites") moves it into the tile, and a click switches to the favourite's tab or opens it. The tile is highlighted while its tab is in use. Right-click to close its tab or remove the favourite, which returns its tab to the list. |
 | Pinned tabs | Tabs pinned from their menu ("Pin Tab"), above a divider. See [Pinned tabs](#pinned-tabs). |
 | Tabs | "+ New Tab", which opens the [command bar](Omnibox.md#command-bar), then one row per tab of today's tabs: icon or loading spinner, title, and a close button on the active tab and on the row under the pointer. Click to switch, middle-click or the close button to close, drag to reorder, right-click for the tab menu, and the up and down arrows move between focused tabs. The list scrolls. |
 | Footer | Settings and the browser menu, which opens above it. |
