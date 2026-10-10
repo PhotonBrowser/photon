@@ -21,8 +21,8 @@ mod tabs;
 mod zoom;
 
 use gpui::{
-    App, Context, Entity, FocusHandle, Render, StyleRefinement, Subscription, Task, WeakEntity,
-    Window, div, prelude::*, px,
+    AnyElement, App, Context, Entity, FocusHandle, Render, StyleRefinement, Subscription, Task,
+    WeakEntity, Window, div, prelude::*, px,
 };
 use photon_core::{BrowserCommand, TabLayout};
 use std::cell::RefCell;
@@ -65,6 +65,8 @@ struct BrowserWindow {
     tab_subscriptions: Vec<Subscription>,
     /// The sidebar, cached so Engine frames repaint only the page.
     chrome: Entity<BrowserChrome>,
+    /// Menus and dialogs over the window, cached for the same reason.
+    overlays: Entity<BrowserOverlays>,
     /// Where the sidebar is, in the vertical layout.
     sidebar: SidebarState,
     /// The space shown, switching between spaces, and the space dialog.
@@ -128,6 +130,21 @@ impl Render for BrowserChrome {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.browser
             .update(cx, |browser, cx| browser.render_chrome(window, cx))
+            .unwrap_or_else(|_| div().into_any_element())
+    }
+}
+
+/// What floats over the whole window: the command bar, the space dialog, a
+/// JavaScript dialog, menus and the pop-up prompt. Cached like the chrome, so
+/// Engine frames do not rebuild it.
+struct BrowserOverlays {
+    browser: WeakEntity<BrowserWindow>,
+}
+
+impl Render for BrowserOverlays {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.browser
+            .update(cx, |browser, cx| browser.render_overlays(window, cx))
             .unwrap_or_else(|_| div().into_any_element())
     }
 }
@@ -207,10 +224,6 @@ impl Render for BrowserWindow {
             FIND_BAR_MOTION,
             cx,
         );
-        // The dialog animates itself; this keeps a closed one drawn while it does.
-        let dialog = self
-            .dialog_presence
-            .sync(self.dialog.clone(), MODAL_MOTION, cx);
         let vertical = Settings::get(cx).tab_layout == TabLayout::Vertical;
         self.sidebar.settle();
         if self.sidebar.is_moving() {
@@ -307,13 +320,32 @@ impl Render for BrowserWindow {
             .child(body)
             .children(edge)
             .on_drag_move(cx.listener(|this, event, _, cx| this.drag_sidebar_edge(event, cx)))
+            .child(
+                self.overlays
+                    .clone()
+                    .cached(StyleRefinement::default().absolute().inset_0()),
+            );
+        self.on_actions(root, cx)
+    }
+}
+
+impl BrowserWindow {
+    /// Everything that floats over the window, drawn by `BrowserOverlays`.
+    fn render_overlays(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        let palette = self.palette(window, cx);
+        // The dialog animates itself; this keeps a closed one drawn while it does.
+        let dialog = self
+            .dialog_presence
+            .sync(self.dialog.clone(), MODAL_MOTION, cx);
+        div()
+            .size_full()
             .children(self.command_bar_overlay(cx))
             .children(self.space_editor_overlay(palette, cx))
             // A JavaScript dialog is modal to the whole window.
             .children(dialog.map(|(dialog, _)| dialog))
             .children(self.open_menu_overlay(palette, cx))
-            .children(self.popup_confirmation(palette, cx));
-        self.on_actions(root, cx)
+            .children(self.popup_confirmation(palette, cx))
+            .into_any_element()
     }
 }
 
@@ -346,10 +378,16 @@ fn open_browser_window(
                     this.settings_changed(cx);
                 });
             let browser = cx.entity().downgrade();
-            let chrome = cx.new(|_| BrowserChrome { browser });
-            // Whatever re-renders the window's own state re-renders the chrome too.
-            let chrome_subscription =
-                cx.observe_self(|this, cx| this.chrome.update(cx, |_, cx| cx.notify()));
+            let chrome = cx.new(|_| BrowserChrome {
+                browser: browser.clone(),
+            });
+            let overlays = cx.new(|_| BrowserOverlays { browser });
+            // Whatever re-renders the window's own state re-renders the chrome
+            // and the overlays too.
+            let chrome_subscription = cx.observe_self(|this, cx| {
+                this.chrome.update(cx, |_, cx| cx.notify());
+                this.overlays.update(cx, |_, cx| cx.notify());
+            });
             let omnibox_subscription = cx.subscribe_in(
                 &omnibox,
                 window,
@@ -373,6 +411,7 @@ fn open_browser_window(
                 tabs: Vec::new(),
                 tab_subscriptions: Vec::new(),
                 chrome,
+                overlays,
                 sidebar: SidebarState::new(),
                 spaces: SpacesState::new(Settings::get(cx).spaces.active().id),
                 tab_focus_handles: Vec::new(),

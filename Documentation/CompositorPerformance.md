@@ -146,6 +146,12 @@ The shell, input routing and the Compositor's asynchronous scrolling all keep up
 
 Pitfalls for this measurement: repeated test loads of GitHub got its error page, and Google served a short script-free page, neither of which scrolls, and a page that does not move presents no frames, which reads like a freeze. Confirm the page scrolls with a screenshot, and scroll in one direction on a long page so the test never sits at an end.
 
+## 11. Per-frame shell work and pipeline creation — measured, 2026-10-10
+
+**Shell draw per page frame.** A page frame marks its view and every ancestor dirty, so the root `BrowserWindow` re-renders each frame; cached views inside it are reused. Timing GPUI-CE's `Window::draw` (render, layout and paint) on a self-scrolling page at 60 fps gave 0.29–0.47 ms p50 across runs, with run-to-run spread larger than any difference between layouts: about 2% of a 16.7 ms frame. The menus, dialogs, command bar and pop-up prompt are now a cached `BrowserOverlays` view beside `BrowserChrome`, so a page frame no longer rebuilds them or their presence bookkeeping; the change is below the measurement's noise, as the draw was already small. Rendering the page without re-rendering the root would need GPUI-CE to stop invalidating a dirty view's ancestors.
+
+**Pipeline creation.** After the shader warm-up (section 9), sampling the Compositor on a warmed YouTube visit found pipeline creation inside flushes at 1–2 ms per program: `GrMtlPipelineStateBuilder::PrecompileShaders` already starts each pipeline's creation asynchronously, relying on Apple's pipeline cache. Prebuilding pipelines in Skia would gain nothing. The startup warm-up itself grew with browsing (163 programs, 2 s of compiles spread over event loop turns, each under ~12 ms); the list is capped at 256.
+
 ## Commits
 
 - Engine `864c2a0892` LibPhotonEmbedder: Accept display metadata from the embedder
@@ -177,7 +183,8 @@ Pitfalls for this measurement: repeated test loads of GitHub got its error page,
 - [x] Purge Skia's unused GPU cache after the page goes idle (Compositor 230 → 122 MB on idle Wikipedia)
 - [x] Measure freezes while interacting with loading pages: shell and input keep up; slow first-paint rasterization stalls frames (section 10)
 - [x] Compile recently used GPU programs at Compositor startup, so first paints of heavy pages do not block scrolling (section 9)
-- [ ] Also create pipeline states ahead of first use, which Skia's precompile leaves for then
+- [x] ~~Create pipeline states ahead of first use~~: Skia's Metal precompile already starts each pipeline's creation asynchronously and leaves it in Apple's cache; sampled on a warmed YouTube visit, creating a pipeline at first use took 1–2 ms (section 11)
+- [x] Cache the menus, dialogs and command bar over the window like the chrome, so a page frame rebuilds only the root, the page frame and the page (section 11)
 - [ ] Send the video and SVG fixes upstream to Ladybird: branches are on `TheoSlater/ladybird`; opening PRs from the CLI was refused by GitHub, so open them from the web
 - [ ] Cache rasterized scroll content so 4K scrolling fits the 120 Hz GPU budget
 - [x] Profile scrolling (section 7)
