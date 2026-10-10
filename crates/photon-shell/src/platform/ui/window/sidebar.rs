@@ -89,9 +89,11 @@ impl BrowserWindow {
         let palette = self.palette(window, cx);
         let shown = self.sidebar.shown();
         let out = shown.max(self.sidebar.revealed());
+        let width = self.sidebar.width(cx);
         let navigation = self.with_titlebar_menu(
             navigation_bar(
                 self.navigation_state(cx),
+                width,
                 out,
                 self.sidebar.visible,
                 window.is_fullscreen() || window.is_simple_fullscreen(),
@@ -102,7 +104,6 @@ impl BrowserWindow {
         );
         let mut layer = gpui::div().size_full().relative();
         if out > 0.0 {
-            let width = metrics::SIDEBAR_WIDTH;
             let mut panel = gpui::div()
                 .id("sidebar-panel")
                 .absolute()
@@ -138,6 +139,10 @@ impl BrowserWindow {
                         .child(self.sidebar_body(palette, cx)),
                 ),
             );
+        }
+        // Kept shown, its edge can be dragged to resize it.
+        if self.sidebar.visible && !self.sidebar.over_page() {
+            layer = layer.child(self.resize_handle(cx));
         }
         layer
             .child(gpui::div().absolute().top_0().left_0().child(navigation))

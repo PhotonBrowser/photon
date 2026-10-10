@@ -259,7 +259,7 @@ impl Render for BrowserWindow {
                     .left_0()
                     .size_full(),
             );
-            let room = div().flex_shrink_0().w(px(metrics::SIDEBAR_WIDTH * shown));
+            let room = div().flex_shrink_0().w(px(self.sidebar.width(cx) * shown));
             // Empty space across the top moves the window.
             let titlebar = self.with_titlebar_menu(
                 window_drag_area(
@@ -295,6 +295,7 @@ impl Render for BrowserWindow {
             .text_color(gpui::rgb(palette.text_primary))
             .child(body)
             .children(edge)
+            .on_drag_move(cx.listener(|this, event, _, cx| this.drag_sidebar_edge(event, cx)))
             .children(self.command_bar_overlay(cx))
             // A JavaScript dialog is modal to the whole window.
             .children(dialog.map(|(dialog, _)| dialog))

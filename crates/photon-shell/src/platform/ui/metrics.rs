@@ -154,7 +154,8 @@ pub(super) const SETTINGS_SIDEBAR_ITEM_HEIGHT: f32 = 30.0;
 pub(super) const SETTINGS_SIDEBAR_ICON_SIZE: f32 = 14.0;
 
 // The sidebar: navigation, address field, favourites, tabs and its footer.
-pub(super) const SIDEBAR_WIDTH: f32 = 240.0;
+/// The grab area on the sidebar's edge for resizing it.
+pub(super) const SIDEBAR_RESIZE_HANDLE_WIDTH: f32 = 8.0;
 /// Space between the sidebar's edges and its content.
 pub(super) const SIDEBAR_PADDING: f32 = 8.0;
 /// Space between the sidebar's top-row buttons.

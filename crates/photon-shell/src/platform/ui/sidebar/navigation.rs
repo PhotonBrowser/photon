@@ -25,11 +25,12 @@ pub(in super::super) struct NavigationActions {
     pub(in super::super) reload: ClickHandler,
 }
 
-/// The top row, the sidebar's width: the sidebar toggle, and back, forward
+/// The top row, `width` wide like the sidebar: the sidebar toggle, and back, forward
 /// and reload drawn at `navigation_shown` opacity. They fade out as the
 /// sidebar hides, leaving the toggle in place above the page.
 pub(in super::super) fn navigation_bar(
     state: NavigationState,
+    width: f32,
     navigation_shown: f32,
     sidebar_visible: bool,
     fullscreen: bool,
@@ -44,7 +45,7 @@ pub(in super::super) fn navigation_bar(
     };
     let bar = window_drag_area(
         h_stack()
-            .w(px(metrics::SIDEBAR_WIDTH))
+            .w(px(width))
             .h(px(metrics::TITLEBAR_HEIGHT))
             .flex_shrink_0()
             .items_center()

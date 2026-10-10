@@ -1,9 +1,10 @@
-//! Where the sidebar is: shown beside the page or hidden, and while hidden,
-//! revealed over the page by pointing at the window's left edge. Each moves
-//! smoothly, and the page follows.
+//! Where the sidebar is and how wide: shown beside the page or hidden, and
+//! while hidden, revealed over the page by pointing at the window's left
+//! edge. Each moves smoothly, and the page follows. Dragging its edge
+//! resizes it, or snaps it shut.
 
-use gpui::{AnyElement, App, Context, Task, div, prelude::*, px};
-use photon_core::TabLayout;
+use gpui::{AnyElement, App, Context, DragMoveEvent, Render, Task, Window, div, prelude::*, px};
+use photon_core::{SidebarResize, TabLayout};
 use std::time::Duration;
 
 use super::super::metrics;
@@ -14,6 +15,17 @@ use super::BrowserWindow;
 /// How long the pointer may be away before the revealed sidebar leaves, so
 /// crossing from the edge into the sidebar does not close it.
 const REVEAL_GRACE: Duration = Duration::from_millis(150);
+/// How long a resize rests before its width is saved.
+const RESIZE_SAVE_DELAY: Duration = Duration::from_millis(300);
+
+/// The sidebar's edge being dragged.
+pub(super) struct SidebarEdgeDrag;
+
+impl Render for SidebarEdgeDrag {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div()
+    }
+}
 
 pub(super) struct SidebarState {
     /// Whether it is kept shown beside the page.
@@ -28,6 +40,9 @@ pub(super) struct SidebarState {
     pointer_on_edge: bool,
     pointer_on_sidebar: bool,
     _hide_check: Option<Task<()>>,
+    /// The width while its edge is dragged, until it is saved.
+    dragged_width: Option<f32>,
+    _save_width: Option<Task<()>>,
 }
 
 impl SidebarState {
@@ -40,7 +55,15 @@ impl SidebarState {
             pointer_on_edge: false,
             pointer_on_sidebar: false,
             _hide_check: None,
+            dragged_width: None,
+            _save_width: None,
         }
+    }
+
+    /// How wide it is: as dragged, or as saved.
+    pub(super) fn width(&self, cx: &App) -> f32 {
+        self.dragged_width
+            .unwrap_or_else(|| Settings::get(cx).sidebar.width() as f32)
     }
 
     /// How far it is shown beside the page, from 0 to 1.
@@ -111,6 +134,54 @@ impl BrowserWindow {
             self.open_menu = None;
             cx.notify();
         }
+    }
+
+    /// The handle on the sidebar's right edge, which resizes it.
+    pub(super) fn resize_handle(&self, cx: &App) -> AnyElement {
+        div()
+            .id("sidebar-resize")
+            .absolute()
+            .top_0()
+            .bottom_0()
+            .left(px(
+                self.sidebar.width(cx) - metrics::SIDEBAR_RESIZE_HANDLE_WIDTH / 2.0
+            ))
+            .w(px(metrics::SIDEBAR_RESIZE_HANDLE_WIDTH))
+            .cursor_col_resize()
+            .on_drag(SidebarEdgeDrag, |_, _, _, cx| cx.new(|_| SidebarEdgeDrag))
+            .into_any_element()
+    }
+
+    /// Follows the sidebar's edge as it is dragged: resizing within limits,
+    /// hiding it when dragged nearly shut, and showing it again when dragged
+    /// back out. The width is saved once the drag rests.
+    pub(super) fn drag_sidebar_edge(
+        &mut self,
+        event: &DragMoveEvent<SidebarEdgeDrag>,
+        cx: &mut Context<Self>,
+    ) {
+        match SidebarResize::to(f32::from(event.event.position.x)) {
+            SidebarResize::Hide => self.set_sidebar_visible(false, cx),
+            SidebarResize::Width(width) => {
+                self.set_sidebar_visible(true, cx);
+                if self.sidebar.dragged_width != Some(width as f32) {
+                    self.sidebar.dragged_width = Some(width as f32);
+                    self.save_sidebar_width_soon(width, cx);
+                    cx.notify();
+                }
+            }
+        }
+    }
+
+    fn save_sidebar_width_soon(&mut self, width: u32, cx: &mut Context<Self>) {
+        self.sidebar._save_width = Some(cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(RESIZE_SAVE_DELAY).await;
+            this.update(cx, |this, cx| {
+                Settings::update(cx, |settings| settings.sidebar.width = width);
+                this.sidebar.dragged_width = None;
+            })
+            .ok();
+        }));
     }
 
     /// The window's left edge below the top bar, which reveals the sidebar.
