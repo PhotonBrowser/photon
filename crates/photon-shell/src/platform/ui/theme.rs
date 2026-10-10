@@ -5,13 +5,45 @@
 //! the shell needs a different role mapping.
 
 use gpui::{App, ColorExt, Rgba, Window, WindowAppearance, colors::Colors, rgb};
+use photon_core::Transparency;
 use photon_performance::PerformancePalette;
 use std::sync::OnceLock;
 
 use super::settings::Settings;
 
+/// How opaque each layer of surface is, for each transparency setting. The
+/// window shows the most of the desktop; controls on it a little less; menus
+/// and dialogs over a busy page the least, so their text stays readable.
+#[derive(Clone, Copy)]
+struct SurfaceOpacity {
+    window: f32,
+    control: f32,
+    raised: f32,
+}
+
+impl SurfaceOpacity {
+    const fn for_transparency(transparency: Transparency) -> Self {
+        match transparency {
+            Transparency::Off => Self {
+                window: 1.0,
+                control: 1.0,
+                raised: 1.0,
+            },
+            Transparency::Subtle => Self {
+                window: 0.88,
+                control: 0.8,
+                raised: 0.92,
+            },
+            Transparency::Clear => Self {
+                window: 0.7,
+                control: 0.6,
+                raised: 0.84,
+            },
+        }
+    }
+}
+
 mod opacity {
-    pub(super) const WINDOW_TINT: f32 = 0.88;
     pub(super) const TEXT_SECONDARY: f32 = 0.72;
     pub(super) const TEXT_DISABLED: f32 = 0.42;
     pub(super) const FOCUSED_FIELD: f32 = 0.08;
@@ -22,7 +54,6 @@ mod opacity {
     pub(super) const MENU_BORDER: f32 = 0.12;
     pub(super) const HOVER: f32 = 0.07;
     pub(super) const INTERNAL_PAGE: f32 = 0.04;
-    pub(super) const RAISED_SURFACE: f32 = 0.92;
     pub(super) const SELECTED: f32 = 0.12;
 }
 
@@ -53,9 +84,13 @@ mod link {
     }
 }
 
-/// The colors for `window`, in the appearance the settings choose.
+/// The colors for `window`, in the appearance and transparency the
+/// settings choose.
 pub(super) fn palette(window: &Window, cx: &App) -> ThemeColors {
-    ThemeColors::for_appearance(Settings::appearance(window.appearance(), cx))
+    ThemeColors::for_appearance(
+        Settings::appearance(window.appearance(), cx),
+        Settings::get(cx).transparency,
+    )
 }
 
 /// Semantic colors used by the shell's controls and surfaces.
@@ -94,49 +129,60 @@ pub(super) struct ThemeColors {
 }
 
 impl ThemeColors {
-    /// Returns cached role colors for the active appearance.
-    pub(super) fn for_appearance(appearance: WindowAppearance) -> Self {
-        static LIGHT: OnceLock<ThemeColors> = OnceLock::new();
-        static DARK: OnceLock<ThemeColors> = OnceLock::new();
-
-        match appearance {
-            WindowAppearance::Dark | WindowAppearance::VibrantDark => {
-                *DARK.get_or_init(|| Self::from_gpui(Colors::dark(), error::dark(), link::dark()))
+    /// Returns cached role colors for an appearance and transparency.
+    fn for_appearance(appearance: WindowAppearance, transparency: Transparency) -> Self {
+        static CACHE: [[OnceLock<ThemeColors>; 3]; 2] = [
+            [OnceLock::new(), OnceLock::new(), OnceLock::new()],
+            [OnceLock::new(), OnceLock::new(), OnceLock::new()],
+        ];
+        let dark = matches!(
+            appearance,
+            WindowAppearance::Dark | WindowAppearance::VibrantDark
+        );
+        let opacity = SurfaceOpacity::for_transparency(transparency);
+        *CACHE[usize::from(dark)][transparency as usize].get_or_init(|| {
+            if dark {
+                Self::from_gpui(Colors::dark(), error::dark(), link::dark(), opacity)
+            } else {
+                Self::from_gpui(Colors::light(), error::light(), link::light(), opacity)
             }
-            WindowAppearance::Light | WindowAppearance::VibrantLight => *LIGHT
-                .get_or_init(|| Self::from_gpui(Colors::light(), error::light(), link::light())),
-        }
+        })
     }
 
-    fn from_gpui(colors: Colors, error: Rgba, link: Rgba) -> Self {
+    fn from_gpui(colors: Colors, error: Rgba, link: Rgba, surfaces: SurfaceOpacity) -> Self {
+        let control = |color: Rgba| to_rgba_token(color.opacity(surfaces.control));
         let text_secondary = mix_colors(colors.text, colors.background, opacity::TEXT_SECONDARY);
         let text_disabled = mix_colors(colors.text, colors.background, opacity::TEXT_DISABLED);
 
         Self {
-            window_tint: to_rgba_token(colors.background.opacity(opacity::WINDOW_TINT)),
+            window_tint: to_rgba_token(colors.background.opacity(surfaces.window)),
             page_background: to_rgb_token(colors.background),
             text_primary: to_rgb_token(colors.text),
             text_secondary: to_rgb_token(text_secondary),
             text_disabled: to_rgb_token(text_disabled),
             selection: to_rgba_token(colors.selected),
-            field: to_rgba_token(colors.container),
-            field_focused: to_rgba_token(mix_colors(
+            field: control(colors.container),
+            field_focused: control(mix_colors(
                 colors.selected,
                 colors.container,
                 opacity::FOCUSED_FIELD,
             )),
             field_error_border: to_rgba_token(error),
-            tab_active_surface: to_rgba_token(colors.container),
+            tab_active_surface: control(colors.container),
             tab_hover_surface: to_rgba_token(colors.text.opacity(opacity::TAB_HOVER)),
             control_hover_surface: to_rgba_token(colors.text.opacity(opacity::CONTROL_HOVER)),
             performance_palette: PerformancePalette {
-                surface: to_rgba_token(colors.container.opacity(opacity::PERFORMANCE_SURFACE)),
+                surface: to_rgba_token(
+                    colors
+                        .container
+                        .opacity(surfaces.raised.min(opacity::PERFORMANCE_SURFACE)),
+                ),
                 text: to_rgb_token(colors.text),
                 secondary_text: to_rgb_token(text_secondary),
             },
             // Raised surfaces let the window's frosted background show through,
             // but stay opaque enough to read over a busy page.
-            menu_surface: to_rgba_token(colors.container.opacity(opacity::RAISED_SURFACE)),
+            menu_surface: to_rgba_token(colors.container.opacity(surfaces.raised)),
             // A light hairline that separates raised surfaces from what is under
             // them without a dark outline.
             menu_border: to_rgba_token(colors.text.opacity(opacity::MENU_BORDER)),

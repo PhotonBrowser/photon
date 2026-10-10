@@ -3,7 +3,7 @@
 use super::super::engine::{EngineSession, RequestedWebView};
 use super::super::presentation::PresentedSurface;
 use super::input::WebViewInput;
-use super::{metrics::WEBVIEW_CORNER_RADIUS, settings::Settings, theme::ThemeColors};
+use super::{metrics::WEBVIEW_CORNER_RADIUS, settings::Settings, theme::palette};
 use gpui::{
     Context, EventEmitter, FocusHandle, InteractiveElement, KeyDownEvent, KeyUpEvent, ObjectFit,
     Render, Subscription, SurfaceSource, Window, WindowAppearance, div, prelude::*, px, surface,
@@ -348,7 +348,7 @@ impl Render for PhotonWebView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let appearance = Settings::appearance(window.appearance(), cx);
         self.update_color_scheme(appearance);
-        let palette = ThemeColors::for_appearance(appearance);
+        let palette = palette(window, cx);
         let weak_this = cx.entity().downgrade();
         let weak_mouse_down = weak_this.clone();
         let weak_mouse_up = weak_this.clone();

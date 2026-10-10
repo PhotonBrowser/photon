@@ -23,7 +23,7 @@ use photon_omnibox::{OmniboxTarget, resolve_with};
 use super::history::BrowsingHistory;
 use super::layout::h_stack;
 use super::{PhotonWebView, WebViewEvent};
-use super::{metrics, settings::Settings, theme::ThemeColors};
+use super::{metrics, settings::Settings, theme::palette};
 
 const INVALID_ADDRESS_DESCRIPTION: &str = "This address can't be opened";
 
@@ -198,8 +198,7 @@ impl Omnibox {
 
 impl Render for Omnibox {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let appearance = Settings::appearance(window.appearance(), cx);
-        let palette = ThemeColors::for_appearance(appearance);
+        let palette = palette(window, cx);
         let editing = self.is_editing(window, cx);
         let field = if editing {
             palette.field_focused

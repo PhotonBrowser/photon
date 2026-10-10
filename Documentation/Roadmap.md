@@ -43,6 +43,7 @@ What the Photon shell does today and what comes next. Engine performance work is
 - [x] New tab page: logo and 4–12 site shortcuts in up to two rows (pinned, then most visited, one per site), with tiles removed on hover, shortcuts added by name and address, and a customise panel
 - [x] Settings page with a sidebar of sections: appearance, search, new tab page, sites (pop-ups), and privacy (clearing browsing data by time range, with disk usage)
 - [x] Settings saved in the profile and followed by every window at once
+- [x] Transparency setting (off, subtle, clear) applied to every surface: window, tabs, omnibox, buttons, menus and pages
 - [x] Photon's pages live at `photon://` addresses, shown in the omnibox (the new tab page leaves it empty) and listed in one registry
 
 ### Keyboard shortcuts

@@ -11,6 +11,7 @@ use crate::platform::engine::{EngineRuntime, RequestedWebView};
 use super::super::layout::v_stack;
 use super::super::modal::{modal, modal_panel};
 use super::super::motion::Transition;
+use super::super::settings::Settings;
 use super::super::titlebar::titlebar;
 use super::super::{
     PhotonWebView, WebViewEvent, metrics,
@@ -30,6 +31,7 @@ struct MinimalPopupWindow {
     pending_popups: Vec<PendingPopup>,
     confirmation_focus: FocusHandle,
     _webview_subscription: Subscription,
+    _settings_subscription: Subscription,
 }
 
 pub(super) fn open_minimal_window(
@@ -73,6 +75,11 @@ pub(super) fn open_minimal_window(
                 pending_popups: Vec::new(),
                 confirmation_focus: cx.focus_handle(),
                 _webview_subscription: webview_subscription,
+                // Follow theme and transparency changes made in any window.
+                _settings_subscription: cx.observe_global::<Settings>(|this, cx| {
+                    this.webview.update(cx, |_, cx| cx.notify());
+                    cx.notify();
+                }),
             }
         })
     }) {
