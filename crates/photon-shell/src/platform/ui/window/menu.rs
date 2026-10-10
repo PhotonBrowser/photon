@@ -108,10 +108,10 @@ impl BrowserWindow {
                 label,
                 tab_index,
                 theme == appearance,
-                Box::new(cx.listener(move |this: &mut Self, _, _, cx| {
+                Box::new(cx.listener(move |this: &mut Self, _, window, cx| {
                     cx.stop_propagation();
                     this.open_menu = None;
-                    this.set_theme(appearance, cx);
+                    this.set_theme(appearance, window, cx);
                 })),
                 palette,
             )
@@ -228,12 +228,21 @@ impl BrowserWindow {
     }
 
     /// Applies a light or dark theme, or follows the system for `None`.
-    fn set_theme(&mut self, appearance: Option<WindowAppearance>, cx: &mut Context<Self>) {
+    fn set_theme(
+        &mut self,
+        appearance: Option<WindowAppearance>,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
         self.theme.set(appearance);
         cx.set_window_appearance(appearance);
 
+        let effective_appearance = appearance.unwrap_or_else(|| window.appearance());
         for tab in self.tabs.clone() {
-            tab.update(cx, |_, cx| cx.notify());
+            tab.update(cx, |view, cx| {
+                view.update_color_scheme(effective_appearance);
+                cx.notify();
+            });
         }
         self.omnibox.update(cx, |_, cx| cx.notify());
         cx.notify();

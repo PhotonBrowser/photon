@@ -335,6 +335,7 @@ fn open_browser_window(
     cx.open_window(window_settings::options(cx), move |window, cx| {
         window.set_window_title("Photon");
         webview.update(cx, |view, cx| {
+            view.update_color_scheme(theme.appearance(window.appearance()));
             view.session.set_visible(true);
             if !is_blank_tab {
                 window.focus(&view.focus_handle, cx);

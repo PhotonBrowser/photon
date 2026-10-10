@@ -46,7 +46,9 @@ impl BrowserWindow {
         let webview = self.tabs[index].clone();
         let is_blank_tab = webview.read(cx).is_blank_tab();
         let window_visible = self.window_visible;
+        let appearance = self.theme.appearance(window.appearance());
         webview.update(cx, |view, cx| {
+            view.update_color_scheme(appearance);
             view.session.set_visible(window_visible);
             if focus_contents && !is_blank_tab {
                 window.focus(&view.focus_handle, cx);
@@ -140,7 +142,11 @@ impl BrowserWindow {
     ) {
         let index = index.min(self.tabs.len());
         let viewport = self.active_webview().read(cx).last_viewport;
-        webview.update(cx, |view, _| view.adopt_viewport(viewport));
+        let appearance = self.theme.appearance(window.appearance());
+        webview.update(cx, |view, _| {
+            view.update_color_scheme(appearance);
+            view.adopt_viewport(viewport);
+        });
         self.tab_subscriptions
             .insert(index, Self::subscribe_to_tab(&webview, window, cx));
         self.tabs.insert(index, webview.clone());

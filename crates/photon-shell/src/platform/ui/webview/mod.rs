@@ -197,7 +197,7 @@ impl PhotonWebView {
 
     /// Lets pages follow the shell theme. Runs before the first viewport
     /// update, so the startup page loads with the right scheme.
-    fn update_color_scheme(&mut self, appearance: WindowAppearance) {
+    pub(super) fn update_color_scheme(&mut self, appearance: WindowAppearance) {
         let dark = matches!(
             appearance,
             WindowAppearance::Dark | WindowAppearance::VibrantDark

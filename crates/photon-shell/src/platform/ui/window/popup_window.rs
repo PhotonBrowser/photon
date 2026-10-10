@@ -41,6 +41,7 @@ pub(super) fn open_minimal_window(
     if let Err(error) = cx.open_window(options, move |window, cx| {
         window.set_window_title("Photon");
         webview.update(cx, |view, cx| {
+            view.update_color_scheme(theme.appearance(window.appearance()));
             view.session.set_visible(true);
             if request.activate {
                 window.focus(&view.focus_handle, cx);
