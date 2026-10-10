@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::new_tab::NewTabSettings;
+use super::sidebar::SidebarSettings;
 
 /// The shell's selected appearance.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -47,6 +48,7 @@ pub struct BrowserSettings {
     pub default_search_engine: String,
     pub popup_policy: PopupPolicy,
     pub new_tab: NewTabSettings,
+    pub sidebar: SidebarSettings,
 }
 
 impl Default for BrowserSettings {
@@ -57,6 +59,7 @@ impl Default for BrowserSettings {
             default_search_engine: "google".to_owned(),
             popup_policy: PopupPolicy::Ask,
             new_tab: NewTabSettings::default(),
+            sidebar: SidebarSettings::default(),
         }
     }
 }

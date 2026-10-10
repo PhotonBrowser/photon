@@ -9,6 +9,7 @@ mod history;
 mod internal_pages;
 mod new_tab;
 mod settings;
+mod sidebar;
 mod state;
 
 pub use browsing_data::ClearBrowsingData;
@@ -22,4 +23,5 @@ pub use photon_omnibox::{
     SuggestionKind, Suggestions, UrlKind, resolve as resolve_omnibox_input,
 };
 pub use settings::{BrowserSettings, PopupPolicy, ThemeMode, Transparency};
+pub use sidebar::{MAX_FAVOURITES, SidebarSettings, Space};
 pub use state::{BrowserCommand, BrowserState, EngineEvent, normalize_url};
