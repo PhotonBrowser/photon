@@ -78,7 +78,8 @@ crates/
 │           ├── window/               # Browser window: layout, commands, rendering
 │           │   ├── app.rs            # App startup and the first window
 │           │   ├── tabs.rs           # Tab lifecycle
-│           │   ├── sidebar.rs        # Builds the tab strip and toolbar or the sidebar; shows or hides it
+│           │   ├── chrome.rs         # Builds the tab strip and toolbar or the sidebar
+│           │   ├── workspace.rs      # Composes chrome, active page, and window overlays
 │           │   ├── command_bar.rs    # Opening the command bar and carrying out its choice
 │           │   ├── sidebar_state.rs  # Where the sidebar is: shown, hidden or revealed from the left edge
 │           │   ├── tab_items.rs      # The tabs as both layouts draw them
@@ -111,6 +112,7 @@ crates/
 │           │   └── controls.rs       # Choices, switches and checkboxes
 │           ├── tabs/                 # Tab rows shared by both layouts: the strip and the sidebar list
 │           ├── toolbar.rs            # The horizontal layout's toolbar
+│           ├── workspace_layout.rs   # Built-in workspace definitions and shell component catalog
 │           ├── sidebar/              # Vertical tab sidebar: navigation, favourites, footer
 │           ├── omnibox/              # Address field and its suggestion panel
 │           ├── command_bar/          # The ⌘T command bar: field and result rows
@@ -186,7 +188,7 @@ owned by the shell; the presentation XPC implementation lives inside
 | Browser settings and profile persistence | [`photon-core/src/settings.rs`](../crates/photon-core/src/settings.rs), [`ui/settings.rs`](../crates/photon-shell/src/platform/ui/settings.rs), and [`photon-storage/src/profile.rs`](../crates/photon-storage/src/profile.rs) |
 | New tab page, settings page, and their controls | [`ui/pages/`](../crates/photon-shell/src/platform/ui/pages/mod.rs) and the rules in [`photon-core/src/new_tab.rs`](../crates/photon-core/src/new_tab.rs) |
 | A new `photon://` page | A module in [`ui/pages/`](../crates/photon-shell/src/platform/ui/pages/mod.rs) with its view and `PageDefinition`, listed in [`pages/registry.rs`](../crates/photon-shell/src/platform/ui/pages/registry.rs) |
-| Tab layouts, the sidebar and favourites | [`ui/tabs/`](../crates/photon-shell/src/platform/ui/tabs/mod.rs), [`ui/toolbar.rs`](../crates/photon-shell/src/platform/ui/toolbar.rs), [`ui/sidebar/`](../crates/photon-shell/src/platform/ui/sidebar/mod.rs), [`ui/window/sidebar.rs`](../crates/photon-shell/src/platform/ui/window/sidebar.rs), and [`photon-core/src/sidebar.rs`](../crates/photon-core/src/sidebar.rs) |
+| Tab layouts, the sidebar and favourites | [`ui/workspace_layout.rs`](../crates/photon-shell/src/platform/ui/workspace_layout.rs), [`ui/tabs/`](../crates/photon-shell/src/platform/ui/tabs/mod.rs), [`ui/toolbar.rs`](../crates/photon-shell/src/platform/ui/toolbar.rs), [`ui/sidebar/`](../crates/photon-shell/src/platform/ui/sidebar/mod.rs), [`ui/window/chrome.rs`](../crates/photon-shell/src/platform/ui/window/chrome.rs), and [`photon-core/src/sidebar.rs`](../crates/photon-core/src/sidebar.rs) |
 | What a tab shows (web view or Photon page) | [`ui/window/content.rs`](../crates/photon-shell/src/platform/ui/window/content.rs) |
 | Peek, the link preview over the page | [`ui/window/peek.rs`](../crates/photon-shell/src/platform/ui/window/peek.rs) |
 | C ABI exposed to native callers | [`photon-ffi/include/photon_ffi.h`](../crates/photon-ffi/include/photon_ffi.h) and [`photon-ffi/src/api.rs`](../crates/photon-ffi/src/api.rs) |

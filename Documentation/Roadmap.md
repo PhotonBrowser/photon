@@ -92,7 +92,7 @@ In order of priority.
 
 See the [customization architecture and delivery plan](Customization.md).
 
-- [ ] Refactor the fixed horizontal and vertical compositions into reusable shell layout modules while preserving existing behavior and profile settings
+- [x] Extract the horizontal and vertical compositions into reusable shell layout modules while preserving existing behavior and profile settings
 - [ ] Add a serializable component catalog, profile presets, and per-space layouts
 - [ ] Add edit mode to show, hide, reorder, resize, and move supported components among four dock regions
 - [ ] Reuse the component catalog and presets in first-run onboarding

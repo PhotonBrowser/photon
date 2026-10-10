@@ -110,10 +110,14 @@ still reopens what was closed.
 - [`ui/sidebar/`](../crates/photon-shell/src/platform/ui/sidebar/mod.rs): the
   sidebar's views: `navigation.rs`, `favourites.rs`, `footer.rs`, and the
   layout in `mod.rs`.
-- [`ui/window/sidebar.rs`](../crates/photon-shell/src/platform/ui/window/sidebar.rs):
-  builds the chosen layout from the window's tabs and the settings, and shows
-  or hides the sidebar. It is the window's cached chrome view, so Engine
-  frames repaint only the page.
+- [`ui/window/chrome.rs`](../crates/photon-shell/src/platform/ui/window/chrome.rs):
+  builds the chosen chrome components from the window's tabs and settings.
+- [`ui/window/workspace.rs`](../crates/photon-shell/src/platform/ui/window/workspace.rs):
+  composes the cached chrome, active page, and window overlays. Engine frames
+  repaint only the page.
+- [`ui/workspace_layout.rs`](../crates/photon-shell/src/platform/ui/workspace_layout.rs):
+  resolves the saved horizontal or vertical layout to the shell's built-in
+  composition and component catalog.
 - [`photon-core`](../crates/photon-core/src/settings.rs): `TabLayout`, the
   pinned tabs and the ([`sidebar.rs`](../crates/photon-core/src/sidebar.rs)), saved
   with the settings.

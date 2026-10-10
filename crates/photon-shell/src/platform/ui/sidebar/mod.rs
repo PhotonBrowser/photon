@@ -3,7 +3,7 @@
 //! which slides in and out.
 //!
 //! These are views of state the browser window owns; the window builds them
-//! in `window/sidebar.rs`.
+//! in `window/chrome.rs`.
 //!
 //! - `navigation`: the top row with room for the window controls.
 //! - `favourites`: the grid of favourite sites.

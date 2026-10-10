@@ -19,11 +19,12 @@ use gpui_elements::editable_text::{
     EditableTextState, StringStorage, TextChanged,
     actions::{Enter, Escape},
 };
-use photon_core::{Suggestion, TabLayout};
+use photon_core::Suggestion;
 use photon_omnibox::{OmniboxTarget, display_address, resolve_with};
 
 use super::history::BrowsingHistory;
 use super::layout::h_stack;
+use super::workspace_layout::{OmniboxPlacement, WorkspaceLayout};
 use super::{PhotonWebView, WebViewEvent};
 use super::{metrics, settings::Settings, theme::palette};
 
@@ -40,15 +41,15 @@ struct FieldStyle {
 }
 
 impl FieldStyle {
-    fn for_layout(layout: TabLayout) -> Self {
+    fn for_layout(layout: OmniboxPlacement) -> Self {
         match layout {
-            TabLayout::Horizontal => Self {
+            OmniboxPlacement::Toolbar => Self {
                 height: metrics::OMNIBOX_HEIGHT,
                 radius: metrics::OMNIBOX_RADIUS,
                 font_size: metrics::OMNIBOX_FONT_SIZE,
                 idle_icon: true,
             },
-            TabLayout::Vertical => Self {
+            OmniboxPlacement::Sidebar => Self {
                 height: metrics::SIDEBAR_OMNIBOX_HEIGHT,
                 radius: metrics::SIDEBAR_OMNIBOX_RADIUS,
                 font_size: metrics::SIDEBAR_OMNIBOX_FONT_SIZE,
@@ -58,7 +59,7 @@ impl FieldStyle {
     }
 
     fn current(cx: &gpui::App) -> Self {
-        Self::for_layout(Settings::get(cx).tab_layout)
+        Self::for_layout(WorkspaceLayout::current(cx).omnibox_placement())
     }
 }
 

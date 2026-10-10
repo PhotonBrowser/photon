@@ -27,6 +27,7 @@ mod titlebar;
 mod toolbar;
 mod webview;
 mod window;
+mod workspace_layout;
 
 /// A click callback for shell controls.
 pub(super) type ClickHandler = Box<dyn Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App)>;

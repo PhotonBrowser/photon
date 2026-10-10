@@ -3,6 +3,7 @@
 mod actions;
 mod alerts;
 mod app;
+mod chrome;
 mod command_bar;
 mod content;
 mod favourites;
@@ -13,19 +14,19 @@ mod peek;
 mod pinned;
 mod popup_window;
 mod popups;
-mod sidebar;
 mod sidebar_state;
 mod spaces;
 mod tab_items;
 mod tab_menu;
 mod tabs;
+mod workspace;
 mod zoom;
 
 use gpui::{
-    AnyElement, App, Context, Entity, FocusHandle, Render, StyleRefinement, Subscription, Task,
-    WeakEntity, Window, div, prelude::*, px,
+    AnyElement, App, Context, Entity, FocusHandle, Render, Subscription, Task, WeakEntity, Window,
+    div, prelude::*,
 };
-use photon_core::{BrowserCommand, TabLayout};
+use photon_core::BrowserCommand;
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
@@ -36,20 +37,15 @@ use super::super::trace;
 use super::super::window_observer::WindowObserver;
 use super::super::window_settings;
 use super::command_bar::CommandBar;
-use super::find_bar::{FIND_BAR_MOTION, FindBar};
+use super::find_bar::FindBar;
 use super::js_dialog::JavaScriptDialog;
-use super::layout::{h_stack, v_stack};
 use super::modal::MODAL_MOTION;
-use super::motion::{AnimateIn, Presence, mix};
+use super::motion::Presence;
 use super::omnibox::{Omnibox, OmniboxEvent};
 use super::pages::{NEW_TAB, find_page};
 use super::settings::Settings;
 use super::tabs::RevealedIcon;
-use super::titlebar::window_drag_area;
-use super::{
-    metrics,
-    theme::{ThemeColors, palette},
-};
+use super::theme::{ThemeColors, palette};
 use alerts::{EngineNotice, NoticeExpiry};
 use content::{BrowserTab, TabContent, create_webview};
 use menu::OpenMenu;
@@ -217,119 +213,6 @@ impl BrowserWindow {
             }
         }
         cx.notify();
-    }
-}
-
-impl Render for BrowserWindow {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let palette = self.palette(window, cx);
-        let find_bar = self.find_bar_presence.sync(
-            self.find_bar.as_ref().map(|(bar, _)| bar.clone()),
-            FIND_BAR_MOTION,
-            cx,
-        );
-        let vertical = Settings::get(cx).tab_layout == TabLayout::Vertical;
-        self.sidebar.settle();
-        if self.sidebar.is_moving() {
-            window.request_animation_frame();
-        }
-        // How far the sidebar is shown beside the page: the page's left edge
-        // follows the sidebar's, and its top rises from below the top bar.
-        let shown = if vertical { self.sidebar.shown() } else { 0.0 };
-        let page = div()
-            .relative()
-            .flex_1()
-            // Keep tall pages inside the page area; they scroll themselves.
-            .min_w_0()
-            .min_h_0()
-            .overflow_hidden()
-            .size_full()
-            .px(px(metrics::PAGE_INSET))
-            .pb(px(metrics::PAGE_INSET))
-            .when(!vertical, |page| page.pt(px(metrics::PAGE_CHROME_GAP)))
-            .when(vertical, |page| {
-                // Beside the sidebar, its own padding separates the two;
-                // with it hidden, the top bar above is gap enough.
-                page.pl(px(mix(metrics::PAGE_INSET, 0.0, shown))).pt(px(mix(
-                    metrics::TITLEBAR_HEIGHT,
-                    metrics::PAGE_INSET,
-                    shown,
-                )))
-            })
-            .child(self.active_view(palette))
-            // The find bar floats in the page's top-right corner.
-            .children(find_bar.map(|(bar, transition)| {
-                div()
-                    .absolute()
-                    .top(px(metrics::PAGE_INSET + metrics::CHIP_INSET))
-                    .right(px(metrics::PAGE_INSET + metrics::CHIP_INSET))
-                    .child(
-                        div()
-                            .child(bar)
-                            .animate("find-bar-motion", FIND_BAR_MOTION, transition),
-                    )
-            }))
-            // Crash and restart chips sit in the page's bottom-right corner.
-            .children(self.notice_chip(palette, cx).map(|chip| {
-                div()
-                    .absolute()
-                    .right(px(metrics::PAGE_INSET + metrics::CHIP_INSET))
-                    .bottom(px(metrics::PAGE_INSET + metrics::CHIP_INSET))
-                    .child(chip)
-            }));
-        // The tab strip and toolbar sit above the page. The sidebar is a
-        // layer over the window, with room made for it beside the page.
-        let (body, edge) = if vertical {
-            let chrome = self.chrome.clone().cached(
-                StyleRefinement::default()
-                    .absolute()
-                    .top_0()
-                    .left_0()
-                    .size_full(),
-            );
-            let room = div().flex_shrink_0().w(px(self.sidebar.width(cx) * shown));
-            // Empty space across the top moves the window.
-            let titlebar = self.with_titlebar_menu(
-                window_drag_area(
-                    div()
-                        .absolute()
-                        .top_0()
-                        .left_0()
-                        .w_full()
-                        .h(px(metrics::TITLEBAR_HEIGHT)),
-                ),
-                cx,
-            );
-            let body = div()
-                .size_full()
-                .relative()
-                .child(titlebar)
-                .child(h_stack().size_full().child(room).child(page))
-                .child(chrome);
-            (body, (!self.sidebar.visible).then(|| self.reveal_edge(cx)))
-        } else {
-            let chrome = self.chrome.clone().cached(
-                StyleRefinement::default()
-                    .w_full()
-                    .h(px(metrics::CHROME_HEIGHT))
-                    .flex_shrink_0(),
-            );
-            (v_stack().size_full().child(chrome).child(page), None)
-        };
-        let root = div()
-            .size_full()
-            .relative()
-            .bg(palette.window_background())
-            .text_color(gpui::rgb(palette.text_primary))
-            .child(body)
-            .children(edge)
-            .on_drag_move(cx.listener(|this, event, _, cx| this.drag_sidebar_edge(event, cx)))
-            .child(
-                self.overlays
-                    .clone()
-                    .cached(StyleRefinement::default().absolute().inset_0()),
-            );
-        self.on_actions(root, cx)
     }
 }
 

@@ -6,7 +6,7 @@ use gpui::{
     AnyElement, Context, Entity, MouseDownEvent, ScrollDelta, ScrollWheelEvent, Subscription,
     TouchPhase, Window, div, prelude::*,
 };
-use photon_core::{SpaceId, TabLayout, WindowColor};
+use photon_core::{SpaceId, WindowColor};
 use std::time::Instant;
 
 use super::super::layout::v_stack;
@@ -18,6 +18,7 @@ use super::super::settings::Settings;
 use super::super::sidebar::SpaceDot;
 use super::super::space_editor::{SpaceEditor, SpaceEditorEvent};
 use super::super::theme::{ThemeColors, window_color_swatch};
+use super::super::workspace_layout::WorkspaceLayout;
 use super::BrowserWindow;
 use super::menu::OpenMenu;
 
@@ -76,7 +77,7 @@ impl BrowserWindow {
     /// Whether the window shows one space at a time: in the sidebar. The tab
     /// strip shows every tab.
     pub(super) fn shows_spaces(&self, cx: &gpui::App) -> bool {
-        Settings::get(cx).tab_layout == TabLayout::Vertical
+        WorkspaceLayout::current(cx).shows_spaces()
     }
 
     pub(super) fn switch_space(&mut self, id: SpaceId, cx: &mut Context<Self>) {

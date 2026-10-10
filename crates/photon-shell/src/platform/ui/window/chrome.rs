@@ -3,9 +3,9 @@
 //! tabs and footer), shown beside the page or revealed over it.
 
 use gpui::{AnyElement, ClickEvent, Context, MouseDownEvent, Window, point, prelude::*, px, rgba};
-use photon_core::{BrowserCommand, TabLayout};
+use photon_core::BrowserCommand;
 
-use super::super::layout::{Elevated, Elevation, Raised};
+use super::super::layout::{Elevated, Elevation, Raised, v_stack};
 use super::super::motion::{AnimateIn, Edge, Entrance};
 use super::super::pages::SETTINGS;
 use super::super::settings::Settings;
@@ -16,6 +16,7 @@ use super::super::sidebar::{
 use super::super::tabs::{DraggedTab, tab_list, tab_strip};
 use super::super::titlebar::titlebar;
 use super::super::toolbar::address_toolbar;
+use super::super::workspace_layout::{ComponentId, Composition, DockRegion, WorkspaceLayout};
 use super::super::{metrics, theme::ThemeColors};
 use super::BrowserWindow;
 use super::menu::OpenMenu;
@@ -23,17 +24,50 @@ use super::menu::OpenMenu;
 impl BrowserWindow {
     /// The chrome for the chosen tab layout.
     pub(super) fn render_chrome(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
-        match Settings::get(cx).tab_layout {
-            TabLayout::Horizontal => self.render_tab_strip(window, cx),
-            TabLayout::Vertical => self.render_sidebar(window, cx),
+        let layout = WorkspaceLayout::current(cx);
+        match layout.composition() {
+            Composition::TopStack => {
+                let mut stack = v_stack().w_full();
+                for component in layout.components(DockRegion::Top) {
+                    stack = stack.child(self.render_component(component.id, window, cx));
+                }
+                stack.into_any_element()
+            }
+            Composition::SidebarOverlay => layout
+                .components(DockRegion::Leading)
+                .iter()
+                .find(|component| component.id == ComponentId::Sidebar)
+                .map(|component| self.render_component(component.id, window, cx))
+                .unwrap_or_else(|| gpui::div().into_any_element()),
         }
     }
 
-    /// The tab strip in the titlebar, over the address toolbar.
+    /// Renders a component selected by the workspace layout definition.
+    fn render_component(
+        &self,
+        component: ComponentId,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        match component {
+            ComponentId::TabStrip => self.render_tab_strip(window, cx),
+            ComponentId::AddressToolbar => self.render_address_toolbar(window, cx),
+            ComponentId::Sidebar => self.render_sidebar(window, cx),
+        }
+    }
+
+    /// The tab strip in the titlebar.
     fn render_tab_strip(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let palette = self.palette(window, cx);
         let strip = tab_strip(self.tab_items(cx), self.new_tab_handler(cx), palette);
-        let toolbar = address_toolbar(
+        self.with_titlebar_menu(titlebar(strip, window), cx)
+            .into_any_element()
+    }
+
+    /// The navigation controls, address field, and browser menu.
+    fn render_address_toolbar(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+        let palette = self.palette(window, cx);
+        address_toolbar(
             self.omnibox.clone(),
             self.navigation_state(cx),
             self.navigation_actions(cx),
@@ -47,21 +81,8 @@ impl BrowserWindow {
                 cx.notify();
             })),
             palette,
-        );
-        gpui::div()
-            .w_full()
-            .flex()
-            .flex_col()
-            .child(titlebar(strip, window).on_mouse_down(
-                gpui::MouseButton::Right,
-                cx.listener(|this, event: &MouseDownEvent, _, cx| {
-                    cx.stop_propagation();
-                    this.open_menu = Some(OpenMenu::Context(event.position));
-                    cx.notify();
-                }),
-            ))
-            .child(toolbar)
-            .into_any_element()
+        )
+        .into_any_element()
     }
 
     /// Opens the browser menu on a right-click in empty titlebar space.

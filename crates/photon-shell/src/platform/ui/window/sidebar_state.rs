@@ -4,12 +4,13 @@
 //! resizes it, or snaps it shut.
 
 use gpui::{AnyElement, App, Context, DragMoveEvent, Render, Task, Window, div, prelude::*, px};
-use photon_core::{SidebarResize, TabLayout};
+use photon_core::SidebarResize;
 use std::time::Duration;
 
 use super::super::metrics;
 use super::super::motion::{Speed, Tween};
 use super::super::settings::Settings;
+use super::super::workspace_layout::WorkspaceLayout;
 use super::BrowserWindow;
 
 /// How long the pointer may be away before the revealed sidebar leaves, so
@@ -124,7 +125,7 @@ impl SidebarState {
 impl BrowserWindow {
     /// Shows or hides the sidebar. The horizontal layout has none to hide.
     pub(super) fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
-        if Settings::get(cx).tab_layout == TabLayout::Vertical {
+        if WorkspaceLayout::current(cx).has_sidebar() {
             self.set_sidebar_visible(!self.sidebar.visible, cx);
         }
     }

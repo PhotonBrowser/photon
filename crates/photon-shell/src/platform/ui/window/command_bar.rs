@@ -1,12 +1,13 @@
 //! Opening the command bar and carrying out what is chosen in it.
 
 use gpui::{AnyElement, ClipboardItem, Context, Focusable, Window, div, prelude::*};
-use photon_core::{BrowserCommand, Command, TabLayout};
+use photon_core::{BrowserCommand, Command};
 
 use super::super::command_bar::{COMMAND_BAR_MOTION, CommandBar, CommandBarEvent, TabSummary};
 use super::super::motion::AnimateIn;
 use super::super::pages::{SETTINGS, find_page};
 use super::super::settings::Settings;
+use super::super::workspace_layout::WorkspaceLayout;
 use super::BrowserWindow;
 use super::content::TabContent;
 
@@ -101,16 +102,19 @@ impl BrowserWindow {
     /// showing, and the sidebar only in the vertical layout.
     fn available_commands(&self, cx: &Context<Self>) -> Vec<Command> {
         let has_page = self.active_webview().is_some();
-        let vertical = Settings::get(cx).tab_layout == TabLayout::Vertical;
+        let layout = WorkspaceLayout::current(cx);
+        let has_sidebar = layout.has_sidebar();
+        let shows_spaces = layout.shows_spaces();
         let spaces = &Settings::get(cx).spaces;
         Command::ALL
             .into_iter()
             .filter(|command| match command {
                 Command::ReloadPage | Command::FindInPage | Command::CopyAddress => has_page,
                 Command::ReopenClosedTab => !self.closed_tabs.is_empty(),
-                Command::ToggleSidebar | Command::NewSpace => vertical,
-                Command::NextSpace => vertical && spaces.neighbour(1).is_some(),
-                Command::PreviousSpace => vertical && spaces.neighbour(-1).is_some(),
+                Command::ToggleSidebar => has_sidebar,
+                Command::NewSpace => shows_spaces,
+                Command::NextSpace => shows_spaces && spaces.neighbour(1).is_some(),
+                Command::PreviousSpace => shows_spaces && spaces.neighbour(-1).is_some(),
                 _ => true,
             })
             .collect()

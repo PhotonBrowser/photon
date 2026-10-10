@@ -1,9 +1,10 @@
 # Customizable browser workspace
 
-**Status: proposal.** This document describes the architecture and delivery
-sequence for making Photon's browser chrome configurable. The first milestone
-is a behavior-preserving refactor of the existing layouts. The edit experience
-comes after that foundation.
+**Status: foundation implemented; customization remains a proposal.** This
+document describes the architecture and delivery sequence for making Photon's
+browser chrome configurable. The initial behavior-preserving layout resolver
+and component catalog are in place. Saved presets, per-space layouts, and the
+edit experience come after that foundation.
 
 ## Goal
 
@@ -49,6 +50,13 @@ their behavior. Existing profiles should keep their current layout choice;
 missing layout data should resolve to the current default. Sidebar reveal and
 resize, tab ordering and menus, keyboard shortcuts, favourites, space
 switching, theme, and page sizing must continue to work as they do now.
+
+The first extraction lives in `ui/workspace_layout.rs`, which resolves the
+existing `TabLayout` preference to built-in layout definitions and a small
+shell component catalog. `ui/window/chrome.rs` renders those components, and
+`ui/window/workspace.rs` composes them around the active page. The profile
+still stores the existing `TabLayout` value, and browser-window state
+continues to own interactions such as sidebar reveal and resizing.
 
 ## Architecture direction
 
