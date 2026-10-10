@@ -20,7 +20,7 @@ use gpui::{AnyElement, div, prelude::*, px, rgba};
 use super::layout::{h_stack, v_stack};
 use super::{metrics, theme::ThemeColors};
 pub(super) use favourites::{FavouriteTile, favourites_grid};
-pub(super) use footer::{FooterActions, footer};
+pub(super) use footer::{FooterActions, SpaceDot, footer};
 pub(super) use navigation::{NavigationActions, NavigationState, navigation_bar};
 
 /// The sidebar's sections below its navigation row.

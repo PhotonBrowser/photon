@@ -2,8 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::new_tab::{NewTabSettings, Shortcut};
+use super::new_tab::NewTabSettings;
 use super::sidebar::SidebarSettings;
+use super::spaces::Spaces;
 
 /// The shell's selected appearance.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -101,9 +102,6 @@ pub enum PopupPolicy {
 pub struct BrowserSettings {
     pub theme: ThemeMode,
     pub transparency: Transparency,
-    pub window_color: WindowColor,
-    /// Whether the window colour fades into a neighbouring one.
-    pub window_gradient: bool,
     pub tab_layout: TabLayout,
     pub default_search_engine: String,
     pub popup_policy: PopupPolicy,
@@ -112,9 +110,9 @@ pub struct BrowserSettings {
     /// Whether closing the last tab closes its window. When not, the window
     /// stays open on a new tab page.
     pub close_window_with_last_tab: bool,
-    /// Tabs pinned above the others, at the addresses they were pinned at,
-    /// opened again at launch.
-    pub pinned_tabs: Vec<Shortcut>,
+    /// The spaces, each with its own colour and pinned tabs, and the one
+    /// shown.
+    pub spaces: Spaces,
     /// Whether unpinned tabs left unused for twelve hours are closed.
     pub archive_tabs: bool,
 }
@@ -124,32 +122,31 @@ impl Default for BrowserSettings {
         Self {
             theme: ThemeMode::System,
             transparency: Transparency::default(),
-            window_color: WindowColor::default(),
-            window_gradient: false,
             tab_layout: TabLayout::default(),
             default_search_engine: "google".to_owned(),
             popup_policy: PopupPolicy::Ask,
             new_tab: NewTabSettings::default(),
             sidebar: SidebarSettings::default(),
             close_window_with_last_tab: true,
-            pinned_tabs: Vec::new(),
+            spaces: Spaces::default(),
             archive_tabs: false,
         }
     }
 }
 
 impl BrowserSettings {
-    /// Returns every preference to its default, keeping the sites people
-    /// saved themselves: the sidebar's favourites, the new tab page's
-    /// shortcuts and the pinned tabs.
+    /// Returns every preference to its default, keeping what people made
+    /// themselves: the sidebar's favourites, the new tab page's shortcuts,
+    /// and the spaces with their pinned tabs, whose colours reset.
     pub fn reset_preferences(&mut self) {
         let favourites = std::mem::take(&mut self.sidebar.favourites);
         let shortcuts = std::mem::take(&mut self.new_tab.pinned);
-        let pinned_tabs = std::mem::take(&mut self.pinned_tabs);
+        let mut spaces = std::mem::take(&mut self.spaces);
+        spaces.reset_colors();
         *self = Self::default();
         self.sidebar.favourites = favourites;
         self.new_tab.pinned = shortcuts;
-        self.pinned_tabs = pinned_tabs;
+        self.spaces = spaces;
     }
 }
 
@@ -166,22 +163,33 @@ mod tests {
         };
         let mut settings = BrowserSettings {
             theme: ThemeMode::Dark,
-            window_color: WindowColor::Teal,
             tab_layout: TabLayout::Vertical,
             ..BrowserSettings::default()
         };
+        let work = settings
+            .spaces
+            .add(Some("Work".to_owned()), WindowColor::Teal, true);
         settings.sidebar.width = 400;
         settings.sidebar.favourites.push(site.clone());
         settings.new_tab.pinned.push(site.clone());
         settings.new_tab.hidden.push("example.org".to_owned());
-        settings.pinned_tabs.push(site.clone());
+        let space = settings.spaces.get_mut(work).unwrap();
+        space.pinned_tabs.push(site.clone());
         settings.archive_tabs = true;
         settings.reset_preferences();
 
         let mut expected = BrowserSettings::default();
         expected.sidebar.favourites.push(site.clone());
         expected.new_tab.pinned.push(site.clone());
-        expected.pinned_tabs.push(site);
+        let work = expected
+            .spaces
+            .add(Some("Work".to_owned()), WindowColor::System, false);
+        expected
+            .spaces
+            .get_mut(work)
+            .unwrap()
+            .pinned_tabs
+            .push(site);
         assert_eq!(settings, expected);
     }
 }

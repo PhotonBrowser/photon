@@ -53,5 +53,9 @@ gpui::actions!(
         ResetZoom,
         /// Show or hide the sidebar.
         ToggleSidebar,
+        /// Show the next space.
+        NextSpace,
+        /// Show the previous space.
+        PreviousSpace,
     ]
 );

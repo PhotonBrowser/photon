@@ -1,6 +1,7 @@
 //! GPUI views and window composition.
 
 mod button;
+mod color_picker;
 mod command_bar;
 mod controls;
 mod find_bar;
@@ -17,6 +18,7 @@ mod omnibox;
 mod pages;
 mod settings;
 mod sidebar;
+mod space_editor;
 mod status_chip;
 mod tabs;
 pub(super) mod theme;

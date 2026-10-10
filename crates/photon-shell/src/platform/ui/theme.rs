@@ -128,8 +128,8 @@ pub(super) fn palette(window: &Window, cx: &App) -> ThemeColors {
         Settings::appearance(window.appearance(), cx),
         WindowStyle {
             transparency: settings.transparency,
-            color: settings.window_color,
-            gradient: settings.window_gradient,
+            color: settings.spaces.active().color,
+            gradient: settings.spaces.active().gradient,
         },
     )
 }

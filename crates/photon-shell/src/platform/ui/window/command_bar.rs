@@ -90,6 +90,9 @@ impl BrowserWindow {
                 self.toggle_sidebar(cx);
                 self.activate_tab(self.active_tab, true, window, cx);
             }
+            Command::NewSpace => self.edit_space(None, window, cx),
+            Command::NextSpace => self.switch_space_by(1, cx),
+            Command::PreviousSpace => self.switch_space_by(-1, cx),
             Command::OpenSettings => self.open_page_tab(SETTINGS, window, cx),
         }
     }
@@ -99,12 +102,15 @@ impl BrowserWindow {
     fn available_commands(&self, cx: &Context<Self>) -> Vec<Command> {
         let has_page = self.active_webview().is_some();
         let vertical = Settings::get(cx).tab_layout == TabLayout::Vertical;
+        let spaces = &Settings::get(cx).spaces;
         Command::ALL
             .into_iter()
             .filter(|command| match command {
                 Command::ReloadPage | Command::FindInPage | Command::CopyAddress => has_page,
                 Command::ReopenClosedTab => !self.closed_tabs.is_empty(),
-                Command::ToggleSidebar => vertical,
+                Command::ToggleSidebar | Command::NewSpace => vertical,
+                Command::NextSpace => vertical && spaces.neighbour(1).is_some(),
+                Command::PreviousSpace => vertical && spaces.neighbour(-1).is_some(),
                 _ => true,
             })
             .collect()

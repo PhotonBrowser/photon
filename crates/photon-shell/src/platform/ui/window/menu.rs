@@ -5,7 +5,7 @@ use gpui::{
     Anchor, Context, MouseButton, MouseDownEvent, Point, SharedString, Window, anchored, div,
     prelude::*,
 };
-use photon_core::BrowserCommand;
+use photon_core::{BrowserCommand, SpaceId};
 
 use super::super::super::engine::ZoomStep;
 use super::super::layout::v_stack;
@@ -28,6 +28,8 @@ pub(super) enum OpenMenu {
     Favourite(usize, Point<gpui::Pixels>),
     /// The menu for the tab at this index.
     Tab(usize, Point<gpui::Pixels>),
+    /// The menu for a space in the sidebar's footer; it opens above it.
+    Space(SpaceId, Point<gpui::Pixels>),
     /// The active page's context menu.
     Page(Point<gpui::Pixels>),
 }
@@ -48,6 +50,7 @@ impl BrowserWindow {
             | OpenMenu::Page(position) => (Anchor::TopLeft, position),
             OpenMenu::Toolbar(position) => (Anchor::TopRight, position),
             OpenMenu::Sidebar(position) => (Anchor::BottomRight, position),
+            OpenMenu::Space(_, position) => (Anchor::BottomLeft, position),
         };
         let menu = match open_menu {
             OpenMenu::Tab(index, _) => self
@@ -56,6 +59,9 @@ impl BrowserWindow {
             OpenMenu::Page(_) => self.page_menu(transition, palette, cx).into_any_element(),
             OpenMenu::Favourite(index, _) => self
                 .favourite_menu(index, transition, palette, cx)
+                .into_any_element(),
+            OpenMenu::Space(id, _) => self
+                .space_menu(id, transition, palette, cx)
                 .into_any_element(),
             OpenMenu::Context(_) | OpenMenu::Toolbar(_) | OpenMenu::Sidebar(_) => self
                 .browser_menu(transition, palette, cx)

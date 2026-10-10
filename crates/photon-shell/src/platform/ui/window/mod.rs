@@ -13,6 +13,7 @@ mod popup_window;
 mod popups;
 mod sidebar;
 mod sidebar_state;
+mod spaces;
 mod tab_menu;
 mod tabs;
 mod zoom;
@@ -51,6 +52,7 @@ use content::{BrowserTab, TabContent, create_webview};
 use menu::OpenMenu;
 use popups::PendingPopup;
 use sidebar_state::SidebarState;
+use spaces::SpacesState;
 use tabs::ClosedTab;
 
 pub use app::run;
@@ -63,6 +65,8 @@ struct BrowserWindow {
     chrome: Entity<BrowserChrome>,
     /// Where the sidebar is, in the vertical layout.
     sidebar: SidebarState,
+    /// The space shown, switching between spaces, and the space dialog.
+    spaces: SpacesState,
     tab_focus_handles: Vec<FocusHandle>,
     /// Closes today's tabs left unused, when the setting asks.
     _archive_task: Task<()>,
@@ -300,6 +304,7 @@ impl Render for BrowserWindow {
             .children(edge)
             .on_drag_move(cx.listener(|this, event, _, cx| this.drag_sidebar_edge(event, cx)))
             .children(self.command_bar_overlay(cx))
+            .children(self.space_editor_overlay(palette, cx))
             // A JavaScript dialog is modal to the whole window.
             .children(dialog.map(|(dialog, _)| dialog))
             .children(self.open_menu_overlay(palette, cx))
@@ -328,10 +333,12 @@ fn open_browser_window(
         cx.new(move |cx: &mut Context<BrowserWindow>| {
             let appearance_subscription =
                 cx.observe_window_appearance(window, |_, _, cx| cx.notify());
-            // Follow settings changed here, in a settings page, or in another window.
+            // Follow settings changed here, in a settings page, or in another
+            // window, including the space shown.
             let settings_subscription =
-                cx.observe_global::<Settings>(|this: &mut BrowserWindow, cx| {
-                    this.settings_changed(cx)
+                cx.observe_global_in::<Settings>(window, |this: &mut BrowserWindow, window, cx| {
+                    this.follow_space(window, cx);
+                    this.settings_changed(cx);
                 });
             let browser = cx.entity().downgrade();
             let chrome = cx.new(|_| BrowserChrome { browser });
@@ -362,6 +369,7 @@ fn open_browser_window(
                 tab_subscriptions: Vec::new(),
                 chrome,
                 sidebar: SidebarState::new(),
+                spaces: SpacesState::new(Settings::get(cx).spaces.active().id),
                 tab_focus_handles: Vec::new(),
                 _archive_task: BrowserWindow::archive_unused_tabs_regularly(window, cx),
                 active_tab: 0,

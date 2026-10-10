@@ -37,5 +37,7 @@ pub fn browser_shortcuts() -> Vec<KeyBinding> {
         KeyBinding::new("secondary--", ZoomOut, None),
         KeyBinding::new("secondary-0", ResetZoom, None),
         KeyBinding::new("secondary-s", ToggleSidebar, None),
+        KeyBinding::new("secondary-alt-right", NextSpace, None),
+        KeyBinding::new("secondary-alt-left", PreviousSpace, None),
     ]
 }

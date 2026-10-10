@@ -57,6 +57,14 @@ impl BrowserWindow {
             self.active_tab = index;
         }
         self.tabs[index].last_active = Instant::now();
+        // A tab of another space brings its space; a favourite's tab
+        // belongs to whichever space it is opened in.
+        let current = self.current_space(cx);
+        if self.tabs[index].favourite.is_some() {
+            self.tabs[index].space = current;
+        } else if self.shows_spaces(cx) && self.tabs[index].space != current {
+            self.switch_space(self.tabs[index].space, cx);
+        }
         let webview = self.tabs[index].content.webview();
         if let Some(webview) = webview.as_ref() {
             let window_visible = self.window_visible;
@@ -215,8 +223,9 @@ impl BrowserWindow {
         let index = index.min(self.tabs.len());
         let subscription = self.subscribe_to_content(&content, window, cx);
         let id = self.allocate_tab_id();
+        let space = self.current_space(cx);
         self.tabs
-            .insert(index, BrowserTab::new(id, content.clone(), pin));
+            .insert(index, BrowserTab::new(id, content.clone(), pin, space));
         self.tab_subscriptions.insert(index, subscription);
         self.tab_focus_handles
             .insert(index, cx.focus_handle().tab_stop(self.tabs.len() == 1));
@@ -333,7 +342,7 @@ impl BrowserWindow {
         let content = self.new_page(NEW_TAB, cx);
         self.tab_subscriptions[0] = self.subscribe_to_content(&content, window, cx);
         let id = self.allocate_tab_id();
-        self.tabs[0] = BrowserTab::new(id, content, None);
+        self.tabs[0] = BrowserTab::new(id, content, None, self.current_space(cx));
         self.active_tab = 0;
         self.activate_tab(0, true, window, cx);
     }

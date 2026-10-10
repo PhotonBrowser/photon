@@ -23,12 +23,15 @@ pub enum Command {
     FindInPage,
     CopyAddress,
     ToggleSidebar,
+    NewSpace,
+    NextSpace,
+    PreviousSpace,
     OpenSettings,
 }
 
 impl Command {
     /// Every command, in the order offered when several match.
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 12] = [
         Self::NewTab,
         Self::NewWindow,
         Self::ReopenClosedTab,
@@ -37,6 +40,9 @@ impl Command {
         Self::FindInPage,
         Self::CopyAddress,
         Self::ToggleSidebar,
+        Self::NewSpace,
+        Self::NextSpace,
+        Self::PreviousSpace,
         Self::OpenSettings,
     ];
 
@@ -50,6 +56,9 @@ impl Command {
             Self::FindInPage => "Find in Page",
             Self::CopyAddress => "Copy Address",
             Self::ToggleSidebar => "Show or Hide Sidebar",
+            Self::NewSpace => "New Space",
+            Self::NextSpace => "Next Space",
+            Self::PreviousSpace => "Previous Space",
             Self::OpenSettings => "Settings",
         }
     }
@@ -65,6 +74,9 @@ impl Command {
             Self::FindInPage => "search text",
             Self::CopyAddress => "url link",
             Self::ToggleSidebar => "tabs",
+            Self::NewSpace => "create add",
+            Self::NextSpace => "switch right",
+            Self::PreviousSpace => "switch left back",
             Self::OpenSettings => "preferences options",
         }
     }

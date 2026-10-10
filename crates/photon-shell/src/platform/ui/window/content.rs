@@ -2,7 +2,7 @@
 //! and how the window follows each.
 
 use gpui::{AnyElement, App, Context, Entity, Subscription, Window, prelude::*};
-use photon_core::{BrowserCommand, Shortcut};
+use photon_core::{BrowserCommand, Shortcut, SpaceId};
 use std::rc::Rc;
 use std::time::Instant;
 
@@ -55,16 +55,19 @@ pub(super) struct BrowserTab {
     /// The address of the favourite the tab belongs to. In the sidebar it
     /// shows as that favourite's tile rather than in the tab list.
     pub(super) favourite: Option<String>,
+    /// The space the tab belongs to.
+    pub(super) space: SpaceId,
     /// When the tab was last in use, for closing tabs left unused.
     pub(super) last_active: Instant,
 }
 
 impl BrowserTab {
-    pub(super) fn new(id: u64, content: TabContent, pin: Option<Shortcut>) -> Self {
+    pub(super) fn new(id: u64, content: TabContent, pin: Option<Shortcut>, space: SpaceId) -> Self {
         Self {
             id,
             content,
             pin,
+            space,
             favourite: None,
             last_active: Instant::now(),
         }

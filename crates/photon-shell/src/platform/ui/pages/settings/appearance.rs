@@ -3,16 +3,17 @@
 //! tabs go.
 
 use gpui::{App, prelude::*, px};
-use photon_core::{TabLayout, ThemeMode, Transparency, WindowColor};
+use photon_core::{TabLayout, ThemeMode, Transparency};
+use std::rc::Rc;
 
-use super::super::super::controls::{Choice, Swatch, choices, dropdown, swatches};
+use super::super::super::color_picker::color_picker;
+use super::super::super::controls::{Choice, choices, dropdown};
 use super::super::super::layout::v_stack;
 use super::super::super::metrics;
 use super::super::super::settings::Settings;
-use super::super::super::theme::{ThemeColors, window_color_swatch};
+use super::super::super::theme::ThemeColors;
 use super::super::change;
-use super::super::controls::switch_row;
-use super::super::layout::{group, label, secondary_text};
+use super::super::layout::{label, secondary_text};
 
 pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
     let current = Settings::get(cx);
@@ -40,16 +41,22 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
         on_choose: change(move |settings| settings.transparency = transparency),
     })
     .collect();
-    let colors = WindowColor::ALL
-        .into_iter()
-        .map(|color| Swatch {
-            label: color.name().into(),
-            color: window_color_swatch(color, palette),
-            chosen: current.window_color == color,
-            on_choose: change(move |settings| settings.window_color = color),
-        })
-        .collect();
-    let gradient = current.window_gradient;
+    let space = current.spaces.active();
+    let colors = color_picker(
+        "settings-window-color",
+        space.color,
+        space.gradient,
+        palette,
+        Rc::new(|color, gradient, _, cx| {
+            Settings::update(cx, |settings| {
+                let id = settings.spaces.active().id;
+                if let Some(space) = settings.spaces.get_mut(id) {
+                    space.color = color;
+                    space.gradient = gradient;
+                }
+            });
+        }),
+    );
     let tab_layouts = [
         (TabLayout::Horizontal, "Horizontal"),
         (TabLayout::Vertical, "Vertical"),
@@ -73,21 +80,11 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
             v_stack()
                 .gap(px(metrics::MENU_ITEM_GAP))
                 .child(label("Window colour", palette))
-                .child(swatches(
-                    "settings-window-color",
-                    "Window colour",
-                    colors,
+                .child(colors)
+                .child(secondary_text(
+                    "The colour of the space shown. Each space has its own.",
                     palette,
-                ))
-                .when(current.window_color != WindowColor::System, |section| {
-                    section.child(group(palette).child(switch_row(
-                        "settings-window-gradient",
-                        "Gradient",
-                        gradient,
-                        palette,
-                        change(move |settings| settings.window_gradient = !gradient),
-                    )))
-                }),
+                )),
         )
         .child(
             v_stack()

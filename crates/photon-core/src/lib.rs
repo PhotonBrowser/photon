@@ -11,6 +11,7 @@ mod internal_pages;
 mod new_tab;
 mod settings;
 mod sidebar;
+mod spaces;
 mod state;
 mod tabs;
 
@@ -29,5 +30,6 @@ pub use settings::{BrowserSettings, PopupPolicy, TabLayout, ThemeMode, Transpare
 pub use sidebar::{
     MAX_FAVOURITES, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH, SidebarResize, SidebarSettings,
 };
+pub use spaces::{Space, SpaceId, Spaces};
 pub use state::{BrowserCommand, BrowserState, EngineEvent, normalize_url};
 pub use tabs::{ARCHIVE_AFTER, pinned_after_drop, should_archive};

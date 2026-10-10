@@ -4,9 +4,10 @@ use gpui::{Context, Div, KeyDownEvent, Window, prelude::*};
 use photon_core::BrowserCommand;
 use photon_shortcuts::{
     CloseTab, FindInPage, FindNext, FindPrevious, FocusOmnibox, GoBack, GoForward, NewTab,
-    NewWindow, OpenCommandBar, Reload, ReopenClosedTab, ResetZoom, SelectLastTab, SelectNextTab,
-    SelectPreviousTab, SelectTab1, SelectTab2, SelectTab3, SelectTab4, SelectTab5, SelectTab6,
-    SelectTab7, SelectTab8, StopLoading, ToggleSidebar, ZoomIn, ZoomOut,
+    NewWindow, NextSpace, OpenCommandBar, PreviousSpace, Reload, ReopenClosedTab, ResetZoom,
+    SelectLastTab, SelectNextTab, SelectPreviousTab, SelectTab1, SelectTab2, SelectTab3,
+    SelectTab4, SelectTab5, SelectTab6, SelectTab7, SelectTab8, StopLoading, ToggleSidebar, ZoomIn,
+    ZoomOut,
 };
 
 use super::super::super::engine::ZoomStep;
@@ -23,6 +24,8 @@ impl BrowserWindow {
                     .update(cx, |omnibox, cx| omnibox.focus(window, cx));
             }))
             .on_action(cx.listener(|this, _: &ToggleSidebar, _, cx| this.toggle_sidebar(cx)))
+            .on_action(cx.listener(|this, _: &NextSpace, _, cx| this.switch_space_by(1, cx)))
+            .on_action(cx.listener(|this, _: &PreviousSpace, _, cx| this.switch_space_by(-1, cx)))
             .on_action(cx.listener(|this, _: &FindInPage, window, cx| {
                 this.open_find_bar(window, cx);
             }))

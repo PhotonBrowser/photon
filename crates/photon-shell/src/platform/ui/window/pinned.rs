@@ -3,7 +3,7 @@
 //! once left unused for twelve hours.
 
 use gpui::{Context, Task, Window};
-use photon_core::{Shortcut, internal_page_url, pinned_after_drop, should_archive};
+use photon_core::{Shortcut, SpaceId, internal_page_url, pinned_after_drop, should_archive};
 use std::time::Duration;
 
 use super::super::pages::find_page;
@@ -86,28 +86,56 @@ impl BrowserWindow {
         }
     }
 
-    /// Saves the pinned tabs, so they open again at launch.
+    /// Saves each space's pinned tabs, so they open again at launch.
     pub(super) fn save_pinned_tabs(&self, cx: &mut Context<Self>) {
-        let pinned: Vec<Shortcut> = self.tabs.iter().filter_map(|tab| tab.pin.clone()).collect();
-        if Settings::get(cx).pinned_tabs != pinned {
-            Settings::update(cx, |settings| settings.pinned_tabs = pinned);
+        let pinned_in = |space: SpaceId| -> Vec<Shortcut> {
+            self.tabs
+                .iter()
+                .filter(|tab| tab.space == space)
+                .filter_map(|tab| tab.pin.clone())
+                .collect()
+        };
+        let changed = Settings::get(cx)
+            .spaces
+            .all()
+            .iter()
+            .any(|space| space.pinned_tabs != pinned_in(space.id));
+        if changed {
+            Settings::update(cx, |settings| {
+                let ids: Vec<SpaceId> =
+                    settings.spaces.all().iter().map(|space| space.id).collect();
+                for id in ids {
+                    if let Some(space) = settings.spaces.get_mut(id) {
+                        space.pinned_tabs = pinned_in(id);
+                    }
+                }
+            });
         }
     }
 
-    /// Opens the saved pinned tabs at the start of the window, in the
-    /// background.
+    /// Opens every space's saved pinned tabs at the start of the window, in
+    /// the background.
     pub(super) fn restore_pinned_tabs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let pinned = Settings::get(cx).pinned_tabs.clone();
-        for (index, pin) in pinned.into_iter().enumerate() {
-            match find_page(&pin.url) {
-                Some(page) => {
-                    let content = self.new_page(page, cx);
-                    self.insert_tab_at(index, content, Some(pin), false, window, cx);
+        let spaces: Vec<(SpaceId, Vec<Shortcut>)> = Settings::get(cx)
+            .spaces
+            .all()
+            .iter()
+            .map(|space| (space.id, space.pinned_tabs.clone()))
+            .collect();
+        for (space, pinned) in spaces {
+            for pin in pinned {
+                let index = self.pinned_count();
+                match find_page(&pin.url) {
+                    Some(page) => {
+                        let content = self.new_page(page, cx);
+                        self.insert_tab_at(index, content, Some(pin), false, window, cx);
+                    }
+                    None => {
+                        let webview = create_webview(cx, self.runtime.clone(), &pin.url);
+                        self.insert_webview(index, webview, Some(pin), false, window, cx);
+                    }
                 }
-                None => {
-                    let webview = create_webview(cx, self.runtime.clone(), &pin.url);
-                    self.insert_webview(index, webview, Some(pin), false, window, cx);
-                }
+                self.tabs[index].space = space;
             }
         }
     }

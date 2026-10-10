@@ -180,6 +180,12 @@ pub(super) const SIDEBAR_FAVOURITE_HEIGHT: f32 = 50.0;
 pub(super) const SIDEBAR_FAVOURITE_ICON_SIZE: f32 = 20.0;
 pub(super) const SIDEBAR_FOOTER_HEIGHT: f32 = 40.0;
 pub(super) const SIDEBAR_SEPARATOR_MARGIN: f32 = 8.0;
+/// The spaces in the sidebar's footer: a dot each, larger while shown.
+pub(super) const SPACE_DOT_SIZE: f32 = 7.0;
+pub(super) const SPACE_DOT_ACTIVE_SIZE: f32 = 10.0;
+pub(super) const SPACE_DOT_BUTTON_SIZE: f32 = 22.0;
+pub(super) const SPACE_DOT_GAP: f32 = 2.0;
+pub(super) const SPACE_DOT_IDLE_OPACITY: f32 = 0.7;
 
 /// The command bar ⌘T opens over the page.
 pub(super) const COMMAND_BAR_WIDTH: f32 = 640.0;

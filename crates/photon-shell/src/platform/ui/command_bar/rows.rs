@@ -11,8 +11,8 @@ use std::rc::Rc;
 
 use super::super::history::BrowsingHistory;
 use super::super::icons::{
-    add_icon, close_icon, copy_icon, globe_icon, history_icon, reload_icon, search_icon_sized,
-    settings_icon, sidebar_icon, window_icon,
+    add_icon, back_icon, close_icon, copy_icon, forward_icon, globe_icon, history_icon,
+    reload_icon, search_icon_sized, settings_icon, sidebar_icon, window_icon,
 };
 use super::super::layout::{h_stack, v_stack};
 use super::super::omnibox::{icon_slot, matched_text, row_text, suggestion_icon};
@@ -145,6 +145,9 @@ fn command_icon(command: Command, palette: ThemeColors) -> AnyElement {
         Command::FindInPage => search_icon_sized(color, size).into_any_element(),
         Command::CopyAddress => copy_icon(color, size).into_any_element(),
         Command::ToggleSidebar => sidebar_icon(color, size).into_any_element(),
+        Command::NewSpace => add_icon(color, size).into_any_element(),
+        Command::NextSpace => forward_icon(color, size).into_any_element(),
+        Command::PreviousSpace => back_icon(color, size).into_any_element(),
         Command::OpenSettings => settings_icon(color, size).into_any_element(),
     }
 }
