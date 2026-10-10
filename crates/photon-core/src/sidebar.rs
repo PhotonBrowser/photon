@@ -7,13 +7,12 @@ use super::new_tab::{Shortcut, site_name};
 /// How many favourites the sidebar holds.
 pub const MAX_FAVOURITES: usize = 12;
 
-/// The sidebar's width when first shown, in logical pixels.
+/// The sidebar's width when first shown, in logical pixels. It is also the
+/// narrowest it can be, since its content needs this room: dragging its edge
+/// any narrower hides it.
 pub const SIDEBAR_DEFAULT_WIDTH: u32 = 240;
-/// The narrowest and widest the sidebar can be dragged.
-pub const SIDEBAR_MIN_WIDTH: u32 = 200;
+/// The widest the sidebar can be dragged.
 pub const SIDEBAR_MAX_WIDTH: u32 = 420;
-/// Dragging the sidebar's edge narrower than this hides it.
-pub const SIDEBAR_SNAP_WIDTH: u32 = 140;
 
 /// What dragging the sidebar's edge to a point does.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -27,10 +26,10 @@ pub enum SidebarResize {
 impl SidebarResize {
     /// The edge dragged to `x` pixels from the window's left edge.
     pub fn to(x: f32) -> Self {
-        if x < SIDEBAR_SNAP_WIDTH as f32 {
+        if x < SIDEBAR_DEFAULT_WIDTH as f32 {
             Self::Hide
         } else {
-            Self::Width((x.round() as u32).clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH))
+            Self::Width((x.round() as u32).min(SIDEBAR_MAX_WIDTH))
         }
     }
 }
@@ -58,7 +57,7 @@ impl SidebarSettings {
     /// The width to draw, within the allowed range even if the saved one is
     /// not.
     pub fn width(&self) -> u32 {
-        self.width.clamp(SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
+        self.width.clamp(SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH)
     }
 
     /// The favourite for `url`'s site, if there is one.
@@ -119,17 +118,17 @@ mod tests {
     }
 
     #[test]
-    fn resizes_within_limits_and_snaps_shut() {
+    fn widens_up_to_the_limit_and_hides_below_the_default() {
         assert_eq!(SidebarResize::to(300.4), SidebarResize::Width(300));
         assert_eq!(
-            SidebarResize::to(160.0),
-            SidebarResize::Width(SIDEBAR_MIN_WIDTH)
+            SidebarResize::to(240.0),
+            SidebarResize::Width(SIDEBAR_DEFAULT_WIDTH)
         );
         assert_eq!(
             SidebarResize::to(900.0),
             SidebarResize::Width(SIDEBAR_MAX_WIDTH)
         );
-        assert_eq!(SidebarResize::to(80.0), SidebarResize::Hide);
+        assert_eq!(SidebarResize::to(239.0), SidebarResize::Hide);
     }
 
     #[test]
@@ -138,7 +137,7 @@ mod tests {
             width: 5,
             ..SidebarSettings::default()
         };
-        assert_eq!(sidebar.width(), SIDEBAR_MIN_WIDTH);
+        assert_eq!(sidebar.width(), SIDEBAR_DEFAULT_WIDTH);
         assert_eq!(SidebarSettings::default().width(), SIDEBAR_DEFAULT_WIDTH);
     }
 }

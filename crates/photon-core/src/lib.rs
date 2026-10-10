@@ -26,7 +26,6 @@ pub use photon_omnibox::{
 };
 pub use settings::{BrowserSettings, PopupPolicy, TabLayout, ThemeMode, Transparency, WindowColor};
 pub use sidebar::{
-    MAX_FAVOURITES, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH,
-    SIDEBAR_SNAP_WIDTH, SidebarResize, SidebarSettings,
+    MAX_FAVOURITES, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH, SidebarResize, SidebarSettings,
 };
 pub use state::{BrowserCommand, BrowserState, EngineEvent, normalize_url};
