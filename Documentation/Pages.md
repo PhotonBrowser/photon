@@ -75,7 +75,7 @@ has a sidebar of sections, one shown at a time, each in its own module:
 
 | Section | Settings |
 | --- | --- |
-| Appearance | Theme (system, light, dark), transparency (off, subtle, clear) and layout: tabs horizontal or vertical |
+| Appearance | Theme (system, light, dark), window colour as swatches with an optional gradient, transparency (off, subtle, clear) and layout: tabs horizontal or vertical |
 | Search | The search engine for the omnibox |
 | New tab page | The new tab page's options |
 | Tabs | Whether closing the last tab closes the window, or leaves it open on a new tab page |

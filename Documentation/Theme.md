@@ -26,8 +26,19 @@ from the [settings](Profile.md), and never choose colors locally.
 
 The base light and dark palettes come from GPUI-CE `Colors`. The shell maps
 them to its roles, with named opacities in the `opacity` group, the link blue
-in `link` and the error red in `error`. Palettes are cached per appearance and
-transparency, so renders never rebuild them.
+in `link` and the error red in `error`. Palettes are cached per appearance,
+transparency and window colour, so renders never rebuild them.
+
+### Window colour
+
+Settings → Appearance tints the window, as in Arc and Zen: the system grey,
+or blue, purple, pink, red, orange, yellow, green or teal, optionally as a
+gradient into the neighbouring hue from the top left. Each colour is a hue in
+the `window_color` group of `theme.rs`, toned for light and dark windows and
+as see-through as the transparency setting makes the window. Draw the
+window's background with `palette.window_background()`, which is the tint or
+the gradient; everything else on the window is a tint over it, so it takes
+the colour too. `window_color_swatch` gives the colour each swatch shows.
 
 ### Transparency
 
@@ -83,7 +94,8 @@ tab all use it, so they frost alike and follow the transparency setting.
   standard menu. Rows include actions, checkboxes, switches, a stepper, small
   headings and blocks that line up embedded controls.
 - [`controls.rs`](../crates/photon-shell/src/platform/ui/controls.rs):
-  segmented `choices`, a `dropdown` that opens a menu of its options,
+  segmented `choices`, a `dropdown` that opens a menu of its options, colour
+  `swatches`,
   `switch` and `check_mark`, used by menus and pages, and
   `themed_text_input` for every text field's caret and selection.
 - [`button.rs`](../crates/photon-shell/src/platform/ui/button.rs): text and

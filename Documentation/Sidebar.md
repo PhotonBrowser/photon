@@ -42,6 +42,14 @@ beside the page, both following one `Tween` from
 [`window/sidebar_state.rs`](../crates/photon-shell/src/platform/ui/window/sidebar_state.rs)
 keeps where the sidebar is and handles the left edge.
 
+## Width
+
+Drag the sidebar's right edge to resize it, between 200 and 420 pixels.
+Dragging it narrower than 140 pixels snaps it shut, and dragging back out
+while still holding shows it again. The width is saved in the profile once
+the drag rests and applies to every window. The limits and the snap are in
+`SidebarResize` in [`photon-core/src/sidebar.rs`](../crates/photon-core/src/sidebar.rs).
+
 ## Closing the last tab
 
 Closing the last tab closes the window, unless Settings → Tabs says to keep
