@@ -11,14 +11,17 @@ use std::sync::OnceLock;
 
 use super::settings::Settings;
 
-/// How opaque the window and raised surfaces are, for each transparency
-/// setting. Surfaces on the window are tints over it, so they are exactly as
-/// see-through as the window; menus and dialogs over a busy page are more
-/// opaque, so their text stays readable.
+/// How opaque the window and raised surfaces are, and how much raised
+/// surfaces blur what is behind them, for each transparency setting. Surfaces
+/// on the window are tints over it, so they are exactly as see-through as the
+/// window; menus and dialogs over a busy page are more opaque and frost the
+/// page behind them, so their text stays readable.
 #[derive(Clone, Copy)]
 struct SurfaceOpacity {
     window: f32,
     raised: f32,
+    /// The blur radius behind raised surfaces, in pixels.
+    raised_blur: f32,
 }
 
 impl SurfaceOpacity {
@@ -27,14 +30,17 @@ impl SurfaceOpacity {
             Transparency::Off => Self {
                 window: 1.0,
                 raised: 1.0,
+                raised_blur: 0.0,
             },
             Transparency::Subtle => Self {
                 window: 0.88,
                 raised: 0.92,
+                raised_blur: 20.0,
             },
             Transparency::Clear => Self {
                 window: 0.7,
                 raised: 0.84,
+                raised_blur: 32.0,
             },
         }
     }
@@ -97,6 +103,9 @@ pub(super) struct ThemeColors {
     pub selection: u32,
     pub field_error_border: u32,
     pub performance_palette: PerformancePalette,
+    /// How much raised surfaces blur what is behind them; see
+    /// [`Raised`](super::layout::Raised).
+    pub raised_blur: f32,
     pub menu_surface: u32,
     pub menu_border: u32,
     /// The one surface the window's parts sit on: the browser's own pages,
@@ -160,6 +169,7 @@ impl ThemeColors {
             // Raised surfaces let the window's frosted background show through,
             // but stay opaque enough to read over a busy page.
             menu_surface: to_rgba_token(colors.container.opacity(surfaces.raised)),
+            raised_blur: surfaces.raised_blur,
             // A light hairline that separates raised surfaces from what is under
             // them without a dark outline.
             menu_border: to_rgba_token(colors.text.opacity(opacity::MENU_BORDER)),

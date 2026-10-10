@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use super::super::controls::themed_text_input;
 use super::super::icons::search_icon_sized;
-use super::super::layout::{Elevated, Elevation};
+use super::super::layout::{Elevated, Elevation, Raised};
 use super::super::layout::{h_stack, v_stack};
 use super::super::motion::{AnimateIn, Entrance};
 use super::super::{metrics, theme::ThemeColors};
@@ -82,7 +82,7 @@ impl Omnibox {
                 .rounded(px(FieldStyle::current(cx).radius))
                 .border_1()
                 .border_color(rgba(palette.menu_border))
-                .bg(rgba(palette.menu_surface))
+                .raised(palette)
                 .elevated(Elevation::High)
                 .occlude()
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())

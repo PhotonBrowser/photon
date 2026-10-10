@@ -3,7 +3,7 @@
 use gpui::{Div, ElementId, MouseButton, div, prelude::*, px, rgb, rgba};
 
 use super::layout::v_stack;
-use super::layout::{Elevated, Elevation};
+use super::layout::{Elevated, Elevation, Raised};
 use super::motion::{AnimateIn, Entrance, Transition, distance};
 use super::{metrics, theme::ThemeColors};
 
@@ -18,7 +18,7 @@ pub(super) fn modal_panel(palette: ThemeColors) -> Div {
         .rounded(px(metrics::SURFACE_RADIUS))
         .border_1()
         .border_color(rgba(palette.menu_border))
-        .bg(rgba(palette.menu_surface))
+        .raised(palette)
         .text_color(rgb(palette.text_primary))
         .elevated(Elevation::High)
 }

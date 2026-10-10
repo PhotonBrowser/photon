@@ -5,7 +5,7 @@ use gpui::{ElementId, MouseButton, Role, SharedString, div, prelude::*, px, rgb,
 use super::button::icon_button;
 use super::controls::{switch, toggled};
 use super::icons::{add_icon, check_icon, minus_icon};
-use super::layout::{Elevated, Elevation};
+use super::layout::{Elevated, Elevation, Raised};
 use super::layout::{h_stack, v_stack};
 use super::motion::{AnimateIn, Entrance, Transition};
 use super::{metrics, theme::ThemeColors};
@@ -52,7 +52,7 @@ pub(super) fn popover_surface(
         .rounded(px(metrics::SURFACE_RADIUS))
         .border_1()
         .border_color(rgba(palette.menu_border))
-        .bg(rgba(palette.menu_surface))
+        .raised(palette)
         .text_size(px(metrics::MENU_FONT_SIZE))
         .text_color(rgb(palette.text_primary))
         .elevated(Elevation::High)

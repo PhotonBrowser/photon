@@ -15,7 +15,7 @@ use gpui::{
 
 use super::Favicon;
 use super::icons::{audio_icon, close_icon, globe_icon, loading_spinner, photon_logo};
-use super::layout::{Elevated, Elevation, h_stack};
+use super::layout::{Elevated, Elevation, Raised, h_stack};
 use super::motion::{AnimateIn, Entrance};
 use super::{ClickHandler, metrics, theme::ThemeColors};
 pub(super) use list::tab_list;
@@ -44,7 +44,7 @@ impl Render for TabDragPreview {
             .rounded(px(metrics::CONTROL_RADIUS))
             .border_1()
             .border_color(rgba(palette.menu_border))
-            .bg(rgba(palette.menu_surface))
+            .raised(palette)
             .text_size(px(metrics::TAB_FONT_SIZE))
             .text_color(rgb(palette.text_primary))
             .elevated(Elevation::Medium)

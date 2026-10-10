@@ -1,6 +1,8 @@
 //! Reusable shell layout primitives.
 
-use gpui::{Div, div, prelude::*};
+use gpui::{Div, div, prelude::*, px, rgba};
+
+use super::theme::ThemeColors;
 
 /// Start a horizontal flex layout. Add alignment, spacing, and sizing as needed.
 pub(super) fn h_stack() -> Div {
@@ -35,3 +37,18 @@ pub(super) trait Elevated: Styled + Sized {
 }
 
 impl<E: Styled> Elevated for E {}
+
+/// Gives a floating element the theme's raised surface: translucent, and
+/// frosting what is behind it as much as the transparency setting asks.
+pub(super) trait Raised: Styled + Sized {
+    fn raised(self, palette: ThemeColors) -> Self {
+        let surface = self.bg(rgba(palette.menu_surface));
+        if palette.raised_blur > 0.0 {
+            surface.backdrop_blur(px(palette.raised_blur))
+        } else {
+            surface
+        }
+    }
+}
+
+impl<E: Styled> Raised for E {}

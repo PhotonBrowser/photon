@@ -14,7 +14,7 @@ use super::button::icon_button;
 use super::controls::themed_text_input;
 use super::icons::{chevron_down_icon, chevron_up_icon, close_icon, search_icon_sized};
 use super::layout::h_stack;
-use super::layout::{Elevated, Elevation};
+use super::layout::{Elevated, Elevation, Raised};
 use super::motion::Entrance;
 use super::{PhotonWebView, WebViewEvent, metrics, theme::palette};
 
@@ -121,7 +121,7 @@ impl Render for FindBar {
             .rounded(px(metrics::SURFACE_RADIUS))
             .border_1()
             .border_color(rgba(palette.menu_border))
-            .bg(rgba(palette.menu_surface))
+            .raised(palette)
             .text_size(px(metrics::FIND_FONT_SIZE))
             .text_color(rgb(palette.text_primary))
             .elevated(Elevation::Medium)
