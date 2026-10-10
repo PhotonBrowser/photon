@@ -119,7 +119,8 @@ pub(super) const OMNIBOX_PANEL_MIN_WIDTH: f32 = 520.0;
 
 pub(super) const PAGE_INSET: f32 = 8.0;
 pub(super) const POPUP_URL_FONT_SIZE: f32 = 12.0;
-pub(super) const WEBVIEW_CORNER_RADIUS: f32 = 12.0;
+/// The corners of the frame a page sits in, web page or the browser's own.
+pub(super) const PAGE_RADIUS: f32 = 12.0;
 pub(super) const INTERNAL_PAGE_INSET: f32 = 32.0;
 pub(super) const INTERNAL_PAGE_MAX_WIDTH: f32 = 620.0;
 pub(super) const INTERNAL_PAGE_SECTION_GAP: f32 = 28.0;

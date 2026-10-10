@@ -3,7 +3,7 @@
 use super::super::engine::{EngineSession, RequestedWebView};
 use super::super::presentation::PresentedSurface;
 use super::input::WebViewInput;
-use super::{metrics::WEBVIEW_CORNER_RADIUS, settings::Settings, theme::palette};
+use super::{metrics::PAGE_RADIUS, settings::Settings, theme::palette};
 use gpui::{
     Context, EventEmitter, FocusHandle, InteractiveElement, KeyDownEvent, KeyUpEvent, ObjectFit,
     Render, Subscription, SurfaceSource, Window, WindowAppearance, div, prelude::*, px, surface,
@@ -443,14 +443,14 @@ impl Render for PhotonWebView {
                 this.input.key_up(&mut this.session, event);
             }));
         webview = webview
-            .rounded(px(WEBVIEW_CORNER_RADIUS))
+            .rounded(px(PAGE_RADIUS))
             .bg(gpui::rgb(palette.page_background));
         if let Some(presented) = self.external.as_ref() {
             webview = webview.child(
                 surface(SurfaceSource::ExternalMetal(presented.surface.clone()))
                     .size_full()
                     .object_fit(ObjectFit::Fill)
-                    .rounded(px(WEBVIEW_CORNER_RADIUS)),
+                    .rounded(px(PAGE_RADIUS)),
             );
         }
         if self.performance_overlay_enabled {

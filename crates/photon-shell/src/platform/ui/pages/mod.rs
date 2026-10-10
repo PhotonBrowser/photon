@@ -101,7 +101,7 @@ impl InternalPage {
         gpui::div()
             .size_full()
             .overflow_hidden()
-            .rounded(px(metrics::WEBVIEW_CORNER_RADIUS))
+            .rounded(px(metrics::PAGE_RADIUS))
             .bg(rgba(palette.surface))
             .child(self.view.clone())
             .into_any_element()
