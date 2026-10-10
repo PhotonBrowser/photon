@@ -78,9 +78,12 @@ has a sidebar of sections, one shown at a time, each in its own module:
 | Appearance | Theme (system, light, dark), window colour as swatches with an optional gradient, transparency (off, subtle, clear) and layout: tabs horizontal or vertical |
 | Search | The search engine for the omnibox |
 | New tab page | The new tab page's options |
-| Tabs | Whether closing the last tab closes the window, or leaves it open on a new tab page |
+| Tabs | Whether closing the last tab closes the window, or leaves it open on a new tab page, and whether today's tabs left unused for twelve hours close |
 | Sites | Pop-up windows: ask, allow or block |
 | Privacy | Clear browsing data: a time range, which kinds (history, searches, cache, cookies and site data) with their sizes on disk, and Clear data |
 
 Changes save at once and apply in every window; see
-[Profile and branding](Profile.md).
+[Profile and branding](Profile.md). "Reset to defaults", at the foot of the
+sidebar, asks before returning every setting to its default, keeping the
+favourites, the new tab page's shortcuts and the pinned tabs
+([`reset.rs`](../crates/photon-shell/src/platform/ui/pages/settings/reset.rs)).

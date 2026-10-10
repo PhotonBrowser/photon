@@ -19,7 +19,8 @@ change applies at once, in every window.
 | Top row | Room for the native window controls, the sidebar toggle, and back, forward and reload or stop. Empty space moves the window; right-clicking it opens the browser menu. |
 | Address field | The [omnibox](Omnibox.md), larger than in the toolbar: the page's address the short way while idle, the full address while editing, and suggestions in a panel that reaches over the page. |
 | Favourites | A three-column grid of favourite sites with their icons. A click switches to a tab already showing the site, or opens it in a new tab. Right-click to remove; add one from a tab's menu ("Add to Favourites"). Up to 12. |
-| Tabs | "+ New Tab", which opens the [command bar](Omnibox.md#command-bar), then one row per tab: icon or loading spinner, title, and a close button on the active tab and on the row under the pointer. Click to switch, middle-click or the close button to close, drag to reorder, right-click for the tab menu, and the up and down arrows move between focused tabs. The list scrolls. |
+| Pinned tabs | Tabs pinned from their menu ("Pin Tab"), above a divider. See [Pinned tabs](#pinned-tabs). |
+| Tabs | "+ New Tab", which opens the [command bar](Omnibox.md#command-bar), then one row per tab of today's tabs: icon or loading spinner, title, and a close button on the active tab and on the row under the pointer. Click to switch, middle-click or the close button to close, drag to reorder, right-click for the tab menu, and the up and down arrows move between focused tabs. The list scrolls. |
 | Footer | Settings and the browser menu, which opens above it. |
 
 ⌘S or the sidebar button shows or hides the sidebar. Its top row, with the
@@ -44,11 +45,28 @@ keeps where the sidebar is and handles the left edge.
 
 ## Width
 
-Drag the sidebar's right edge to resize it, between 200 and 420 pixels.
-Dragging it narrower than 140 pixels snaps it shut, and dragging back out
-while still holding shows it again. The width is saved in the profile once
+Drag the sidebar's right edge to widen it, up to 420 pixels. Its default
+width, 240 pixels, is also the narrowest it goes, since its content needs that
+room: dragging any narrower hides it, and dragging back out while still
+holding shows it again. The width is saved in the profile once
 the drag rests and applies to every window. The limits and the snap are in
 `SidebarResize` in [`photon-core/src/sidebar.rs`](../crates/photon-core/src/sidebar.rs).
+
+## Pinned tabs
+
+As in Arc, a tab's menu pins it above today's tabs, and unpins it. Pinned
+tabs keep the address they were pinned at and open again, in the background,
+in the first window at launch; if several windows pin tabs, the one changed
+last is what is saved. In the horizontal strip they show only their icons, at
+the start.
+
+Dragging a tab among the pinned tabs pins it, and among today's tabs, onto the
+divider or onto "+ New Tab" unpins it. Settings → Tabs can close today's tabs
+left unused for twelve hours; pinned tabs and the tab in use stay, and closed
+tabs can be reopened with ⌘⇧T. The rules are in
+[`photon-core/src/tabs.rs`](../crates/photon-core/src/tabs.rs), and the
+window's side in
+[`window/pinned.rs`](../crates/photon-shell/src/platform/ui/window/pinned.rs).
 
 ## Closing the last tab
 
@@ -71,6 +89,6 @@ still reopens what was closed.
   builds the chosen layout from the window's tabs and the settings, and shows
   or hides the sidebar. It is the window's cached chrome view, so Engine
   frames repaint only the page.
-- [`photon-core`](../crates/photon-core/src/settings.rs): `TabLayout` and the
-  favourites ([`sidebar.rs`](../crates/photon-core/src/sidebar.rs)), saved
+- [`photon-core`](../crates/photon-core/src/settings.rs): `TabLayout`, the
+  pinned tabs and the ([`sidebar.rs`](../crates/photon-core/src/sidebar.rs)), saved
   with the settings.

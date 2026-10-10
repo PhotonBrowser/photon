@@ -22,7 +22,9 @@ What the Photon shell does today and what comes next. Engine performance work is
 - [x] Horizontal tabs in the titlebar (the default) or a vertical sidebar, chosen in Settings → Appearance
 - [x] Vertical tab sidebar: navigation, a larger address field, favourite sites, tabs and a footer, shown or hidden with ⌘S
 - [x] The sidebar slides in and out while the page resizes beside it in step; hidden, pointing at the window's left edge reveals it over the page until the pointer leaves
-- [x] Drag the sidebar's edge to resize it (remembered in the profile), or nearly shut to hide it
+- [x] Drag the sidebar's edge to widen it (remembered in the profile); narrower than its default hides it
+- [x] Pinned tabs above a divider, as in Arc: pinned from the tab menu or by dragging, saved and reopened at launch, icons only in the horizontal strip
+- [x] Optionally close today's tabs left unused for 12 hours
 - [x] Favourite sites: up to 12 in a grid, added from a tab's menu, opening or switching to the site's tab
 - [x] Tabs with new, close and select; up and down arrows move between tabs
 - [x] Optionally keep the window open on a new tab page when its last tab closes
@@ -52,6 +54,7 @@ What the Photon shell does today and what comes next. Engine performance work is
 - [x] New tab page: logo and 4–12 site shortcuts in up to two rows (pinned, then most visited, one per site), with tiles removed on hover, shortcuts added by name and address, and a customise panel
 - [x] Settings page with a sidebar of sections: appearance (theme, transparency, tab layout), search, new tab page, tabs, sites (pop-ups), and privacy (clearing browsing data by time range, with disk usage)
 - [x] Settings saved in the profile and followed by every window at once
+- [x] Reset to defaults, after asking, keeping favourites, shortcuts and pinned tabs
 - [x] Window colour, as in Arc and Zen: the system grey or one of eight colours, optionally as a gradient, chosen with swatches in Appearance
 - [x] Transparency setting (off, subtle, clear) applied to every surface: window, tabs, omnibox, buttons, menus and pages; floating surfaces frost what is behind them, more as transparency rises
 - [x] The browser's own pages live at `photon://` addresses, shown in the omnibox (the new tab page leaves it empty) and listed in one registry
@@ -81,8 +84,6 @@ In order of priority.
 
 ### Arc and Zen feel
 
-- [ ] Pinned tabs above today's tabs, with a divider and drag between them; optionally archive unpinned tabs after 12 hours
-- [ ] The page as a floating card: a soft shadow and a slightly larger radius on a tinted window
 - [ ] Peek: Shift- or Alt-click a link to preview it floating over the page
 - [ ] Split view: two or more tabs side by side
 - [ ] Spaces in the sidebar, each with its own name, icon, colour and tabs, switched by swiping

@@ -82,6 +82,7 @@ crates/
 │           │   ├── command_bar.rs    # Opening the command bar and carrying out its choice
 │           │   ├── sidebar_state.rs  # Where the sidebar is: shown, hidden or revealed from the left edge
 │           │   ├── tab_menu.rs       # Tab menu, reordering and bulk tab actions
+│           │   ├── pinned.rs         # Pinned tabs, saved and reopened, and closing unused tabs
 │           │   ├── content.rs        # What a tab shows: a web view or one of the browser's pages
 │           │   ├── menu.rs           # Browser menu and the menu overlay
 │           │   ├── page_menu.rs      # Page right-click menus
@@ -102,7 +103,7 @@ crates/
 │           ├── pages/                # Photon's own pages at photon:// addresses, drawn natively in a tab
 │           │   ├── registry.rs       # Every page, found by its photon:// name
 │           │   ├── new_tab/          # Logo, shortcut tiles, customise panel, adding a shortcut
-│           │   ├── settings/         # Sidebar and one module per section
+│           │   ├── settings/         # Sidebar, one module per section, and resetting
 │           │   ├── layout.rs         # Page columns, headings and groups
 │           │   └── controls.rs       # Choices, switches and checkboxes
 │           ├── tabs/                 # Tab rows shared by both layouts: the strip and the sidebar list
