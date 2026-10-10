@@ -25,6 +25,8 @@ self-scrolling page, or `https://en.wikipedia.org/wiki/Web_browser`. Rates on a
 | Idle pages | Repaint for video paint facts only when they change (Ladybird bug) | Any page with a `<video>`, even paused, rendered at display rate forever; Wikipedia at 60 fps indefinitely | Idle (0 fps) a few seconds after load; a playing video still presents at 60 fps |
 | Page load | Stop loading SVG images requesting frames of every SVG image (Ladybird bug) | ~13,000 image invalidations while Wikipedia loads (206 SVG images) | 0 |
 | Idle GPU memory | Purge Skia resources unused for 5 s once no frame has completed for 5 s | Compositor on idle Wikipedia: 230 MB footprint, 114 MB GPU memory | 122 MB footprint, 17 MB GPU memory |
+| First paint of heavy pages | Compile the GPU programs recent sessions used when the Compositor starts, one per event loop turn | Slowest first-paint flushes 290–360 ms on a long Wikipedia table, 341 ms on YouTube; scrolling froze behind them while pages loaded | About 8 ms on the Wikipedia table; 41 ms on a second YouTube visit |
+| UI draw | Cache the menus, dialogs and command bar over the window like the chrome | The root view rebuilt them on every page frame | Not rebuilt per frame; the window's whole draw per page frame was already 0.29–0.47 ms (p50), and the change is within that run-to-run spread |
 
 ## Investigated without a change
 
@@ -34,12 +36,16 @@ self-scrolling page, or `https://en.wikipedia.org/wiki/Web_browser`. Rates on a
 | Apparent 150–600 ms stalls | A test animation moved content off-screen; the damage diff correctly skipped those frames. |
 | Blank launch | Not reproduced in 20 launches (12 local page, 8 Wikipedia); every launch presented frames. |
 | Scrolling | Steady 60 fps at 60 Hz with no deferrals. The compositor re-rasterizes the whole viewport each scroll frame; its GPU time is 4.1 / 5.3 / 5.7 ms (p50 / p90 / p99) at 3.3 MP and 5.8 / 9.1 / 12.5 ms at 6.2 MP. Other stages stay under 1 ms. |
+| Freezes while scrolling loading pages | With synthetic trackpad scrolling through the real input path: the shell's main thread never stalled (8 ms timer within a few ms over 125 ticks); a long GitHub file scrolled at 60 fps; every wheel event during a Wikipedia load was scrolled by the Compositor, with forced layout under 0.6 ms per event. The freezes were the slow first-paint flushes, fixed above. See [section 10](CompositorPerformance.md#10-freezes-while-interacting-with-loading-pages--measured-2026-10-10). |
+| YouTube while scrolling | 52–56 fps with a playing Short; p95 frame interval 33 ms, hitches of 80–200 ms as new content appears. |
+| Pipeline creation after the warm-up | 1–2 ms per program at first use: Skia's Metal precompile already starts each pipeline asynchronously, relying on Apple's cache, so prebuilding pipelines would gain nothing. See [section 11](CompositorPerformance.md#11-per-frame-shell-work-and-pipeline-creation--measured-2026-10-10). |
 
 ## Remaining
 
 - Confirm 120 fps on the 120 Hz 4K display.
 - Scrolling a full-screen 4K page at 120 Hz: extrapolated compositor GPU time is about 7.7 ms (p50) and 12 ms (p90) against an 8.3 ms budget. Caching rasterized scroll content (tiles or layers) instead of repainting the viewport each frame would remove most of it.
-- First paint of heavy pages: on Google search results the Compositor's Skia flush took 461, 195 and 191 ms for the first frames, then spiked to 21–84 ms (34 fps, frame interval p95 100 ms). Cache hits rule out shader compilation; see [section 9](CompositorPerformance.md#9-slow-first-paint-on-heavy-pages--open).
+- A kind of page not visited before still compiles its new GPU programs during its first paint, once; the warm-up list then covers it. The warm-up grows with browsing (163 programs took 2 s of compiles, spread over event loop turns) and is capped at 256.
+- YouTube's 80–200 ms hitches as new content appears while scrolling.
 - Send the two Ladybird fixes upstream: branches `libweb-video-paint-facts-repaint` and `libweb-svg-image-load-frame-requests` on `TheoSlater/ladybird`.
 
 ## Engine and GPUI-CE commits
@@ -52,4 +58,6 @@ self-scrolling page, or `https://en.wikipedia.org/wiki/Web_browser`. Rates on a
 | Engine | `e2746e5c0a` | LibWeb: Repaint for video paint facts only when they change |
 | Engine | `967707f712` | LibWeb: Keep loading SVG images from requesting frames of every image |
 | Engine | `1c9ff08eb5` | Compositor: Purge unused GPU cache once a page stops drawing |
+| Engine | `d47e8bacce` | LibGfx+Compositor: Compile recently used GPU programs before first use |
+| Engine | `bb320a69d6` | Tests/LibGfx: Fix and extend the Ganesh persistent cache tests |
 | GPUI-CE | `fdd3033141` | gpui_apple: Release external surface textures that are no longer drawn |
