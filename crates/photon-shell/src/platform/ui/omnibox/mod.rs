@@ -58,13 +58,16 @@ impl FieldStyle {
         }
     }
 
-    fn current(cx: &gpui::App) -> Self {
-        Self::for_layout(WorkspaceLayout::current(cx).omnibox_placement())
+    fn current(cx: &gpui::App, placement: Option<OmniboxPlacement>) -> Self {
+        Self::for_layout(
+            placement.unwrap_or_else(|| WorkspaceLayout::current(cx).omnibox_placement()),
+        )
     }
 }
 
 pub(super) struct Omnibox {
     input: Entity<EditableTextState>,
+    workspace_placement: Option<OmniboxPlacement>,
     /// The active tab's web view; `None` while it shows one of Photon's pages.
     webview: Option<Entity<PhotonWebView>>,
     /// The address of the active tab's Photon page, if it shows one.
@@ -119,6 +122,7 @@ impl Omnibox {
         ];
         let mut omnibox = Self {
             input,
+            workspace_placement: None,
             webview: None,
             page_address: None,
             current_url: String::new(),
@@ -140,6 +144,18 @@ impl Omnibox {
     pub(super) fn focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         window.focus(&self.input.focus_handle(cx), cx);
         self.input.update(cx, |input, cx| input.select_document(cx));
+    }
+
+    pub(super) fn set_workspace_placement(
+        &mut self,
+        placement: Option<OmniboxPlacement>,
+        cx: &mut Context<Self>,
+    ) {
+        if self.workspace_placement == placement {
+            return;
+        }
+        self.workspace_placement = placement;
+        cx.notify();
     }
 
     /// Shows the active tab's address: its web view's, followed as it
@@ -271,7 +287,7 @@ impl Render for Omnibox {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = palette(window, cx);
         let editing = self.is_editing(window, cx);
-        let style = FieldStyle::current(cx);
+        let style = FieldStyle::current(cx, self.workspace_placement);
         let field_box = h_stack()
             .id("titlebar-omnibox")
             .relative()

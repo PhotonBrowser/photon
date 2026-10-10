@@ -34,6 +34,9 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.workspace_edit.is_some() {
+            return;
+        }
         if index >= self.tabs.len() {
             return;
         }
@@ -255,6 +258,9 @@ impl BrowserWindow {
     }
 
     pub(super) fn reopen_closed_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.workspace_edit.is_some() {
+            return;
+        }
         if let Some(closed) = self.closed_tabs.pop() {
             self.insert_tab(closed.index, Some(&closed.url), window, cx);
         }
@@ -267,12 +273,18 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.workspace_edit.is_some() {
+            return;
+        }
         if let Some(index) = self.listed_tab_after(self.active_tab, offset, cx) {
             self.activate_tab(index, true, window, cx);
         }
     }
 
     pub(super) fn close_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if self.workspace_edit.is_some() {
+            return;
+        }
         if index >= self.tabs.len() {
             return;
         }

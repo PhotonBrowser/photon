@@ -20,6 +20,7 @@ mod tab_items;
 mod tab_menu;
 mod tabs;
 mod workspace;
+mod workspace_edit;
 mod zoom;
 
 use gpui::{
@@ -67,6 +68,10 @@ struct BrowserWindow {
     overlays: Entity<BrowserOverlays>,
     /// Where the sidebar is, in the vertical layout.
     sidebar: SidebarState,
+    /// The in-progress workspace layout, discarded on Cancel or Escape.
+    workspace_edit: Option<workspace_edit::WorkspaceEditing>,
+    workspace_edit_presence: Presence<workspace_edit::WorkspaceEditing>,
+    workspace_chrome_presence: Presence<workspace_edit::WorkspaceEditing>,
     /// The space shown, switching between spaces, and the space dialog.
     spaces: SpacesState,
     tab_focus_handles: Vec<FocusHandle>,
@@ -189,6 +194,9 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.workspace_edit.is_some() {
+            return;
+        }
         self.open_menu = None;
         match command {
             BrowserCommand::NewTab => self.open_tab(window, cx),
@@ -229,6 +237,7 @@ impl BrowserWindow {
             .children(self.peek_overlay(palette, cx))
             .children(self.command_bar_overlay(cx))
             .children(self.space_editor_overlay(palette, cx))
+            .children(self.workspace_editor_overlay(palette, cx))
             // A JavaScript dialog is modal to the whole window.
             .children(dialog.map(|(dialog, _)| dialog))
             .children(self.open_menu_overlay(palette, cx))
@@ -301,6 +310,9 @@ fn open_browser_window(
                 chrome,
                 overlays,
                 sidebar: SidebarState::new(),
+                workspace_edit: None,
+                workspace_edit_presence: Presence::default(),
+                workspace_chrome_presence: Presence::default(),
                 spaces: SpacesState::new(Settings::get(cx).spaces.active().id),
                 tab_focus_handles: Vec::new(),
                 _archive_task: BrowserWindow::archive_unused_tabs_regularly(window, cx),

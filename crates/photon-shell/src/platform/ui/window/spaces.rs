@@ -81,6 +81,9 @@ impl BrowserWindow {
     }
 
     pub(super) fn switch_space(&mut self, id: SpaceId, cx: &mut Context<Self>) {
+        if self.workspace_edit.is_some() {
+            return;
+        }
         Settings::update(cx, |settings| {
             settings.spaces.activate(id);
         });
@@ -88,6 +91,9 @@ impl BrowserWindow {
 
     /// Switches to the space `offset` places along, if there is one.
     pub(super) fn switch_space_by(&mut self, offset: isize, cx: &mut Context<Self>) {
+        if self.workspace_edit.is_some() {
+            return;
+        }
         if let Some(id) = Settings::get(cx).spaces.neighbour(offset) {
             self.switch_space(id, cx);
         }

@@ -14,6 +14,9 @@ use super::content::TabContent;
 impl BrowserWindow {
     /// Opens the command bar over the page, or focuses it when it is open.
     pub(super) fn open_command_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.workspace_edit.is_some() {
+            return;
+        }
         if let Some(bar) = &self.command_bar {
             let focus = bar.read(cx).focus_handle(cx);
             window.focus(&focus, cx);

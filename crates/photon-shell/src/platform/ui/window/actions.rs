@@ -90,6 +90,14 @@ impl BrowserWindow {
 
     /// Escape closes the open menu, or else dismisses a notice chip.
     fn escape(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if self.workspace_edit.is_some() {
+            if event.keystroke.key == "escape" {
+                self.cancel_workspace_edit(cx);
+            }
+            window.prevent_default();
+            cx.stop_propagation();
+            return;
+        }
         if event.keystroke.key != "escape" {
             return;
         }

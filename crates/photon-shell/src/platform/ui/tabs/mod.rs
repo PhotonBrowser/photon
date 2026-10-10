@@ -19,7 +19,7 @@ use super::layout::{Elevated, Elevation, Raised, h_stack};
 use super::motion::{AnimateIn, Entrance};
 use super::{ClickHandler, metrics, theme::ThemeColors};
 pub(super) use list::tab_list;
-pub(super) use strip::tab_strip;
+pub(super) use strip::{tab_strip, tab_strip_content};
 
 /// A tab being dragged to a new position.
 pub(super) struct DraggedTab {

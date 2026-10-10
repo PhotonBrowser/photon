@@ -1,5 +1,5 @@
 //! Where the sidebar is and how wide: shown beside the page or hidden, and
-//! while hidden, revealed over the page by pointing at the window's left
+//! while hidden, revealed over the page by pointing at the window's outer
 //! edge. Each moves smoothly, and the page follows. Dragging its edge
 //! resizes it, or snaps it shut.
 
@@ -37,7 +37,7 @@ pub(super) struct SidebarState {
     revealed: bool,
     /// How far it is revealed, from 0 to 1.
     reveal: Tween,
-    /// Whether the pointer is over the left edge, and over the sidebar.
+    /// Whether the pointer is over the reveal edge, and over the sidebar.
     pointer_on_edge: bool,
     pointer_on_sidebar: bool,
     _hide_check: Option<Task<()>>,
@@ -63,8 +63,11 @@ impl SidebarState {
 
     /// How wide it is: as dragged, or as saved.
     pub(super) fn width(&self, cx: &App) -> f32 {
-        self.dragged_width
-            .unwrap_or_else(|| Settings::get(cx).sidebar.width() as f32)
+        self.dragged_width.unwrap_or_else(|| {
+            WorkspaceLayout::current(cx)
+                .sidebar_extent()
+                .unwrap_or_else(|| Settings::get(cx).sidebar.width()) as f32
+        })
     }
 
     /// How far it is shown beside the page, from 0 to 1.
@@ -125,32 +128,48 @@ impl SidebarState {
 impl BrowserWindow {
     /// Shows or hides the sidebar. The horizontal layout has none to hide.
     pub(super) fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
+        if self.workspace_edit.is_some() {
+            return;
+        }
         if WorkspaceLayout::current(cx).has_sidebar() {
             self.set_sidebar_visible(!self.sidebar.visible, cx);
         }
     }
 
     pub(super) fn set_sidebar_visible(&mut self, visible: bool, cx: &mut Context<Self>) {
+        if self.workspace_edit.is_some() {
+            return;
+        }
         if self.sidebar.set_visible(visible, cx) {
             self.open_menu = None;
             cx.notify();
         }
     }
 
-    /// The handle on the sidebar's right edge, which resizes it.
-    pub(super) fn resize_handle(&self, cx: &App) -> AnyElement {
-        div()
+    /// The handle on the page-facing edge of the sidebar.
+    pub(super) fn resize_handle(&self, region: photon_core::DockRegion, cx: &App) -> AnyElement {
+        let layout = WorkspaceLayout::current(cx);
+        let handle = div()
             .id("sidebar-resize")
             .absolute()
-            .top_0()
-            .bottom_0()
-            .left(px(
-                self.sidebar.width(cx) - metrics::SIDEBAR_RESIZE_HANDLE_WIDTH / 2.0
-            ))
+            .top(px(layout.top_extent()))
+            .bottom(px(layout.bottom_extent()))
             .w(px(metrics::SIDEBAR_RESIZE_HANDLE_WIDTH))
             .cursor_col_resize()
-            .on_drag(SidebarEdgeDrag, |_, _, _, cx| cx.new(|_| SidebarEdgeDrag))
-            .into_any_element()
+            .on_drag(SidebarEdgeDrag, |_, _, _, cx| cx.new(|_| SidebarEdgeDrag));
+        if region == photon_core::DockRegion::Leading {
+            handle
+                .left(px(
+                    self.sidebar.width(cx) - metrics::SIDEBAR_RESIZE_HANDLE_WIDTH / 2.0
+                ))
+                .into_any_element()
+        } else {
+            handle
+                .right(px(
+                    self.sidebar.width(cx) - metrics::SIDEBAR_RESIZE_HANDLE_WIDTH / 2.0
+                ))
+                .into_any_element()
+        }
     }
 
     /// Follows the sidebar's edge as it is dragged: resizing within limits,
@@ -159,9 +178,20 @@ impl BrowserWindow {
     pub(super) fn drag_sidebar_edge(
         &mut self,
         event: &DragMoveEvent<SidebarEdgeDrag>,
+        window: &Window,
         cx: &mut Context<Self>,
     ) {
-        match SidebarResize::to(f32::from(event.event.position.x)) {
+        let edge = WorkspaceLayout::current(cx).sidebar_region().map_or(
+            event.event.position.x,
+            |region| {
+                if region == photon_core::DockRegion::Trailing {
+                    window.viewport_size().width - event.event.position.x
+                } else {
+                    event.event.position.x
+                }
+            },
+        );
+        match SidebarResize::to(f32::from(edge)) {
             SidebarResize::Hide => self.set_sidebar_visible(false, cx),
             SidebarResize::Width(width) => {
                 self.set_sidebar_visible(true, cx);
@@ -175,25 +205,48 @@ impl BrowserWindow {
     }
 
     fn save_sidebar_width_soon(&mut self, width: u32, cx: &mut Context<Self>) {
+        let space_id = Settings::get(cx).spaces.active().id;
         self.sidebar._save_width = Some(cx.spawn(async move |this, cx| {
             cx.background_executor().timer(RESIZE_SAVE_DELAY).await;
             this.update(cx, |this, cx| {
-                Settings::update(cx, |settings| settings.sidebar.width = width);
+                Settings::update(cx, |settings| {
+                    settings.sidebar.width = width;
+                    if let Some(layout) = settings
+                        .spaces
+                        .get_mut(space_id)
+                        .and_then(|space| space.layout_override.as_mut())
+                    {
+                        layout.set_preferred_extent(
+                            photon_core::SIDEBAR_TOGGLE_COMPONENT_ID,
+                            Some(width as u16),
+                        );
+                        // Older saved layouts still store the composite sidebar
+                        // until a space is edited and saved again.
+                        layout.set_preferred_extent(
+                            photon_core::SIDEBAR_COMPONENT_ID,
+                            Some(width as u16),
+                        );
+                    }
+                });
                 this.sidebar.dragged_width = None;
             })
             .ok();
         }));
     }
 
-    /// The window's left edge below the top bar, which reveals the sidebar.
+    /// The window's outer edge below the top bar, which reveals the sidebar.
     /// It lies in the margin beside the page, so it never covers the page.
-    pub(super) fn reveal_edge(&self, cx: &mut Context<Self>) -> AnyElement {
-        div()
+    pub(super) fn reveal_edge(
+        &self,
+        region: photon_core::DockRegion,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let layout = WorkspaceLayout::current(cx);
+        let edge = div()
             .id("reveal-sidebar")
             .absolute()
-            .top(px(metrics::TITLEBAR_HEIGHT))
-            .bottom_0()
-            .left_0()
+            .top(px(layout.top_extent().max(metrics::TITLEBAR_HEIGHT)))
+            .bottom(px(layout.bottom_extent()))
             .w(px(metrics::PAGE_INSET))
             .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
                 this.sidebar.pointer_on_edge = *hovered;
@@ -202,8 +255,12 @@ impl BrowserWindow {
                 } else if this.sidebar.set_revealed(true, cx) {
                     cx.notify();
                 }
-            }))
-            .into_any_element()
+            }));
+        if region == photon_core::DockRegion::Trailing {
+            edge.right_0().into_any_element()
+        } else {
+            edge.left_0().into_any_element()
+        }
     }
 
     /// Follows the pointer over the revealed sidebar.

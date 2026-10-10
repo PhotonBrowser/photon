@@ -135,6 +135,16 @@ impl BrowserWindow {
                     this.open_page_tab(SETTINGS, window, cx);
                 })),
                 palette,
+            ))
+            .child(menu_action(
+                "menu-edit-workspace",
+                "Edit Workspace",
+                3,
+                Box::new(cx.listener(|this, _, window, cx| {
+                    cx.stop_propagation();
+                    this.open_workspace_editor(window, cx);
+                })),
+                palette,
             ));
 
         if has_page {
@@ -142,7 +152,7 @@ impl BrowserWindow {
                 .child(menu_action(
                     "menu-find",
                     "Find in Page…",
-                    3,
+                    4,
                     Box::new(cx.listener(|this, _, window, cx| {
                         cx.stop_propagation();
                         this.open_menu = None;
@@ -170,7 +180,7 @@ impl BrowserWindow {
                 .child(menu_checkbox(
                     "menu-debug-info",
                     "Debug info",
-                    4,
+                    5,
                     performance_overlay_enabled,
                     Box::new(cx.listener(|this, _, _, cx| {
                         cx.stop_propagation();

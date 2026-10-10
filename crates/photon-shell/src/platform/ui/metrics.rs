@@ -39,8 +39,6 @@ pub(super) const TAB_FONT_SIZE: f32 = 12.0;
 pub(super) const CONTROL_RADIUS: f32 = 7.0;
 
 pub(super) const TOOLBAR_HEIGHT: f32 = 30.0;
-/// The tab strip and address toolbar, laid out as one cached view.
-pub(super) const CHROME_HEIGHT: f32 = TITLEBAR_HEIGHT + TOOLBAR_HEIGHT;
 pub(super) const TOOLBAR_HORIZONTAL_INSET: f32 = 12.0;
 pub(super) const TOOLBAR_CONTROL_GAP: f32 = 8.0;
 pub(super) const TOOLBAR_BUTTON_SIZE: f32 = 28.0;
@@ -99,6 +97,13 @@ pub(super) const MODAL_PADDING: f32 = 18.0;
 pub(super) const MODAL_GAP: f32 = 12.0;
 pub(super) const MODAL_SURFACE_INSET: f32 = 16.0;
 pub(super) const DIALOG_MESSAGE_MAX_HEIGHT: f32 = 240.0;
+pub(super) const WORKSPACE_CANVAS_GAP: f32 = 8.0;
+pub(super) const WORKSPACE_DOCK_MIN_HEIGHT: f32 = 56.0;
+pub(super) const WORKSPACE_DOCK_SIDE_WIDTH: f32 = 210.0;
+pub(super) const WORKSPACE_DRAG_HANDLE_SIZE: f32 = 20.0;
+pub(super) const WORKSPACE_LIBRARY_HEIGHT: f32 = 96.0;
+pub(super) const WORKSPACE_LIBRARY_PADDING: f32 = 8.0;
+pub(super) const WORKSPACE_LIBRARY_GAP: f32 = 6.0;
 
 /// The address field in the toolbar.
 pub(super) const OMNIBOX_HEIGHT: f32 = 28.0;

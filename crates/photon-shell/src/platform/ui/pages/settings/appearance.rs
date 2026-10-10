@@ -3,7 +3,7 @@
 //! tabs go.
 
 use gpui::{App, prelude::*, px};
-use photon_core::{TabLayout, ThemeMode, Transparency};
+use photon_core::{TabLayout, ThemeMode, Transparency, WorkspaceLayout as SavedWorkspaceLayout};
 use std::rc::Rc;
 
 use super::super::super::color_picker::color_picker;
@@ -13,6 +13,7 @@ use super::super::super::layout::v_stack;
 use super::super::super::metrics;
 use super::super::super::settings::Settings;
 use super::super::super::theme::ThemeColors;
+use super::super::super::workspace_layout::WorkspaceLayout;
 use super::super::change;
 use super::super::layout::{label, secondary_text};
 
@@ -65,10 +66,64 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
     .into_iter()
     .map(|(layout, label)| Choice {
         label: label.into(),
-        chosen: current.tab_layout == layout,
-        on_choose: change(move |settings| settings.tab_layout = layout),
+        chosen: current.workspace.default_preset_id
+            == match layout {
+                TabLayout::Horizontal => photon_core::HORIZONTAL_PRESET_ID,
+                TabLayout::Vertical => photon_core::VERTICAL_PRESET_ID,
+            },
+        on_choose: change(move |settings| {
+            settings.tab_layout = layout;
+            settings.workspace.set_builtin_layout(layout);
+        }),
     })
     .collect();
+    let active_space_id = current.spaces.active().id;
+    let active_layout_override = current
+        .spaces
+        .active()
+        .layout_override
+        .as_ref()
+        .and_then(WorkspaceLayout::from_saved)
+        .map(|layout| layout.saved().clone());
+    let follow_default = current.spaces.active().layout_override.is_none();
+    let horizontal_layout = SavedWorkspaceLayout::horizontal();
+    let vertical_layout = SavedWorkspaceLayout::vertical();
+    let follows_horizontal = active_layout_override.as_ref() == Some(&horizontal_layout);
+    let follows_vertical = active_layout_override.as_ref() == Some(&vertical_layout);
+    let mut space_layouts = vec![
+        Choice {
+            label: "Use profile default".into(),
+            chosen: follow_default,
+            on_choose: change(move |settings| {
+                settings.spaces.clear_layout_override(active_space_id);
+            }),
+        },
+        Choice {
+            label: "Horizontal".into(),
+            chosen: follows_horizontal,
+            on_choose: change(move |settings| {
+                settings
+                    .spaces
+                    .set_layout_override(active_space_id, &SavedWorkspaceLayout::horizontal());
+            }),
+        },
+        Choice {
+            label: "Vertical".into(),
+            chosen: follows_vertical,
+            on_choose: change(move |settings| {
+                settings
+                    .spaces
+                    .set_layout_override(active_space_id, &SavedWorkspaceLayout::vertical());
+            }),
+        },
+    ];
+    if !follow_default && !follows_horizontal && !follows_vertical {
+        space_layouts.push(Choice {
+            label: "Custom layout".into(),
+            chosen: true,
+            on_choose: change(move |_| {}),
+        });
+    }
     v_stack()
         .gap(px(metrics::INTERNAL_PAGE_SECTION_GAP))
         .child(
@@ -105,15 +160,26 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
         .child(
             v_stack()
                 .gap(px(metrics::MENU_ITEM_GAP))
-                .child(label("Layout", palette))
+                .child(label("Default layout", palette))
                 .child(dropdown(
-                    "settings-tab-layout",
-                    "Tabs",
+                    "settings-default-layout",
+                    "Default layout",
                     tab_layouts,
                     palette,
                 ))
                 .child(secondary_text(
-                    "Tabs along the top, or in a sidebar with favourites.",
+                    "Used by new spaces and spaces set to use the profile default.",
+                    palette,
+                ))
+                .child(label("Layout for this space", palette))
+                .child(dropdown(
+                    "settings-space-layout",
+                    "Layout for this space",
+                    space_layouts,
+                    palette,
+                ))
+                .child(secondary_text(
+                    "Choosing a layout saves a copy for this space. Use the profile default to follow future changes.",
                     palette,
                 )),
         )

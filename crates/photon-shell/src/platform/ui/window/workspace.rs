@@ -3,12 +3,12 @@
 use gpui::{Render, StyleRefinement, Window, div, prelude::*, px};
 
 use super::super::find_bar::FIND_BAR_MOTION;
-use super::super::layout::{h_stack, v_stack};
 use super::super::motion::{AnimateIn, mix};
 use super::super::titlebar::window_drag_area;
-use super::super::workspace_layout::WorkspaceLayout;
+use super::super::workspace_layout::ComponentId;
 use super::super::{metrics, theme::palette};
 use super::BrowserWindow;
+use photon_core::DockRegion;
 
 impl Render for BrowserWindow {
     fn render(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) -> impl IntoElement {
@@ -18,37 +18,73 @@ impl Render for BrowserWindow {
             FIND_BAR_MOTION,
             cx,
         );
-        let has_sidebar = WorkspaceLayout::current(cx).has_sidebar();
+        let editing = self.workspace_edit.is_some();
+        let layout = self.workspace_layout(cx);
+        let sidebar_region = layout.sidebar_region();
+        let has_sidebar = sidebar_region.is_some();
         self.sidebar.settle();
         if self.sidebar.is_moving() {
             window.request_animation_frame();
         }
-        // How far the sidebar is shown beside the page: the page's leading
-        // edge follows the sidebar, and its top rises from below the top bar.
-        let shown = if has_sidebar {
+        let shown = if editing && has_sidebar {
+            1.0
+        } else if has_sidebar {
             self.sidebar.shown()
         } else {
             0.0
         };
+        let has_top_controls = layout
+            .components(DockRegion::Top)
+            .any(|component| component.id != ComponentId::TabStrip);
+        let has_bottom_tabs = layout
+            .components(DockRegion::Bottom)
+            .any(|component| component.id == ComponentId::TabStrip);
+        let has_bottom_controls = layout
+            .components(DockRegion::Bottom)
+            .any(|component| component.id != ComponentId::TabStrip);
+        let top_extent = layout.top_extent()
+            + if editing && has_top_controls {
+                metrics::WORKSPACE_CANVAS_GAP
+            } else {
+                0.0
+            };
+        let bottom_extent = layout.bottom_extent()
+            + if editing && has_bottom_tabs && has_bottom_controls {
+                metrics::WORKSPACE_CANVAS_GAP
+            } else {
+                0.0
+            }
+            + if editing {
+                metrics::WORKSPACE_LIBRARY_HEIGHT
+            } else {
+                0.0
+            };
+        let side_width = layout
+            .sidebar_extent()
+            .map_or_else(|| self.sidebar.width(cx), |width| width as f32)
+            * shown;
+        let page_top = if top_extent > 0.0 {
+            top_extent + metrics::PAGE_CHROME_GAP
+        } else if has_sidebar {
+            mix(metrics::TITLEBAR_HEIGHT, metrics::PAGE_INSET, shown)
+        } else {
+            metrics::PAGE_CHROME_GAP
+        };
+        let page_side_padding = mix(metrics::PAGE_INSET, 0.0, shown);
         let page = div()
-            .relative()
-            .flex_1()
-            // Keep tall pages inside the page area; they scroll themselves.
+            .absolute()
+            .inset_0()
             .min_w_0()
             .min_h_0()
             .overflow_hidden()
-            .size_full()
             .px(px(metrics::PAGE_INSET))
-            .pb(px(metrics::PAGE_INSET))
-            .when(!has_sidebar, |page| page.pt(px(metrics::PAGE_CHROME_GAP)))
-            .when(has_sidebar, |page| {
-                // Beside the sidebar, its own padding separates the two;
-                // with it hidden, the top bar above is gap enough.
-                page.pl(px(mix(metrics::PAGE_INSET, 0.0, shown))).pt(px(mix(
-                    metrics::TITLEBAR_HEIGHT,
-                    metrics::PAGE_INSET,
-                    shown,
-                )))
+            .pt(px(page_top))
+            .pb(px(bottom_extent + metrics::PAGE_INSET))
+            .when(sidebar_region == Some(DockRegion::Leading), |page| {
+                page.pl(px(side_width + page_side_padding))
+            })
+            .when(sidebar_region == Some(DockRegion::Trailing), |page| {
+                page.pr(px(side_width + page_side_padding))
             })
             .child(self.active_view(palette))
             // The find bar floats in the page's top-right corner.
@@ -70,20 +106,19 @@ impl Render for BrowserWindow {
                     .right(px(metrics::PAGE_INSET + metrics::CHIP_INSET))
                     .bottom(px(metrics::PAGE_INSET + metrics::CHIP_INSET))
                     .child(chip)
-            }));
-        // The horizontal layout stacks chrome above the page. The vertical
-        // layout layers the sidebar and makes room for it beside the page.
-        let (body, edge) = if has_sidebar {
-            let chrome = self.chrome.clone().cached(
-                StyleRefinement::default()
-                    .absolute()
-                    .top_0()
-                    .left_0()
-                    .size_full(),
-            );
-            let room = div().flex_shrink_0().w(px(self.sidebar.width(cx) * shown));
-            // Empty space across the top moves the window.
-            let titlebar = self.with_titlebar_menu(
+            }))
+            .when(editing, |page| {
+                page.child(
+                    div()
+                        .id("workspace-page-blocker")
+                        .absolute()
+                        .inset_0()
+                        .occlude(),
+                )
+            });
+
+        let blank_titlebar = (!editing && has_sidebar && top_extent == 0.0).then(|| {
+            self.with_titlebar_menu(
                 window_drag_area(
                     div()
                         .absolute()
@@ -93,31 +128,29 @@ impl Render for BrowserWindow {
                         .h(px(metrics::TITLEBAR_HEIGHT)),
                 ),
                 cx,
-            );
-            let body = div()
-                .size_full()
-                .relative()
-                .child(titlebar)
-                .child(h_stack().size_full().child(room).child(page))
-                .child(chrome);
-            (body, (!self.sidebar.visible).then(|| self.reveal_edge(cx)))
-        } else {
-            let chrome = self.chrome.clone().cached(
-                StyleRefinement::default()
-                    .w_full()
-                    .h(px(metrics::CHROME_HEIGHT))
-                    .flex_shrink_0(),
-            );
-            (v_stack().size_full().child(chrome).child(page), None)
-        };
+            )
+        });
+        let chrome = self
+            .chrome
+            .clone()
+            .cached(StyleRefinement::default().absolute().inset_0());
+        let reveal_edge = (!editing)
+            .then_some(sidebar_region)
+            .flatten()
+            .filter(|_| !self.sidebar.visible)
+            .map(|region| self.reveal_edge(region, cx));
         let root = div()
             .size_full()
             .relative()
             .bg(palette.window_background())
             .text_color(gpui::rgb(palette.text_primary))
-            .child(body)
-            .children(edge)
-            .on_drag_move(cx.listener(|this, event, _, cx| this.drag_sidebar_edge(event, cx)))
+            .child(page)
+            .children(blank_titlebar)
+            .child(chrome)
+            .children(reveal_edge)
+            .on_drag_move(
+                cx.listener(|this, event, window, cx| this.drag_sidebar_edge(event, window, cx)),
+            )
             .child(
                 self.overlays
                     .clone()

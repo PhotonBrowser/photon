@@ -18,7 +18,7 @@ impl Omnibox {
     /// closed or open, so the text does not move as it opens.
     pub(super) fn field_content(&self, palette: ThemeColors, cx: &mut Context<Self>) -> gpui::Div {
         let input_focus = self.input.focus_handle(cx).tab_index(3).tab_stop(true);
-        let style = FieldStyle::current(cx);
+        let style = FieldStyle::current(cx, None);
         let icon =
             (style.idle_icon || !self.suggestions.is_empty()).then(|| self.field_icon(palette, cx));
         h_stack()
@@ -79,7 +79,7 @@ impl Omnibox {
                 .right(border)
                 // A narrow field opens into a panel that reaches over the page.
                 .min_w(px(metrics::OMNIBOX_PANEL_MIN_WIDTH))
-                .rounded(px(FieldStyle::current(cx).radius))
+                .rounded(px(FieldStyle::current(cx, None).radius))
                 .border_1()
                 .border_color(rgba(palette.menu_border))
                 .raised(palette)

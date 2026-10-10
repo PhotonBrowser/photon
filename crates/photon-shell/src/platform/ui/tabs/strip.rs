@@ -13,6 +13,17 @@ pub(in super::super) fn tab_strip(
     on_new_tab: ClickHandler,
     palette: ThemeColors,
 ) -> impl IntoElement {
+    tab_strip_content(tabs, on_new_tab, palette).w_full()
+}
+
+/// The intrinsic-width tab controls, without the full-width titlebar row.
+/// Workspace edit mode uses this to frame the visible controls rather than
+/// the empty titlebar around them.
+pub(in super::super) fn tab_strip_content(
+    tabs: Vec<TabItem>,
+    on_new_tab: ClickHandler,
+    palette: ThemeColors,
+) -> gpui::Div {
     let tab_count = tabs.len();
     let mut focus_index = 0;
     let mut strip = h_stack()
@@ -40,7 +51,6 @@ pub(in super::super) fn tab_strip(
         focus_index += stops;
     }
     h_stack()
-        .w_full()
         .items_center()
         .gap(px(metrics::TAB_STRIP_GAP))
         .h(px(metrics::TITLEBAR_HEIGHT))
