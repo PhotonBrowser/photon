@@ -4181,6 +4181,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "photon-brand"
+version = "0.1.0"
+
+[[package]]
 name = "photon-cli"
 version = "0.1.0"
 dependencies = [
@@ -4195,7 +4199,9 @@ dependencies = [
 name = "photon-core"
 version = "0.1.0"
 dependencies = [
+ "photon-brand",
  "photon-omnibox",
+ "serde",
 ]
 
 [[package]]
@@ -4209,6 +4215,7 @@ dependencies = [
 name = "photon-omnibox"
 version = "0.1.0"
 dependencies = [
+ "photon-brand",
  "url",
 ]
 
@@ -4255,7 +4262,9 @@ dependencies = [
  "mach2",
  "metal",
  "objc",
+ "photon-brand",
  "photon-core",
+ "photon-omnibox",
  "photon-performance",
  "photon-presentation-ipc",
  "photon-shortcuts",
@@ -4274,6 +4283,7 @@ dependencies = [
 name = "photon-storage"
 version = "0.1.0"
 dependencies = [
+ "photon-brand",
  "photon-core",
  "serde",
  "serde_json",
