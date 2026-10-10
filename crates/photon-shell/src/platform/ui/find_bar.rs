@@ -2,7 +2,7 @@
 
 use gpui::{
     Context, Entity, EventEmitter, Focusable, KeyDownEvent, MouseButton, Render, Role,
-    Subscription, Window, div, prelude::*, px, rgb, rgb_to_hsla, rgba,
+    Subscription, Window, div, prelude::*, px, rgb, rgba,
 };
 use gpui_elements::editable_text::{
     EditableTextState, StringStorage, TextChanged,
@@ -11,10 +11,12 @@ use gpui_elements::editable_text::{
 };
 
 use super::button::icon_button;
+use super::controls::themed_text_input;
 use super::icons::{chevron_down_icon, chevron_up_icon, close_icon, search_icon_sized};
 use super::layout::h_stack;
+use super::layout::{Elevated, Elevation};
 use super::motion::Entrance;
-use super::{PhotonWebView, WebViewEvent, metrics, theme::ThemeColors};
+use super::{PhotonWebView, WebViewEvent, metrics, theme::palette};
 
 /// How the bar drops in and lifts away.
 pub(super) const FIND_BAR_MOTION: Entrance = Entrance::fall();
@@ -98,8 +100,7 @@ impl FindBar {
 
 impl Render for FindBar {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let appearance = self.webview.read(cx).theme.appearance(window.appearance());
-        let palette = ThemeColors::for_appearance(appearance);
+        let palette = palette(window, cx);
         let has_matches = self
             .webview
             .read(cx)
@@ -123,21 +124,18 @@ impl Render for FindBar {
             .bg(rgba(palette.menu_surface))
             .text_size(px(metrics::FIND_FONT_SIZE))
             .text_color(rgb(palette.text_primary))
-            .shadow_md()
+            .elevated(Elevation::Medium)
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .capture_action(cx.listener(Self::next))
             .capture_action(cx.listener(Self::close))
             .on_key_down(cx.listener(Self::key_down))
             .child(search_icon_sized(palette.text_secondary, icon_size))
             .child(
-                text_input("find-bar-input")
+                themed_text_input(text_input("find-bar-input"), palette)
                     .state(self.input.downgrade())
                     .track_focus(&self.input.focus_handle(cx))
                     .placeholder("Find in page")
                     .placeholder_color(rgb(palette.text_secondary))
-                    .caret_color(rgb_to_hsla(rgb(palette.accent)))
-                    .selection_color(rgb_to_hsla(rgba(palette.selection)))
-                    .caret_blink_interval_500ms()
                     .w(px(metrics::FIND_FIELD_WIDTH))
                     .whitespace_nowrap()
                     .overflow_x_scroll(),

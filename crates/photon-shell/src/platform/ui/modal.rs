@@ -3,6 +3,7 @@
 use gpui::{Div, ElementId, MouseButton, div, prelude::*, px, rgb, rgba};
 
 use super::layout::v_stack;
+use super::layout::{Elevated, Elevation};
 use super::motion::{AnimateIn, Entrance, Transition, distance};
 use super::{metrics, theme::ThemeColors};
 
@@ -19,7 +20,7 @@ pub(super) fn modal_panel(palette: ThemeColors) -> Div {
         .border_color(rgba(palette.menu_border))
         .bg(rgba(palette.menu_surface))
         .text_color(rgb(palette.text_primary))
-        .shadow_lg()
+        .elevated(Elevation::High)
 }
 
 /// The backdrop's fade, which also fades the panel.

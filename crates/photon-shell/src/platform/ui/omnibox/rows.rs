@@ -136,7 +136,7 @@ fn suggestion_row(
             metrics::OMNIBOX_HORIZONTAL_PADDING - metrics::OMNIBOX_SUGGESTIONS_INSET
         ))
         .rounded(px(metrics::MENU_ITEM_RADIUS))
-        .hover(|style| style.bg(gpui::rgba(palette.menu_hover)))
+        .hover(|style| style.bg(gpui::rgba(palette.hover_surface)))
         .child(suggestion_icon(suggestion, palette, cx))
         .child(
             div()
@@ -146,7 +146,7 @@ fn suggestion_row(
                 .child(StyledText::new(label).with_highlights(highlights)),
         );
     if selected {
-        row = row.bg(gpui::rgba(palette.menu_hover));
+        row = row.bg(gpui::rgba(palette.selected_surface));
     }
     row
 }

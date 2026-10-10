@@ -2,7 +2,7 @@
 
 use gpui::{
     App, Context, Entity, FocusHandle, Focusable, KeyDownEvent, Render, Role, Subscription, Window,
-    div, prelude::*, px, rgb, rgb_to_hsla, rgba,
+    div, prelude::*, px, rgb, rgba,
 };
 use gpui_elements::editable_text::{
     EditableTextState, StringStorage,
@@ -12,10 +12,11 @@ use gpui_elements::editable_text::{
 use photon_core::{DialogKind, DialogRequest};
 
 use super::button::{ButtonSize, button};
+use super::controls::themed_text_input;
 use super::layout::h_stack;
 use super::modal::{modal, modal_panel};
 use super::motion::Transition;
-use super::{PhotonWebView, metrics, theme::ThemeColors};
+use super::{PhotonWebView, metrics, theme::palette};
 
 pub(super) struct JavaScriptDialog {
     webview: Entity<PhotonWebView>,
@@ -109,8 +110,7 @@ impl JavaScriptDialog {
 
 impl Render for JavaScriptDialog {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let appearance = self.webview.read(cx).theme.appearance(window.appearance());
-        let palette = ThemeColors::for_appearance(appearance);
+        let palette = palette(window, cx);
         let is_alert = self.request.kind == DialogKind::Alert;
 
         let mut buttons = h_stack()
@@ -188,12 +188,9 @@ impl Render for JavaScriptDialog {
                     .capture_action(cx.listener(Self::accept_from_field))
                     .capture_action(cx.listener(Self::cancel_from_field))
                     .child(
-                        text_input("javascript-dialog-input")
+                        themed_text_input(text_input("javascript-dialog-input"), palette)
                             .state(input.downgrade())
                             .track_focus(&input.focus_handle(cx))
-                            .caret_color(rgb_to_hsla(rgb(palette.accent)))
-                            .selection_color(rgb_to_hsla(rgba(palette.selection)))
-                            .caret_blink_interval_500ms()
                             .flex_1()
                             .min_w_0()
                             .whitespace_nowrap()

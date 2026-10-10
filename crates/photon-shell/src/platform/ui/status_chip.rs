@@ -5,6 +5,7 @@ use gpui::{ElementId, MouseButton, Role, SharedString, prelude::*, px, rgb, rgba
 use super::button::{ButtonSize, button, icon_button};
 use super::icons::{check_icon, close_icon, loading_spinner, search_icon_sized, warning_icon};
 use super::layout::h_stack;
+use super::layout::{Elevated, Elevation};
 use super::motion::{AnimateIn, Entrance, Transition};
 use super::{ClickHandler, metrics, theme::ThemeColors};
 
@@ -63,7 +64,7 @@ pub(super) fn status_chip(
         .bg(rgba(palette.menu_surface))
         .text_size(px(metrics::CHIP_FONT_SIZE))
         .text_color(rgb(palette.text_primary))
-        .shadow_sm()
+        .elevated(Elevation::Low)
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .child(icon)
         .child(message);

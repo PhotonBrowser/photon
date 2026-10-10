@@ -1,12 +1,12 @@
 //! The field's content, and the panel it opens into while typing.
 
-use gpui::{
-    AnyElement, Context, Focusable, MouseButton, deferred, prelude::*, px, rgb, rgb_to_hsla, rgba,
-};
+use gpui::{AnyElement, Context, Focusable, MouseButton, deferred, prelude::*, px, rgb, rgba};
 use gpui_elements::editable_text::text_input;
 use std::rc::Rc;
 
+use super::super::controls::themed_text_input;
 use super::super::icons::search_icon_sized;
+use super::super::layout::{Elevated, Elevation};
 use super::super::layout::{h_stack, v_stack};
 use super::super::motion::{AnimateIn, Entrance};
 use super::super::{metrics, theme::ThemeColors};
@@ -29,14 +29,11 @@ impl Omnibox {
             .px(px(metrics::OMNIBOX_HORIZONTAL_PADDING))
             .child(self.field_icon(palette, cx))
             .child(
-                text_input("titlebar-omnibox-input")
+                themed_text_input(text_input("titlebar-omnibox-input"), palette)
                     .state(self.input.downgrade())
                     .track_focus(&input_focus)
                     .placeholder("Search or enter address")
                     .placeholder_color(rgb(palette.text_primary))
-                    .caret_color(rgb_to_hsla(rgb(palette.accent)))
-                    .selection_color(rgb_to_hsla(rgba(palette.selection)))
-                    .caret_blink_interval_500ms()
                     .flex_1()
                     .min_w_0()
                     .whitespace_nowrap()
@@ -83,7 +80,7 @@ impl Omnibox {
                 .border_1()
                 .border_color(rgba(palette.menu_border))
                 .bg(rgba(palette.menu_surface))
-                .shadow_lg()
+                .elevated(Elevation::High)
                 .occlude()
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .child(self.field_content(palette, cx))

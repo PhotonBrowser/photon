@@ -46,7 +46,7 @@ pub(super) fn button(
         .role(Role::Button)
         .aria_label(label)
         .tab_index(0)
-        .focus_visible(|style| style.border_1().border_color(rgb(palette.accent)))
+        .focus_visible(|style| style.border_1().border_color(rgb(palette.chosen)))
         .flex_shrink_0()
         .items_center()
         .justify_center()
@@ -67,7 +67,7 @@ pub(super) fn button(
         button
             .text_color(rgb(palette.text_primary))
             .bg(rgba(palette.control_hover_surface))
-            .hover(|style| style.bg(rgba(palette.menu_hover)))
+            .hover(|style| style.bg(rgba(palette.hover_surface)))
     }
 }
 
@@ -87,7 +87,7 @@ pub(super) fn icon_button(
         .role(Role::Button)
         .aria_label(label)
         .aria_disabled(!enabled)
-        .focus_visible(|style| style.border_1().border_color(rgb(palette.accent)))
+        .focus_visible(|style| style.border_1().border_color(rgb(palette.chosen)))
         .flex_shrink_0()
         .items_center()
         .justify_center()

@@ -1,15 +1,15 @@
 //! Browser tab strip and its controls.
 
 use gpui::{
-    AnyElement, App, Context, ElementId, FocusHandle, Image, ImageFormat, ImageSource,
-    KeyDownEvent, MouseButton, MouseDownEvent, MouseUpEvent, ObjectFit, Render, Role, SharedString,
-    Window, div, img, prelude::*, px, rgb, rgba,
+    AnyElement, App, Context, ElementId, FocusHandle, ImageSource, KeyDownEvent, MouseButton,
+    MouseDownEvent, MouseUpEvent, ObjectFit, Render, Role, SharedString, Window, div, img,
+    prelude::*, px, rgb, rgba,
 };
-use std::sync::{Arc, LazyLock};
 
 use super::Favicon;
-use super::icons::{add_icon, audio_icon, close_icon, globe_icon, loading_spinner};
+use super::icons::{add_icon, audio_icon, close_icon, globe_icon, loading_spinner, photon_logo};
 use super::layout::h_stack;
+use super::layout::{Elevated, Elevation};
 use super::motion::{AnimateIn, Entrance};
 use super::{metrics, theme::ThemeColors};
 
@@ -41,7 +41,7 @@ impl Render for TabDragPreview {
             .bg(rgba(palette.menu_surface))
             .text_size(px(metrics::TAB_FONT_SIZE))
             .text_color(rgb(palette.text_primary))
-            .shadow_md()
+            .elevated(Elevation::Medium)
             .opacity(metrics::TAB_DRAG_PREVIEW_OPACITY)
             .child(div().truncate().child(self.label.clone()))
     }
@@ -66,14 +66,16 @@ pub(super) enum TabIcon {
     },
     /// A page without an icon of its own.
     Page,
-    /// A new tab, which shows the Photon logo.
-    NewTab,
+    /// The Photon logo, for Photon's own pages that use it.
+    Logo,
+    /// A monochrome symbol, drawn in the tab's text color at the given size.
+    Symbol(fn(u32, f32) -> AnyElement),
 }
 
 /// Identifies an icon a tab reveals with the appear animation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum RevealedIcon {
-    NewTab,
+    Logo,
     Favicon(u64),
 }
 
@@ -83,26 +85,21 @@ impl TabIcon {
     /// last revealed icon: a page's icon that returns after them stays put.
     pub(super) fn revealed(&self) -> Option<RevealedIcon> {
         match self {
-            Self::NewTab => Some(RevealedIcon::NewTab),
+            Self::Logo => Some(RevealedIcon::Logo),
             Self::Favicon(favicon) => Some(RevealedIcon::Favicon(favicon.key)),
             Self::Audio {
                 favicon: Some(favicon),
                 ..
             } => Some(RevealedIcon::Favicon(favicon.key)),
-            Self::Loading(_) | Self::Page | Self::Audio { favicon: None, .. } => None,
+            Self::Loading(_) | Self::Page | Self::Symbol(_) | Self::Audio { favicon: None, .. } => {
+                None
+            }
         }
     }
 }
 
 /// How a tab icon appears.
 pub(super) const ICON_ENTRANCE: Entrance = Entrance::pop(metrics::TAB_FAVICON_SIZE);
-
-static NEW_TAB_LOGO: LazyLock<Arc<Image>> = LazyLock::new(|| {
-    Arc::new(Image::from_bytes(
-        ImageFormat::Svg,
-        include_bytes!("../../../assets/monotone-planet.svg").to_vec(),
-    ))
-});
 
 /// Sizes an icon image, growing it in from a smaller size while
 /// `appearing`, inside a fixed slot so the tab title does not move.
@@ -156,7 +153,7 @@ pub(super) fn tab_strip(
         .items_center()
         .gap(px(metrics::TAB_STRIP_GAP))
         .flex_initial()
-        .min_w(px(0.0))
+        .min_w_0()
         .overflow_x_scroll();
 
     let mut focus_index = 0;
@@ -243,6 +240,7 @@ fn browser_tab(
     let icon = match tab.icon {
         TabIcon::Loading(step) => loading_spinner(icon_color, icon_size, step).into_any_element(),
         TabIcon::Page => globe_icon(icon_color, icon_size).into_any_element(),
+        TabIcon::Symbol(symbol) => symbol(icon_color, icon_size),
         TabIcon::Favicon(favicon) => sized_icon(
             img(ImageSource::Render(favicon.image)).object_fit(ObjectFit::Contain),
             icon_id,
@@ -258,8 +256,8 @@ fn browser_tab(
             icon_color,
             palette,
         ),
-        TabIcon::NewTab => sized_icon(
-            img(NEW_TAB_LOGO.clone()).object_fit(ObjectFit::Contain),
+        TabIcon::Logo => sized_icon(
+            img(photon_logo()).object_fit(ObjectFit::Contain),
             icon_id,
             tab.icon_appearing,
             icon_size,
@@ -268,7 +266,7 @@ fn browser_tab(
     control = control.child(icon);
 
     control
-        .child(div().flex_1().min_w(px(0.0)).truncate().child(tab.label))
+        .child(div().flex_1().min_w_0().truncate().child(tab.label))
         .child(close_tab_button(
             close_id,
             close_label,
@@ -297,7 +295,7 @@ fn audio_control_button(
         .role(Role::Button)
         .aria_label(label)
         .tab_index(focus_index)
-        .focus_visible(|style| style.border_1().border_color(rgb(palette.accent)))
+        .focus_visible(|style| style.border_1().border_color(rgb(palette.chosen)))
         .flex_shrink_0()
         .relative()
         .items_center()
@@ -324,7 +322,7 @@ fn close_tab_button(
         .role(Role::Button)
         .aria_label(label)
         .tab_index(focus_index)
-        .focus_visible(|style| style.border_1().border_color(rgb(palette.accent)))
+        .focus_visible(|style| style.border_1().border_color(rgb(palette.chosen)))
         .flex_shrink_0()
         .items_center()
         .justify_center()
@@ -347,7 +345,7 @@ fn new_tab_button(
         .role(Role::Button)
         .aria_label("New tab")
         .tab_index(focus_index)
-        .focus_visible(|style| style.border_1().border_color(rgb(palette.accent)))
+        .focus_visible(|style| style.border_1().border_color(rgb(palette.chosen)))
         .flex_shrink_0()
         .items_center()
         .justify_center()

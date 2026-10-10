@@ -1,7 +1,74 @@
 //! Monochrome shell icons, tinted with the caller's color.
 
-use gpui::{Transformation, prelude::*, px, radians, rgb, svg};
+use gpui::{Image, ImageFormat, Transformation, prelude::*, px, radians, rgb, svg};
 use std::f32::consts::TAU;
+use std::sync::{Arc, LazyLock};
+
+/// The browser's logo, in its own colors.
+pub(super) fn photon_logo() -> Arc<Image> {
+    static LOGO: LazyLock<Arc<Image>> = LazyLock::new(|| {
+        Arc::new(Image::from_bytes(
+            ImageFormat::Svg,
+            photon_brand::LOGO_SVG.to_vec(),
+        ))
+    });
+    LOGO.clone()
+}
+
+/// A gear, for settings.
+pub(super) fn settings_icon(color: u32, size: f32) -> impl IntoElement {
+    svg()
+        .data(
+            br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2.5l1.6 2.6 3-.6.6 3 2.6 1.6-1.4 2.9 1.4 2.9-2.6 1.6-.6 3-3-.6L12 21.5l-1.6-2.6-3 .6-.6-3-2.6-1.6 1.4-2.9-1.4-2.9 2.6-1.6.6-3 3 .6Z"/></g></svg>"##,
+        )
+        .size(px(size))
+        .flex_shrink_0()
+        .text_color(rgb(color))
+}
+
+/// A circle half filled, for appearance.
+pub(super) fn appearance_icon(color: u32, size: f32) -> impl IntoElement {
+    svg()
+        .data(
+            br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17Z" fill="currentColor"/></svg>"##,
+        )
+        .size(px(size))
+        .flex_shrink_0()
+        .text_color(rgb(color))
+}
+
+/// A page with a grid, for the new tab page.
+pub(super) fn grid_icon(color: u32, size: f32) -> impl IntoElement {
+    svg()
+        .data(
+            br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></g></svg>"##,
+        )
+        .size(px(size))
+        .flex_shrink_0()
+        .text_color(rgb(color))
+}
+
+/// A shield, for privacy.
+pub(super) fn shield_icon(color: u32, size: f32) -> impl IntoElement {
+    svg()
+        .data(
+            br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 3.5 5 6v5.5c0 4.3 2.9 7.6 7 9 4.1-1.4 7-4.7 7-9V6Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>"##,
+        )
+        .size(px(size))
+        .flex_shrink_0()
+        .text_color(rgb(color))
+}
+
+/// A pencil, for customising.
+pub(super) fn edit_icon(color: u32, size: f32) -> impl IntoElement {
+    svg()
+        .data(
+            br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4Zm9-13 4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>"##,
+        )
+        .size(px(size))
+        .flex_shrink_0()
+        .text_color(rgb(color))
+}
 
 /// Steps in one turn of the loading spinner, one per spoke.
 pub(super) const LOADING_SPINNER_STEPS: usize = 12;
