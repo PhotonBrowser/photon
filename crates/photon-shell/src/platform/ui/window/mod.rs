@@ -291,7 +291,7 @@ impl Render for BrowserWindow {
         let root = div()
             .size_full()
             .relative()
-            .bg(gpui::rgba(palette.window_tint))
+            .bg(palette.window_background())
             .text_color(gpui::rgb(palette.text_primary))
             .child(body)
             .children(edge)

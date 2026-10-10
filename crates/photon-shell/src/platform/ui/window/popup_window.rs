@@ -2,7 +2,7 @@
 
 use gpui::{
     App, Context, Entity, FocusHandle, KeyDownEvent, Render, Role, Subscription, Window, div,
-    prelude::*, px, rgb, rgba,
+    prelude::*, px, rgb,
 };
 use std::rc::Rc;
 
@@ -214,7 +214,7 @@ impl Render for MinimalPopupWindow {
         v_stack()
             .size_full()
             .relative()
-            .bg(rgba(palette.window_tint))
+            .bg(palette.window_background())
             .text_color(rgb(palette.text_primary))
             .child(titlebar(
                 div()

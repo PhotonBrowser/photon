@@ -140,6 +140,10 @@ pub(super) const SHORTCUT_GAP: f32 = 8.0;
 pub(super) const SHORTCUT_REMOVE_INSET: f32 = 4.0;
 pub(super) const SEGMENT_HEIGHT: f32 = 26.0;
 pub(super) const DROPDOWN_WIDTH: f32 = 160.0;
+/// A colour swatch, and the ring around the chosen one.
+pub(super) const SWATCH_SIZE: f32 = 22.0;
+pub(super) const SWATCH_RING_SIZE: f32 = 30.0;
+pub(super) const SWATCH_GAP: f32 = 6.0;
 pub(super) const SEGMENT_HORIZONTAL_PADDING: f32 = 12.0;
 pub(super) const SEGMENT_RADIUS: f32 = 5.0;
 pub(super) const SEGMENT_GAP: f32 = 2.0;

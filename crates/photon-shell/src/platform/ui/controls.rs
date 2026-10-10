@@ -1,5 +1,5 @@
 //! Small controls shared by menus and Photon's own pages: segmented choices,
-//! dropdowns, switches and checkbox marks. Each shows hover, chosen and focus the same
+//! dropdowns, colour swatches, switches and checkbox marks. Each shows hover, chosen and focus the same
 //! way, using the theme's roles.
 
 use std::rc::Rc;
@@ -66,6 +66,63 @@ pub(super) fn choices(
         .p(px(metrics::SEGMENT_INSET))
         .rounded(px(metrics::CONTROL_RADIUS))
         .bg(rgba(palette.surface))
+        .children(options)
+}
+
+/// One colour in [`swatches`].
+pub(super) struct Swatch {
+    pub(super) label: SharedString,
+    /// The colour shown, as an RGB token from the theme.
+    pub(super) color: u32,
+    pub(super) chosen: bool,
+    pub(super) on_choose: ClickHandler,
+}
+
+/// Mutually exclusive colours as round swatches, the chosen one ringed.
+pub(super) fn swatches(
+    id: &'static str,
+    label: &'static str,
+    options: Vec<Swatch>,
+    palette: ThemeColors,
+) -> impl IntoElement {
+    let options = options.into_iter().enumerate().map(|(index, option)| {
+        h_stack()
+            .id((id, index))
+            .role(Role::RadioButton)
+            .aria_label(option.label)
+            .aria_toggled(toggled(option.chosen))
+            .tab_index(0)
+            .size(px(metrics::SWATCH_RING_SIZE))
+            .items_center()
+            .justify_center()
+            .rounded_full()
+            .border_2()
+            .border_color(if option.chosen {
+                rgb_to_hsla(rgb(palette.chosen))
+            } else {
+                gpui::transparent_black()
+            })
+            .when(!option.chosen, |ring| {
+                ring.hover(|style| style.border_color(rgba(palette.selected_surface)))
+            })
+            .focus_visible(|style| style.border_color(rgb(palette.chosen)))
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .on_click(option.on_choose)
+            .child(
+                div()
+                    .size(px(metrics::SWATCH_SIZE))
+                    .rounded_full()
+                    .border_1()
+                    .border_color(rgba(palette.menu_border))
+                    .bg(rgb(option.color)),
+            )
+    });
+    h_stack()
+        .id(id)
+        .role(Role::RadioGroup)
+        .aria_label(label)
+        .flex_wrap()
+        .gap(px(metrics::SWATCH_GAP))
         .children(options)
 }
 

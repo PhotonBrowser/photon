@@ -4,10 +4,14 @@
 //! light and dark palettes come from GPUI-CE; adjust token derivation here when
 //! the shell needs a different role mapping.
 
-use gpui::{App, ColorExt, Rgba, Window, WindowAppearance, colors::Colors, rgb};
-use photon_core::Transparency;
+use gpui::{
+    App, Background, ColorExt, Rgba, Window, WindowAppearance, colors::Colors, hsla, hsla_to_rgba,
+    linear_color_stop, linear_gradient, rgb, rgb_to_hsla, rgba,
+};
+use photon_core::{Transparency, WindowColor};
 use photon_performance::PerformancePalette;
-use std::sync::OnceLock;
+use std::cell::RefCell;
+use std::collections::HashMap;
 
 use super::settings::Settings;
 
@@ -57,6 +61,9 @@ mod opacity {
     pub(super) const SELECTED: f32 = 0.12;
 }
 
+/// The direction a window gradient runs, in degrees: from the top left.
+const WINDOW_GRADIENT_ANGLE: f32 = 135.0;
+
 /// GPUI-CE's palettes have no error role, so the shell uses the macOS system
 /// red for each appearance.
 mod error {
@@ -84,19 +91,76 @@ mod link {
     }
 }
 
-/// The colors for `window`, in the appearance and transparency the
-/// settings choose.
+/// The window colours, as hues, and how they tint each appearance.
+mod window_color {
+    use photon_core::WindowColor;
+
+    /// A colour's hue, in turns, or `None` for the system grey.
+    pub(super) fn hue(color: WindowColor) -> Option<f32> {
+        match color {
+            WindowColor::System => None,
+            WindowColor::Blue => Some(0.6),
+            WindowColor::Purple => Some(0.74),
+            WindowColor::Pink => Some(0.9),
+            WindowColor::Red => Some(0.99),
+            WindowColor::Orange => Some(0.07),
+            WindowColor::Yellow => Some(0.13),
+            WindowColor::Green => Some(0.38),
+            WindowColor::Teal => Some(0.49),
+        }
+    }
+
+    /// How far a gradient turns toward the neighbouring hue, in turns.
+    pub(super) const GRADIENT_TURN: f32 = 0.09;
+
+    /// Saturation and lightness of the tint on each appearance, and of the
+    /// swatches that offer it.
+    pub(super) const LIGHT: (f32, f32) = (0.55, 0.87);
+    pub(super) const DARK: (f32, f32) = (0.3, 0.17);
+    pub(super) const SWATCH: (f32, f32) = (0.6, 0.55);
+}
+
+/// The colors for `window`, in the appearance, transparency and window
+/// colour the settings choose.
 pub(super) fn palette(window: &Window, cx: &App) -> ThemeColors {
+    let settings = Settings::get(cx);
     ThemeColors::for_appearance(
         Settings::appearance(window.appearance(), cx),
-        Settings::get(cx).transparency,
+        WindowStyle {
+            transparency: settings.transparency,
+            color: settings.window_color,
+            gradient: settings.window_gradient,
+        },
     )
+}
+
+/// What decides a palette besides the appearance.
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+struct WindowStyle {
+    transparency: Transparency,
+    color: WindowColor,
+    gradient: bool,
+}
+
+/// How `color` looks in the swatch that offers it; the system grey is the
+/// page background.
+pub(super) fn window_color_swatch(color: WindowColor, palette: ThemeColors) -> u32 {
+    match window_color::hue(color) {
+        Some(hue) => {
+            let (saturation, lightness) = window_color::SWATCH;
+            to_rgb_token(hsla_to_rgba(hsla(hue, saturation, lightness, 1.0)))
+        }
+        None => palette.page_background,
+    }
 }
 
 /// Semantic colors used by the shell's controls and surfaces.
 #[derive(Clone, Copy)]
 pub(super) struct ThemeColors {
+    /// The window's background, fading to `window_tint_end` when it is a
+    /// gradient; see [`ThemeColors::window_background`].
     pub window_tint: u32,
+    pub window_tint_end: u32,
     pub page_background: u32,
     pub text_primary: u32,
     pub text_secondary: u32,
@@ -127,31 +191,75 @@ pub(super) struct ThemeColors {
 }
 
 impl ThemeColors {
-    /// Returns cached role colors for an appearance and transparency.
-    fn for_appearance(appearance: WindowAppearance, transparency: Transparency) -> Self {
-        static CACHE: [[OnceLock<ThemeColors>; 3]; 2] = [
-            [OnceLock::new(), OnceLock::new(), OnceLock::new()],
-            [OnceLock::new(), OnceLock::new(), OnceLock::new()],
-        ];
+    /// The window's background: its tint, or a gradient between tints.
+    pub(super) fn window_background(&self) -> Background {
+        if self.window_tint == self.window_tint_end {
+            return rgba(self.window_tint).into();
+        }
+        linear_gradient(
+            WINDOW_GRADIENT_ANGLE,
+            linear_color_stop(rgb_to_hsla(rgba(self.window_tint)), 0.0),
+            linear_color_stop(rgb_to_hsla(rgba(self.window_tint_end)), 1.0),
+        )
+    }
+
+    /// Returns cached role colors for an appearance and window style.
+    fn for_appearance(appearance: WindowAppearance, style: WindowStyle) -> Self {
+        thread_local! {
+            static CACHE: RefCell<HashMap<(bool, WindowStyle), ThemeColors>> =
+                RefCell::new(HashMap::new());
+        }
         let dark = matches!(
             appearance,
             WindowAppearance::Dark | WindowAppearance::VibrantDark
         );
-        let opacity = SurfaceOpacity::for_transparency(transparency);
-        *CACHE[usize::from(dark)][transparency as usize].get_or_init(|| {
-            if dark {
-                Self::from_gpui(Colors::dark(), error::dark(), link::dark(), opacity)
-            } else {
-                Self::from_gpui(Colors::light(), error::light(), link::light(), opacity)
-            }
+        CACHE.with_borrow_mut(|cache| {
+            *cache.entry((dark, style)).or_insert_with(|| {
+                let opacity = SurfaceOpacity::for_transparency(style.transparency);
+                let (colors, error, link) = if dark {
+                    (Colors::dark(), error::dark(), link::dark())
+                } else {
+                    (Colors::light(), error::light(), link::light())
+                };
+                Self::from_gpui(colors, error, link, opacity, style, dark)
+            })
         })
     }
 
-    fn from_gpui(colors: Colors, error: Rgba, link: Rgba, surfaces: SurfaceOpacity) -> Self {
+    fn from_gpui(
+        colors: Colors,
+        error: Rgba,
+        link: Rgba,
+        surfaces: SurfaceOpacity,
+        style: WindowStyle,
+        dark: bool,
+    ) -> Self {
         let text_secondary = mix_colors(colors.text, colors.background, opacity::TEXT_SECONDARY);
+        let (saturation, lightness) = if dark {
+            window_color::DARK
+        } else {
+            window_color::LIGHT
+        };
+        let tint = |hue: f32| -> Rgba {
+            hsla_to_rgba(hsla(
+                hue.rem_euclid(1.0),
+                saturation,
+                lightness,
+                surfaces.window,
+            ))
+        };
+        let (window_tint, window_tint_end) = match window_color::hue(style.color) {
+            None => {
+                let tint = colors.background.opacity(surfaces.window);
+                (tint, tint)
+            }
+            Some(hue) if style.gradient => (tint(hue), tint(hue + window_color::GRADIENT_TURN)),
+            Some(hue) => (tint(hue), tint(hue)),
+        };
 
         Self {
-            window_tint: to_rgba_token(colors.background.opacity(surfaces.window)),
+            window_tint: to_rgba_token(window_tint),
+            window_tint_end: to_rgba_token(window_tint_end),
             page_background: to_rgb_token(colors.background),
             text_primary: to_rgb_token(colors.text),
             text_secondary: to_rgb_token(text_secondary),
