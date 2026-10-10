@@ -78,8 +78,9 @@ crates/
 │           ├── window/               # Browser window: layout, commands, rendering
 │           │   ├── app.rs            # App startup and the first window
 │           │   ├── tabs.rs           # Tab lifecycle
-│           │   ├── chrome.rs         # Builds the tab strip and toolbar or the sidebar
+│           │   ├── chrome.rs         # Renders independent workspace controls and panels
 │           │   ├── workspace.rs      # Composes chrome, active page, and window overlays
+│           │   ├── workspace_edit.rs # Draft editor for saved workspace layouts
 │           │   ├── command_bar.rs    # Opening the command bar and carrying out its choice
 │           │   ├── sidebar_state.rs  # Where the sidebar is: shown, hidden or revealed from the left edge
 │           │   ├── tab_items.rs      # The tabs as both layouts draw them
@@ -111,9 +112,9 @@ crates/
 │           │   ├── layout.rs         # Page columns, headings and groups
 │           │   └── controls.rs       # Choices, switches and checkboxes
 │           ├── tabs/                 # Tab rows shared by both layouts: the strip and the sidebar list
-│           ├── toolbar.rs            # The horizontal layout's toolbar
+│           ├── toolbar.rs            # Shared row for individually placed toolbar controls
 │           ├── workspace_layout.rs   # Built-in workspace definitions and shell component catalog
-│           ├── sidebar/              # Vertical tab sidebar: navigation, favourites, footer
+│           ├── sidebar/              # Side dock host, favourites, navigation and footer panels
 │           ├── omnibox/              # Address field and its suggestion panel
 │           ├── command_bar/          # The ⌘T command bar: field and result rows
 │           ├── space_editor.rs       # The dialog for a space's name and colour
@@ -185,10 +186,10 @@ owned by the shell; the presentation XPC implementation lives inside
 | Engine frame pacing or pausing Engine while the window is occluded | [`platform/display.rs`](../crates/photon-shell/src/platform/display.rs), [`platform/window_observer.rs`](../crates/photon-shell/src/platform/window_observer.rs), then [`ui/window/`](../crates/photon-shell/src/platform/ui/window/mod.rs) |
 | Rust declarations for native embedder functions | [`platform/ffi.rs`](../crates/photon-shell/src/platform/ffi.rs) and [`PhotonEmbedderBridge.h`](../native/embedder/PhotonEmbedderBridge.h) |
 | Browser state and command rules | [`photon-core/src/state.rs`](../crates/photon-core/src/state.rs) |
-| Browser settings and profile persistence | [`photon-core/src/settings.rs`](../crates/photon-core/src/settings.rs), [`ui/settings.rs`](../crates/photon-shell/src/platform/ui/settings.rs), and [`photon-storage/src/profile.rs`](../crates/photon-storage/src/profile.rs) |
+| Browser settings and profile persistence | [`photon-core/src/settings.rs`](../crates/photon-core/src/settings.rs), [`photon-core/src/workspace.rs`](../crates/photon-core/src/workspace.rs), [`ui/settings.rs`](../crates/photon-shell/src/platform/ui/settings.rs), and [`photon-storage/src/profile.rs`](../crates/photon-storage/src/profile.rs) |
 | New tab page, settings page, and their controls | [`ui/pages/`](../crates/photon-shell/src/platform/ui/pages/mod.rs) and the rules in [`photon-core/src/new_tab.rs`](../crates/photon-core/src/new_tab.rs) |
 | A new `photon://` page | A module in [`ui/pages/`](../crates/photon-shell/src/platform/ui/pages/mod.rs) with its view and `PageDefinition`, listed in [`pages/registry.rs`](../crates/photon-shell/src/platform/ui/pages/registry.rs) |
-| Tab layouts, the sidebar and favourites | [`ui/workspace_layout.rs`](../crates/photon-shell/src/platform/ui/workspace_layout.rs), [`ui/tabs/`](../crates/photon-shell/src/platform/ui/tabs/mod.rs), [`ui/toolbar.rs`](../crates/photon-shell/src/platform/ui/toolbar.rs), [`ui/sidebar/`](../crates/photon-shell/src/platform/ui/sidebar/mod.rs), [`ui/window/chrome.rs`](../crates/photon-shell/src/platform/ui/window/chrome.rs), and [`photon-core/src/sidebar.rs`](../crates/photon-core/src/sidebar.rs) |
+| Workspace layout and editing, spaces, sidebar and favourites | [`ui/workspace_layout.rs`](../crates/photon-shell/src/platform/ui/workspace_layout.rs), [`ui/window/workspace_edit.rs`](../crates/photon-shell/src/platform/ui/window/workspace_edit.rs), [`photon-core/src/workspace.rs`](../crates/photon-core/src/workspace.rs), [`photon-core/src/spaces.rs`](../crates/photon-core/src/spaces.rs), [`ui/tabs/`](../crates/photon-shell/src/platform/ui/tabs/mod.rs), [`ui/toolbar.rs`](../crates/photon-shell/src/platform/ui/toolbar.rs), [`ui/sidebar/`](../crates/photon-shell/src/platform/ui/sidebar/mod.rs), and [`ui/window/chrome.rs`](../crates/photon-shell/src/platform/ui/window/chrome.rs) |
 | What a tab shows (web view or Photon page) | [`ui/window/content.rs`](../crates/photon-shell/src/platform/ui/window/content.rs) |
 | Peek, the link preview over the page | [`ui/window/peek.rs`](../crates/photon-shell/src/platform/ui/window/peek.rs) |
 | C ABI exposed to native callers | [`photon-ffi/include/photon_ffi.h`](../crates/photon-ffi/include/photon_ffi.h) and [`photon-ffi/src/api.rs`](../crates/photon-ffi/src/api.rs) |
