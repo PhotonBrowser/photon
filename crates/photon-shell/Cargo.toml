@@ -18,6 +18,7 @@ photon-shortcuts = { path = "../photon-shortcuts" }
 photon-storage = { path = "../photon-storage" }
 photon-presentation-ipc = { path = "../photon-presentation-ipc" }
 anyhow = "1"
+futures = "0.3"
 image = { version = "0.25", default-features = false }
 raw-window-handle = "0.6"
 

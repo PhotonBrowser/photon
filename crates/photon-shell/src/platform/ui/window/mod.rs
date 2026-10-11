@@ -3,29 +3,34 @@
 mod actions;
 mod alerts;
 mod app;
+mod app_menus;
 mod chrome;
 mod command_bar;
 mod content;
+mod context_menu;
 mod favourites;
 mod find;
+mod keyboard_shortcuts;
 mod menu;
+mod open_urls;
 mod page_menu;
 mod peek;
 mod pinned;
 mod popup_window;
 mod popups;
-mod sidebar_state;
+mod session;
+mod side_dock;
 mod spaces;
 mod tab_items;
 mod tab_menu;
 mod tabs;
+mod title;
 mod workspace;
-mod workspace_edit;
 mod zoom;
 
 use gpui::{
     AnyElement, App, Context, Entity, FocusHandle, Render, Subscription, Task, WeakEntity, Window,
-    div, prelude::*,
+    WindowHandle, div, prelude::*,
 };
 use photon_core::BrowserCommand;
 use std::cell::RefCell;
@@ -33,6 +38,7 @@ use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 use std::time::Instant;
 
+use super::super::app_update::update_app;
 use super::super::engine::EngineRuntime;
 use super::super::trace;
 use super::super::window_observer::WindowObserver;
@@ -43,16 +49,16 @@ use super::js_dialog::JavaScriptDialog;
 use super::modal::MODAL_MOTION;
 use super::motion::Presence;
 use super::omnibox::{Omnibox, OmniboxEvent};
-use super::pages::{NEW_TAB, find_page};
+use super::pages::find_page;
 use super::settings::Settings;
+use super::shortcuts_dialog::ShortcutsDialog;
 use super::tabs::RevealedIcon;
 use super::theme::{ThemeColors, palette};
 use alerts::{EngineNotice, NoticeExpiry};
 use content::{BrowserTab, TabContent, create_webview};
-use menu::OpenMenu;
 use peek::PeekState;
 use popups::PendingPopup;
-use sidebar_state::SidebarState;
+use side_dock::SidebarState;
 use spaces::SpacesState;
 use tabs::ClosedTab;
 
@@ -62,32 +68,31 @@ struct BrowserWindow {
     tabs: Vec<BrowserTab>,
     /// One per tab, in `tabs` order: follows its web view or page.
     tab_subscriptions: Vec<Subscription>,
+    /// The New Tab page shown while the window has no tabs.
+    empty_page: Option<TabContent>,
+    _empty_page_subscription: Option<Subscription>,
     /// The sidebar, cached so Engine frames repaint only the page.
     chrome: Entity<BrowserChrome>,
     /// Menus and dialogs over the window, cached for the same reason.
     overlays: Entity<BrowserOverlays>,
     /// Where the sidebar is, in the vertical layout.
     sidebar: SidebarState,
-    /// The in-progress workspace layout, discarded on Cancel or Escape.
-    workspace_edit: Option<workspace_edit::WorkspaceEditing>,
-    workspace_edit_presence: Presence<workspace_edit::WorkspaceEditing>,
-    workspace_chrome_presence: Presence<workspace_edit::WorkspaceEditing>,
     /// The space shown, switching between spaces, and the space dialog.
     spaces: SpacesState,
     tab_focus_handles: Vec<FocusHandle>,
     /// Closes today's tabs left unused, when the setting asks.
     _archive_task: Task<()>,
-    active_tab: usize,
+    active_tab: Option<usize>,
     next_tab_id: u64,
     omnibox: Entity<Omnibox>,
     _omnibox_subscription: Subscription,
     runtime: Rc<EngineRuntime>,
-    open_menu: Option<OpenMenu>,
-    /// Keeps a closed menu drawn while it animates away.
-    menu_presence: Presence<OpenMenu>,
     find_bar_presence: Presence<Entity<FindBar>>,
     /// A link previewed over the page.
     peek: PeekState,
+    /// The keyboard shortcuts dialog, while open.
+    shortcuts_dialog: Option<(Entity<ShortcutsDialog>, Subscription)>,
+    shortcuts_dialog_presence: Presence<Entity<ShortcutsDialog>>,
     /// The command bar, while open.
     command_bar: Option<Entity<CommandBar>>,
     command_bar_presence: Presence<Entity<CommandBar>>,
@@ -106,6 +111,11 @@ struct BrowserWindow {
     dialog: Option<Entity<JavaScriptDialog>>,
     pending_popups: VecDeque<PendingPopup>,
     popup_confirmation_focus: FocusHandle,
+    /// The title last given to the window, so it changes only with the page.
+    window_title: String,
+    /// Holds focus when nothing in the window does, such as after a click
+    /// on an empty page, so the browser's shortcuts still reach it.
+    root_focus: FocusHandle,
     /// The last Engine service stop or restart, shown in a chip.
     engine_notice: Option<EngineNotice>,
     /// When the zoom chip was last shown, after a zoom change.
@@ -119,9 +129,13 @@ struct BrowserWindow {
     /// tab only while it is, since GPUI-CE stops drawing an occluded window.
     window_visible: bool,
     _appearance_subscription: Subscription,
+    /// Redraws as the window comes to the front, so the menu bar follows it.
+    _activation_subscription: Subscription,
     _settings_subscription: Subscription,
     _chrome_subscription: Subscription,
     _window_observer: Option<WindowObserver>,
+    /// Forgets the window's tabs in the saved session as it closes.
+    _session_release: Subscription,
 }
 
 /// The tab strip and toolbar, or the sidebar. A cached view re-renders only when it is
@@ -194,10 +208,6 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.workspace_edit.is_some() {
-            return;
-        }
-        self.open_menu = None;
         match command {
             BrowserCommand::NewTab => self.open_tab(window, cx),
             BrowserCommand::NewWindow => {
@@ -209,14 +219,14 @@ impl BrowserWindow {
             }
             BrowserCommand::Navigate(url) => self.navigate_active(&url, window, cx),
             command => {
-                if let Some(webview) = self.active_webview() {
-                    if let Err(error) = webview.update(cx, |view, cx| {
+                if let Some(webview) = self.active_webview()
+                    && let Err(error) = webview.update(cx, |view, cx| {
                         let result = view.execute(command, cx);
                         cx.notify();
                         result
-                    }) {
-                        trace(format_args!("browser command: {error:#}"));
-                    }
+                    })
+                {
+                    trace(format_args!("browser command: {error:#}"));
                 }
             }
         }
@@ -237,36 +247,37 @@ impl BrowserWindow {
             .children(self.peek_overlay(palette, cx))
             .children(self.command_bar_overlay(cx))
             .children(self.space_editor_overlay(palette, cx))
-            .children(self.workspace_editor_overlay(palette, cx))
+            .children(self.shortcuts_dialog_overlay(palette, cx))
             // A JavaScript dialog is modal to the whole window.
             .children(dialog.map(|(dialog, _)| dialog))
-            .children(self.open_menu_overlay(palette, cx))
             .children(self.popup_confirmation(palette, cx))
             .into_any_element()
     }
 }
 
-/// Opens a browser window showing `startup_address`, or a new tab page. The
-/// first window at launch also opens the pinned tabs again.
+/// Opens a browser window showing `startup_address`, or no tab when there is
+/// no startup address. The first window at launch also opens pinned tabs.
 fn open_browser_window(
     runtime: Rc<EngineRuntime>,
     startup_address: Option<String>,
     restore_pinned_tabs: bool,
     cx: &mut App,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<WindowHandle<BrowserWindow>> {
     // A page's address opens that page; any other address a web page.
     let startup_page = startup_address.as_deref().and_then(find_page);
     let initial_webview = startup_address
         .as_deref()
         .filter(|_| startup_page.is_none())
         .map(|address| create_webview(cx, runtime.clone(), address));
-    cx.open_window(window_settings::options(cx), move |window, cx| {
+    let handle = cx.open_window(window_settings::options(cx), move |window, cx| {
         window_settings::configure_traffic_lights(window);
         window.set_window_title(photon_brand::NAME);
         let omnibox = cx.new(|cx| Omnibox::new(window, cx));
         cx.new(move |cx: &mut Context<BrowserWindow>| {
             let appearance_subscription =
                 cx.observe_window_appearance(window, |_, _, cx| cx.notify());
+            let activation_subscription =
+                cx.observe_window_activation(window, |_, _, cx| cx.notify());
             // Follow settings changed here, in a settings page, or in another
             // window, including the space shown.
             let settings_subscription =
@@ -297,34 +308,36 @@ fn open_browser_window(
             let window_observer = WindowObserver::new(window, move |visible, display_changed| {
                 let this = this.clone();
                 app.spawn(async move |cx| {
-                    this.update(cx, |this: &mut BrowserWindow, cx| {
-                        this.window_changed(visible, display_changed, cx)
+                    update_app(cx, |cx| {
+                        this.update(cx, |this: &mut BrowserWindow, cx| {
+                            this.window_changed(visible, display_changed, cx)
+                        })
+                        .ok();
                     })
-                    .ok();
+                    .await;
                 })
                 .detach();
             });
             let mut browser = BrowserWindow {
                 tabs: Vec::new(),
                 tab_subscriptions: Vec::new(),
+                empty_page: None,
+                _empty_page_subscription: None,
                 chrome,
                 overlays,
-                sidebar: SidebarState::new(),
-                workspace_edit: None,
-                workspace_edit_presence: Presence::default(),
-                workspace_chrome_presence: Presence::default(),
+                sidebar: SidebarState::new(cx),
                 spaces: SpacesState::new(Settings::get(cx).spaces.active().id),
                 tab_focus_handles: Vec::new(),
                 _archive_task: BrowserWindow::archive_unused_tabs_regularly(window, cx),
-                active_tab: 0,
+                active_tab: None,
                 next_tab_id: 1,
                 omnibox,
                 _omnibox_subscription: omnibox_subscription,
                 runtime,
-                open_menu: None,
-                menu_presence: Presence::default(),
                 find_bar_presence: Presence::default(),
                 peek: PeekState::default(),
+                shortcuts_dialog: None,
+                shortcuts_dialog_presence: Presence::default(),
                 command_bar: None,
                 command_bar_presence: Presence::default(),
                 _command_bar_subscription: None,
@@ -337,28 +350,42 @@ fn open_browser_window(
                 dialog: None,
                 pending_popups: VecDeque::new(),
                 popup_confirmation_focus: cx.focus_handle(),
+                root_focus: cx.focus_handle(),
+                window_title: photon_brand::NAME.to_owned(),
                 engine_notice: None,
                 notice_expiry: None,
                 zoom_shown_at: None,
                 revealed_icons: RefCell::default(),
                 window_visible: true,
                 _appearance_subscription: appearance_subscription,
+                _activation_subscription: activation_subscription,
                 _settings_subscription: settings_subscription,
                 _chrome_subscription: chrome_subscription,
                 _window_observer: window_observer,
+                _session_release: {
+                    let key = cx.entity_id().as_u64();
+                    cx.on_release(move |_, cx| BrowserWindow::forget_session(key, cx))
+                },
             };
-            match initial_webview {
-                Some(webview) => {
+            match (initial_webview, startup_page) {
+                (Some(webview), _) => {
                     let content = TabContent::Web(webview);
                     browser.insert_content(0, content, true, window, cx);
                 }
-                None => browser.insert_page(0, startup_page.unwrap_or(NEW_TAB), window, cx),
+                (None, Some(page)) => browser.insert_page(0, page, window, cx),
+                (None, None) => {}
             }
             if restore_pinned_tabs {
                 browser.restore_pinned_tabs(window, cx);
             }
+            if browser.active_tab.is_none() && !browser.tabs.is_empty() {
+                browser.activate_tab(0, true, window, cx);
+            }
+            if browser.tabs.is_empty() {
+                browser.show_empty_new_tab_page(window, cx);
+            }
             browser
         })
     })?;
-    Ok(())
+    Ok(handle)
 }

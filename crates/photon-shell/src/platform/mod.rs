@@ -1,5 +1,7 @@
 //! macOS GPUI-CE shell: wires UI, Engine, and native presentation modules together.
 
+mod app_update;
+mod default_browser;
 mod display;
 mod engine;
 mod ffi;

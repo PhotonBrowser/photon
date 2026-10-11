@@ -3,27 +3,42 @@
 use gpui::{Context, Div, KeyDownEvent, Window, prelude::*};
 use photon_core::BrowserCommand;
 use photon_shortcuts::{
-    CloseTab, FindInPage, FindNext, FindPrevious, FocusOmnibox, GoBack, GoForward, NewTab,
-    NewWindow, NextSpace, OpenCommandBar, PreviousSpace, Reload, ReopenClosedTab, ResetZoom,
-    SelectLastTab, SelectNextTab, SelectPreviousTab, SelectTab1, SelectTab2, SelectTab3,
-    SelectTab4, SelectTab5, SelectTab6, SelectTab7, SelectTab8, StopLoading, ToggleSidebar, ZoomIn,
-    ZoomOut,
+    CloseTab, FindInPage, FindNext, FindPrevious, FocusOmnibox, GoBack, GoForward, MinimizeWindow,
+    NewTab, NextSpace, OpenCommandBar, OpenSettings, PreviousSpace, Reload, ReopenClosedTab,
+    ResetZoom, SelectLastTab, SelectNextTab, SelectPreviousTab, SelectTab1, SelectTab2, SelectTab3,
+    SelectTab4, SelectTab5, SelectTab6, SelectTab7, SelectTab8, ShowKeyboardShortcuts, StopLoading,
+    ToggleDebugInfo, ToggleSidebar, ToggleSidebarIcons, ToggleZenMode, ZoomIn, ZoomOut, ZoomWindow,
 };
 
 use super::super::super::engine::ZoomStep;
+use super::super::pages::SETTINGS;
 use super::BrowserWindow;
+use super::menu::RunMenuCommand;
+use super::page_menu::ActivatePageMenuItem;
 
 impl BrowserWindow {
     /// Handles the browser's shortcuts and Escape on the window's root element.
     pub(super) fn on_actions(&self, root: Div, cx: &mut Context<Self>) -> Div {
         root.on_key_down(cx.listener(Self::escape))
             .on_action(cx.listener(|this, _: &FocusOmnibox, window, cx| {
-                // The address field lives in the sidebar.
-                this.set_sidebar_visible(true, cx);
+                this.show_address_field(cx);
                 this.omnibox
                     .update(cx, |omnibox, cx| omnibox.focus(window, cx));
             }))
             .on_action(cx.listener(|this, _: &ToggleSidebar, _, cx| this.toggle_sidebar(cx)))
+            .on_action(cx.listener(|this, _: &ToggleSidebarIcons, _, cx| {
+                this.toggle_sidebar_icons(cx);
+            }))
+            .on_action(cx.listener(|this, _: &ToggleZenMode, _, cx| this.toggle_zen_mode(cx)))
+            .on_action(cx.listener(|this, _: &OpenSettings, window, cx| {
+                this.open_page_tab(SETTINGS, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ShowKeyboardShortcuts, window, cx| {
+                this.show_keyboard_shortcuts(window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ToggleDebugInfo, _, cx| {
+                this.toggle_performance_overlay(cx);
+            }))
             .on_action(cx.listener(|this, _: &NextSpace, _, cx| this.switch_space_by(1, cx)))
             .on_action(cx.listener(|this, _: &PreviousSpace, _, cx| this.switch_space_by(-1, cx)))
             .on_action(cx.listener(|this, _: &FindInPage, window, cx| {
@@ -44,9 +59,14 @@ impl BrowserWindow {
             .on_action(cx.listener(|this, _: &NewTab, window, cx| {
                 this.dispatch_command(BrowserCommand::NewTab, window, cx);
             }))
-            .on_action(cx.listener(|this, _: &NewWindow, window, cx| {
-                this.dispatch_command(BrowserCommand::NewWindow, window, cx);
+            .on_action(cx.listener(|this, item: &RunMenuCommand, window, cx| {
+                this.run_menu_command(item, window, cx);
             }))
+            .on_action(cx.listener(|this, item: &ActivatePageMenuItem, _, cx| {
+                this.activate_page_menu_item(item, cx);
+            }))
+            .on_action(|_: &MinimizeWindow, window, _| window.minimize_window())
+            .on_action(|_: &ZoomWindow, window, _| window.zoom_window())
             .on_action(cx.listener(|this, _: &Reload, window, cx| {
                 this.dispatch_command(BrowserCommand::Reload, window, cx);
             }))
@@ -60,11 +80,11 @@ impl BrowserWindow {
                 this.dispatch_command(BrowserCommand::Forward, window, cx);
             }))
             .on_action(cx.listener(|this, _: &CloseTab, window, cx| {
-                this.open_menu = None;
-                this.close_tab(this.active_tab, window, cx);
+                if let Some(active_tab) = this.active_tab {
+                    this.close_tab(active_tab, window, cx);
+                }
             }))
             .on_action(cx.listener(|this, _: &ReopenClosedTab, window, cx| {
-                this.open_menu = None;
                 this.reopen_closed_tab(window, cx);
             }))
             .on_action(cx.listener(|this, _: &SelectNextTab, window, cx| {
@@ -90,18 +110,10 @@ impl BrowserWindow {
 
     /// Escape closes the open menu, or else dismisses a notice chip.
     fn escape(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
-        if self.workspace_edit.is_some() {
-            if event.keystroke.key == "escape" {
-                self.cancel_workspace_edit(cx);
-            }
-            window.prevent_default();
-            cx.stop_propagation();
-            return;
-        }
         if event.keystroke.key != "escape" {
             return;
         }
-        if self.open_menu.take().is_none() && !self.dismiss_notice(cx) {
+        if !self.dismiss_notice(cx) {
             return;
         }
         window.prevent_default();

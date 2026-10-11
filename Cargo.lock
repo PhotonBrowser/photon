@@ -4192,6 +4192,7 @@ dependencies = [
  "clap",
  "indicatif",
  "owo-colors",
+ "photon-brand",
  "serde",
  "toml 0.8.23",
 ]
@@ -4254,6 +4255,7 @@ dependencies = [
  "cc",
  "core-video",
  "foreign-types",
+ "futures",
  "gpui-ce",
  "gpui_ce_apple",
  "gpui_ce_elements",

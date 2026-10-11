@@ -1,22 +1,19 @@
 //! Opening the command bar and carrying out what is chosen in it.
 
-use gpui::{AnyElement, ClipboardItem, Context, Focusable, Window, div, prelude::*};
+use gpui::{AnyElement, App, ClipboardItem, Context, Focusable, Window, div, prelude::*};
 use photon_core::{BrowserCommand, Command};
 
 use super::super::command_bar::{COMMAND_BAR_MOTION, CommandBar, CommandBarEvent, TabSummary};
 use super::super::motion::AnimateIn;
-use super::super::pages::{SETTINGS, find_page};
+use super::super::pages::SETTINGS;
 use super::super::settings::Settings;
 use super::super::workspace_layout::WorkspaceLayout;
 use super::BrowserWindow;
-use super::content::TabContent;
+use super::content::{BrowserTab, TabContent};
 
 impl BrowserWindow {
     /// Opens the command bar over the page, or focuses it when it is open.
     pub(super) fn open_command_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.workspace_edit.is_some() {
-            return;
-        }
         if let Some(bar) = &self.command_bar {
             let focus = bar.read(cx).focus_handle(cx);
             window.focus(&focus, cx);
@@ -32,7 +29,6 @@ impl BrowserWindow {
                 this.command_bar_event(event, window, cx)
             },
         ));
-        self.open_menu = None;
         self.command_bar = Some(bar);
         cx.notify();
     }
@@ -61,15 +57,17 @@ impl BrowserWindow {
         self.command_bar = None;
         self._command_bar_subscription = None;
         match event {
-            CommandBarEvent::Open(url) => match find_page(url) {
-                Some(page) => self.open_page_tab(page, window, cx),
-                None => self.insert_tab(self.tabs.len(), Some(url), window, cx),
-            },
+            CommandBarEvent::Open(url) => self.open_in_new_tab(url, window, cx),
             CommandBarEvent::SwitchToTab(index) => self.activate_tab(*index, true, window, cx),
             CommandBarEvent::Run(command) => self.run_command(*command, window, cx),
             CommandBarEvent::Dismiss => {
                 // Back to where typing was before it opened.
-                self.activate_tab(self.active_tab, true, window, cx);
+                if let Some(active_tab) = self.active_tab {
+                    self.activate_tab(active_tab, true, window, cx);
+                } else {
+                    self.omnibox
+                        .update(cx, |omnibox, cx| omnibox.focus(window, cx));
+                }
             }
         }
         cx.notify();
@@ -80,7 +78,11 @@ impl BrowserWindow {
             Command::NewTab => self.open_tab(window, cx),
             Command::NewWindow => self.dispatch_command(BrowserCommand::NewWindow, window, cx),
             Command::ReopenClosedTab => self.reopen_closed_tab(window, cx),
-            Command::CloseTab => self.close_tab(self.active_tab, window, cx),
+            Command::CloseTab => {
+                if let Some(active_tab) = self.active_tab {
+                    self.close_tab(active_tab, window, cx);
+                }
+            }
             Command::ReloadPage => self.dispatch_command(BrowserCommand::Reload, window, cx),
             Command::FindInPage => self.open_find_bar(window, cx),
             Command::CopyAddress => {
@@ -88,16 +90,25 @@ impl BrowserWindow {
                     let url = webview.read(cx).state.url.clone();
                     cx.write_to_clipboard(ClipboardItem::new_string(url));
                 }
-                self.activate_tab(self.active_tab, true, window, cx);
+                if let Some(active_tab) = self.active_tab {
+                    self.activate_tab(active_tab, true, window, cx);
+                }
             }
-            Command::ToggleSidebar => {
-                self.toggle_sidebar(cx);
-                self.activate_tab(self.active_tab, true, window, cx);
+            Command::ToggleSidebar | Command::ToggleSidebarIcons | Command::ToggleZenMode => {
+                match command {
+                    Command::ToggleSidebar => self.toggle_sidebar(cx),
+                    Command::ToggleSidebarIcons => self.toggle_sidebar_icons(cx),
+                    _ => self.toggle_zen_mode(cx),
+                }
+                if let Some(active_tab) = self.active_tab {
+                    self.activate_tab(active_tab, true, window, cx);
+                }
             }
             Command::NewSpace => self.edit_space(None, window, cx),
             Command::NextSpace => self.switch_space_by(1, cx),
             Command::PreviousSpace => self.switch_space_by(-1, cx),
             Command::OpenSettings => self.open_page_tab(SETTINGS, window, cx),
+            Command::ShowKeyboardShortcuts => self.show_keyboard_shortcuts(window, cx),
         }
     }
 
@@ -114,7 +125,7 @@ impl BrowserWindow {
             .filter(|command| match command {
                 Command::ReloadPage | Command::FindInPage | Command::CopyAddress => has_page,
                 Command::ReopenClosedTab => !self.closed_tabs.is_empty(),
-                Command::ToggleSidebar => has_sidebar,
+                Command::ToggleSidebar | Command::ToggleSidebarIcons => has_sidebar,
                 Command::NewSpace => shows_spaces,
                 Command::NextSpace => shows_spaces && spaces.neighbour(1).is_some(),
                 Command::PreviousSpace => shows_spaces && spaces.neighbour(-1).is_some(),
@@ -124,25 +135,27 @@ impl BrowserWindow {
     }
 
     fn tab_summaries(&self, cx: &Context<Self>) -> Vec<TabSummary> {
-        self.tabs
-            .iter()
-            .map(|tab| match &tab.content {
-                TabContent::Page(page) => TabSummary {
-                    title: page.definition.title.to_owned(),
-                    url: tab.content.page_address().unwrap_or_default(),
+        self.tabs.iter().map(|tab| tab_summary(tab, cx)).collect()
+    }
+}
+
+/// A tab's title, or its address when the page has none, and its address.
+pub(super) fn tab_summary(tab: &BrowserTab, cx: &App) -> TabSummary {
+    match &tab.content {
+        TabContent::Page(page) => TabSummary {
+            title: page.definition.title.to_owned(),
+            url: tab.content.page_address().unwrap_or_default(),
+        },
+        TabContent::Web(webview) => {
+            let state = &webview.read(cx).state;
+            TabSummary {
+                title: if state.title.trim().is_empty() {
+                    state.url.clone()
+                } else {
+                    state.title.clone()
                 },
-                TabContent::Web(webview) => {
-                    let state = &webview.read(cx).state;
-                    TabSummary {
-                        title: if state.title.trim().is_empty() {
-                            state.url.clone()
-                        } else {
-                            state.title.clone()
-                        },
-                        url: state.url.clone(),
-                    }
-                }
-            })
-            .collect()
+                url: state.url.clone(),
+            }
+        }
     }
 }

@@ -7,10 +7,14 @@ use photon_shortcuts::browser_shortcuts;
 use std::rc::Rc;
 use std::time::Duration;
 
+use super::super::super::app_update::update_app;
 use super::super::super::engine::EngineRuntime;
 use super::super::super::motion_observer::ReducedMotionObserver;
 use super::super::history::load_browsing_history;
 use super::super::settings::{Settings, load_settings};
+use super::app_menus::install_app_menus;
+use super::open_urls::{open_received_urls, receive_opened_urls};
+use super::session::{load_session, restore_session};
 use super::{BrowserWindow, open_browser_window};
 use photon_storage::Profile;
 
@@ -22,7 +26,9 @@ struct ReducedMotion {
 impl Global for ReducedMotion {}
 
 pub fn run() {
-    application().run(|cx: &mut App| {
+    let application = application();
+    let opened_urls = receive_opened_urls(&application);
+    application.run(move |cx: &mut App| {
         // GPUI keeps macOS apps alive after their last window closes by default. Photon
         // has one browser window and owns an Engine runtime, so closing it must quit the
         // app and run the registered Engine/GPU shutdown path.
@@ -43,12 +49,19 @@ pub fn run() {
             .unwrap_or_else(|error| panic!("could not start Photon Engine: {error:#}")),
         );
         follow_settings(&runtime, cx);
+        let saved_session = load_session(profile.clone(), cx);
         load_browsing_history(profile, cx);
         announce_service_restarts(&runtime, cx);
         quit_after_env_timeout(cx);
+        install_app_menus(runtime.clone(), cx);
+        open_received_urls(opened_urls, runtime.clone(), cx);
         cx.activate(true);
-        open_browser_window(runtime, initial_address(), true, cx)
-            .expect("open GPUI-CE Photon window");
+        // An address to open starts afresh; otherwise last time's windows
+        // come back, or a new one opens.
+        let address = initial_address();
+        if address.is_some() || !restore_session(&saved_session, &runtime, cx) {
+            open_browser_window(runtime, address, true, cx).expect("open GPUI-CE Photon window");
+        }
     });
 }
 
@@ -88,8 +101,10 @@ pub(super) fn initial_address() -> Option<String> {
 fn follow_reduced_motion(cx: &mut App) {
     let app = cx.to_async();
     let observer = ReducedMotionObserver::new(move |reduce_motion| {
-        app.spawn(async move |cx| cx.update(|cx| cx.set_reduce_motion(reduce_motion)))
-            .detach();
+        app.spawn(async move |cx| {
+            update_app(cx, |cx| cx.set_reduce_motion(reduce_motion)).await;
+        })
+        .detach();
     });
     cx.set_global(ReducedMotion {
         _observer: observer,
@@ -101,7 +116,7 @@ fn announce_service_restarts(runtime: &EngineRuntime, cx: &mut App) {
     let app = cx.to_async();
     runtime.on_service_change(move |_, restarted| {
         app.spawn(async move |cx| {
-            cx.update(|cx| {
+            update_app(cx, |cx| {
                 for window in cx.windows() {
                     if let Some(window) = window.downcast::<BrowserWindow>() {
                         window
@@ -110,6 +125,7 @@ fn announce_service_restarts(runtime: &EngineRuntime, cx: &mut App) {
                     }
                 }
             })
+            .await;
         })
         .detach();
     });
