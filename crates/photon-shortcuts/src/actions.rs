@@ -53,6 +53,28 @@ gpui::actions!(
         ResetZoom,
         /// Show or hide the sidebar.
         ToggleSidebar,
+        /// Collapse the sidebar to icons, or expand it again.
+        ToggleSidebarIcons,
+        /// Hide all browser chrome around the page, or bring it back.
+        ToggleZenMode,
+        /// Open the browser's settings in a tab.
+        OpenSettings,
+        /// Show or hide the active page's performance details.
+        ToggleDebugInfo,
+        /// List the browser's keyboard shortcuts.
+        ShowKeyboardShortcuts,
+        /// Quit the browser.
+        Quit,
+        /// Hide the browser's windows.
+        HideApp,
+        /// Hide every other app's windows.
+        HideOtherApps,
+        /// Show every app's hidden windows.
+        ShowAllApps,
+        /// Minimize the window into the Dock.
+        MinimizeWindow,
+        /// Zoom the window to fill the screen, or back.
+        ZoomWindow,
         /// Show the next space.
         NextSpace,
         /// Show the previous space.

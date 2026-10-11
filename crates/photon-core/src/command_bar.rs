@@ -23,15 +23,18 @@ pub enum Command {
     FindInPage,
     CopyAddress,
     ToggleSidebar,
+    ToggleSidebarIcons,
+    ToggleZenMode,
     NewSpace,
     NextSpace,
     PreviousSpace,
     OpenSettings,
+    ShowKeyboardShortcuts,
 }
 
 impl Command {
     /// Every command, in the order offered when several match.
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 15] = [
         Self::NewTab,
         Self::NewWindow,
         Self::ReopenClosedTab,
@@ -40,10 +43,13 @@ impl Command {
         Self::FindInPage,
         Self::CopyAddress,
         Self::ToggleSidebar,
+        Self::ToggleSidebarIcons,
+        Self::ToggleZenMode,
         Self::NewSpace,
         Self::NextSpace,
         Self::PreviousSpace,
         Self::OpenSettings,
+        Self::ShowKeyboardShortcuts,
     ];
 
     pub fn name(self) -> &'static str {
@@ -56,10 +62,13 @@ impl Command {
             Self::FindInPage => "Find in Page",
             Self::CopyAddress => "Copy Address",
             Self::ToggleSidebar => "Show or Hide Sidebar",
+            Self::ToggleSidebarIcons => "Collapse or Expand Sidebar",
+            Self::ToggleZenMode => "Zen Mode",
             Self::NewSpace => "New Space",
             Self::NextSpace => "Next Space",
             Self::PreviousSpace => "Previous Space",
             Self::OpenSettings => "Settings",
+            Self::ShowKeyboardShortcuts => "Keyboard Shortcuts",
         }
     }
 
@@ -74,10 +83,13 @@ impl Command {
             Self::FindInPage => "search text",
             Self::CopyAddress => "url link",
             Self::ToggleSidebar => "tabs",
+            Self::ToggleSidebarIcons => "icons compact tabs",
+            Self::ToggleZenMode => "focus distraction free fullscreen hide chrome",
             Self::NewSpace => "create add",
             Self::NextSpace => "switch right",
             Self::PreviousSpace => "switch left back",
             Self::OpenSettings => "preferences options",
+            Self::ShowKeyboardShortcuts => "keybindings hotkeys keys help",
         }
     }
 }
@@ -211,7 +223,7 @@ mod tests {
         let results = command_bar_results("find", &TABS, &Command::ALL, vec![search("find")]);
         assert!(results.contains(&CommandBarResult::Run {
             command: Command::FindInPage,
-            name_matches: vec![0..4],
+            name_matches: std::iter::once(0..4).collect(),
         }));
     }
 
