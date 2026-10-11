@@ -62,7 +62,32 @@ impl BrowserWindow {
         }
     }
 
-    /// Closes every tab but the one at `index`, which becomes active.
+    /// The everyday tabs listed beside the tab at `index`: neither pinned
+    /// nor favourites', in this space. With `after_only`, only those listed
+    /// after it. Bulk closing touches no others, so it never unpins a tab or
+    /// closes one the sidebar does not show.
+    fn closable_neighbours(
+        &self,
+        index: usize,
+        after_only: bool,
+        cx: &Context<Self>,
+    ) -> Vec<usize> {
+        let listed = self.listed_tabs(cx);
+        let position = listed.iter().position(|&listed| listed == index);
+        listed
+            .iter()
+            .enumerate()
+            .filter(|&(at, &other)| {
+                other != index
+                    && self.tabs[other].pin.is_none()
+                    && (!after_only || position.is_some_and(|position| at > position))
+            })
+            .map(|(_, &other)| other)
+            .collect()
+    }
+
+    /// Closes the other everyday tabs beside the one at `index`, which
+    /// becomes active.
     pub(super) fn close_other_tabs(
         &mut self,
         index: usize,
@@ -72,13 +97,12 @@ impl BrowserWindow {
         if index >= self.tabs.len() {
             return;
         }
+        let others = self.closable_neighbours(index, false, cx);
         self.activate_tab(index, true, window, cx);
-        for other in (0..self.tabs.len()).rev().filter(|other| *other != index) {
-            self.close_tab(other, window, cx);
-        }
+        self.close_tabs(others, window, cx);
     }
 
-    /// Closes the tabs after the one at `index`.
+    /// Closes the everyday tabs listed after the one at `index`.
     pub(super) fn close_tabs_to_right(
         &mut self,
         index: usize,
@@ -88,11 +112,22 @@ impl BrowserWindow {
         if index >= self.tabs.len() {
             return;
         }
-        if self.active_tab.is_some_and(|active_tab| active_tab > index) {
+        let right = self.closable_neighbours(index, true, cx);
+        if self
+            .active_tab
+            .is_some_and(|active| right.contains(&active))
+        {
             self.activate_tab(index, true, window, cx);
         }
-        for right in (index + 1..self.tabs.len()).rev() {
-            self.close_tab(right, window, cx);
+        self.close_tabs(right, window, cx);
+    }
+
+    /// Closes the tabs at `indices`, last first so the others keep their
+    /// places.
+    fn close_tabs(&mut self, mut indices: Vec<usize>, window: &mut Window, cx: &mut Context<Self>) {
+        indices.sort_unstable_by(|a, b| b.cmp(a));
+        for index in indices {
+            self.close_tab(index, window, cx);
         }
     }
 
@@ -105,7 +140,6 @@ impl BrowserWindow {
     /// The menu for the tab at `index`: reloading, duplicating, pinning and
     /// favouriting it, and closing it or others.
     fn tab_menu_items(&self, index: usize, cx: &Context<Self>) -> Vec<MenuItem> {
-        let count = self.tabs.len();
         let mut items = vec![
             command_item("Reload Tab", MenuCommand::ReloadTab(index)),
             command_item("Duplicate Tab", MenuCommand::DuplicateTab(index)),
@@ -126,13 +160,13 @@ impl BrowserWindow {
         } else {
             command_item("Close Tab", MenuCommand::CloseTab(index))
         });
-        if count > 1 {
+        if !self.closable_neighbours(index, false, cx).is_empty() {
             items.push(command_item(
                 "Close Other Tabs",
                 MenuCommand::CloseOtherTabs(index),
             ));
         }
-        if index + 1 < count {
+        if !self.closable_neighbours(index, true, cx).is_empty() {
             items.push(command_item(
                 "Close Tabs to the Right",
                 MenuCommand::CloseTabsToRight(index),
