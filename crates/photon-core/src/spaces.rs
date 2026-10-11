@@ -1,14 +1,16 @@
 //! Spaces, as in Arc: separate sets of tabs, each with its own name, window
-//! colour and pinned tabs. Favourites are shared by every space.
+//! colour, pinned tabs and favourites.
 
 use serde::{Deserialize, Serialize};
 
-use super::new_tab::Shortcut;
+use super::new_tab::{Shortcut, site_name};
 use super::settings::WindowColor;
 use super::workspace::WorkspaceLayout;
 
 /// A space's identity, which stays the same as spaces are added and removed.
 pub type SpaceId = u64;
+/// How many favourites a space holds.
+pub const MAX_FAVOURITES: usize = 12;
 
 /// One space.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -23,8 +25,14 @@ pub struct Space {
     /// Tabs pinned in this space, at the addresses they were pinned at,
     /// opened again at launch.
     pub pinned_tabs: Vec<Shortcut>,
-    /// A copied layout for this space, or `None` to follow the profile default.
+    /// Sites kept at the top of this space's sidebar.
+    pub favourites: Vec<Shortcut>,
+    /// Whether the empty favourites drop hint was dismissed in this space.
+    pub favourites_hint_dismissed: bool,
+    /// Legacy copied layout data saved before spaces selected named presets.
     pub layout_override: Option<WorkspaceLayout>,
+    /// A named profile preset selected for this space.
+    pub preset_override_id: Option<String>,
 }
 
 impl Default for Space {
@@ -35,8 +43,38 @@ impl Default for Space {
             color: WindowColor::default(),
             gradient: false,
             pinned_tabs: Vec::new(),
+            favourites: Vec::new(),
+            favourites_hint_dismissed: false,
             layout_override: None,
+            preset_override_id: None,
         }
+    }
+}
+
+impl Space {
+    /// The favourite for `url`'s site, if there is one in this space.
+    pub fn favourite_for(&self, url: &str) -> Option<&Shortcut> {
+        let site = site_name(url);
+        self.favourites
+            .iter()
+            .find(|favourite| site_name(&favourite.url) == site)
+    }
+
+    /// Adds a site to this space's favourites, unless it is already there or
+    /// the favourites are full. Returns whether it was added.
+    pub fn add_favourite(&mut self, favourite: Shortcut) -> bool {
+        if self.favourites.len() >= MAX_FAVOURITES || self.favourite_for(&favourite.url).is_some() {
+            return false;
+        }
+        self.favourites.push(favourite);
+        true
+    }
+
+    /// Removes the favourite for `url`'s site from this space.
+    pub fn remove_favourite(&mut self, url: &str) {
+        let site = site_name(url);
+        self.favourites
+            .retain(|favourite| site_name(&favourite.url) != site);
     }
 }
 
@@ -122,7 +160,10 @@ impl Spaces {
             color,
             gradient,
             pinned_tabs: Vec::new(),
+            favourites: Vec::new(),
+            favourites_hint_dismissed: false,
             layout_override: None,
+            preset_override_id: None,
         });
         id
     }
@@ -136,6 +177,20 @@ impl Spaces {
             return false;
         };
         space.layout_override = Some(layout.clone());
+        space.preset_override_id = None;
+        true
+    }
+
+    /// Selects a named profile preset for `id`.
+    pub fn set_preset_override(&mut self, id: SpaceId, preset_id: &str) -> bool {
+        if preset_id.is_empty() || preset_id.len() > 64 {
+            return false;
+        }
+        let Some(space) = self.get_mut(id) else {
+            return false;
+        };
+        space.preset_override_id = Some(preset_id.to_owned());
+        space.layout_override = None;
         true
     }
 
@@ -145,7 +200,18 @@ impl Spaces {
             return false;
         };
         space.layout_override = None;
+        space.preset_override_id = None;
         true
+    }
+
+    /// Removes assignments to a deleted preset so those spaces follow the
+    /// profile default again.
+    pub fn remove_preset_override(&mut self, preset_id: &str) {
+        for space in &mut self.spaces {
+            if space.preset_override_id.as_deref() == Some(preset_id) {
+                space.preset_override_id = None;
+            }
+        }
     }
 
     /// Removes the space `id`, unless it is the last. A removed space that
@@ -174,10 +240,18 @@ impl Spaces {
         }
     }
 
-    /// Removes every space-specific layout so spaces follow the profile default.
+    /// Removes every space-specific layout selection so spaces follow the profile default.
     pub fn reset_layout_overrides(&mut self) {
         for space in &mut self.spaces {
             space.layout_override = None;
+            space.preset_override_id = None;
+        }
+    }
+
+    /// Shows the empty favourites hint again in every space.
+    pub fn reset_favourites_hint_dismissals(&mut self) {
+        for space in &mut self.spaces {
+            space.favourites_hint_dismissed = false;
         }
     }
 
@@ -238,6 +312,34 @@ mod tests {
     }
 
     #[test]
+    fn favourites_belong_to_their_space() {
+        let mut spaces = Spaces::default();
+        let first = spaces.active().id;
+        let second = spaces.add(None, WindowColor::System, false);
+        let favourite = Shortcut {
+            title: "Example".to_owned(),
+            url: "https://example.com/".to_owned(),
+        };
+
+        assert!(
+            spaces
+                .get_mut(first)
+                .unwrap()
+                .add_favourite(favourite.clone())
+        );
+        assert!(spaces.get(second).unwrap().favourites.is_empty());
+        assert!(!spaces.get_mut(first).unwrap().add_favourite(Shortcut {
+            title: "Example again".to_owned(),
+            url: "https://www.example.com/other".to_owned(),
+        }));
+        spaces
+            .get_mut(first)
+            .unwrap()
+            .remove_favourite("https://example.com/");
+        assert!(spaces.get(first).unwrap().favourites.is_empty());
+    }
+
+    #[test]
     fn resetting_colours_keeps_the_spaces() {
         let mut spaces = Spaces::default();
         spaces.add(Some("Work".to_owned()), WindowColor::Blue, true);
@@ -262,6 +364,32 @@ mod tests {
         assert!(spaces.clear_layout_override(id));
         assert_eq!(spaces.get(id).unwrap().layout_override, None);
         assert!(!spaces.clear_layout_override(999));
+    }
+
+    #[test]
+    fn spaces_can_select_named_presets_without_storing_a_layout_copy() {
+        let mut spaces = Spaces::default();
+        let id = spaces.active().id;
+
+        assert!(spaces.set_preset_override(id, "work-right"));
+        assert_eq!(
+            spaces.get(id).unwrap().preset_override_id.as_deref(),
+            Some("work-right")
+        );
+        assert!(spaces.get(id).unwrap().layout_override.is_none());
+        assert!(spaces.clear_layout_override(id));
+        assert!(spaces.get(id).unwrap().preset_override_id.is_none());
+    }
+
+    #[test]
+    fn deleting_a_named_preset_makes_assigned_spaces_follow_the_default() {
+        let mut spaces = Spaces::default();
+        let id = spaces.add(None, WindowColor::Blue, false);
+        assert!(spaces.set_preset_override(id, "work-right"));
+
+        spaces.remove_preset_override("work-right");
+
+        assert!(spaces.get(id).unwrap().preset_override_id.is_none());
     }
 
     #[test]

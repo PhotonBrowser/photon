@@ -94,11 +94,10 @@ In order of priority.
 See the [customization architecture and delivery plan](Customization.md).
 
 - [x] Extract the horizontal and vertical compositions into reusable shell layout modules while preserving existing behavior and profile settings
-- [x] Add a serializable layout model and profile presets; migrate existing `TabLayout` preferences
-- [x] Add per-space layout assignments with the profile preset as the default
-- [x] Add edit mode to show, hide, reorder, resize, and move supported components among four dock regions
-- [x] Split current toolbar controls and sidebar panels into individual catalog components
-- [ ] Reuse the component catalog and presets in first-run onboarding
+- [x] Add named presets for horizontal or vertical tabs and left or right sidebar placement
+- [x] Choose a profile default, assign a preset per space, and keep each space's colour independent
+- [x] View, create, edit, and delete presets; choose or create one while creating or editing a space
+- [ ] Reuse workspace presets in first-run onboarding
 
 ### Arc and Zen feel
 

@@ -28,6 +28,15 @@ const MAX_ID_LENGTH: usize = 64;
 const MAX_PRESET_NAME_LENGTH: usize = 64;
 const MAX_PREFERRED_EXTENT: u16 = 4096;
 
+/// Which side of the window holds the vertical workspace sidebar.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SidebarSide {
+    #[default]
+    Left,
+    Right,
+}
+
 /// A dock edge around the page. Leading and trailing follow text direction.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -128,6 +137,74 @@ impl WorkspaceLayout {
         ])
     }
 
+    /// A standard browser layout with its sidebar on the chosen side.
+    pub fn for_tab_layout_and_side(tab_layout: TabLayout, side: SidebarSide) -> Self {
+        let layout = match tab_layout {
+            TabLayout::Horizontal => Self::horizontal(),
+            TabLayout::Vertical => Self::vertical(),
+        };
+        layout.with_sidebar_side(side)
+    }
+
+    /// Returns the tab mode represented by this layout, including old saved
+    /// layouts that used composite sidebar and toolbar components.
+    pub fn tab_layout(&self) -> TabLayout {
+        let vertical_tabs_visible = self
+            .component(VERTICAL_TABS_COMPONENT_ID)
+            .is_some_and(|component| component.visible);
+        let horizontal_tabs_hidden = self
+            .component(TAB_STRIP_COMPONENT_ID)
+            .is_some_and(|component| !component.visible);
+        if vertical_tabs_visible || horizontal_tabs_hidden {
+            TabLayout::Vertical
+        } else {
+            TabLayout::Horizontal
+        }
+    }
+
+    /// Returns the logical side used by the sidebar components.
+    pub fn sidebar_side(&self) -> SidebarSide {
+        let region = [
+            SIDEBAR_TOGGLE_COMPONENT_ID,
+            VERTICAL_TABS_COMPONENT_ID,
+            FAVOURITES_PANEL_COMPONENT_ID,
+            SIDEBAR_FOOTER_COMPONENT_ID,
+            SIDEBAR_COMPONENT_ID,
+        ]
+        .into_iter()
+        .find_map(|id| self.component(id).map(|component| component.region));
+        match region {
+            Some(DockRegion::Trailing) => SidebarSide::Right,
+            _ => SidebarSide::Left,
+        }
+    }
+
+    /// Moves all side-docked components together, preserving their order.
+    pub fn with_sidebar_side(mut self, side: SidebarSide) -> Self {
+        let target = match side {
+            SidebarSide::Left => DockRegion::Leading,
+            SidebarSide::Right => DockRegion::Trailing,
+        };
+        let mut side_components = self
+            .components
+            .iter()
+            .filter(|component| {
+                matches!(component.region, DockRegion::Leading | DockRegion::Trailing)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        side_components.sort_by_key(|component| (component.region.index(), component.order));
+        self.components.retain(|component| {
+            !matches!(component.region, DockRegion::Leading | DockRegion::Trailing)
+        });
+        for (order, component) in side_components.iter_mut().enumerate() {
+            component.region = target;
+            component.order = order as u16;
+        }
+        self.components.extend(side_components);
+        self
+    }
+
     fn from_catalog_components<const N: usize>(components: [(&str, DockRegion, bool); N]) -> Self {
         let mut orders = [0u16; 4];
         let components = components
@@ -142,6 +219,7 @@ impl WorkspaceLayout {
         Self { components }
     }
 
+    #[cfg(test)]
     fn legacy_horizontal() -> Self {
         Self {
             components: vec![
@@ -152,6 +230,7 @@ impl WorkspaceLayout {
         }
     }
 
+    #[cfg(test)]
     fn legacy_vertical() -> Self {
         Self {
             components: vec![
@@ -349,11 +428,22 @@ impl WorkspaceSettings {
 
     /// Keeps the appearance setting and profile default preset in sync.
     pub fn set_builtin_layout(&mut self, tab_layout: TabLayout) {
-        self.default_preset_id = match tab_layout {
+        let preferred_id = match tab_layout {
             TabLayout::Horizontal => HORIZONTAL_PRESET_ID,
             TabLayout::Vertical => VERTICAL_PRESET_ID,
-        }
-        .to_owned();
+        };
+        self.default_preset_id = self
+            .presets
+            .iter()
+            .find(|preset| preset.id == preferred_id && preset.layout.tab_layout() == tab_layout)
+            .or_else(|| {
+                self.presets
+                    .iter()
+                    .find(|preset| preset.layout.tab_layout() == tab_layout)
+            })
+            .or_else(|| self.presets.first())
+            .map(|preset| preset.id.clone())
+            .unwrap_or_default();
     }
 
     pub fn default_preset(&self) -> Option<&WorkspacePreset> {
@@ -362,17 +452,86 @@ impl WorkspaceSettings {
             .find(|preset| preset.id == self.default_preset_id)
     }
 
+    /// Saves a named standard layout and returns its stable profile ID.
+    pub fn add_preset(&mut self, name: &str, layout: WorkspaceLayout) -> Option<String> {
+        let name = name.trim();
+        if self.presets.len() >= MAX_PRESETS
+            || name.is_empty()
+            || name.chars().count() > MAX_PRESET_NAME_LENGTH
+            || !layout.is_valid()
+        {
+            return None;
+        }
+
+        let base = preset_id_base(name);
+        let id = (1..)
+            .map(|suffix| {
+                let suffix = if suffix == 1 {
+                    String::new()
+                } else {
+                    format!("-{suffix}")
+                };
+                let base_length = MAX_ID_LENGTH.saturating_sub(suffix.len());
+                format!("{}{suffix}", &base[..base.len().min(base_length)])
+            })
+            .find(|id| self.presets.iter().all(|preset| preset.id != *id))?;
+
+        self.presets.push(WorkspacePreset {
+            id: id.clone(),
+            name: name.to_owned(),
+            layout,
+        });
+        Some(id)
+    }
+
+    /// Updates a preset without changing its stable ID or space assignments.
+    pub fn update_preset(&mut self, id: &str, name: &str, layout: WorkspaceLayout) -> bool {
+        let name = name.trim();
+        if name.is_empty() || name.chars().count() > MAX_PRESET_NAME_LENGTH || !layout.is_valid() {
+            return false;
+        }
+        let Some(preset) = self.presets.iter_mut().find(|preset| preset.id == id) else {
+            return false;
+        };
+        preset.name = name.to_owned();
+        preset.layout = layout;
+        true
+    }
+
+    /// Removes a preset unless it is the last one. If it was the profile
+    /// default, the first remaining preset becomes the default.
+    pub fn remove_preset(&mut self, id: &str) -> bool {
+        if self.presets.len() <= 1 {
+            return false;
+        }
+        let Some(index) = self.presets.iter().position(|preset| preset.id == id) else {
+            return false;
+        };
+        self.presets.remove(index);
+        if self.default_preset_id == id {
+            self.default_preset_id = self.presets[0].id.clone();
+        }
+        true
+    }
+
+    /// Selects an existing preset as the profile default.
+    pub fn set_default_preset(&mut self, id: &str) -> bool {
+        if self.default_preset_id == id || !self.presets.iter().any(|preset| preset.id == id) {
+            return false;
+        }
+        self.default_preset_id = id.to_owned();
+        true
+    }
+
     /// Checks preset identities, the default reference, and layout structure.
     /// Allowed regions and component-specific extent limits belong to the
     /// shell-owned component catalog.
     pub fn is_valid(&self) -> bool {
-        if self.presets.len() < 2 || self.presets.len() > MAX_PRESETS {
+        if self.presets.is_empty() || self.presets.len() > MAX_PRESETS {
             return false;
         }
 
         let mut ids = HashSet::with_capacity(self.presets.len());
-        let mut has_horizontal = false;
-        let mut has_vertical = false;
         for preset in &self.presets {
             if !is_stable_id(&preset.id)
                 || preset.name.trim().is_empty()
@@ -382,27 +541,33 @@ impl WorkspaceSettings {
             {
                 return false;
             }
-
-            match preset.id.as_str() {
-                HORIZONTAL_PRESET_ID => {
-                    has_horizontal = preset.layout == WorkspaceLayout::horizontal()
-                        || preset.layout == WorkspaceLayout::legacy_horizontal();
-                    if !has_horizontal {
-                        return false;
-                    }
-                }
-                VERTICAL_PRESET_ID => {
-                    has_vertical = preset.layout == WorkspaceLayout::vertical()
-                        || preset.layout == WorkspaceLayout::legacy_vertical();
-                    if !has_vertical {
-                        return false;
-                    }
-                }
-                _ => {}
-            }
         }
 
-        has_horizontal && has_vertical && ids.contains(self.default_preset_id.as_str())
+        ids.contains(self.default_preset_id.as_str())
+    }
+}
+
+fn preset_id_base(name: &str) -> String {
+    let mut id = String::new();
+    let mut separator = false;
+    for character in name.chars() {
+        if character.is_ascii_alphanumeric() {
+            if separator && !id.is_empty() {
+                id.push('-');
+            }
+            id.push(character.to_ascii_lowercase());
+            separator = false;
+        } else {
+            separator = true;
+        }
+        if id.len() >= MAX_ID_LENGTH {
+            break;
+        }
+    }
+    if id.is_empty() {
+        "preset".to_owned()
+    } else {
+        id.trim_end_matches('-').to_owned()
     }
 }
 
@@ -423,6 +588,67 @@ mod tests {
         let settings = WorkspaceSettings::default();
         assert_eq!(settings.default_preset_id, HORIZONTAL_PRESET_ID);
         assert!(settings.default_preset().is_some());
+        assert!(settings.is_valid());
+    }
+
+    #[test]
+    fn standard_layouts_support_a_right_sidebar_without_mixing_tab_modes() {
+        let layout =
+            WorkspaceLayout::for_tab_layout_and_side(TabLayout::Vertical, SidebarSide::Right);
+        assert_eq!(layout.tab_layout(), TabLayout::Vertical);
+        assert_eq!(layout.sidebar_side(), SidebarSide::Right);
+        assert!(layout.is_valid());
+        assert!(
+            layout
+                .component(TAB_STRIP_COMPONENT_ID)
+                .is_some_and(|component| !component.visible)
+        );
+    }
+
+    #[test]
+    fn custom_presets_get_stable_unique_ids_and_can_become_the_default() {
+        let mut settings = WorkspaceSettings::default();
+        let layout =
+            WorkspaceLayout::for_tab_layout_and_side(TabLayout::Horizontal, SidebarSide::Right);
+        let first = settings
+            .add_preset("  Work setup  ", layout.clone())
+            .unwrap();
+        let second = settings.add_preset("Work setup", layout).unwrap();
+
+        assert_eq!(first, "work-setup");
+        assert_eq!(second, "work-setup-2");
+        assert!(settings.set_default_preset(&first));
+        assert_eq!(settings.default_preset_id, first);
+        assert!(settings.is_valid());
+    }
+
+    #[test]
+    fn presets_can_be_renamed_reconfigured_and_deleted_safely() {
+        let mut settings = WorkspaceSettings::default();
+        let id = settings
+            .add_preset("Research", WorkspaceLayout::horizontal())
+            .unwrap();
+        assert!(settings.update_preset(
+            &id,
+            "Research right",
+            WorkspaceLayout::for_tab_layout_and_side(TabLayout::Vertical, SidebarSide::Right),
+        ));
+        assert_eq!(settings.presets.last().unwrap().name, "Research right");
+        assert_eq!(
+            settings.presets.last().unwrap().layout.tab_layout(),
+            TabLayout::Vertical
+        );
+        assert!(settings.set_default_preset(&id));
+        assert!(settings.remove_preset(&id));
+        assert_ne!(settings.default_preset_id, id);
+        assert!(settings.is_valid());
+    }
+
+    #[test]
+    fn presets_cannot_delete_the_last_preset() {
+        let mut settings = WorkspaceSettings::default();
+        settings.presets.truncate(1);
+        assert!(!settings.remove_preset(HORIZONTAL_PRESET_ID));
         assert!(settings.is_valid());
     }
 
@@ -453,6 +679,18 @@ mod tests {
             settings.default_preset().unwrap().layout,
             WorkspaceLayout::vertical()
         );
+    }
+
+    #[test]
+    fn maps_tab_layout_to_a_remaining_custom_preset_after_builtin_removal() {
+        let mut settings = WorkspaceSettings::default();
+        settings.remove_preset(VERTICAL_PRESET_ID);
+        let right =
+            WorkspaceLayout::for_tab_layout_and_side(TabLayout::Vertical, SidebarSide::Right);
+        let id = settings.add_preset("Vertical right", right).unwrap();
+        settings.remove_preset(VERTICAL_PRESET_ID);
+        settings.set_builtin_layout(TabLayout::Vertical);
+        assert_eq!(settings.default_preset_id, id);
     }
 
     #[test]
@@ -512,8 +750,10 @@ mod tests {
 
     #[test]
     fn rejects_invalid_preset_references_and_extents() {
-        let mut settings = WorkspaceSettings::default();
-        settings.default_preset_id = "missing".to_owned();
+        let settings = WorkspaceSettings {
+            default_preset_id: "missing".to_owned(),
+            ..WorkspaceSettings::default()
+        };
         assert!(!settings.is_valid());
 
         let mut layout = WorkspaceLayout::horizontal();
