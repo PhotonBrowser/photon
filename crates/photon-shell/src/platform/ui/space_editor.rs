@@ -6,14 +6,16 @@ use gpui::{
     Subscription, Window, div, prelude::*, px, rgb,
 };
 use gpui_elements::editable_text::{EditableTextState, StringStorage, text_input};
-use photon_core::{Space, WindowColor};
+use photon_core::{SidebarSide, Space, TabLayout, WindowColor, WorkspaceLayout};
 use std::rc::Rc;
 
 use super::button::{ButtonSize, button};
 use super::color_picker::color_picker;
-use super::controls::text_field;
-use super::layout::h_stack;
+use super::controls::{Choice, text_field};
+use super::dropdown::dropdown;
+use super::layout::{form_field, h_stack, secondary_text, v_stack};
 use super::modal::modal_panel;
+use super::settings::Settings;
 use super::{metrics, theme::palette};
 
 /// What the dialog asks its window to do. Each closes it.
@@ -22,6 +24,8 @@ pub(super) enum SpaceEditorEvent {
         name: String,
         color: WindowColor,
         gradient: bool,
+        preset_id: Option<String>,
+        new_preset: Option<(String, WorkspaceLayout)>,
     },
     Cancel,
 }
@@ -34,12 +38,47 @@ pub(super) struct SpaceEditor {
     name: Entity<EditableTextState>,
     color: WindowColor,
     gradient: bool,
+    preset_id: Option<String>,
+    creating_preset: bool,
+    preset_name: Entity<EditableTextState>,
+    preset_tab_layout: TabLayout,
+    preset_sidebar_side: SidebarSide,
+    invalid_preset: bool,
     _name_observer: Subscription,
+    _preset_name_observer: Subscription,
 }
 
 impl SpaceEditor {
     /// A dialog for changing `space`, or for a new space when `None`.
     pub(super) fn new(space: Option<&Space>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let settings = Settings::get(cx);
+        let preset_id = space.and_then(|space| {
+            space.preset_override_id.clone().or_else(|| {
+                space.layout_override.as_ref().and_then(|layout| {
+                    settings
+                        .workspace
+                        .presets
+                        .iter()
+                        .find(|preset| {
+                            preset.layout.tab_layout() == layout.tab_layout()
+                                && preset.layout.sidebar_side() == layout.sidebar_side()
+                        })
+                        .map(|preset| preset.id.clone())
+                })
+            })
+        });
+        let selected_layout = preset_id
+            .as_deref()
+            .and_then(|id| {
+                settings
+                    .workspace
+                    .presets
+                    .iter()
+                    .find(|preset| preset.id == id)
+            })
+            .or_else(|| settings.workspace.default_preset())
+            .map(|preset| preset.layout.clone())
+            .unwrap_or_default();
         let name = cx.new(|cx| {
             let mut state = EditableTextState::new(StringStorage::default(), cx);
             if let Some(space) = space {
@@ -47,24 +86,102 @@ impl SpaceEditor {
             }
             state
         });
+        let preset_name = cx.new(|cx| EditableTextState::new(StringStorage::default(), cx));
         window.focus(&name.focus_handle(cx), cx);
         name.update(cx, |name, cx| name.select_document(cx));
         let name_observer = cx.observe(&name, |_, _, cx| cx.notify());
+        let preset_name_observer = cx.observe(&preset_name, |_, _, cx| cx.notify());
         Self {
             creating: space.is_none(),
             name,
             color: space.map_or(WindowColor::System, |space| space.color),
             gradient: space.is_some_and(|space| space.gradient),
+            preset_id,
+            creating_preset: false,
+            preset_name,
+            preset_tab_layout: selected_layout.tab_layout(),
+            preset_sidebar_side: selected_layout.sidebar_side(),
+            invalid_preset: false,
             _name_observer: name_observer,
+            _preset_name_observer: preset_name_observer,
         }
     }
 
     fn save(&mut self, cx: &mut Context<Self>) {
+        let new_preset = if self.creating_preset {
+            let name = self.preset_name.read(cx).as_str().trim().to_owned();
+            let layout = WorkspaceLayout::for_tab_layout_and_side(
+                self.preset_tab_layout,
+                self.preset_sidebar_side,
+            );
+            let mut workspace = Settings::get(cx).workspace.clone();
+            if workspace.add_preset(&name, layout.clone()).is_none() {
+                self.invalid_preset = true;
+                cx.notify();
+                return;
+            }
+            Some((name, layout))
+        } else {
+            None
+        };
         cx.emit(SpaceEditorEvent::Save {
             name: self.name.read(cx).as_str().trim().to_owned(),
             color: self.color,
             gradient: self.gradient,
+            preset_id: if new_preset.is_some() {
+                None
+            } else {
+                self.preset_id.clone()
+            },
+            new_preset,
         });
+    }
+
+    fn select_preset(&mut self, preset_id: Option<String>, cx: &mut Context<Self>) {
+        self.preset_id = preset_id;
+        self.creating_preset = false;
+        self.invalid_preset = false;
+        cx.notify();
+    }
+
+    fn start_preset_creation(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let layout = self
+            .preset_id
+            .as_deref()
+            .and_then(|id| {
+                Settings::get(cx)
+                    .workspace
+                    .presets
+                    .iter()
+                    .find(|preset| preset.id == id)
+            })
+            .or_else(|| Settings::get(cx).workspace.default_preset())
+            .map(|preset| preset.layout.clone())
+            .unwrap_or_default();
+        self.preset_tab_layout = layout.tab_layout();
+        self.preset_sidebar_side = layout.sidebar_side();
+        self.creating_preset = true;
+        self.invalid_preset = false;
+        window.focus(&self.preset_name.focus_handle(cx), cx);
+        cx.notify();
+    }
+
+    fn cancel_preset_creation(&mut self, cx: &mut Context<Self>) {
+        self.creating_preset = false;
+        self.invalid_preset = false;
+        cx.notify();
+    }
+
+    fn set_preset_tab_layout(&mut self, layout: TabLayout, cx: &mut Context<Self>) {
+        self.preset_tab_layout = layout;
+        self.invalid_preset = false;
+        cx.notify();
+    }
+
+    fn set_preset_sidebar_side(&mut self, side: SidebarSide, cx: &mut Context<Self>) {
+        self.preset_sidebar_side = side;
+        self.invalid_preset = false;
+        cx.notify();
     }
 }
 
@@ -97,6 +214,97 @@ impl Render for SpaceEditor {
                 .ok();
             }),
         );
+        let settings = Settings::get(cx);
+        let mut preset_choices = vec![Choice {
+            label: "Use profile default".into(),
+            chosen: self.preset_id.is_none(),
+            on_choose: Box::new(cx.listener(|this, _, _, cx| this.select_preset(None, cx))),
+        }];
+        preset_choices.extend(settings.workspace.presets.iter().map(|preset| {
+            let id = preset.id.clone();
+            Choice {
+                label: preset.name.clone().into(),
+                chosen: self.preset_id.as_deref() == Some(&id),
+                on_choose: Box::new(
+                    cx.listener(move |this, _, _, cx| this.select_preset(Some(id.clone()), cx)),
+                ),
+            }
+        }));
+        let preset_picker = h_stack()
+            .items_center()
+            .gap(px(metrics::BUTTON_GAP))
+            .child(dropdown(
+                "space-editor-layout-preset",
+                "Layout preset",
+                preset_choices,
+                palette,
+            ))
+            .child(button(
+                "space-editor-new-preset",
+                if self.creating_preset {
+                    "Cancel new preset"
+                } else {
+                    "New preset…"
+                },
+                false,
+                ButtonSize::Regular,
+                palette,
+                Box::new(cx.listener(|this, _, window, cx| {
+                    if this.creating_preset {
+                        this.cancel_preset_creation(cx);
+                    } else {
+                        this.start_preset_creation(window, cx);
+                    }
+                })),
+            ));
+        let preset_creation = self.creating_preset.then(|| {
+            let name_field = form_field(
+                "Preset name",
+                text_field(
+                    text_input("space-editor-preset-name")
+                        .state(self.preset_name.downgrade())
+                        .track_focus(&self.preset_name.focus_handle(cx))
+                        .placeholder("Name")
+                        .placeholder_color(rgb(palette.text_secondary)),
+                    palette,
+                ),
+                palette,
+            );
+            let layout_fields = super::workspace_preset_fields::fields(
+                "space-editor-preset-tabs",
+                "space-editor-preset-sidebar",
+                self.preset_tab_layout,
+                self.preset_sidebar_side,
+                palette,
+                |layout| {
+                    Box::new(
+                        cx.listener(move |this, _, _, cx| this.set_preset_tab_layout(layout, cx)),
+                    )
+                },
+                |side| {
+                    Box::new(
+                        cx.listener(move |this, _, _, cx| this.set_preset_sidebar_side(side, cx)),
+                    )
+                },
+            );
+            let form = v_stack()
+                .gap(px(metrics::INTERNAL_PAGE_GROUP_GAP))
+                .child(
+                    div()
+                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .child("Create a preset for this space"),
+                )
+                .child(name_field)
+                .child(layout_fields);
+            if self.invalid_preset {
+                form.child(secondary_text(
+                    "Enter a name up to 64 characters. The profile can have up to 32 presets.",
+                    palette,
+                ))
+            } else {
+                form
+            }
+        });
         modal_panel(palette)
             .id("space-editor")
             .role(Role::Dialog)
@@ -115,15 +323,21 @@ impl Render for SpaceEditor {
                 cx.stop_propagation();
             }))
             .child(div().font_weight(gpui::FontWeight::SEMIBOLD).child(title))
-            .child(text_field(
-                text_input("space-editor-name")
-                    .state(self.name.downgrade())
-                    .track_focus(&self.name.focus_handle(cx))
-                    .placeholder("Name")
-                    .placeholder_color(rgb(palette.text_secondary)),
+            .child(form_field(
+                "Space name",
+                text_field(
+                    text_input("space-editor-name")
+                        .state(self.name.downgrade())
+                        .track_focus(&self.name.focus_handle(cx))
+                        .placeholder("Name")
+                        .placeholder_color(rgb(palette.text_secondary)),
+                    palette,
+                ),
                 palette,
             ))
-            .child(colors)
+            .child(form_field("Window colour", colors, palette))
+            .child(form_field("Layout preset", preset_picker, palette))
+            .children(preset_creation)
             .child(
                 h_stack()
                     .justify_end()

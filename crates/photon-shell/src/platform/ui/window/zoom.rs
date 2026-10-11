@@ -9,9 +9,6 @@ use super::BrowserWindow;
 impl BrowserWindow {
     /// Zooms the active page and shows its new level in a chip.
     pub(super) fn zoom(&mut self, step: ZoomStep, cx: &mut Context<Self>) {
-        if self.workspace_edit.is_some() {
-            return;
-        }
         if let Some(webview) = self.active_webview() {
             webview.update(cx, |view, _| view.zoom(step));
             self.zoom_shown_at = Some(Instant::now());

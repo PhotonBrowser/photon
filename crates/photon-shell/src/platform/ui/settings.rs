@@ -25,6 +25,12 @@ pub(in crate::platform) fn load_settings(profile: Option<Profile>, cx: &mut App)
         .as_ref()
         .map(Profile::load_settings)
         .unwrap_or_default();
+    if settings.migrate_legacy_favourites()
+        && let Some(profile) = &profile
+        && let Err(error) = profile.save_settings(&settings)
+    {
+        trace(format_args!("saving migrated favourites: {error}"));
+    }
     // A search engine this build does not know falls back to the default.
     if SearchEngines::builtin()
         .get(&settings.default_search_engine)

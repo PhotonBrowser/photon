@@ -5,6 +5,8 @@ use gpui::{FontWeight, Role, SharedString, div, prelude::*, px, rgb, rgba};
 use super::super::layout::v_stack;
 use super::super::{metrics, theme::ThemeColors};
 
+pub(super) use super::super::layout::{label, secondary_text};
+
 /// A scrolling column of content, centered in the space it is given.
 pub(super) fn scrolling_column(
     id: impl Into<gpui::ElementId>,
@@ -44,25 +46,6 @@ pub(super) fn heading(
                 .child(title),
         )
         .child(secondary_text(description, palette))
-}
-
-/// A label above a control, such as "Shortcuts" above its choices.
-pub(super) fn label(text: &'static str, palette: ThemeColors) -> impl IntoElement {
-    div()
-        .text_size(px(metrics::TAB_FONT_SIZE))
-        .font_weight(FontWeight::MEDIUM)
-        .text_color(rgb(palette.text_secondary))
-        .child(text)
-}
-
-pub(super) fn secondary_text(
-    text: impl Into<SharedString>,
-    palette: ThemeColors,
-) -> impl IntoElement {
-    div()
-        .text_size(px(metrics::TAB_FONT_SIZE))
-        .text_color(rgb(palette.text_secondary))
-        .child(text.into())
 }
 
 /// A panel holding related rows.
