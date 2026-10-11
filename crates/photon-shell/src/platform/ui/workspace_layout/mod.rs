@@ -7,6 +7,7 @@ use gpui::App;
 use photon_core::{
     DockRegion, TabLayout, WorkspaceLayout as SavedWorkspaceLayout, WorkspaceSettings,
 };
+use std::rc::Rc;
 
 mod catalog;
 mod legacy;
@@ -33,8 +34,11 @@ pub(super) enum OmniboxPlacement {
 
 impl WorkspaceLayout {
     /// Resolves the active space's named preset or legacy layout, then the profile default.
-    pub(super) fn current(cx: &App) -> Self {
-        let settings = Settings::get(cx);
+    pub(super) fn current(cx: &App) -> Rc<Self> {
+        Settings::layout(cx, Self::resolve)
+    }
+
+    fn resolve(settings: &photon_core::BrowserSettings) -> Self {
         let active_space = settings.spaces.active();
         settings
             .workspace
@@ -152,6 +156,13 @@ impl WorkspaceLayout {
         self.components(DockRegion::Leading)
             .chain(self.components(DockRegion::Trailing))
             .any(|component| component.id == ComponentId::VerticalTabs)
+    }
+
+    /// Whether tabs show in a strip above or below the page.
+    pub(super) fn has_tab_strip(&self) -> bool {
+        self.components(DockRegion::Top)
+            .chain(self.components(DockRegion::Bottom))
+            .any(|component| component.id == ComponentId::TabStrip)
     }
 
     pub(super) fn sidebar_region(&self) -> Option<DockRegion> {

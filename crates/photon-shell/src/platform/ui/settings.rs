@@ -9,11 +9,14 @@ use gpui::{App, BorrowAppContext, Global, Task, WindowAppearance};
 use photon_core::{BrowserSettings, ThemeMode};
 use photon_omnibox::SearchEngines;
 use photon_storage::Profile;
+use std::cell::OnceCell;
+use std::rc::Rc;
 use std::sync::Mutex;
 use std::time::Duration;
 
 use super::super::app_update::update_app;
 use super::super::trace;
+use super::workspace_layout::WorkspaceLayout;
 
 /// How long after a change the settings are saved, so a burst of changes,
 /// as while dragging the sidebar's edge, saves once.
@@ -28,6 +31,9 @@ pub(super) struct Settings {
     profile: Option<Profile>,
     /// The pending save.
     save: Option<Task<()>>,
+    /// The workspace layout the settings resolve to, worked out on first
+    /// use after each change, as drawing asks for it many times a frame.
+    layout: OnceCell<Rc<WorkspaceLayout>>,
 }
 
 impl Global for Settings {}
@@ -55,6 +61,7 @@ pub(in crate::platform) fn load_settings(profile: Option<Profile>, cx: &mut App)
         settings,
         profile,
         save: None,
+        layout: OnceCell::new(),
     });
     cx.on_app_quit(|cx| {
         let save = cx.update_global::<Settings, _>(|store, _| {
@@ -84,6 +91,7 @@ impl Settings {
     pub(super) fn update(cx: &mut App, update: impl FnOnce(&mut BrowserSettings)) {
         cx.update_global::<Self, _>(|store, cx| {
             update(&mut store.settings);
+            store.layout = OnceCell::new();
             store.save_soon(cx);
         });
     }
@@ -111,6 +119,18 @@ impl Settings {
                     .detach();
             }
         }));
+    }
+
+    /// The workspace layout, resolved by `resolve` once per change.
+    pub(super) fn layout(
+        cx: &App,
+        resolve: impl FnOnce(&BrowserSettings) -> WorkspaceLayout,
+    ) -> Rc<WorkspaceLayout> {
+        let store = cx.global::<Self>();
+        store
+            .layout
+            .get_or_init(|| Rc::new(resolve(&store.settings)))
+            .clone()
     }
 
     fn snapshot(&self) -> Option<(Profile, BrowserSettings)> {
