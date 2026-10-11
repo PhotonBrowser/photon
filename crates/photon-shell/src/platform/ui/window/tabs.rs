@@ -2,6 +2,7 @@
 
 use gpui::{Context, KeyDownEvent, Window};
 use photon_core::Shortcut;
+use photon_core::WindowSession;
 use std::time::{Duration, Instant};
 
 use super::super::icons::LOADING_SPINNER_STEPS;
@@ -315,6 +316,8 @@ impl BrowserWindow {
         self.revealed_icons.borrow_mut().remove(&removed.id);
 
         if self.tabs.len() == 1 && Settings::get(cx).close_window_with_last_tab {
+            // Closed with its last tab, the window has nothing to reopen.
+            self.record_session_state(WindowSession::default(), cx);
             window.remove_window();
             return;
         }

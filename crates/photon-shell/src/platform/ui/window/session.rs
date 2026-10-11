@@ -142,8 +142,13 @@ pub(super) fn restore_session(
 impl BrowserWindow {
     /// Records this window's tabs in the session when they have changed.
     pub(super) fn record_session(&self, cx: &mut Context<Self>) {
-        let key = cx.entity_id().as_u64();
         let state = self.session_state(cx);
+        self.record_session_state(state, cx);
+    }
+
+    /// Records `state` as this window's tabs, saving it when it changed.
+    pub(super) fn record_session_state(&self, state: WindowSession, cx: &mut Context<Self>) {
+        let key = cx.entity_id().as_u64();
         cx.update_global::<BrowsingSession, _>(|session, cx| {
             match session
                 .windows
