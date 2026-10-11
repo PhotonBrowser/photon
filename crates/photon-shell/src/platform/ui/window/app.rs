@@ -11,6 +11,7 @@ use super::super::super::app_update::update_app;
 use super::super::super::engine::EngineRuntime;
 use super::super::super::motion_observer::ReducedMotionObserver;
 use super::super::history::load_browsing_history;
+use super::super::install_form_controls;
 use super::super::settings::{Settings, load_settings};
 use super::app_menus::install_app_menus;
 use super::open_urls::{open_received_urls, receive_opened_urls};
@@ -54,6 +55,7 @@ pub fn run() {
         announce_service_restarts(&runtime, cx);
         quit_after_env_timeout(cx);
         install_app_menus(runtime.clone(), cx);
+        install_form_controls(cx);
         open_received_urls(opened_urls, runtime.clone(), cx);
         cx.activate(true);
         // An address to open starts afresh; otherwise last time's windows

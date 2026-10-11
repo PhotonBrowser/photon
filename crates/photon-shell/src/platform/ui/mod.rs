@@ -46,6 +46,7 @@ pub(super) type KeyDownHandler =
     Box<dyn Fn(&gpui::KeyDownEvent, &mut gpui::Window, &mut gpui::App)>;
 
 pub(in crate::platform) use webview::{
-    CrashNotice, Favicon, FindResult, PageMenuItem, PhotonWebView, WebViewEvent,
+    CrashNotice, Favicon, FindResult, PageMenuItem, PhotonWebView, SelectDropdown, SelectItem,
+    WebViewEvent, install_form_controls,
 };
 pub use window::run;

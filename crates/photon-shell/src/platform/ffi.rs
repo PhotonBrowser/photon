@@ -53,6 +53,22 @@ pub(super) mod embedder {
     pub(crate) type ContextMenuCallback =
         unsafe extern "C" fn(*mut c_void, f64, f64, *const ContextMenuItem, usize);
 
+    /// A `<select>` dropdown entry's `kind`.
+    pub(crate) const SELECT_ITEM_OPTION: i32 = 0;
+    pub(crate) const SELECT_ITEM_GROUP_LABEL: i32 = 1;
+
+    #[repr(C)]
+    pub(crate) struct SelectItem {
+        pub kind: i32,
+        pub label: *const c_char,
+        pub id: u32,
+        pub selected: bool,
+        pub enabled: bool,
+    }
+
+    pub(crate) type SelectDropdownCallback =
+        unsafe extern "C" fn(*mut c_void, f64, f64, f64, *const SelectItem, usize);
+
     #[repr(C)]
     pub(crate) struct ViewCallbacks {
         pub callback_data: *mut c_void,
@@ -96,6 +112,8 @@ pub(super) mod embedder {
         pub open_in_new_tab_callback:
             Option<unsafe extern "C" fn(*mut c_void, *const c_char, bool)>,
         pub peek_callback: Option<unsafe extern "C" fn(*mut c_void, *const c_char)>,
+        pub select_dropdown_callback: Option<SelectDropdownCallback>,
+        pub file_picker_callback: Option<unsafe extern "C" fn(*mut c_void, bool)>,
         #[cfg(target_os = "macos")]
         pub native_metal_presentation: bool,
         #[cfg(target_os = "macos")]
@@ -156,6 +174,12 @@ pub(super) mod embedder {
         );
         pub fn photon_view_set_focus(view: *mut c_void, focused: bool);
         pub fn photon_view_activate_context_menu_item(view: *mut c_void, index: usize);
+        pub fn photon_view_select_dropdown_closed(view: *mut c_void, chosen: bool, id: u32);
+        pub fn photon_view_file_picker_closed(
+            view: *mut c_void,
+            paths: *const *const c_char,
+            count: usize,
+        );
         pub fn photon_view_notify_state(view: *mut c_void);
         pub fn photon_view_copy_window_handle(
             view: *mut c_void,

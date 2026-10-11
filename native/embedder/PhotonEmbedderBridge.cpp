@@ -53,6 +53,8 @@ Photon::ViewCallbacks make_view_callbacks(
     auto context_menu_callback = callbacks.context_menu_callback;
     auto open_in_new_tab_callback = callbacks.open_in_new_tab_callback;
     auto peek_callback = callbacks.peek_callback;
+    auto select_dropdown_callback = callbacks.select_dropdown_callback;
+    auto file_picker_callback = callbacks.file_picker_callback;
 
     Photon::ViewCallbacks result;
     result.state_changed = [=](Photon::ViewState const& state) {
@@ -190,6 +192,25 @@ Photon::ViewCallbacks make_view_callbacks(
         context_menu_callback(callback_data, request.x, request.y, items.data(),
             items.size());
     };
+    // Without a handler the Engine answers these itself, so the page is not
+    // left waiting.
+    if (select_dropdown_callback) {
+        result.select_dropdown_requested = [=](Photon::SelectDropdownRequest const& request) {
+            std::vector<PhotonSelectItem> items;
+            items.reserve(request.items.size());
+            for (auto const& item : request.items) {
+                items.push_back({ static_cast<int>(item.kind), item.label.c_str(), item.id,
+                    item.selected, item.enabled });
+            }
+            select_dropdown_callback(callback_data, request.x, request.y,
+                request.minimum_width, items.data(), items.size());
+        };
+    }
+    if (file_picker_callback) {
+        result.file_picker_requested = [=](bool allow_multiple) {
+            file_picker_callback(callback_data, allow_multiple);
+        };
+    }
     result.open_in_new_tab_requested = [=](std::string const& url, bool activate) {
         if (open_in_new_tab_callback)
             open_in_new_tab_callback(callback_data, url.c_str(), activate);
@@ -404,6 +425,25 @@ extern "C" void photon_view_activate_context_menu_item(void* view, size_t index)
 {
     if (view)
         static_cast<ViewHandle*>(view)->view->activate_context_menu_item(index);
+}
+
+extern "C" void photon_view_select_dropdown_closed(void* view, bool chosen, uint32_t id)
+{
+    if (view)
+        static_cast<ViewHandle*>(view)->view->select_dropdown_closed(
+            chosen ? std::optional<uint32_t> { id } : std::nullopt);
+}
+
+extern "C" void photon_view_file_picker_closed(void* view, char const* const* paths, size_t count)
+{
+    if (!view)
+        return;
+    std::vector<std::string> chosen;
+    for (size_t index = 0; index < count; ++index) {
+        if (paths[index])
+            chosen.emplace_back(paths[index]);
+    }
+    static_cast<ViewHandle*>(view)->view->file_picker_closed(chosen);
 }
 
 extern "C" void photon_view_zoom(void* view, int step)

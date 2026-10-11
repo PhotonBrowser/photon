@@ -9,7 +9,7 @@ use std::{
 };
 
 use super::super::presentation::MachPortGuard;
-use super::super::ui::{Favicon, FindResult, PageMenuItem};
+use super::super::ui::{Favicon, FindResult, PageMenuItem, SelectDropdown, SelectItem};
 use super::super::{ffi::embedder, trace};
 pub(super) use super::callback_state::{CallbackState, RuntimeCallbacks, deliver_pending_releases};
 use super::{EngineSession, RequestedWebView};
@@ -161,6 +161,54 @@ pub(super) unsafe extern "C" fn on_engine_context_menu(
         .collect();
     unsafe { &*(context.cast::<CallbackState>()) }
         .update_webview(move |view, cx| view.show_context_menu(items, cx));
+}
+
+pub(super) unsafe extern "C" fn on_engine_select_dropdown(
+    context: *mut c_void,
+    x: f64,
+    y: f64,
+    minimum_width: f64,
+    items: *const embedder::SelectItem,
+    count: usize,
+) {
+    if context.is_null() || (items.is_null() && count > 0) {
+        return;
+    }
+    let items = if count == 0 {
+        &[][..]
+    } else {
+        unsafe { std::slice::from_raw_parts(items, count) }
+    };
+    let items = items
+        .iter()
+        .map(|item| {
+            let label = unsafe { engine_string(item.label) }.unwrap_or_default();
+            match item.kind {
+                embedder::SELECT_ITEM_OPTION => SelectItem::Option {
+                    label: label.into(),
+                    id: item.id,
+                    selected: item.selected,
+                    enabled: item.enabled,
+                },
+                embedder::SELECT_ITEM_GROUP_LABEL => SelectItem::GroupLabel(label.into()),
+                _ => SelectItem::Separator,
+            }
+        })
+        .collect();
+    let dropdown = SelectDropdown {
+        position: (x as f32, y as f32),
+        minimum_width: minimum_width as f32,
+        items,
+    };
+    unsafe { &*(context.cast::<CallbackState>()) }
+        .update_webview(move |view, cx| view.show_select_dropdown(dropdown, cx));
+}
+
+pub(super) unsafe extern "C" fn on_engine_file_picker(context: *mut c_void, allow_multiple: bool) {
+    if !context.is_null() {
+        unsafe { &*(context.cast::<CallbackState>()) }
+            .update_webview(move |view, cx| view.open_file_picker(allow_multiple, cx));
+    }
 }
 
 pub(super) unsafe extern "C" fn on_engine_open_in_new_tab(

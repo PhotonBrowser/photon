@@ -142,6 +142,8 @@ impl EngineSession {
             context_menu_callback: Some(on_engine_context_menu),
             open_in_new_tab_callback: Some(on_engine_open_in_new_tab),
             peek_callback: Some(on_engine_peek),
+            select_dropdown_callback: Some(on_engine_select_dropdown),
+            file_picker_callback: Some(on_engine_file_picker),
             #[cfg(target_os = "macos")]
             native_metal_presentation: true,
             #[cfg(target_os = "macos")]
@@ -283,6 +285,32 @@ impl EngineSession {
     /// Runs an item of the context menu the page last asked for.
     pub(in crate::platform) fn activate_context_menu_item(&mut self, index: usize) {
         unsafe { embedder::photon_view_activate_context_menu_item(self.view, index) }
+    }
+
+    /// Answers the open `<select>` dropdown with the chosen option, or `None`
+    /// when it was dismissed.
+    pub(in crate::platform) fn select_dropdown_closed(&mut self, chosen: Option<u32>) {
+        unsafe {
+            embedder::photon_view_select_dropdown_closed(
+                self.view,
+                chosen.is_some(),
+                chosen.unwrap_or(0),
+            )
+        }
+    }
+
+    /// Answers the open file picker with the chosen files; none when it was
+    /// cancelled.
+    pub(in crate::platform) fn file_picker_closed(&mut self, paths: &[std::path::PathBuf]) {
+        use std::os::unix::ffi::OsStrExt;
+        let paths: Vec<CString> = paths
+            .iter()
+            .filter_map(|path| CString::new(path.as_os_str().as_bytes()).ok())
+            .collect();
+        let pointers: Vec<*const c_char> = paths.iter().map(|path| path.as_ptr()).collect();
+        unsafe {
+            embedder::photon_view_file_picker_closed(self.view, pointers.as_ptr(), pointers.len())
+        }
     }
 
     /// Ends the search and removes its highlights.

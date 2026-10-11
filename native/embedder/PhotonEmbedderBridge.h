@@ -58,6 +58,23 @@ struct PhotonContextMenuItem {
 // the view, and its items. Answer with photon_view_activate_context_menu_item.
 using PhotonContextMenuCallback = void (*)(void*, double, double,
     PhotonContextMenuItem const*, size_t);
+// One entry in a <select> element's dropdown. `kind` is 0 for an option, 1
+// for the label of a group of options and 2 for a separator.
+struct PhotonSelectItem {
+    int kind;
+    char const* label;
+    uint32_t id;
+    bool selected;
+    bool enabled;
+};
+// Called with where a <select> element's dropdown opens, in logical pixels in
+// the view, its narrowest width and its items. Answer with
+// photon_view_select_dropdown_closed, also when it is dismissed.
+using PhotonSelectDropdownCallback = void (*)(void*, double, double, double,
+    PhotonSelectItem const*, size_t);
+// Called when a file input asks for files, with whether it takes several.
+// Answer with photon_view_file_picker_closed, also when it is cancelled.
+using PhotonFilePickerCallback = void (*)(void*, bool);
 // Called with a URL a context menu action opens in a new tab, and whether to
 // switch to it.
 using PhotonOpenInNewTabCallback = void (*)(void*, char const*, bool);
@@ -113,6 +130,8 @@ struct PhotonViewCallbacks {
     PhotonContextMenuCallback context_menu_callback;
     PhotonOpenInNewTabCallback open_in_new_tab_callback;
     PhotonPeekCallback peek_callback;
+    PhotonSelectDropdownCallback select_dropdown_callback;
+    PhotonFilePickerCallback file_picker_callback;
 #if defined(__APPLE__)
     bool native_metal_presentation;
     PhotonNativeBackingCallback native_backing_callback;
@@ -164,6 +183,12 @@ bool photon_view_toggle_audio_mute(void* view);
 void photon_view_set_focus(void* view, bool focused);
 // Runs an item of the context menu most recently requested, by index.
 void photon_view_activate_context_menu_item(void* view, size_t index);
+// Answers the open <select> dropdown with the chosen option's id, or with
+// `chosen` false when it was dismissed.
+void photon_view_select_dropdown_closed(void* view, bool chosen, uint32_t id);
+// Answers the open file picker with the chosen files' paths; none when it was
+// cancelled.
+void photon_view_file_picker_closed(void* view, char const* const* paths, size_t count);
 void photon_view_notify_state(void* view);
 void photon_view_copy_window_handle(void* view, char* handle, size_t capacity);
 // 0 follows the engine default, 1 prefers dark, 2 prefers light.

@@ -67,6 +67,11 @@ pub(super) struct WebViewInput {
 }
 
 impl WebViewInput {
+    /// Where the page sits in its window.
+    pub(super) fn viewport_origin(&self) -> (f32, f32) {
+        self.viewport_origin
+    }
+
     pub(super) fn set_viewport_origin(&mut self, x: f32, y: f32) {
         self.viewport_origin = (x, y);
     }

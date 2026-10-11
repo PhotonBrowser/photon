@@ -5,9 +5,9 @@ use super::super::presentation::PresentedSurface;
 use super::input::{EditCommand, WebViewInput};
 use super::{metrics::PAGE_RADIUS, settings::Settings, theme::palette};
 use gpui::{
-    Context, EventEmitter, FocusHandle, InteractiveElement, KeyDownEvent, KeyUpEvent, MouseButton,
-    NavigationDirection, ObjectFit, Render, Subscription, SurfaceSource, Window, WindowAppearance,
-    div, prelude::*, px, surface,
+    AnyWindowHandle, Context, EventEmitter, FocusHandle, InteractiveElement, KeyDownEvent,
+    KeyUpEvent, MouseButton, NavigationDirection, ObjectFit, Render, Subscription, SurfaceSource,
+    Window, WindowAppearance, div, prelude::*, px, surface,
 };
 use gpui_elements::editable_text::actions::{Copy, Cut, Paste, Redo, SelectAll, Undo};
 use photon_core::{BrowserCommand, BrowserState, EngineEvent, PageCrashes, PageDialogs};
@@ -24,6 +24,7 @@ mod crashes;
 mod dialogs;
 mod favicon;
 mod find;
+mod form_controls;
 mod history;
 mod history_swipe;
 mod zoom;
@@ -32,6 +33,7 @@ pub(in crate::platform) use context_menu::{PageMenu, PageMenuItem};
 pub(in crate::platform) use crashes::CrashNotice;
 pub(in crate::platform) use favicon::Favicon;
 pub(in crate::platform) use find::FindResult;
+pub(in crate::platform) use form_controls::{SelectDropdown, SelectItem, install_form_controls};
 
 static MOUSE_MOVE_TRACE_COUNT: AtomicUsize = AtomicUsize::new(0);
 
@@ -69,6 +71,8 @@ pub(in crate::platform) struct PhotonWebView {
     pub(super) session: EngineSession,
     pub(super) focus_handle: FocusHandle,
     pub(super) last_viewport: Option<(i32, i32, u32)>,
+    /// The window the page was last drawn in, where its menus open.
+    window: Option<AnyWindowHandle>,
     /// The color scheme last sent to Engine, `true` for dark.
     sent_dark_color_scheme: Option<bool>,
     input: WebViewInput,
@@ -277,6 +281,7 @@ impl PhotonWebView {
             audio_muted: false,
             loading_since: None,
             dialogs: PageDialogs::default(),
+            window: None,
             session,
             focus_handle: cx.focus_handle(),
             last_viewport: None,
@@ -398,6 +403,7 @@ impl Render for PhotonWebView {
                     // Resize from the laid-out WebView bounds, not the native window
                     // bounds minus assumed titlebar/padding values. During live resize,
                     // those assumptions can differ by a frame and offset the page.
+                    this.window = Some(window.window_handle());
                     this.input.set_viewport_origin(
                         f32::from(event.bounds.origin.x),
                         f32::from(event.bounds.origin.y),
