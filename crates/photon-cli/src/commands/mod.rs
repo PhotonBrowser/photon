@@ -1,3 +1,5 @@
+#[cfg(target_os = "macos")]
+pub(super) mod app_bundle;
 pub(super) mod build;
 pub(super) mod check;
 pub(super) mod engine;

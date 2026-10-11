@@ -117,7 +117,7 @@ fn service_is_registered(target: &str) -> bool {
         .is_ok_and(|result| result.status.success())
 }
 
-fn xml_escape(value: &str) -> String {
+pub(super) fn xml_escape(value: &str) -> String {
     value
         .replace('&', "&amp;")
         .replace('<', "&lt;")

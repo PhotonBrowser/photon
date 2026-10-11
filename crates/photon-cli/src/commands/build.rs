@@ -354,10 +354,21 @@ pub(crate) fn run_direct(
     } else {
         engine.join("bin")
     };
-    let executable = root
+    let built = root
         .join("target")
         .join(if release { "release" } else { "debug" })
         .join("Photon");
+    let helper_dir = helper_dir.to_string_lossy().into_owned();
+    // The same environment lets macOS launch the bundle for a link; the
+    // browser makes its own presentation channel then.
+    let executable = super::app_bundle::ensure(
+        root,
+        &built,
+        &[
+            ("PHOTON_HELPER_DIRECTORY", helper_dir.clone()),
+            ("PHOTON_PRESENTATION_XPC_SERVICE", service.clone()),
+        ],
+    )?;
     let mut process = Command::new(executable);
     process
         .current_dir(root)
