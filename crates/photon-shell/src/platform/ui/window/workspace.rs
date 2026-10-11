@@ -24,8 +24,12 @@ impl Render for BrowserWindow {
         let layout = WorkspaceLayout::current(cx);
         let sidebar_region = layout.sidebar_region();
         self.sidebar.settle();
-        if self.sidebar.is_moving() {
+        let moving = self.sidebar.is_moving();
+        if moving {
             window.request_animation_frame();
+        }
+        if let Some(webview) = self.active_webview() {
+            webview.update(cx, |view, _| view.set_layout_animating(moving));
         }
         self.place_window_controls(window, cx);
         if std::mem::take(&mut self.state_changed) {
