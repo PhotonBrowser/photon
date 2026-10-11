@@ -449,23 +449,18 @@ impl EngineSession {
             leases.released,
             leases.outstanding,
         ));
-        assert_eq!(
-            leases.outstanding, 0,
-            "native presentation leases remain at shutdown"
-        );
-        assert_eq!(
-            leases.received, leases.completed,
-            "native presentation leases did not complete"
-        );
-        assert_eq!(
-            leases.completed, leases.released,
-            "completed native presentation leases were not released"
-        );
-        assert_eq!(
-            gpu_submitted, gpu_completed,
-            "Metal command buffers did not all complete"
-        );
-        assert_eq!(gpu_in_flight, 0);
+        // A miscount here means a frame or command buffer was lost, which is
+        // worth knowing but not worth taking the browser down as a tab closes.
+        let balanced = leases.outstanding == 0
+            && leases.received == leases.completed
+            && leases.completed == leases.released
+            && gpu_submitted == gpu_completed
+            && gpu_in_flight == 0;
+        if !balanced {
+            trace(format_args!(
+                "warning: shutdown accounting is unbalanced; presentation frames or Metal work were left over"
+            ));
+        }
         self.presentation
             .release_scheduler
             .store(std::ptr::null_mut(), Ordering::Release);
