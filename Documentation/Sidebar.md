@@ -16,44 +16,74 @@ change applies at once, in every window.
 
 | Part | What it does |
 | --- | --- |
-| Top row | Room for the native window controls, the sidebar toggle, and back, forward and reload or stop. Empty space moves the window; right-clicking it opens the browser menu. |
+| Top row | Room for the native window controls, the sidebar toggle, and back, forward and reload or stop. Empty space moves the window. |
 | Address field | The [omnibox](Omnibox.md), larger than in the toolbar: the page's address the short way while idle, the full address while editing, and suggestions in a panel that reaches over the page. |
-| Favourites | A three-column grid of favourite sites with their icons, up to 12. As in Arc, each has a tab of its own, shown as its tile rather than in the tab list: adding a tab from its menu ("Add to Favourites") moves it into the tile, and a click switches to the favourite's tab or opens it. The tile is highlighted while its tab is in use. Right-click to close its tab or remove the favourite, which returns its tab to the list. |
+| Favourites | A three-column grid of this space's favourite sites with their icons, up to 12. When empty, a dismissible drop hint explains how to add one. Drag a tab into the grid or choose "Add to Favourites" from its right-click menu; the tab becomes its tile rather than staying in the tab list. Click a tile to switch to its tab or open it. The tile is highlighted while its tab is in use. Right-click to close its tab or remove the favourite, which returns its tab to the list. |
 | Pinned tabs | Tabs pinned from their menu ("Pin Tab"), above a divider. See [Pinned tabs](#pinned-tabs). |
 | Tabs | "+ New Tab", which opens the [command bar](Omnibox.md#command-bar), then one row per tab of today's tabs: icon or loading spinner, title, and a close button on the active tab and on the row under the pointer. Click to switch, middle-click or the close button to close, drag to reorder, right-click for the tab menu, and the up and down arrows move between focused tabs. The list scrolls. |
 | Footer | Settings, the spaces as dots with a button to add one, and the browser menu, which opens above it. |
 
-⌘S or the sidebar button shows or hides the sidebar. Its top row, with the
-window controls and the sidebar button, stays where it is; the rest slides in
-from the left edge or back out, and the page narrows or widens beside it in
-step, so the page resizes smoothly rather than jumping. Back, forward and
-reload fade with the sidebar. Hidden, the top row is a bar as tall as the
-horizontal tab strip above the page, which takes the whole width.
+Right-clicking any empty space in the sidebar or titlebar opens the browser's
+native macOS menu: new tabs and windows, find, zoom and debug info for a web
+page, "Sidebar as Icons", "Zen Mode" and Settings, each with its shortcut.
+Controls take their own clicks, so right-clicking one does not open it.
+
+⌘S or the sidebar button shows or hides the sidebar. The whole sidebar,
+including its top row with the window controls, the sidebar button, back,
+forward and reload, slides in from the left edge or back out, and the page
+narrows or widens beside it in step, so it resizes smoothly rather than
+jumping. Hidden, nothing sits above the page: the window controls hide too,
+and only a thin margin around the page moves the window.
 
 - Pointing at the window's left edge slides the sidebar in over the page, on
-  a raised surface. It slides away once the pointer has left the edge and the
-  sidebar for a moment, unless a menu opened from it is still open.
-- Its sidebar button keeps it shown: the page makes room beside it, and the
-  surface fades as it does.
-- ⌘L shows the sidebar to focus the address field.
+  a raised surface, with its labels and the window controls. It slides away
+  once the pointer has left the edge and the sidebar for a moment, unless a
+  menu opened from it is still open.
+- Its sidebar button keeps it shown, with its labels: the page makes room
+  beside it, and the surface fades as it does.
+- ⌘L shows and expands the sidebar to focus the address field.
 - The address field shows only the page's site, such as `github.com`, until
   it is clicked to edit the full address, unless Settings → Search shows the
   full address.
 
+## Collapsed to icons
+
+⇧⌘S, "Sidebar as Icons" in the browser menu, or dragging the sidebar's edge
+narrow collapses it to a 56-pixel column of icons: favourites, pinned and
+today's tabs as square tiles with "+" for a new tab, and the spaces above the
+browser menu. The address field and the favourites hint are left out. The
+window controls stack vertically at its top, above the sidebar button, which
+expands it again. Labels and icons crossfade while the width animates. The
+choice is saved in the profile, so new windows open the same way; hiding and
+showing the sidebar keeps it.
+
+## Zen mode
+
+⌥⌘Z, "Zen Mode" in the browser menu or the command bar hides the chrome
+around the page: the sidebar, any bars above and below it, and the window
+controls. The page keeps its margin, and the margin above it moves the
+window. Pointing at the left edge still
+reveals the sidebar, and its sidebar button leaves Zen mode and keeps it. The
+page's right-click menu offers "Exit Zen Mode" while it is on. Zen mode
+belongs to its window and is not saved.
+
 The window draws the sidebar as a layer over itself and keeps room for it
-beside the page, both following one `Tween` from
+beside the page, each following a `Tween` from
 [`motion.rs`](../crates/photon-shell/src/platform/ui/motion.rs).
-[`window/sidebar_state.rs`](../crates/photon-shell/src/platform/ui/window/sidebar_state.rs)
-keeps where the sidebar is and handles the left edge.
+[`window/side_dock/`](../crates/photon-shell/src/platform/ui/window/side_dock/)
+keeps where the sidebar is, handles its edges, draws it, and places the
+native window controls through GPUI-CE's `set_traffic_light_axis` and
+`set_traffic_lights_visible`.
 
 ## Width
 
 Drag the sidebar's right edge to widen it, up to 420 pixels. Its default
-width, 240 pixels, is also the narrowest it goes, since its content needs that
-room: dragging any narrower hides it, and dragging back out while still
-holding shows it again. The width is saved in the profile once
-the drag rests and applies to every window. The limits and the snap are in
-`SidebarResize` in [`photon-core/src/sidebar.rs`](../crates/photon-core/src/sidebar.rs).
+width, 240 pixels, is the narrowest it goes with labels. Dragging narrower
+snaps to whichever is nearer, the default width or the icons, and dragging
+almost to the edge hides it; dragging back out while still holding shows it
+again. The width is saved in the profile once the drag rests and applies to
+every window. The limits and the snaps are in `SidebarResize` in
+[`photon-core/src/sidebar.rs`](../crates/photon-core/src/sidebar.rs).
 
 ## Pinned tabs
 
@@ -75,8 +105,9 @@ window's side in
 ## Spaces
 
 As in Arc, spaces are separate sets of tabs, each with its own name, window
-colour and pinned tabs; favourites are shared by every space. The sidebar
-shows the tabs of the space shown, and new tabs join it.
+colour, pinned tabs and favourites. Favourites and their dismissed empty hint
+stay with that space. The sidebar shows the tabs and favourites of the space
+shown, and new tabs join it.
 
 - Switch with the footer's dots, a two-finger swipe sideways across the
   sidebar, ⌘⌥← and ⌘⌥→, or the command bar. The tabs slide in from the side

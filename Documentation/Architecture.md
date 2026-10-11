@@ -52,8 +52,10 @@ API; it is not part of the desktop shell's internal state path.
 - `crates/photon-performance` owns performance snapshots, monitor state, timing
   accumulation, value formatting, and the GPUI debug overlay. It has no Engine
   IPC, native embedder, or window-lifecycle dependencies.
-- `crates/photon-shortcuts` owns browser-level GPUI actions and default key
-  bindings.
+- `crates/photon-shortcuts` owns browser-level GPUI actions, their default
+  key bindings, and the named, grouped catalog the shortcuts dialog lists.
+  Views show an action's keys with `ui/kbd.rs`, which reads the keymap, so
+  labels never drift from the bindings.
 - `crates/photon-presentation-ipc` owns the macOS XPC protocol, Rust client
   channel, native descriptor transport, and service entry point. The separate
   `crates/photon-presentation-broker` package is the small service executable.
@@ -71,26 +73,39 @@ crates/
 ├── photon-shell/                     # GPUI-CE shell and native Engine adapter
 │   └── src/platform/
 │       ├── engine/                   # Engine runtime and per-tab sessions
-│       │   └── callbacks.rs          # Engine C callbacks and the state they update
+│       │   ├── mod.rs                # The runtime every tab's session shares
+│       │   ├── session.rs            # A tab's session: navigation, input, presentation, shutdown
+│       │   ├── callback_state.rs     # What a tab's Engine callbacks share and update
+│       │   └── callbacks.rs          # Engine C callbacks
 │       ├── presentation.rs           # IOSurface frames, leases, GPU completion
 │       ├── window_settings.rs        # Native window options and material choice
+│       ├── default_browser.rs        # Whether macOS opens web links with the browser
 │       └── ui/
 │           ├── window/               # Browser window: layout, commands, rendering
 │           │   ├── app.rs            # App startup and the first window
 │           │   ├── tabs.rs           # Tab lifecycle
 │           │   ├── chrome.rs         # Renders independent workspace controls and panels
 │           │   ├── workspace.rs      # Composes chrome, active page, and window overlays
-│           │   ├── workspace_edit.rs # Draft editor for saved workspace layouts
 │           │   ├── command_bar.rs    # Opening the command bar and carrying out its choice
-│           │   ├── sidebar_state.rs  # Where the sidebar is: shown, hidden or revealed from the left edge
+│           │   ├── side_dock/        # The sidebar: shown, collapsed to icons, hidden, revealed, or tucked away by Zen mode
+│           │   │   ├── mod.rs        # Its state and motion
+│           │   │   ├── commands.rs   # Showing, collapsing, Zen mode and the native window controls
+│           │   │   ├── edges.rs      # Resizing from its edge and revealing it from the window's edge
+│           │   │   └── view.rs       # Drawing it
 │           │   ├── tab_items.rs      # The tabs as both layouts draw them
 │           │   ├── tab_menu.rs       # Tab menu, reordering and bulk tab actions
 │           │   ├── favourites.rs     # Favourite tiles with their own tabs, and their menus
 │           │   ├── pinned.rs         # Pinned tabs, saved and reopened, and closing unused tabs
 │           │   ├── spaces.rs         # Switching spaces, and creating, changing and removing them
 │           │   ├── content.rs        # What a tab shows: a web view or one of the browser's pages
-│           │   ├── menu.rs           # Browser menu and the menu overlay
-│           │   ├── page_menu.rs      # Page right-click menus
+│           │   ├── menu.rs           # Commands native menus run on a tab, favourite or space
+│           │   ├── context_menu.rs   # Native browser menu for right-clicks on empty chrome
+│           │   ├── keyboard_shortcuts.rs # Opens the keyboard shortcuts dialog
+│           │   ├── page_menu.rs      # Native page right-click menu from the Engine's items
+│           │   ├── app_menus.rs      # macOS menu bar, Dock menu and app-wide actions
+│           │   ├── open_urls.rs      # Opens addresses macOS hands the browser in new tabs
+│           │   ├── title.rs          # Window title follows the active page
+│           │   ├── session.rs        # Saves and reopens windows and tabs across restarts
 │           │   ├── find.rs           # Opening and closing the find bar
 │           │   ├── zoom.rs           # Zoom commands and the zoom chip
 │           │   ├── popups.rs         # Pop-up window confirmation
@@ -113,7 +128,10 @@ crates/
 │           │   └── controls.rs       # Choices, switches and checkboxes
 │           ├── tabs/                 # Tab rows shared by both layouts: the strip and the sidebar list
 │           ├── toolbar.rs            # Shared row for individually placed toolbar controls
-│           ├── workspace_layout.rs   # Built-in workspace definitions and shell component catalog
+│           ├── workspace_layout/     # Resolves saved workspace layouts for the shell
+│           │   ├── mod.rs            # The layout in effect and where components sit
+│           │   ├── catalog.rs        # Each component's placements and sizes
+│           │   └── legacy.rs         # Upgrades layouts saved by older versions
 │           ├── sidebar/              # Side dock host, favourites, navigation and footer panels
 │           ├── omnibox/              # Address field and its suggestion panel
 │           ├── command_bar/          # The ⌘T command bar: field and result rows
@@ -123,6 +141,8 @@ crates/
 │           ├── settings.rs           # Shared settings, saved to the profile
 │           ├── js_dialog.rs          # JavaScript alert, confirm and prompt
 │           ├── modal.rs              # Reusable centered modal
+│           ├── kbd.rs                # Keyboard shortcuts as keycaps, in macOS or PC notation
+│           ├── shortcuts_dialog.rs   # Dialog listing every keyboard shortcut
 │           ├── motion.rs             # Entrance and exit animations, presets and Presence
 │           ├── menu.rs               # Popover surface and menu rows
 │           ├── controls.rs           # Segmented choices, switches, checkbox marks, text fields
@@ -137,7 +157,7 @@ crates/
 ├── photon-core/                      # Framework-independent browser model
 ├── photon-omnibox/                   # Search engines, address resolution, suggestions
 ├── photon-storage/                   # On-disk profile: history, icons, website data
-├── photon-brand/                     # Browser name, page scheme, profile folder and logo
+├── photon-brand/                     # Browser name, bundle identifier, page scheme, profile folder, logo and app icon
 ├── photon-ffi/                       # Exported C API and static library
 ├── photon-shortcuts/                 # Browser actions and key bindings
 ├── photon-cli/                       # `./photon` developer commands
@@ -173,7 +193,7 @@ owned by the shell; the presentation XPC implementation lives inside
 | GPUI-CE native window size, titlebar, traffic lights, blur | [`platform/window_settings.rs`](../crates/photon-shell/src/platform/window_settings.rs) and [`ui/metrics.rs`](../crates/photon-shell/src/platform/ui/metrics.rs) |
 | Shell colors, appearance, transparency, or theme mapping | [`ui/theme.rs`](../crates/photon-shell/src/platform/ui/theme.rs) |
 | Menus, popovers, and shared controls | [`ui/menu.rs`](../crates/photon-shell/src/platform/ui/menu.rs) and [`ui/controls.rs`](../crates/photon-shell/src/platform/ui/controls.rs) |
-| The browser's name, page scheme, profile folder, or logo | [`photon-brand`](../crates/photon-brand/src/lib.rs) |
+| The browser's name, bundle identifier, page scheme, profile folder, logo, or app icon | [`photon-brand`](../crates/photon-brand/src/lib.rs) |
 | Shared layout, spacing, corner radii, or type sizes | [`ui/metrics.rs`](../crates/photon-shell/src/platform/ui/metrics.rs) |
 | Window layout or app startup | [`ui/window/`](../crates/photon-shell/src/platform/ui/window/mod.rs) |
 | Dialogs, modals, and buttons | [`ui/js_dialog.rs`](../crates/photon-shell/src/platform/ui/js_dialog.rs), [`ui/modal.rs`](../crates/photon-shell/src/platform/ui/modal.rs), [`ui/button.rs`](../crates/photon-shell/src/platform/ui/button.rs), and [`photon-core/src/dialogs.rs`](../crates/photon-core/src/dialogs.rs) |
@@ -189,7 +209,7 @@ owned by the shell; the presentation XPC implementation lives inside
 | Browser settings and profile persistence | [`photon-core/src/settings.rs`](../crates/photon-core/src/settings.rs), [`photon-core/src/workspace.rs`](../crates/photon-core/src/workspace.rs), [`ui/settings.rs`](../crates/photon-shell/src/platform/ui/settings.rs), and [`photon-storage/src/profile.rs`](../crates/photon-storage/src/profile.rs) |
 | New tab page, settings page, and their controls | [`ui/pages/`](../crates/photon-shell/src/platform/ui/pages/mod.rs) and the rules in [`photon-core/src/new_tab.rs`](../crates/photon-core/src/new_tab.rs) |
 | A new `photon://` page | A module in [`ui/pages/`](../crates/photon-shell/src/platform/ui/pages/mod.rs) with its view and `PageDefinition`, listed in [`pages/registry.rs`](../crates/photon-shell/src/platform/ui/pages/registry.rs) |
-| Workspace layout and editing, spaces, sidebar and favourites | [`ui/workspace_layout.rs`](../crates/photon-shell/src/platform/ui/workspace_layout.rs), [`ui/window/workspace_edit.rs`](../crates/photon-shell/src/platform/ui/window/workspace_edit.rs), [`photon-core/src/workspace.rs`](../crates/photon-core/src/workspace.rs), [`photon-core/src/spaces.rs`](../crates/photon-core/src/spaces.rs), [`ui/tabs/`](../crates/photon-shell/src/platform/ui/tabs/mod.rs), [`ui/toolbar.rs`](../crates/photon-shell/src/platform/ui/toolbar.rs), [`ui/sidebar/`](../crates/photon-shell/src/platform/ui/sidebar/mod.rs), and [`ui/window/chrome.rs`](../crates/photon-shell/src/platform/ui/window/chrome.rs) |
+| Workspace presets, spaces, sidebar and favourites | [`ui/workspace_layout/`](../crates/photon-shell/src/platform/ui/workspace_layout/mod.rs), [`photon-core/src/workspace.rs`](../crates/photon-core/src/workspace.rs), [`photon-core/src/spaces.rs`](../crates/photon-core/src/spaces.rs), [`ui/tabs/`](../crates/photon-shell/src/platform/ui/tabs/mod.rs), [`ui/toolbar.rs`](../crates/photon-shell/src/platform/ui/toolbar.rs), [`ui/sidebar/`](../crates/photon-shell/src/platform/ui/sidebar/mod.rs), and [`ui/window/chrome.rs`](../crates/photon-shell/src/platform/ui/window/chrome.rs) |
 | What a tab shows (web view or Photon page) | [`ui/window/content.rs`](../crates/photon-shell/src/platform/ui/window/content.rs) |
 | Peek, the link preview over the page | [`ui/window/peek.rs`](../crates/photon-shell/src/platform/ui/window/peek.rs) |
 | C ABI exposed to native callers | [`photon-ffi/include/photon_ffi.h`](../crates/photon-ffi/include/photon_ffi.h) and [`photon-ffi/src/api.rs`](../crates/photon-ffi/src/api.rs) |
@@ -198,6 +218,7 @@ owned by the shell; the presentation XPC implementation lives inside
 | The ⌘T command bar | [`photon-core/src/command_bar.rs`](../crates/photon-core/src/command_bar.rs), [`ui/command_bar/`](../crates/photon-shell/src/platform/ui/command_bar/mod.rs), and [`ui/window/command_bar.rs`](../crates/photon-shell/src/platform/ui/window/command_bar.rs) |
 | History, saved data, and clearing it | [`photon-core/src/history.rs`](../crates/photon-core/src/history.rs), [`photon-storage`](../crates/photon-storage/src/lib.rs), and [`ui/history.rs`](../crates/photon-shell/src/platform/ui/history.rs) |
 | `./photon` command behavior | [`photon-cli/src/commands/`](../crates/photon-cli/src/commands/) |
+| The development `Photon.app` bundle `./photon run` builds in `~/Library/Application Support/Photon/Development/`: Info.plist, icon, web-link registration | [`photon-cli/src/commands/app_bundle.rs`](../crates/photon-cli/src/commands/app_bundle.rs) |
 
 Keep window policy in `window_settings.rs`, shared presentation values in
 `ui/metrics.rs`, shell color roles in `ui/theme.rs`, browser rules in core and
