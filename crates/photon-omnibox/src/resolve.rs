@@ -214,10 +214,7 @@ fn is_private_v4(address: Ipv4Addr) -> bool {
 
 /// Unique-local (`fc00::/7`) and link-local (`fe80::/10`) addresses.
 fn is_local_v6(address: &Ipv6Addr) -> bool {
-    match address.segments() {
-        [0xfc00..=0xfdff, ..] | [0xfe80, ..] => true,
-        _ => false,
-    }
+    matches!(address.segments(), [0xfc00..=0xfdff, ..] | [0xfe80, ..])
 }
 
 /// Whether the host part is a plausible public or local hostname.

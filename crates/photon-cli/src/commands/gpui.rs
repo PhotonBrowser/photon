@@ -73,9 +73,10 @@ fn require_clean_source(repository: &Path) -> Result<(), String> {
     if status.trim().is_empty() {
         Ok(())
     } else {
-        Err(format!(
+        Err(
             "GPUI-CE has uncommitted changes; commit or save them before switching revisions"
-        ))
+                .to_owned(),
+        )
     }
 }
 

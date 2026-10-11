@@ -220,7 +220,7 @@ fn past_searches(text: &str, searches: &[PastSearch], engines: &SearchEngines) -
         .map(|search| Suggestion {
             kind: SuggestionKind::PastSearch,
             text: search.query.to_owned(),
-            text_matches: vec![0..text.len()],
+            text_matches: std::iter::once(0..text.len()).collect(),
             url: engines.default_engine().search_url(search.query),
         })
         .collect()
