@@ -31,7 +31,7 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
                 change(move |settings| settings.close_window_with_last_tab = !close_window),
             )
             .into_any_element(),
-            "When off, closing the last tab leaves the window open on a new tab page.",
+            "When off, closing the last tab leaves the window open without tabs.",
         ))
         .child(setting(
             switch_row(

@@ -166,7 +166,7 @@ impl BrowserWindow {
             let unused = should_archive(
                 enabled,
                 tab.pin.is_some(),
-                index == self.active_tab,
+                self.active_tab == Some(index),
                 tab.last_active.elapsed(),
             );
             if unused {

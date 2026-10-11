@@ -1,14 +1,14 @@
 //! What a tab shows — a web page in the Engine or one of Photon's own pages —
 //! and how the window follows each.
 
-use gpui::{AnyElement, App, Context, Entity, Subscription, Window, prelude::*};
+use gpui::{AnyElement, App, Context, Entity, Subscription, Window, div, prelude::*};
 use photon_core::{BrowserCommand, Shortcut, SpaceId};
 use std::rc::Rc;
 use std::time::Instant;
 
 use super::super::super::engine::{EngineRuntime, EngineSession, UiWake};
 use super::super::super::trace;
-use super::super::pages::{InternalPage, PageDefinition, PageEvent, find_page};
+use super::super::pages::{InternalPage, NEW_TAB, PageDefinition, PageEvent, find_page};
 use super::super::settings::Settings;
 use super::super::theme::ThemeColors;
 use super::super::{PhotonWebView, WebViewEvent};
@@ -76,16 +76,34 @@ impl BrowserTab {
 
 impl BrowserWindow {
     pub(super) fn active_webview(&self) -> Option<Entity<PhotonWebView>> {
-        self.tabs[self.active_tab].content.webview()
+        self.active_tab
+            .and_then(|index| self.tabs.get(index))
+            .and_then(|tab| tab.content.webview())
     }
 
-    /// The active tab's page or web view.
+    /// The active tab's page or web view, or the New Tab page when empty.
     pub(super) fn active_view(&self, palette: ThemeColors) -> AnyElement {
-        self.tabs[self.active_tab].content.view(palette)
+        self.active_tab
+            .and_then(|index| self.tabs.get(index))
+            .map_or_else(
+                || {
+                    self.empty_page
+                        .as_ref()
+                        .map_or_else(|| div().into_any_element(), |page| page.view(palette))
+                },
+                |tab| tab.content.view(palette),
+            )
     }
 
     pub(super) fn new_page(&self, page: &'static PageDefinition, cx: &mut App) -> TabContent {
         TabContent::Page(InternalPage::open(page, &self.runtime, cx))
+    }
+
+    pub(super) fn show_empty_new_tab_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let content = self.new_page(NEW_TAB, cx);
+        self._empty_page_subscription = Some(self.subscribe_to_content(&content, window, cx));
+        self.empty_page = Some(content);
+        cx.notify();
     }
 
     /// Loads `url` in the active tab: one of Photon's pages for a
@@ -97,6 +115,16 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.active_tab.is_none() {
+            match find_page(url) {
+                Some(page) => self.insert_page(self.tabs.len(), page, window, cx),
+                None => {
+                    let webview = create_webview(cx, self.runtime.clone(), url);
+                    self.insert_webview(self.tabs.len(), webview, None, true, window, cx);
+                }
+            }
+            return;
+        }
         if let Some(page) = find_page(url) {
             let content = self.new_page(page, cx);
             self.replace_active_content(content, window, cx);
@@ -121,15 +149,19 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let Some(active_tab) = self.active_tab else {
+            self.insert_content(self.tabs.len(), content, true, window, cx);
+            return;
+        };
         if let Some(webview) = self.active_webview() {
             webview.update(cx, |view, _| {
                 view.session.set_visible(false);
                 view.session.set_focus(false);
             });
         }
-        self.tab_subscriptions[self.active_tab] = self.subscribe_to_content(&content, window, cx);
-        self.tabs[self.active_tab].content = content;
-        self.activate_tab(self.active_tab, true, window, cx);
+        self.tab_subscriptions[active_tab] = self.subscribe_to_content(&content, window, cx);
+        self.tabs[active_tab].content = content;
+        self.activate_tab(active_tab, true, window, cx);
     }
 
     /// Follows the tab's web view or page for as long as the subscription lives.

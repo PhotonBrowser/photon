@@ -5,7 +5,7 @@ use photon_core::Shortcut;
 use std::time::{Duration, Instant};
 
 use super::super::icons::LOADING_SPINNER_STEPS;
-use super::super::pages::{NEW_TAB, PageDefinition};
+use super::super::pages::{NEW_TAB, PageDefinition, find_page};
 use super::super::settings::Settings;
 use super::super::tabs::{ICON_ENTRANCE, TabIcon};
 use super::BrowserWindow;
@@ -34,32 +34,30 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.workspace_edit.is_some() {
-            return;
-        }
         if index >= self.tabs.len() {
             return;
         }
-        if index != self.active_tab {
-            self.open_menu = None;
+        if self.active_tab != Some(index) {
             // The find bar searches one page; switching tabs ends its search.
             self.close_find_bar(false, window, cx);
-            if let Some(previous) = self.tabs.get_mut(self.active_tab) {
-                previous.last_active = Instant::now();
+            if let Some(previous_index) = self.active_tab {
+                if let Some(previous) = self.tabs.get_mut(previous_index) {
+                    previous.last_active = Instant::now();
+                }
+                if let Some(previous) = self
+                    .tabs
+                    .get(previous_index)
+                    .and_then(|tab| tab.content.webview())
+                {
+                    previous.update(cx, |view, cx| {
+                        view.reset_history_swipe(true);
+                        view.session.set_visible(false);
+                        view.session.set_focus(false);
+                        cx.notify();
+                    });
+                }
             }
-            if let Some(previous) = self
-                .tabs
-                .get(self.active_tab)
-                .and_then(|tab| tab.content.webview())
-            {
-                previous.update(cx, |view, cx| {
-                    view.reset_history_swipe(true);
-                    view.session.set_visible(false);
-                    view.session.set_focus(false);
-                    cx.notify();
-                });
-            }
-            self.active_tab = index;
+            self.active_tab = Some(index);
         }
         self.tabs[index].last_active = Instant::now();
         // A tab of another space brings its space; a favourite's tab
@@ -112,6 +110,20 @@ impl BrowserWindow {
             self.insert_webview(index, webview, None, true, window, cx);
         } else {
             self.insert_page(index, NEW_TAB, window, cx);
+        }
+    }
+
+    /// Opens `address` in a new tab at the end: one of Photon's pages for a
+    /// page's address, otherwise a web page.
+    pub(super) fn open_in_new_tab(
+        &mut self,
+        address: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match find_page(address) {
+            Some(page) => self.open_page_tab(page, window, cx),
+            None => self.insert_tab(self.tabs.len(), Some(address), window, cx),
         }
     }
 
@@ -234,11 +246,17 @@ impl BrowserWindow {
         self.tab_subscriptions.insert(index, subscription);
         self.tab_focus_handles
             .insert(index, cx.focus_handle().tab_stop(self.tabs.len() == 1));
-        if index <= self.active_tab && self.tabs.len() > 1 {
+        if self
+            .active_tab
+            .is_some_and(|active_tab| index <= active_tab && self.tabs.len() > 1)
+        {
             // Keep `active_tab` naming the same page until the switch below.
-            self.active_tab += 1;
+            self.active_tab = self.active_tab.map(|active_tab| active_tab + 1);
         }
+        let activate = activate || (self.active_tab.is_none() && self.tabs.len() == 1);
         if activate {
+            self.empty_page = None;
+            self._empty_page_subscription = None;
             self.activate_tab(index, true, window, cx);
         } else {
             if let Some(webview) = content.webview() {
@@ -258,9 +276,6 @@ impl BrowserWindow {
     }
 
     pub(super) fn reopen_closed_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.workspace_edit.is_some() {
-            return;
-        }
         if let Some(closed) = self.closed_tabs.pop() {
             self.insert_tab(closed.index, Some(&closed.url), window, cx);
         }
@@ -273,18 +288,12 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.workspace_edit.is_some() {
-            return;
-        }
-        if let Some(index) = self.listed_tab_after(self.active_tab, offset, cx) {
+        if let Some(index) = self.listed_tab_after(self.active_tab.unwrap_or(0), offset, cx) {
             self.activate_tab(index, true, window, cx);
         }
     }
 
     pub(super) fn close_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
-        if self.workspace_edit.is_some() {
-            return;
-        }
         if index >= self.tabs.len() {
             return;
         }
@@ -307,26 +316,37 @@ impl BrowserWindow {
             return;
         }
         self.remember_closed(index, &removed.content, cx);
-        if self.tabs.len() == 1 {
-            self.replace_last_tab_with_new_tab(window, cx);
-            return;
-        }
 
-        let was_active = index == self.active_tab;
+        let was_active = self.active_tab == Some(index);
         let was_pinned = self.tabs.remove(index).pin.is_some();
         drop(self.tab_subscriptions.remove(index));
         self.tab_focus_handles.remove(index);
-        if index < self.active_tab {
-            self.active_tab -= 1;
-        } else if was_active {
-            self.active_tab = index.min(self.tabs.len() - 1);
+        if let Some(active_tab) = self.active_tab {
+            if index < active_tab {
+                self.active_tab = Some(active_tab - 1);
+            } else if was_active {
+                self.active_tab =
+                    (!self.tabs.is_empty()).then_some(index.min(self.tabs.len().saturating_sub(1)));
+            }
         }
 
         if was_pinned {
             self.save_pinned_tabs(cx);
         }
+        if self.tabs.is_empty() {
+            self.active_tab = None;
+            self.close_find_bar(false, window, cx);
+            self.omnibox.update(cx, |omnibox, cx| {
+                omnibox.set_content(None, None, window, cx)
+            });
+            self.show_empty_new_tab_page(window, cx);
+            cx.notify();
+            return;
+        }
         if was_active {
-            self.activate_tab(self.active_tab, true, window, cx);
+            if let Some(active_tab) = self.active_tab {
+                self.activate_tab(active_tab, true, window, cx);
+            }
         } else {
             cx.notify();
         }
@@ -347,18 +367,6 @@ impl BrowserWindow {
                 url: view.state.url.clone(),
             });
         }
-    }
-
-    /// Keeps the window open after its last tab closes, showing a fresh new
-    /// tab page in that tab's place.
-    fn replace_last_tab_with_new_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.close_find_bar(false, window, cx);
-        let content = self.new_page(NEW_TAB, cx);
-        self.tab_subscriptions[0] = self.subscribe_to_content(&content, window, cx);
-        let id = self.allocate_tab_id();
-        self.tabs[0] = BrowserTab::new(id, content, None, self.current_space(cx));
-        self.active_tab = 0;
-        self.activate_tab(0, true, window, cx);
     }
 
     /// Whether a loading tab or a notice shows a spinner.

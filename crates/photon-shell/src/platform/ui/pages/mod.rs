@@ -1,5 +1,5 @@
-//! Photon's own pages, drawn by the shell in a tab rather than loaded by the
-//! Engine, at addresses such as `photon://settings`.
+//! Photon's own pages, drawn by the shell rather than loaded by the Engine,
+//! at addresses such as `photon://settings`.
 //!
 //! Each page is a view with its own state. It reads and changes the shared
 //! [`Settings`](super::settings::Settings) and history directly, and asks its
@@ -26,7 +26,7 @@ pub(super) use registry::{NEW_TAB, PageDefinition, PageIcon, SETTINGS, find_page
 
 /// What a page asks its window to do.
 pub(super) enum PageEvent {
-    /// Load an address in the page's tab.
+    /// Load an address from the page.
     Open(String),
     /// Open another of Photon's pages.
     OpenPage(&'static PageDefinition),
@@ -45,7 +45,7 @@ pub(super) struct PageContext {
 }
 
 impl PageContext {
-    /// Asks the window to load `url` in the page's tab.
+    /// Asks the window to load `url` in the active tab, creating one if needed.
     pub(super) fn open(&self, url: String, cx: &mut App) {
         self.events
             .update(cx, |_, cx| cx.emit(PageEvent::Open(url)));
@@ -58,7 +58,7 @@ impl PageContext {
     }
 }
 
-/// One of Photon's pages, shown in a tab.
+/// One of Photon's pages, usually shown in a tab.
 #[derive(Clone)]
 pub(super) struct InternalPage {
     pub(super) definition: &'static PageDefinition,
