@@ -1,6 +1,6 @@
 //! Opening, closing and switching tabs, and the tab strip they show in.
 
-use gpui::{Context, KeyDownEvent, Window};
+use gpui::{App, Context, KeyDownEvent, Window};
 use photon_core::Shortcut;
 use photon_core::WindowSession;
 use std::time::{Duration, Instant};
@@ -9,6 +9,7 @@ use super::super::icons::LOADING_SPINNER_STEPS;
 use super::super::pages::{NEW_TAB, PageDefinition, find_page};
 use super::super::settings::Settings;
 use super::super::tabs::{ICON_ENTRANCE, TabIcon};
+use super::super::workspace_layout::WorkspaceLayout;
 use super::BrowserWindow;
 use super::content::{
     BrowserTab, TabContent, create_webview, create_webview_from_session, follow_appearance,
@@ -415,6 +416,15 @@ impl BrowserWindow {
                 })
     }
 
+    /// Whether any tab, and so any spinner, is on screen: in a tab strip
+    /// Zen mode has not tucked away, or in a sidebar that is shown or
+    /// revealed. Showing them again redraws them at the current step.
+    fn tabs_on_screen(&self, cx: &App) -> bool {
+        let layout = WorkspaceLayout::current(cx);
+        (layout.has_tab_strip() && self.sidebar.chrome_shown() > 0.0)
+            || (layout.has_sidebar() && (self.sidebar.shown() > 0.0 || self.sidebar.over_page()))
+    }
+
     /// Steps the spinners while any is shown. With reduced motion they stay still.
     pub(super) fn animate_spinner(&mut self, cx: &mut Context<Self>) {
         if self.spinner_running || cx.reduce_motion() || !self.spinner_shown(cx) {
@@ -429,7 +439,7 @@ impl BrowserWindow {
                         let keep_running = !cx.reduce_motion() && this.spinner_shown(cx);
                         if keep_running {
                             this.spinner_step = (this.spinner_step + 1) % LOADING_SPINNER_STEPS;
-                            if this.window_visible {
+                            if this.window_visible && this.tabs_on_screen(cx) {
                                 this.chrome.update(cx, |_, cx| cx.notify());
                                 if this.notice_is_working(cx) {
                                     cx.notify();
