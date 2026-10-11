@@ -1,6 +1,6 @@
 //! A centered modal surface that dims and blocks what it covers.
 
-use gpui::{Div, ElementId, div, prelude::*, px, rgb, rgba};
+use gpui::{Div, ElementId, FontWeight, SharedString, div, prelude::*, px, rgb, rgba};
 
 use super::controls::OwnsClicks;
 use super::layout::v_stack;
@@ -20,8 +20,18 @@ pub(super) fn modal_panel(palette: ThemeColors) -> Div {
         .border_1()
         .border_color(rgba(palette.menu_border))
         .raised(palette)
+        .text_size(px(metrics::DIALOG_TEXT_SIZE))
         .text_color(rgb(palette.text_primary))
         .elevated(Elevation::High)
+}
+
+/// A dialog's title, the same in every dialog.
+pub(super) fn dialog_title(title: impl Into<SharedString>, palette: ThemeColors) -> Div {
+    div()
+        .text_size(px(metrics::DIALOG_TITLE_SIZE))
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(rgb(palette.text_primary))
+        .child(title.into())
 }
 
 /// The backdrop's fade, which also fades the panel.

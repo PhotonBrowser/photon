@@ -4,7 +4,7 @@ use gpui::{App, ElementId, FontWeight, div, prelude::*, px, rgba};
 use photon_core::Transparency;
 use std::rc::Rc;
 
-use super::super::super::button::{ButtonSize, button};
+use super::super::super::button::{ButtonKind, ButtonSize, button};
 use super::super::super::color_picker::color_picker;
 use super::super::super::controls::{Choice, choices};
 use super::super::super::dropdown::dropdown;
@@ -156,13 +156,15 @@ pub(super) fn settings(
         let edit = edit_preset(id.clone());
         let delete = (current.workspace.presets.len() > 1).then(|| {
             button(
-                "settings-delete-layout-preset",
+                (ElementId::from("settings-delete-layout-preset"), id.clone()),
                 "Delete",
-                false,
+                ButtonKind::Destructive,
+                true,
                 ButtonSize::Regular,
                 palette,
                 delete_preset(id.clone()),
             )
+            .aria_label(format!("Delete {preset_name}"))
             .into_any_element()
         });
         h_stack()
@@ -191,7 +193,7 @@ pub(super) fn settings(
                                     .min_w_0()
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(gpui::rgb(palette.text_primary))
-                                    .child(preset_name),
+                                    .child(preset_name.clone()),
                             )
                             .when(is_default, |row| {
                                 row.child(secondary_text("Profile default", palette))
@@ -203,14 +205,18 @@ pub(super) fn settings(
                 h_stack()
                     .items_center()
                     .gap(px(metrics::BUTTON_GAP))
-                    .child(button(
-                        "settings-edit-layout-preset",
-                        "Edit",
-                        false,
-                        ButtonSize::Regular,
-                        palette,
-                        edit,
-                    ))
+                    .child(
+                        button(
+                            (ElementId::from("settings-edit-layout-preset"), id.clone()),
+                            "Edit",
+                            ButtonKind::Secondary,
+                            true,
+                            ButtonSize::Regular,
+                            palette,
+                            edit,
+                        )
+                        .aria_label(format!("Edit {preset_name}")),
+                    )
                     .children(delete),
             )
     });
@@ -237,7 +243,8 @@ pub(super) fn settings(
                 .child(button(
                     "settings-create-layout-preset",
                     "New preset…",
-                    false,
+                    ButtonKind::Secondary,
+                    true,
                     ButtonSize::Regular,
                     palette,
                     create_preset,

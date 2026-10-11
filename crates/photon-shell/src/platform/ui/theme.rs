@@ -171,6 +171,10 @@ pub(super) struct ThemeColors {
     pub text_secondary: u32,
     pub selection: u32,
     pub field_error_border: u32,
+    /// Error messages, and the label of a button that deletes or resets.
+    pub error: u32,
+    /// A button that deletes or resets, under the pointer.
+    pub error_hover_surface: u32,
     pub performance_palette: PerformancePalette,
     /// How much raised surfaces blur what is behind them; see
     /// [`Raised`](super::layout::Raised).
@@ -284,6 +288,8 @@ impl ThemeColors {
             text_secondary: to_rgb_token(text_secondary),
             selection: to_rgba_token(colors.selected),
             field_error_border: to_rgba_token(error),
+            error: to_rgb_token(error),
+            error_hover_surface: to_rgba_token(error.opacity(opacity::HOVER * 2.0)),
             performance_palette: PerformancePalette {
                 surface: to_rgba_token(
                     colors

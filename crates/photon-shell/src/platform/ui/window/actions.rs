@@ -108,7 +108,8 @@ impl BrowserWindow {
             }))
     }
 
-    /// Escape closes the open menu, or else dismisses a notice chip.
+    /// Escape dismisses a notice chip. Menus and dialogs handle their own
+    /// Escape before it gets here.
     fn escape(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         if event.keystroke.key != "escape" {
             return;

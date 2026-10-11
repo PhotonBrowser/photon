@@ -1,15 +1,15 @@
 //! Creating, editing, deleting and confirming workspace presets.
 
-use gpui::{AnyElement, Context, Focusable, KeyDownEvent, Role, Window, div, prelude::*, px, rgb};
+use gpui::{AnyElement, Context, Focusable, KeyDownEvent, Role, Window, prelude::*, px, rgb};
 use gpui_elements::editable_text::{EditableTextState, StringStorage, text_input};
 use photon_core::{
     SidebarSide, TabLayout, WorkspaceLayout as SavedWorkspaceLayout, WorkspacePreset,
 };
 
-use super::super::super::button::{ButtonSize, button};
+use super::super::super::button::{ButtonKind, ButtonSize, button};
 use super::super::super::controls::text_field;
-use super::super::super::layout::{form_field, h_stack};
-use super::super::super::modal::{MODAL_MOTION, modal, modal_panel};
+use super::super::super::layout::{error_text, form_field, h_stack};
+use super::super::super::modal::{MODAL_MOTION, dialog_title, modal, modal_panel};
 use super::super::super::settings::Settings;
 use super::super::super::{metrics, theme::ThemeColors};
 use super::super::layout::secondary_text;
@@ -225,11 +225,11 @@ impl SettingsPage {
                 }
                 cx.stop_propagation();
             }))
-            .child(div().font_weight(gpui::FontWeight::SEMIBOLD).child(title))
+            .child(dialog_title(title, palette))
             .child(name_field)
             .child(layout_fields);
         if draft.invalid {
-            panel = panel.child(secondary_text(
+            panel = panel.child(error_text(
                 if editing {
                     "Enter a name of up to 64 characters."
                 } else {
@@ -245,7 +245,8 @@ impl SettingsPage {
                 .child(button(
                     "settings-preset-cancel",
                     "Cancel",
-                    false,
+                    ButtonKind::Secondary,
+                    true,
                     ButtonSize::Regular,
                     palette,
                     Box::new(cx.listener(|this, _, _, cx| this.cancel_workspace_preset(cx))),
@@ -257,6 +258,7 @@ impl SettingsPage {
                     } else {
                         "Create preset"
                     },
+                    ButtonKind::Primary,
                     true,
                     ButtonSize::Regular,
                     palette,
@@ -290,14 +292,13 @@ impl SettingsPage {
                 if event.keystroke.modifiers.modified() {
                     return;
                 }
-                match event.keystroke.key.as_str() {
-                    "enter" => this.confirm_delete_workspace_preset(cx),
-                    "escape" => this.cancel_delete_workspace_preset(cx),
-                    _ => return,
+                // Enter does not delete: only the button does.
+                if event.keystroke.key == "escape" {
+                    this.cancel_delete_workspace_preset(cx);
+                    cx.stop_propagation();
                 }
-                cx.stop_propagation();
             }))
-            .child(div().font_weight(gpui::FontWeight::SEMIBOLD).child(title))
+            .child(dialog_title(title, palette))
             .child(secondary_text(message, palette))
             .child(
                 h_stack()
@@ -306,7 +307,8 @@ impl SettingsPage {
                     .child(button(
                         "settings-delete-preset-cancel",
                         "Cancel",
-                        false,
+                        ButtonKind::Secondary,
+                        true,
                         ButtonSize::Regular,
                         palette,
                         Box::new(
@@ -316,6 +318,7 @@ impl SettingsPage {
                     .child(button(
                         "settings-delete-preset-confirm",
                         "Delete preset",
+                        ButtonKind::Destructive,
                         true,
                         ButtonSize::Regular,
                         palette,

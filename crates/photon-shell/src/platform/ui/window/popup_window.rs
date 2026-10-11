@@ -1,8 +1,8 @@
 //! The reduced browser window used for site-created browsing contexts.
 
 use gpui::{
-    App, Context, Entity, FocusHandle, KeyDownEvent, Render, Role, Subscription, Window, div,
-    prelude::*, px, rgb,
+    AnyElement, App, Context, Entity, FocusHandle, Render, Subscription, Window, div, prelude::*,
+    px, rgb,
 };
 use std::rc::Rc;
 
@@ -10,8 +10,8 @@ use crate::platform::engine::{EngineRuntime, RequestedWebView};
 
 use super::super::js_dialog::DialogHost;
 use super::super::layout::v_stack;
-use super::super::modal::{modal, modal_panel};
-use super::super::motion::Transition;
+use super::super::modal::MODAL_MOTION;
+use super::super::motion::Presence;
 use super::super::settings::Settings;
 use super::super::titlebar::titlebar;
 use super::super::{
@@ -19,6 +19,7 @@ use super::super::{
     theme::{ThemeColors, palette},
 };
 use super::content::{create_webview_from_session, follow_appearance};
+use super::popups::popup_confirmation_dialog;
 use super::window_settings;
 
 struct PendingPopup {
@@ -31,6 +32,8 @@ struct MinimalPopupWindow {
     runtime: Rc<EngineRuntime>,
     pending_popups: Vec<PendingPopup>,
     confirmation_focus: FocusHandle,
+    /// Keeps the pop-up confirmation drawn while it fades away.
+    popup_presence: Presence<String>,
     /// The page's JavaScript dialog, as a tab shows it.
     dialog: DialogHost,
     _webview_subscription: Subscription,
@@ -83,6 +86,7 @@ pub(super) fn open_minimal_window(
                 runtime,
                 pending_popups: Vec::new(),
                 confirmation_focus: cx.focus_handle(),
+                popup_presence: Presence::default(),
                 dialog: DialogHost::default(),
                 _webview_subscription: webview_subscription,
                 // Follow theme and transparency changes made in any window.
@@ -119,75 +123,23 @@ impl MinimalPopupWindow {
     }
 
     fn popup_confirmation(
-        &self,
+        &mut self,
         palette: ThemeColors,
         cx: &mut Context<Self>,
-    ) -> Option<impl IntoElement + use<>> {
-        let popup = self.pending_popups.first()?;
-        let origin = popup.origin.clone();
-        let panel = modal_panel(palette)
-            .id("popup-confirmation-panel")
-            .role(Role::AlertDialog)
-            .aria_label("Allow pop-up window")
-            .aria_description(format!("{} requested a separate window", origin))
-            .aria_modal(true)
-            .track_focus(&self.confirmation_focus)
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                if event.keystroke.modifiers.modified() {
-                    return;
-                }
-                match event.keystroke.key.as_str() {
-                    "escape" => this.block_pending_popup(window, cx),
-                    "enter" => this.allow_pending_popup(window, cx),
-                    _ => return,
-                }
-                cx.stop_propagation();
-            }))
-            .child(
-                div()
-                    .text_size(px(metrics::MENU_FONT_SIZE))
-                    .child("Allow this page to open a separate window?"),
-            )
-            .child(
-                div()
-                    .text_size(px(metrics::TAB_FONT_SIZE))
-                    .text_color(rgb(palette.text_secondary))
-                    .truncate()
-                    .child(origin),
-            )
-            .child(
-                super::super::layout::h_stack()
-                    .items_center()
-                    .justify_end()
-                    .gap(px(metrics::BUTTON_GAP))
-                    .child(super::super::button::button(
-                        "popup-confirmation-block",
-                        "Block",
-                        false,
-                        super::super::button::ButtonSize::Regular,
-                        palette,
-                        Box::new(cx.listener(|this, _, window, cx| {
-                            cx.stop_propagation();
-                            this.block_pending_popup(window, cx);
-                        })),
-                    ))
-                    .child(super::super::button::button(
-                        "popup-confirmation-allow",
-                        "Open Window",
-                        true,
-                        super::super::button::ButtonSize::Regular,
-                        palette,
-                        Box::new(cx.listener(|this, _, window, cx| {
-                            cx.stop_propagation();
-                            this.allow_pending_popup(window, cx);
-                        })),
-                    )),
-            );
-        Some(modal(
-            "popup-confirmation",
-            Transition::Enter,
+    ) -> Option<AnyElement> {
+        let origin = self
+            .pending_popups
+            .first()
+            .map(|popup| popup.origin.clone());
+        let (origin, transition) = self.popup_presence.sync(origin, MODAL_MOTION, cx)?;
+        Some(popup_confirmation_dialog(
+            origin,
+            transition,
+            &self.confirmation_focus,
             palette,
-            panel,
+            Self::block_pending_popup,
+            Self::allow_pending_popup,
+            cx,
         ))
     }
 

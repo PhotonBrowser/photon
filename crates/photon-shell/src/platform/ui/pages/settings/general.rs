@@ -5,7 +5,7 @@ use gpui::{App, prelude::*, px, rgb};
 use std::time::Duration;
 
 use super::super::super::super::default_browser::DefaultBrowser;
-use super::super::super::button::{ButtonSize, button};
+use super::super::super::button::{ButtonKind, ButtonSize, button};
 use super::super::super::layout::v_stack;
 use super::super::super::settings::Settings;
 use super::super::super::{metrics, theme::ThemeColors};
@@ -55,9 +55,10 @@ fn default_browser(palette: ThemeColors) -> impl IntoElement {
         DefaultBrowser::NotDefault => (
             button(
                 "settings-make-default-browser",
-                "Make Default",
-                false,
-                ButtonSize::Small,
+                "Make default",
+                ButtonKind::Secondary,
+                true,
+                ButtonSize::Regular,
                 palette,
                 Box::new(|_, _, cx| make_default_browser(cx)),
             )
@@ -66,7 +67,7 @@ fn default_browser(palette: ThemeColors) -> impl IntoElement {
         ),
         DefaultBrowser::Unavailable => (
             div_text("Unavailable", palette).into_any_element(),
-            format!("Open {name} from its app, as `photon run` does, to make it the default."),
+            format!("{name} can become the default browser once it is opened as an app."),
         ),
     };
     v_stack()

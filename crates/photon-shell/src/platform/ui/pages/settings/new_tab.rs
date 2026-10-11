@@ -3,7 +3,7 @@
 
 use gpui::{App, prelude::*, px};
 
-use super::super::super::button::{ButtonSize, button};
+use super::super::super::button::{ButtonKind, ButtonSize, button};
 use super::super::super::controls::choices;
 use super::super::super::layout::{h_stack, v_stack};
 use super::super::super::{metrics, theme::ThemeColors};
@@ -36,7 +36,8 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
                 .child(button(
                     "settings-new-tab-restore",
                     "Restore removed shortcuts",
-                    false,
+                    ButtonKind::Secondary,
+                    true,
                     ButtonSize::Small,
                     palette,
                     options.restore_removed(),

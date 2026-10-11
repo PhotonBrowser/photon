@@ -19,6 +19,22 @@ pub(super) fn action_kbd(action: &dyn Action, palette: ThemeColors, cx: &App) ->
     Some(kbd(binding, palette))
 }
 
+/// The keys bound to `action` as text, such as "⌘⇧T" on macOS or
+/// "Ctrl+Shift+T" elsewhere, for a sentence that mentions them.
+pub(super) fn action_keys(action: &dyn Action, cx: &App) -> Option<String> {
+    let keymap = cx.key_bindings();
+    let keymap = keymap.borrow();
+    let binding = keymap.bindings_for_action(action).last()?;
+    let keystrokes = binding.keystrokes().iter().map(|keystroke| {
+        keycap_labels(keystroke.modifiers(), keystroke.key(), MAC)
+            .iter()
+            .map(SharedString::as_ref)
+            .collect::<Vec<_>>()
+            .join(if MAC { "" } else { "+" })
+    });
+    Some(keystrokes.collect::<Vec<_>>().join(" "))
+}
+
 /// The keycaps for `binding`, one keystroke after another.
 pub(super) fn kbd(binding: &KeyBinding, palette: ThemeColors) -> Div {
     let caps = binding

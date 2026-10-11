@@ -1,10 +1,10 @@
 //! Resetting every setting to its default, after asking.
 
-use gpui::{AnyElement, Context, KeyDownEvent, Role, Window, div, prelude::*, px, rgb};
+use gpui::{AnyElement, Context, KeyDownEvent, Role, Window, prelude::*, px};
 
-use super::super::super::button::{ButtonSize, button};
+use super::super::super::button::{ButtonKind, ButtonSize, button};
 use super::super::super::layout::h_stack;
-use super::super::super::modal::{MODAL_MOTION, modal, modal_panel};
+use super::super::super::modal::{MODAL_MOTION, dialog_title, modal, modal_panel};
 use super::super::super::settings::Settings;
 use super::super::super::{metrics, theme::ThemeColors};
 use super::super::layout::secondary_text;
@@ -20,7 +20,8 @@ impl SettingsPage {
         button(
             "settings-reset",
             "Reset to defaults",
-            false,
+            ButtonKind::Secondary,
+            true,
             ButtonSize::Small,
             palette,
             Box::new(cx.listener(|this, _, window, cx| this.ask_to_reset(window, cx))),
@@ -57,24 +58,17 @@ impl SettingsPage {
             .aria_label("Reset settings")
             .aria_modal(true)
             .track_focus(&self.reset_focus)
-            .text_size(px(metrics::INTERNAL_PAGE_BODY_SIZE))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                 if event.keystroke.modifiers.modified() {
                     return;
                 }
-                match event.keystroke.key.as_str() {
-                    "enter" => this.reset(cx),
-                    "escape" => this.set_confirming_reset(false, cx),
-                    _ => return,
+                // Enter does not reset: only the button does.
+                if event.keystroke.key == "escape" {
+                    this.set_confirming_reset(false, cx);
+                    cx.stop_propagation();
                 }
-                cx.stop_propagation();
             }))
-            .child(
-                div()
-                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .text_color(rgb(palette.text_primary))
-                    .child("Reset all settings?"),
-            )
+            .child(dialog_title("Reset all settings?", palette))
             .child(secondary_text(
                 "Appearance, layout, search, the new tab page, tabs and sites go back to \
                  their defaults. Your favourites and shortcuts stay.",
@@ -87,7 +81,8 @@ impl SettingsPage {
                     .child(button(
                         "settings-reset-cancel",
                         "Cancel",
-                        false,
+                        ButtonKind::Secondary,
+                        true,
                         ButtonSize::Regular,
                         palette,
                         Box::new(
@@ -97,6 +92,7 @@ impl SettingsPage {
                     .child(button(
                         "settings-reset-confirm",
                         "Reset",
+                        ButtonKind::Destructive,
                         true,
                         ButtonSize::Regular,
                         palette,

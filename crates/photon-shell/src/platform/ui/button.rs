@@ -1,8 +1,9 @@
 //! Text buttons for alerts and dialogs.
 
-use gpui::{Div, Role, Stateful, prelude::*, px, rgb, rgba};
+use gpui::{Div, ElementId, Role, SharedString, Stateful, prelude::*, px, rgb, rgba};
 
 use super::ClickHandler;
+use super::controls::FocusRing;
 use super::controls::OwnsClicks;
 use super::icons::more_icon;
 use super::layout::{ControlSurface, h_stack};
@@ -17,16 +18,31 @@ pub(super) enum ButtonSize {
     Small,
 }
 
-/// A labelled button. The `primary` button is the default action and is
-/// filled; others are plain until hovered.
+/// What a labelled button does, which sets how it looks.
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum ButtonKind {
+    /// The default action, filled with the accent.
+    Primary,
+    /// Any other action, plain until hovered.
+    Secondary,
+    /// An action that deletes or resets, in the error colour. It is never
+    /// the default, so Enter does not run it.
+    Destructive,
+}
+
+/// A labelled button. A disabled one is dimmed, ignores clicks and is left
+/// out of the tab order. Callers can name it more fully for accessibility
+/// with `aria_label`, as when several rows share a label.
 pub(super) fn button(
-    id: &'static str,
-    label: &'static str,
-    primary: bool,
+    id: impl Into<ElementId>,
+    label: impl Into<SharedString>,
+    kind: ButtonKind,
+    enabled: bool,
     size: ButtonSize,
     palette: ThemeColors,
     on_click: ClickHandler,
-) -> impl IntoElement {
+) -> Stateful<Div> {
+    let label = label.into();
     let (height, min_width, padding, font_size) = match size {
         ButtonSize::Regular => (
             metrics::BUTTON_HEIGHT,
@@ -41,13 +57,14 @@ pub(super) fn button(
             metrics::SMALL_BUTTON_FONT_SIZE,
         ),
     };
+    let primary = kind == ButtonKind::Primary;
     let button = h_stack()
         .id(id)
         .role(Role::Button)
-        .aria_label(label)
-        .tab_index(0)
+        .aria_label(label.clone())
+        .aria_disabled(!enabled)
         .focus_visible(|style| {
-            style.border_1().border_color(rgb(if primary {
+            style.border_color(rgb(if primary {
                 palette.on_chosen
             } else {
                 palette.chosen
@@ -61,24 +78,29 @@ pub(super) fn button(
         .px(px(padding))
         .control_surface(palette)
         .text_size(px(font_size))
-        .owns_clicks()
-        .on_click(on_click)
         .child(label);
-
-    if primary {
-        button
+    let button = match kind {
+        ButtonKind::Primary => button
             .bg(rgb(palette.chosen))
             .border_color(rgb(palette.chosen))
-            .text_color(rgb(palette.on_chosen))
-            .hover(|style| {
-                style
-                    .bg(rgb(palette.chosen_hover))
-                    .border_color(rgb(palette.chosen_hover))
-            })
-    } else {
-        button
-            .text_color(rgb(palette.text_primary))
-            .hover(|style| style.bg(rgba(palette.selected_surface)))
+            .text_color(rgb(palette.on_chosen)),
+        ButtonKind::Secondary => button.text_color(rgb(palette.text_primary)),
+        ButtonKind::Destructive => button.text_color(rgb(palette.error)),
+    };
+    if !enabled {
+        return button.opacity(metrics::DISABLED_OPACITY);
+    }
+    let button = button.tab_index(0).owns_clicks().on_click(on_click);
+    match kind {
+        ButtonKind::Primary => button.hover(|style| {
+            style
+                .bg(rgb(palette.chosen_hover))
+                .border_color(rgb(palette.chosen_hover))
+        }),
+        ButtonKind::Secondary => button.hover(|style| style.bg(rgba(palette.surface_hover))),
+        ButtonKind::Destructive => {
+            button.hover(|style| style.bg(rgba(palette.error_hover_surface)))
+        }
     }
 }
 
@@ -98,7 +120,7 @@ pub(super) fn icon_button(
         .role(Role::Button)
         .aria_label(label)
         .aria_disabled(!enabled)
-        .focus_visible(|style| style.border_1().border_color(rgb(palette.chosen)))
+        .focus_ring(palette)
         .flex_shrink_0()
         .items_center()
         .justify_center()
@@ -135,7 +157,7 @@ pub(super) fn toolbar_button(
         .role(Role::Button)
         .aria_label(label)
         .aria_disabled(!enabled)
-        .focus_visible(|style| style.border_1().border_color(rgb(palette.chosen)))
+        .focus_ring(palette)
         .flex_shrink_0()
         .items_center()
         .justify_center()
@@ -164,7 +186,7 @@ pub(super) fn menu_button(
         .role(Role::Button)
         .aria_label("Open browser menu")
         .tab_index(tab_index)
-        .focus_visible(|style| style.border_1().border_color(rgb(palette.chosen)))
+        .focus_ring(palette)
         .flex_shrink_0()
         .items_center()
         .justify_center()

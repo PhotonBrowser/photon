@@ -108,6 +108,8 @@ struct BrowserWindow {
     /// The active tab's open JavaScript dialog.
     dialog: DialogHost,
     pending_popups: VecDeque<PendingPopup>,
+    /// Keeps the pop-up confirmation drawn while it fades away.
+    popup_presence: Presence<String>,
     popup_confirmation_focus: FocusHandle,
     /// The title last given to the window, so it changes only with the page.
     window_title: String,
@@ -348,6 +350,7 @@ fn open_browser_window(
                 find_bar: None,
                 dialog: DialogHost::default(),
                 pending_popups: VecDeque::new(),
+                popup_presence: Presence::default(),
                 popup_confirmation_focus: cx.focus_handle(),
                 root_focus: cx.focus_handle(),
                 window_title: photon_brand::NAME.to_owned(),

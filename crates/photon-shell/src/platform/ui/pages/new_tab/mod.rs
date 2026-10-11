@@ -11,7 +11,9 @@ mod options;
 mod shortcut_form;
 mod tiles;
 
-use gpui::{Context, ObjectFit, Render, Subscription, Window, div, img, prelude::*, px};
+use gpui::{
+    Context, FocusHandle, ObjectFit, Render, Subscription, Window, div, img, prelude::*, px,
+};
 
 use super::super::history::BrowsingHistory;
 use super::super::icons::photon_logo;
@@ -39,10 +41,14 @@ pub(in super::super) struct NewTabPage {
     customising: bool,
     /// Keeps the closed customise panel drawn while it animates away.
     customise_presence: Presence<()>,
+    /// The customise button, which takes focus back as the panel closes.
+    customise_focus: FocusHandle,
     /// The shortcut tile under the pointer, which offers to be removed.
     hovered: Option<usize>,
     /// The form for adding a shortcut, while it is open.
     adding: Option<ShortcutForm>,
+    /// Keeps the closed form drawn while it fades away.
+    adding_presence: Presence<ShortcutForm>,
     _settings_observer: Subscription,
 }
 
@@ -52,15 +58,17 @@ impl NewTabPage {
             context,
             customising: false,
             customise_presence: Presence::default(),
+            customise_focus: cx.focus_handle(),
             hovered: None,
             adding: None,
+            adding_presence: Presence::default(),
             // Follow changes made here, in settings, or in another window.
             _settings_observer: cx.observe_global::<Settings>(|_, cx| cx.notify()),
         }
     }
 
-    fn toggle_customising(&mut self, cx: &mut Context<Self>) {
-        self.customising = !self.customising;
+    fn set_customising(&mut self, customising: bool, cx: &mut Context<Self>) {
+        self.customising = customising;
         cx.notify();
     }
 

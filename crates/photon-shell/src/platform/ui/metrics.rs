@@ -116,11 +116,13 @@ pub(super) const MODAL_PADDING: f32 = 18.0;
 pub(super) const MODAL_GAP: f32 = 12.0;
 pub(super) const MODAL_SURFACE_INSET: f32 = 16.0;
 pub(super) const DIALOG_MESSAGE_MAX_HEIGHT: f32 = 240.0;
+/// Every dialog's title, and the text under it.
+pub(super) const DIALOG_TITLE_SIZE: f32 = 15.0;
+pub(super) const DIALOG_TEXT_SIZE: f32 = 13.0;
 /// The keyboard shortcuts dialog, wider than a modal's default for its
 /// names and keys, and scrolling past this height.
 pub(super) const SHORTCUTS_DIALOG_WIDTH: f32 = 460.0;
 pub(super) const SHORTCUTS_DIALOG_MAX_HEIGHT: f32 = 520.0;
-pub(super) const SHORTCUTS_DIALOG_TITLE_SIZE: f32 = 16.0;
 
 /// The address field in the toolbar.
 pub(super) const OMNIBOX_HEIGHT: f32 = 28.0;

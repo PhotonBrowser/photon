@@ -2,8 +2,8 @@
 //! the keys bound to it now. Escape or its close button dismisses it.
 
 use gpui::{
-    Context, EventEmitter, FocusHandle, Focusable, FontWeight, KeyDownEvent, Render, Role, Window,
-    div, prelude::*, px, rgb, rgba,
+    Context, EventEmitter, FocusHandle, Focusable, KeyDownEvent, Render, Role, Window, div,
+    prelude::*, px, rgb, rgba,
 };
 use photon_shortcuts::{ShortcutGroup, shortcut_groups};
 
@@ -11,7 +11,7 @@ use super::button::icon_button;
 use super::icons::close_icon;
 use super::kbd::action_kbd;
 use super::layout::{h_stack, v_stack};
-use super::modal::modal_panel;
+use super::modal::{dialog_title, modal_panel};
 use super::{metrics, theme::ThemeColors, theme::palette};
 
 pub(super) enum ShortcutsDialogEvent {
@@ -44,12 +44,7 @@ impl Render for ShortcutsDialog {
         let header = h_stack()
             .items_center()
             .justify_between()
-            .child(
-                div()
-                    .text_size(px(metrics::SHORTCUTS_DIALOG_TITLE_SIZE))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child("Keyboard Shortcuts"),
-            )
+            .child(dialog_title("Keyboard shortcuts", palette))
             .child(icon_button(
                 "keyboard-shortcuts-close",
                 "Close",

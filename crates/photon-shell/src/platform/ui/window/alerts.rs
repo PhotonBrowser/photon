@@ -164,11 +164,12 @@ impl BrowserWindow {
                     action: Some(NoticeAction::Reload),
                 },
                 None => {
-                    let error = webview.as_ref()?.read(cx).state.error.clone()?;
+                    // The Engine's error is for the log; the chip says it plainly.
+                    webview.as_ref()?.read(cx).state.error.as_ref()?;
                     Notice {
                         id: "page-error",
                         icon: ChipIcon::Problem,
-                        message: SharedString::from(format!("Page error: {error}")),
+                        message: SharedString::new_static("This page couldn't be shown"),
                         expires_at: None,
                         action: Some(NoticeAction::Reload),
                     }

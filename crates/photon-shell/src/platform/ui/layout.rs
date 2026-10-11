@@ -1,6 +1,6 @@
 //! Reusable shell layout primitives.
 
-use gpui::{Div, FontWeight, SharedString, div, prelude::*, px, rgb, rgba};
+use gpui::{Div, FontWeight, SharedString, Stateful, div, prelude::*, px, rgb, rgba};
 
 use super::{metrics, theme::ThemeColors};
 
@@ -36,10 +36,18 @@ pub(super) fn form_field(
 }
 
 /// Secondary text that supports a control without competing with its label.
-pub(super) fn secondary_text(
-    text: impl Into<SharedString>,
-    palette: ThemeColors,
-) -> impl IntoElement {
+/// A short error, such as why a form cannot be saved, in the error colour
+/// and read out as it appears.
+pub(super) fn error_text(text: impl Into<SharedString>, palette: ThemeColors) -> Stateful<Div> {
+    div()
+        .id("form-error")
+        .aria_live(gpui::accesskit::Live::Polite)
+        .text_size(px(metrics::TAB_FONT_SIZE))
+        .text_color(rgb(palette.error))
+        .child(text.into())
+}
+
+pub(super) fn secondary_text(text: impl Into<SharedString>, palette: ThemeColors) -> Div {
     div()
         .text_size(px(metrics::TAB_FONT_SIZE))
         .text_color(rgb(palette.text_secondary))

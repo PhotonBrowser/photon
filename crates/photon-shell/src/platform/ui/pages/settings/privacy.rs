@@ -6,7 +6,7 @@ use photon_core::ClearBrowsingData;
 use photon_storage::DataUsage;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use super::super::super::button::{ButtonSize, button};
+use super::super::super::button::{ButtonKind, ButtonSize, button};
 use super::super::super::controls::{Choice, choices};
 use super::super::super::history::BrowsingHistory;
 use super::super::super::layout::{h_stack, v_stack};
@@ -237,14 +237,11 @@ impl SettingsPage {
                     .child(button(
                         "settings-clear-data",
                         button_label,
-                        true,
+                        ButtonKind::Destructive,
+                        clickable,
                         ButtonSize::Regular,
                         palette,
-                        Box::new(cx.listener(move |this, _, _, cx| {
-                            if clickable {
-                                this.clear(cx);
-                            }
-                        })),
+                        Box::new(cx.listener(|this, _, _, cx| this.clear(cx))),
                     )),
             )
     }

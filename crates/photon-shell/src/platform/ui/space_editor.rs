@@ -9,12 +9,12 @@ use gpui_elements::editable_text::{EditableTextState, StringStorage, text_input}
 use photon_core::{SidebarSide, Space, TabLayout, WindowColor, WorkspaceLayout};
 use std::rc::Rc;
 
-use super::button::{ButtonSize, button};
+use super::button::{ButtonKind, ButtonSize, button};
 use super::color_picker::color_picker;
 use super::controls::{Choice, text_field};
 use super::dropdown::dropdown;
-use super::layout::{form_field, h_stack, secondary_text, v_stack};
-use super::modal::modal_panel;
+use super::layout::{error_text, form_field, h_stack, v_stack};
+use super::modal::{dialog_title, modal_panel};
 use super::settings::Settings;
 use super::{metrics, theme::palette};
 
@@ -246,7 +246,8 @@ impl Render for SpaceEditor {
                 } else {
                     "New preset…"
                 },
-                false,
+                ButtonKind::Secondary,
+                true,
                 ButtonSize::Regular,
                 palette,
                 Box::new(cx.listener(|this, _, window, cx| {
@@ -297,8 +298,8 @@ impl Render for SpaceEditor {
                 .child(name_field)
                 .child(layout_fields);
             if self.invalid_preset {
-                form.child(secondary_text(
-                    "Enter a name up to 64 characters. The profile can have up to 32 presets.",
+                form.child(error_text(
+                    "Enter a name of up to 64 characters. The profile can have up to 32 presets.",
                     palette,
                 ))
             } else {
@@ -322,7 +323,7 @@ impl Render for SpaceEditor {
                 }
                 cx.stop_propagation();
             }))
-            .child(div().font_weight(gpui::FontWeight::SEMIBOLD).child(title))
+            .child(dialog_title(title, palette))
             .child(form_field(
                 "Space name",
                 text_field(
@@ -345,7 +346,8 @@ impl Render for SpaceEditor {
                     .child(button(
                         "space-editor-cancel",
                         "Cancel",
-                        false,
+                        ButtonKind::Secondary,
+                        true,
                         ButtonSize::Regular,
                         palette,
                         Box::new(cx.listener(|_, _, _, cx| cx.emit(SpaceEditorEvent::Cancel))),
@@ -353,6 +355,7 @@ impl Render for SpaceEditor {
                     .child(button(
                         "space-editor-save",
                         confirm,
+                        ButtonKind::Primary,
                         true,
                         ButtonSize::Regular,
                         palette,

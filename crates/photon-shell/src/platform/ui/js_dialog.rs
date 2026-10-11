@@ -2,7 +2,7 @@
 
 use gpui::{
     AnyElement, App, Context, Entity, FocusHandle, Focusable, KeyDownEvent, Render, Role,
-    Subscription, Window, div, prelude::*, px, rgb,
+    Subscription, Window, div, prelude::*, px,
 };
 use gpui_elements::editable_text::{
     EditableTextState, StringStorage,
@@ -11,10 +11,10 @@ use gpui_elements::editable_text::{
 };
 use photon_core::{DialogKind, DialogRequest};
 
-use super::button::{ButtonSize, button};
+use super::button::{ButtonKind, ButtonSize, button};
 use super::controls::text_field;
 use super::layout::h_stack;
-use super::modal::{MODAL_MOTION, modal, modal_panel};
+use super::modal::{MODAL_MOTION, dialog_title, modal, modal_panel};
 use super::motion::{Presence, Transition};
 use super::{PhotonWebView, metrics, theme::palette};
 
@@ -173,7 +173,8 @@ impl Render for JavaScriptDialog {
             buttons = buttons.child(button(
                 "javascript-dialog-cancel",
                 "Cancel",
-                false,
+                ButtonKind::Secondary,
+                true,
                 ButtonSize::Regular,
                 palette,
                 Box::new(cx.listener(|this, _, _, cx| {
@@ -185,6 +186,7 @@ impl Render for JavaScriptDialog {
         buttons = buttons.child(button(
             "javascript-dialog-ok",
             "OK",
+            ButtonKind::Primary,
             true,
             ButtonSize::Regular,
             palette,
@@ -212,19 +214,12 @@ impl Render for JavaScriptDialog {
                 }
                 cx.stop_propagation();
             }))
-            .child(
-                div()
-                    .text_size(px(metrics::TAB_FONT_SIZE))
-                    .text_color(rgb(palette.text_secondary))
-                    .truncate()
-                    .child(self.request.title.clone()),
-            )
+            .child(dialog_title(self.request.title.clone(), palette).truncate())
             .child(
                 div()
                     .id("javascript-dialog-message")
                     .max_h(px(metrics::DIALOG_MESSAGE_MAX_HEIGHT))
                     .overflow_y_scroll()
-                    .text_size(px(metrics::MENU_FONT_SIZE))
                     .child(self.request.message.clone()),
             );
 

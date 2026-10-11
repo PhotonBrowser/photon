@@ -1,8 +1,10 @@
 //! The tabs section: what closing the last tab does, and closing tabs left
 //! unused.
 
-use gpui::{App, prelude::*, px};
+use gpui::{App, SharedString, prelude::*, px};
+use photon_shortcuts::ReopenClosedTab;
 
+use super::super::super::kbd::action_keys;
 use super::super::super::layout::v_stack;
 use super::super::super::settings::Settings;
 use super::super::super::{metrics, theme::ThemeColors};
@@ -14,7 +16,7 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
     let current = Settings::get(cx);
     let close_window = current.close_window_with_last_tab;
     let archive = current.archive_tabs;
-    let setting = |row, note| {
+    let setting = |row, note: SharedString| {
         v_stack()
             .gap(px(metrics::MENU_ITEM_GAP))
             .child(group(palette).child(row))
@@ -31,7 +33,7 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
                 change(move |settings| settings.close_window_with_last_tab = !close_window),
             )
             .into_any_element(),
-            "When off, closing the last tab leaves the window open without tabs.",
+            "When off, closing the last tab leaves the window open without tabs.".into(),
         ))
         .child(setting(
             switch_row(
@@ -42,6 +44,11 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
                 change(move |settings| settings.archive_tabs = !archive),
             )
             .into_any_element(),
-            "Pinned tabs stay. Closed tabs can be reopened with ⌘⇧T.",
+            match action_keys(&ReopenClosedTab, cx) {
+                Some(keys) => format!("Pinned tabs stay. Closed tabs can be reopened with {keys}."),
+                None => "Pinned tabs stay. Closed tabs can be reopened from the History menu."
+                    .to_owned(),
+            }
+            .into(),
         ))
 }

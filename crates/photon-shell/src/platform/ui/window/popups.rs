@@ -1,12 +1,12 @@
 //! Confirmation and routing for site-requested browsing contexts.
 
-use gpui::{Context, Entity, KeyDownEvent, Role, Window, div, prelude::*, px, rgb};
+use gpui::{AnyElement, Context, Entity, FocusHandle, KeyDownEvent, Role, Window, prelude::*, px};
 
 use crate::platform::engine::RequestedWebView;
 
-use super::super::button::{ButtonSize, button};
-use super::super::layout::h_stack;
-use super::super::modal::{modal, modal_panel};
+use super::super::button::{ButtonKind, ButtonSize, button};
+use super::super::layout::{h_stack, secondary_text};
+use super::super::modal::{MODAL_MOTION, dialog_title, modal, modal_panel};
 use super::super::motion::Transition;
 use super::super::{PhotonWebView, metrics, theme::ThemeColors};
 use super::BrowserWindow;
@@ -42,87 +42,34 @@ impl BrowserWindow {
     }
 
     pub(super) fn popup_confirmation(
-        &self,
+        &mut self,
         palette: ThemeColors,
         cx: &mut Context<Self>,
-    ) -> Option<impl IntoElement + use<>> {
-        let popup = self.pending_popups.front()?;
-        let origin = popup.origin.clone();
-        let focus_handle = &self.popup_confirmation_focus;
-        let panel = modal_panel(palette)
-            .id("popup-confirmation-panel")
-            .role(Role::AlertDialog)
-            .aria_label("Allow pop-up window")
-            .aria_description(format!("{} requested a separate window", origin))
-            .aria_modal(true)
-            .track_focus(focus_handle)
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                if event.keystroke.modifiers.modified() {
-                    return;
-                }
-                match event.keystroke.key.as_str() {
-                    "escape" => this.block_pending_popup(window, cx),
-                    "enter" => this.allow_pending_popup(window, cx),
-                    _ => return,
-                }
-                cx.stop_propagation();
-            }))
-            .child(
-                div()
-                    .text_size(px(metrics::MENU_FONT_SIZE))
-                    .child("Allow this page to open a separate window?"),
-            )
-            .child(
-                div()
-                    .text_size(px(metrics::TAB_FONT_SIZE))
-                    .text_color(rgb(palette.text_secondary))
-                    .truncate()
-                    .child(origin),
-            )
-            .child(
-                h_stack()
-                    .items_center()
-                    .justify_end()
-                    .gap(px(metrics::BUTTON_GAP))
-                    .child(button(
-                        "popup-confirmation-block",
-                        "Block",
-                        false,
-                        ButtonSize::Regular,
-                        palette,
-                        Box::new(cx.listener(|this, _, window, cx| {
-                            cx.stop_propagation();
-                            this.block_pending_popup(window, cx);
-                        })),
-                    ))
-                    .child(button(
-                        "popup-confirmation-allow",
-                        "Open Window",
-                        true,
-                        ButtonSize::Regular,
-                        palette,
-                        Box::new(cx.listener(|this, _, window, cx| {
-                            cx.stop_propagation();
-                            this.allow_pending_popup(window, cx);
-                        })),
-                    )),
-            );
-        Some(modal(
-            "popup-confirmation",
-            Transition::Enter,
+    ) -> Option<AnyElement> {
+        let origin = self
+            .pending_popups
+            .front()
+            .map(|popup| popup.origin.clone());
+        let (origin, transition) = self.popup_presence.sync(origin, MODAL_MOTION, cx)?;
+        Some(popup_confirmation_dialog(
+            origin,
+            transition,
+            &self.popup_confirmation_focus,
             palette,
-            panel,
+            Self::block_pending_popup,
+            Self::allow_pending_popup,
+            cx,
         ))
     }
 
-    fn allow_pending_popup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn allow_pending_popup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(popup) = self.pending_popups.pop_front() {
             open_minimal_window(self.runtime.clone(), popup.request, cx);
         }
         self.refocus_after_popup_decision(window, cx);
     }
 
-    fn block_pending_popup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn block_pending_popup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.pending_popups.pop_front();
         self.refocus_after_popup_decision(window, cx);
     }
@@ -141,4 +88,71 @@ impl BrowserWindow {
         }
         cx.notify();
     }
+}
+
+/// Asks whether a page at `origin` may open a separate window. Enter allows
+/// it and Escape blocks it. Browser and site windows both ask this way.
+pub(super) fn popup_confirmation_dialog<V: 'static>(
+    origin: String,
+    transition: Transition,
+    focus: &FocusHandle,
+    palette: ThemeColors,
+    block: fn(&mut V, &mut Window, &mut Context<V>),
+    allow: fn(&mut V, &mut Window, &mut Context<V>),
+    cx: &mut Context<V>,
+) -> AnyElement {
+    let panel = modal_panel(palette)
+        .id("popup-confirmation-panel")
+        .role(Role::AlertDialog)
+        .aria_label("Allow pop-up window")
+        .aria_description(format!("{origin} requested a separate window"))
+        .aria_modal(true)
+        .track_focus(focus)
+        .on_key_down(cx.listener(move |this, event: &KeyDownEvent, window, cx| {
+            if event.keystroke.modifiers.modified() {
+                return;
+            }
+            match event.keystroke.key.as_str() {
+                "escape" => block(this, window, cx),
+                "enter" => allow(this, window, cx),
+                _ => return,
+            }
+            cx.stop_propagation();
+        }))
+        .child(dialog_title(
+            "Allow this page to open a separate window?",
+            palette,
+        ))
+        .child(secondary_text(origin, palette).truncate())
+        .child(
+            h_stack()
+                .items_center()
+                .justify_end()
+                .gap(px(metrics::BUTTON_GAP))
+                .child(button(
+                    "popup-confirmation-block",
+                    "Block",
+                    ButtonKind::Secondary,
+                    true,
+                    ButtonSize::Regular,
+                    palette,
+                    Box::new(cx.listener(move |this, _, window, cx| {
+                        cx.stop_propagation();
+                        block(this, window, cx);
+                    })),
+                ))
+                .child(button(
+                    "popup-confirmation-allow",
+                    "Open window",
+                    ButtonKind::Primary,
+                    true,
+                    ButtonSize::Regular,
+                    palette,
+                    Box::new(cx.listener(move |this, _, window, cx| {
+                        cx.stop_propagation();
+                        allow(this, window, cx);
+                    })),
+                )),
+        );
+    modal("popup-confirmation", transition, palette, panel).into_any_element()
 }

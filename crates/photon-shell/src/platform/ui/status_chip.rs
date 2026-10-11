@@ -2,7 +2,7 @@
 
 use gpui::{ElementId, Role, SharedString, prelude::*, px, rgb, rgba};
 
-use super::button::{ButtonSize, button, icon_button};
+use super::button::{ButtonKind, ButtonSize, button, icon_button};
 use super::controls::OwnsClicks;
 use super::icons::{check_icon, close_icon, loading_spinner, search_icon_sized, warning_icon};
 use super::layout::h_stack;
@@ -73,6 +73,7 @@ pub(super) fn status_chip(
         chip = chip.child(button(
             "status-chip-action",
             label,
+            ButtonKind::Primary,
             true,
             ButtonSize::Small,
             palette,

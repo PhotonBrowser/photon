@@ -1,6 +1,6 @@
 //! The form for adding a shortcut by name and address.
 
-use gpui::{Context, Entity, Focusable, Role, Window, div, prelude::*, px, rgb};
+use gpui::{Context, Entity, Focusable, Role, Window, prelude::*, px, rgb};
 use gpui_elements::editable_text::{
     EditableTextState, StringStorage,
     actions::{Enter, Escape},
@@ -8,17 +8,16 @@ use gpui_elements::editable_text::{
 };
 use photon_core::{OmniboxTarget, Shortcut, resolve_omnibox_input, site_name};
 
-use super::super::super::button::{ButtonSize, button};
+use super::super::super::button::{ButtonKind, ButtonSize, button};
 use super::super::super::controls::text_field;
-use super::super::super::layout::h_stack;
-use super::super::super::modal::{modal, modal_panel};
-use super::super::super::motion::Transition;
+use super::super::super::layout::{error_text, h_stack};
+use super::super::super::modal::{MODAL_MOTION, dialog_title, modal, modal_panel};
 use super::super::super::settings::Settings;
 use super::super::super::{metrics, theme::ThemeColors};
-use super::super::layout::secondary_text;
 use super::NewTabPage;
 
 /// The name and address of a shortcut being added.
+#[derive(Clone)]
 pub(super) struct ShortcutForm {
     name: Entity<EditableTextState>,
     address: Entity<EditableTextState>,
@@ -72,11 +71,15 @@ impl NewTabPage {
 
     /// A modal asking for the shortcut's name and address.
     pub(super) fn shortcut_form(
-        &self,
+        &mut self,
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> Option<impl IntoElement> {
-        let form = self.adding.as_ref()?;
+        // A closed form stays drawn while it fades away.
+        let (form, transition) =
+            self.adding_presence
+                .sync(self.adding.clone(), MODAL_MOTION, cx)?;
+        let form = &form;
         let field = |id: &'static str, state: &Entity<EditableTextState>, placeholder| {
             text_field(
                 text_input(id)
@@ -92,7 +95,6 @@ impl NewTabPage {
             .role(Role::Dialog)
             .aria_label("Add shortcut")
             .aria_modal(true)
-            .text_size(px(metrics::INTERNAL_PAGE_BODY_SIZE))
             .capture_action(cx.listener(|this, _: &Enter, _, cx| {
                 cx.stop_propagation();
                 this.finish_adding(cx);
@@ -101,15 +103,11 @@ impl NewTabPage {
                 cx.stop_propagation();
                 this.cancel_adding(cx);
             }))
-            .child(
-                div()
-                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .child("Add shortcut"),
-            )
+            .child(dialog_title("Add shortcut", palette))
             .child(field("new-tab-shortcut-name", &form.name, "Name"))
             .child(field("new-tab-shortcut-address", &form.address, "Address"));
         if form.invalid {
-            panel = panel.child(secondary_text("This address can't be opened", palette));
+            panel = panel.child(error_text("This address can't be opened", palette));
         }
         let buttons = h_stack()
             .justify_end()
@@ -117,7 +115,8 @@ impl NewTabPage {
             .child(button(
                 "new-tab-shortcut-cancel",
                 "Cancel",
-                false,
+                ButtonKind::Secondary,
+                true,
                 ButtonSize::Regular,
                 palette,
                 Box::new(cx.listener(|this, _, _, cx| this.cancel_adding(cx))),
@@ -125,6 +124,7 @@ impl NewTabPage {
             .child(button(
                 "new-tab-shortcut-add",
                 "Add",
+                ButtonKind::Primary,
                 true,
                 ButtonSize::Regular,
                 palette,
@@ -132,7 +132,7 @@ impl NewTabPage {
             ));
         Some(modal(
             "new-tab-shortcut-modal",
-            Transition::Enter,
+            transition,
             palette,
             panel.child(buttons),
         ))

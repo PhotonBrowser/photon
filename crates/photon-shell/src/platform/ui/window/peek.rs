@@ -112,7 +112,7 @@ impl BrowserWindow {
             .owns_clicks()
             .child(icon_button(
                 "peek-open-in-tab",
-                "Open in Tab",
+                "Open in tab",
                 open,
                 metrics::ICON_BUTTON_SIZE,
                 open_in_tab_icon(palette.text_primary, metrics::ICON_BUTTON_ICON_SIZE),

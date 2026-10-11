@@ -1,9 +1,8 @@
 //! The new tab page's customise button and the menu it opens above itself.
 
-use gpui::{Context, Role, deferred, div, prelude::*, px, rgb, rgba};
+use gpui::{Context, KeyDownEvent, Role, deferred, div, prelude::*, px, rgb, rgba};
 
-use super::super::super::controls::OwnsClicks;
-use super::super::super::controls::choices;
+use super::super::super::controls::{FocusRing, OwnsClicks, choices};
 use super::super::super::icons::edit_icon;
 use super::super::super::layout::{h_stack, v_stack};
 use super::super::super::menu::{
@@ -35,6 +34,23 @@ impl NewTabPage {
                         .right_0()
                         .bottom(px(metrics::SMALL_BUTTON_HEIGHT + metrics::MENU_ITEM_GAP))
                         .occlude()
+                        // A click elsewhere or Escape closes it, as any menu.
+                        .when(self.customising, |menu| {
+                            menu.on_mouse_down_out(
+                                cx.listener(|this, _, _, cx| this.set_customising(false, cx)),
+                            )
+                            .on_key_down(cx.listener(
+                                |this, event: &KeyDownEvent, window, cx| {
+                                    if event.keystroke.key == "escape"
+                                        && !event.keystroke.modifiers.modified()
+                                    {
+                                        cx.stop_propagation();
+                                        this.set_customising(false, cx);
+                                        window.focus(&this.customise_focus, cx);
+                                    }
+                                },
+                            ))
+                        })
                         .child(self.customise_menu(transition, palette, cx)),
                 )
                 .priority(1)
@@ -45,8 +61,9 @@ impl NewTabPage {
             .role(Role::Button)
             .aria_label("Customise new tab page")
             .aria_expanded(self.customising)
+            .track_focus(&self.customise_focus)
             .tab_index(0)
-            .focus_visible(|style| style.border_1().border_color(rgb(palette.chosen)))
+            .focus_ring(palette)
             .items_center()
             .gap(px(metrics::MENU_ITEM_GAP))
             .h(px(metrics::SMALL_BUTTON_HEIGHT))
@@ -57,11 +74,18 @@ impl NewTabPage {
             .bg(rgba(if self.customising {
                 palette.selected_surface
             } else {
-                palette.hover_surface
+                palette.surface
             }))
-            .hover(|style| style.bg(rgba(palette.selected_surface)))
+            .when(!self.customising, |button| {
+                button.hover(|style| style.bg(rgba(palette.surface_hover)))
+            })
             .owns_clicks()
-            .on_click(cx.listener(|this, _, _, cx| this.toggle_customising(cx)))
+            // The state when drawn: a click outside the open panel closes it
+            // on mouse down, and this click must not open it again.
+            .on_click(cx.listener({
+                let customising = self.customising;
+                move |this, _, _, cx| this.set_customising(!customising, cx)
+            }))
             .child(edit_icon(
                 palette.text_secondary,
                 metrics::ICON_BUTTON_ICON_SIZE,
