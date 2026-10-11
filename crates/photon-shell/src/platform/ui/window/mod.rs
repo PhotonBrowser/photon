@@ -111,6 +111,10 @@ struct BrowserWindow {
     popup_confirmation_focus: FocusHandle,
     /// The title last given to the window, so it changes only with the page.
     window_title: String,
+    /// Whether the window was notified since it last followed its state in
+    /// the title, menu bar and session. A page frame alone redraws the window
+    /// without notifying it, and changes none of them.
+    state_changed: bool,
     /// Holds focus when nothing in the window does, such as after a click
     /// on an empty page, so the browser's shortcuts still reach it.
     root_focus: FocusHandle,
@@ -288,6 +292,7 @@ fn open_browser_window(
             // Whatever re-renders the window's own state re-renders the chrome
             // and the overlays too.
             let chrome_subscription = cx.observe_self(|this, cx| {
+                this.state_changed = true;
                 this.chrome.update(cx, |_, cx| cx.notify());
                 this.overlays.update(cx, |_, cx| cx.notify());
             });
@@ -346,6 +351,7 @@ fn open_browser_window(
                 popup_confirmation_focus: cx.focus_handle(),
                 root_focus: cx.focus_handle(),
                 window_title: photon_brand::NAME.to_owned(),
+                state_changed: true,
                 engine_notice: None,
                 notice_expiry: None,
                 zoom_shown_at: None,

@@ -28,9 +28,11 @@ impl Render for BrowserWindow {
             window.request_animation_frame();
         }
         self.place_window_controls(window, cx);
-        self.follow_page_title(window, cx);
-        self.update_menu_bar(window, cx);
-        self.record_session(cx);
+        if std::mem::take(&mut self.state_changed) {
+            self.follow_page_title(window, cx);
+            self.update_menu_bar(window, cx);
+            self.record_session(cx);
+        }
         // Shortcuts dispatch from the focused element, so with none focused
         // they would reach nothing.
         if window.focused(cx).is_none() {
