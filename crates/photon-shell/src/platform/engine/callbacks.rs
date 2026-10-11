@@ -58,7 +58,7 @@ impl CallbackState {
     pub(super) fn set_page_error(&self, message: String) {
         self.update_webview(move |view, cx| {
             view.state.apply(EngineEvent::LoadFailed(message));
-            view.history_swipe_navigation_failed(cx);
+            view.history_swipe_navigation_failed();
             view.state_changed(cx);
         });
     }
@@ -72,9 +72,9 @@ impl CallbackState {
     }
 
     pub(super) fn navigation_committed(&self) {
-        self.update_webview(|view, cx| {
+        self.update_webview(|view, _cx| {
             view.dialogs.navigation_committed();
-            view.history_swipe_navigation_committed(cx);
+            view.history_swipe_navigation_committed();
         });
     }
 
@@ -86,6 +86,13 @@ impl CallbackState {
     ) {
         self.update_webview(move |view, cx| {
             view.history_swipe_candidate(gesture_id, back, unconsumed_delta as f32, cx);
+        });
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(super) fn vertical_overscroll(&self, gesture_id: u64, unconsumed_delta: f64) {
+        self.update_webview(move |view, cx| {
+            view.vertical_overscroll_candidate(gesture_id, unconsumed_delta as f32, cx);
         });
     }
 
@@ -525,6 +532,20 @@ pub(super) unsafe extern "C" fn on_engine_history_swipe_candidate(
         let callbacks = unsafe { &*(context.cast::<CallbackState>()) };
         callbacks.history_swipe_candidate(gesture_id, back, unconsumed_delta);
     }
+}
+
+pub(super) unsafe extern "C" fn on_engine_vertical_overscroll(
+    context: *mut c_void,
+    gesture_id: u64,
+    unconsumed_delta: f64,
+) {
+    #[cfg(target_os = "macos")]
+    if !context.is_null() {
+        let callbacks = unsafe { &*(context.cast::<CallbackState>()) };
+        callbacks.vertical_overscroll(gesture_id, unconsumed_delta);
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = (context, gesture_id, unconsumed_delta);
 }
 
 pub(super) unsafe extern "C" fn on_engine_dialog(

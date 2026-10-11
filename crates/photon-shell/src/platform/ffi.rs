@@ -87,6 +87,7 @@ pub(super) mod embedder {
         pub navigation_committed_callback: Option<unsafe extern "C" fn(*mut c_void)>,
         pub history_swipe_candidate_callback:
             Option<unsafe extern "C" fn(*mut c_void, u64, bool, f64)>,
+        pub vertical_overscroll_callback: Option<unsafe extern "C" fn(*mut c_void, u64, f64)>,
         pub crash_recovered_callback: Option<unsafe extern "C" fn(*mut c_void)>,
         pub new_web_view_callback: Option<NewWebViewCallback>,
         pub find_result_callback: Option<unsafe extern "C" fn(*mut c_void, usize, bool, usize)>,

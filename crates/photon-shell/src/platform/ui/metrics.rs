@@ -136,15 +136,21 @@ pub(super) const HISTORY_SWIPE_COMMIT_FRACTION: f32 = 0.33;
 pub(super) const HISTORY_SWIPE_FLICK_FRACTION: f32 = 0.12;
 /// Outward trackpad velocity that qualifies as a fast history swipe, in px/s.
 pub(super) const HISTORY_SWIPE_FLICK_VELOCITY: f32 = 900.0;
-/// Spring stiffness for settling a history swipe.
-pub(super) const HISTORY_SWIPE_SPRING_STIFFNESS: f32 = 420.0;
-/// Spring damping for settling a history swipe.
-pub(super) const HISTORY_SWIPE_SPRING_DAMPING: f32 = 42.0;
-/// Diameter of the arrow shown in the exposed page edge during a history swipe.
+/// Diameter of the arrow shown at the page edge during a history swipe.
 pub(super) const HISTORY_SWIPE_INDICATOR_SIZE: f32 = 42.0;
 pub(super) const HISTORY_SWIPE_INDICATOR_ICON_SIZE: f32 = 18.0;
 /// Gesture travel at which the edge arrow becomes fully visible.
 pub(super) const HISTORY_SWIPE_INDICATOR_REVEAL_DISTANCE: f32 = 20.0;
+/// Maximum vertical page-surface travel as a fraction of the viewport height.
+pub(super) const VERTICAL_OVERSCROLL_MAX_DISTANCE_FRACTION: f32 = 0.18;
+/// Absolute cap for vertical page-surface travel in logical pixels.
+pub(super) const VERTICAL_OVERSCROLL_MAX_DISTANCE: f32 = 150.0;
+/// Spring stiffness for settling vertical page overscroll.
+pub(super) const VERTICAL_OVERSCROLL_SPRING_STIFFNESS: f32 = 420.0;
+/// Spring damping for settling vertical page overscroll.
+pub(super) const VERTICAL_OVERSCROLL_SPRING_DAMPING: f32 = 42.0;
+/// Delay after a native touch phase ends before settling if momentum does not begin.
+pub(super) const VERTICAL_OVERSCROLL_END_DELAY_MS: u64 = 100;
 pub(super) const INTERNAL_PAGE_INSET: f32 = 32.0;
 pub(super) const INTERNAL_PAGE_MAX_WIDTH: f32 = 620.0;
 pub(super) const INTERNAL_PAGE_SECTION_GAP: f32 = 28.0;

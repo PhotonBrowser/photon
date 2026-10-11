@@ -288,6 +288,16 @@ impl EngineSession {
             dialog_callback: Some(on_engine_dialog),
             navigation_committed_callback: Some(on_engine_navigation_committed),
             history_swipe_candidate_callback: Some(on_engine_history_swipe_candidate),
+            vertical_overscroll_callback: {
+                #[cfg(target_os = "macos")]
+                {
+                    Some(on_engine_vertical_overscroll)
+                }
+                #[cfg(not(target_os = "macos"))]
+                {
+                    None
+                }
+            },
             crash_recovered_callback: Some(on_engine_crash_recovered),
             new_web_view_callback: Some(on_engine_new_web_view),
             find_result_callback: Some(on_engine_find_result),

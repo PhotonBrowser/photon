@@ -45,6 +45,7 @@ Photon::ViewCallbacks make_view_callbacks(
     auto dialog_callback = callbacks.dialog_callback;
     auto navigation_committed_callback = callbacks.navigation_committed_callback;
     auto history_swipe_candidate_callback = callbacks.history_swipe_candidate_callback;
+    auto vertical_overscroll_callback = callbacks.vertical_overscroll_callback;
     auto crash_recovered_callback = callbacks.crash_recovered_callback;
     auto new_web_view_callback = callbacks.new_web_view_callback;
     auto find_result_callback = callbacks.find_result_callback;
@@ -136,6 +137,10 @@ Photon::ViewCallbacks make_view_callbacks(
     result.history_swipe_candidate = [=](uint64_t gesture_id, bool back, float unconsumed_delta) {
         if (history_swipe_candidate_callback)
             history_swipe_candidate_callback(callback_data, gesture_id, back, unconsumed_delta);
+    };
+    result.vertical_overscroll = [=](uint64_t gesture_id, float unconsumed_delta) {
+        if (vertical_overscroll_callback)
+            vertical_overscroll_callback(callback_data, gesture_id, unconsumed_delta);
     };
     result.new_web_view_requested = [=](Photon::NewWebViewRequest const& request) {
         if (!new_web_view_callback)
