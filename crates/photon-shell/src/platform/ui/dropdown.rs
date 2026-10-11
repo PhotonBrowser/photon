@@ -4,13 +4,15 @@
 use std::rc::Rc;
 use std::time::Instant;
 
-use gpui::{App, ElementId, Role, Window, deferred, div, prelude::*, px, rgb, rgba};
+use gpui::{
+    App, ClickEvent, ElementId, KeyDownEvent, Role, Window, deferred, div, prelude::*, px, rgb,
+    rgba,
+};
 
-use super::controls::Choice;
-use super::controls::OwnsClicks;
+use super::controls::{Choice, FocusRing, OwnsClicks};
 use super::icons::chevron_down_icon;
 use super::layout::{ControlSurface, h_stack, v_stack};
-use super::menu::{MENU_MOTION, menu_checkbox, popover_surface};
+use super::menu::{MENU_MOTION, menu_option, popover_surface};
 use super::motion::Transition;
 use super::{metrics, theme::ThemeColors};
 
@@ -29,6 +31,10 @@ pub(super) fn dropdown(
         palette,
     }
 }
+
+type ChooseHandler = dyn Fn(&ClickEvent, &mut Window, &mut App);
+/// Opens or closes the menu.
+type SetOpen = Rc<dyn Fn(bool, &mut Window, &mut App)>;
 
 /// Whether the menu is open, and when it last closed, so it can animate
 /// away.
@@ -56,6 +62,14 @@ impl RenderOnce for Dropdown {
         } = self;
         let open_state =
             window.use_keyed_state(ElementId::from(id), cx, |_, _| OpenState::default());
+        let focus = window
+            .use_keyed_state(
+                ElementId::Name(format!("{id}-focus").into()),
+                cx,
+                |_, cx| cx.focus_handle(),
+            )
+            .read(cx)
+            .clone();
         let OpenState { open, closed_at } = *open_state.read(cx);
         // A closing menu stays drawn while it animates away, like any menu.
         let transition = if open {
@@ -66,50 +80,73 @@ impl RenderOnce for Dropdown {
         } else {
             None
         };
-        let set_open = {
+        // Closing returns focus to the control, as the menu's rows go away.
+        let set_open: SetOpen = {
             let open_state = open_state.clone();
-            move |open: bool, cx: &mut App| {
+            let focus = focus.clone();
+            Rc::new(move |open: bool, window: &mut Window, cx: &mut App| {
                 open_state.update(cx, |state, cx| {
                     *state = OpenState {
                         open,
                         closed_at: (!open).then(Instant::now),
                     };
                     cx.notify();
-                })
-            }
+                });
+                if !open {
+                    window.focus(&focus, cx);
+                }
+            })
         };
-        let chosen = options
-            .iter()
-            .find(|option| option.chosen)
-            .map(|option| option.label.clone())
+        let chosen_index = options.iter().position(|option| option.chosen);
+        let chosen = chosen_index
+            .map(|index| options[index].label.clone())
             .unwrap_or_default();
+        // Each option's action is shared by its row and the control's arrow keys.
+        let (labels, choose): (Vec<_>, Vec<Rc<ChooseHandler>>) = options
+            .into_iter()
+            .map(|option| ((option.label, option.chosen), Rc::from(option.on_choose)))
+            .unzip();
         let menu = transition.map(|transition| {
-            let set_open = Rc::new(set_open.clone());
-            let rows = options.into_iter().enumerate().map(|(index, option)| {
-                let set_open = set_open.clone();
-                let on_choose = option.on_choose;
-                menu_checkbox(
-                    (id, index),
-                    option.label,
-                    0,
-                    option.chosen,
-                    None,
-                    Box::new(move |event, window, cx| {
-                        on_choose(event, window, cx);
-                        set_open(false, cx);
-                    }),
-                    palette,
-                )
-            });
+            let rows = labels
+                .into_iter()
+                .zip(choose.iter().cloned())
+                .enumerate()
+                .map(|(index, ((label, chosen), on_choose))| {
+                    let set_open = set_open.clone();
+                    menu_option(
+                        (id, index),
+                        label,
+                        chosen,
+                        Box::new(move |event, window, cx| {
+                            on_choose(event, window, cx);
+                            set_open(false, window, cx);
+                        }),
+                        palette,
+                    )
+                });
             let close = set_open.clone();
+            let close_on_escape = set_open.clone();
             deferred(
                 div()
                     .absolute()
                     .left_0()
-                    .top(px(metrics::SEGMENT_HEIGHT + metrics::MENU_ITEM_GAP))
+                    .top(px(metrics::BUTTON_HEIGHT + metrics::MENU_ITEM_GAP))
                     .when(open, |menu| {
                         menu.occlude()
-                            .on_mouse_down_out(move |_, _, cx| close(false, cx))
+                            .on_mouse_down_out(move |_, window, cx| close(false, window, cx))
+                            // Up and Down move between the options.
+                            .on_key_down(move |event: &KeyDownEvent, window, cx| {
+                                if event.keystroke.modifiers.modified() {
+                                    return;
+                                }
+                                match event.keystroke.key.as_str() {
+                                    "escape" => close_on_escape(false, window, cx),
+                                    "down" => window.focus_next(cx),
+                                    "up" => window.focus_prev(cx),
+                                    _ => return,
+                                }
+                                cx.stop_propagation();
+                            })
                     })
                     .child(popover_surface(
                         label,
@@ -122,26 +159,55 @@ impl RenderOnce for Dropdown {
             )
             .priority(1)
         });
+        let toggle = set_open.clone();
+        let close = set_open;
         h_stack()
             .id(id)
             .relative()
             .role(Role::ComboBox)
             .aria_label(label)
             .aria_expanded(open)
+            .track_focus(&focus)
             .tab_index(0)
-            .focus_visible(|style| style.border_1().border_color(rgb(palette.chosen)))
+            .focus_ring(palette)
             .w(px(metrics::DROPDOWN_WIDTH))
-            .h(px(metrics::SEGMENT_HEIGHT))
+            .h(px(metrics::BUTTON_HEIGHT))
             .px(px(metrics::SEGMENT_HORIZONTAL_PADDING))
             .items_center()
             .justify_between()
             .control_surface(palette)
             .when(open, |control| control.bg(rgba(palette.selected_surface)))
-            .hover(|style| style.bg(rgba(palette.selected_surface)))
+            .hover(|style| style.bg(rgba(palette.surface_hover)))
             .text_size(px(metrics::BUTTON_FONT_SIZE))
             .text_color(rgb(palette.text_primary))
             .owns_clicks()
-            .on_click(move |_, _, cx| set_open(!open, cx))
+            .on_click(move |_, window, cx| toggle(!open, window, cx))
+            // Closed, Up and Down step through the options without opening
+            // the menu, as a native pop-up button does.
+            .on_key_down(move |event: &KeyDownEvent, window, cx| {
+                if event.keystroke.modifiers.modified() {
+                    return;
+                }
+                let step: isize = match event.keystroke.key.as_str() {
+                    "escape" if open => {
+                        close(false, window, cx);
+                        cx.stop_propagation();
+                        return;
+                    }
+                    "down" if !open => 1,
+                    "up" if !open => -1,
+                    _ => return,
+                };
+                cx.stop_propagation();
+                let next = chosen_index.map_or(0, |index| {
+                    (index as isize + step).clamp(0, choose.len() as isize - 1) as usize
+                });
+                if Some(next) != chosen_index
+                    && let Some(on_choose) = choose.get(next)
+                {
+                    on_choose(&ClickEvent::default(), window, cx);
+                }
+            })
             .child(div().flex_1().min_w_0().truncate().child(chosen))
             .child(chevron_down_icon(
                 palette.text_secondary,

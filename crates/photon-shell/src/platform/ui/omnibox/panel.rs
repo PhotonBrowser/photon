@@ -35,7 +35,7 @@ impl Omnibox {
                     .state(self.input.downgrade())
                     .track_focus(&input_focus)
                     .placeholder("Search or enter address")
-                    .placeholder_color(rgb(palette.text_primary))
+                    .placeholder_color(rgb(palette.text_secondary))
                     .flex_1()
                     .min_w_0()
                     .whitespace_nowrap()

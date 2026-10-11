@@ -10,6 +10,7 @@ use super::motion::{AnimateIn, Entrance, Transition};
 use super::{metrics, theme::ThemeColors};
 
 use super::ClickHandler;
+use super::controls::FocusRing;
 use super::controls::OwnsClicks;
 
 /// How menus open and close.
@@ -32,7 +33,9 @@ pub(super) fn popover_surface(
         .aria_label(label)
         .tab_group()
         .w(px(width))
-        .py(px(metrics::MENU_PADDING))
+        // Rows sit inset from the edges, so their rounded highlight sits
+        // inside the rounded surface.
+        .p(px(metrics::MENU_PADDING))
         .rounded(px(metrics::SURFACE_RADIUS))
         .border_1()
         .border_color(rgba(palette.menu_border))
@@ -66,21 +69,17 @@ pub(super) fn menu_action(
     menu_item(id, label, tab_index, Role::MenuItem, palette).on_click(on_click)
 }
 
-/// A menu row that turns something on or off, checked while it is on, with
-/// its keyboard shortcut before the check.
-pub(super) fn menu_checkbox(
+/// An option in a list box, such as a dropdown's menu, checked while chosen.
+pub(super) fn menu_option(
     id: impl Into<ElementId>,
     label: impl Into<SharedString>,
-    tab_index: isize,
-    checked: bool,
-    keys: Option<gpui::Div>,
+    chosen: bool,
     on_click: ClickHandler,
     palette: ThemeColors,
 ) -> impl IntoElement {
-    menu_item(id, label, tab_index, Role::MenuItemCheckBox, palette)
-        .aria_toggled(toggled(checked))
-        .children(keys)
-        .child(if checked {
+    menu_item(id, label, 0, Role::ListBoxOption, palette)
+        .aria_selected(chosen)
+        .child(if chosen {
             check_icon(palette.text_secondary, metrics::TOOLBAR_ICON_SIZE).into_any_element()
         } else {
             div()
@@ -135,7 +134,8 @@ fn menu_item(
 ) -> gpui::Stateful<gpui::Div> {
     menu_row(id, label.into(), role)
         .tab_index(tab_index)
-        .focus_visible(|style| style.border_1().border_color(rgb(palette.chosen)))
+        .focus_ring(palette)
+        .rounded(px(metrics::MENU_ITEM_RADIUS))
         .hover(|style| style.bg(rgba(palette.hover_surface)))
 }
 
