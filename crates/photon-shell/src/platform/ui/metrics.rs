@@ -89,6 +89,8 @@ pub(super) const FIND_RESULT_FONT_SIZE: f32 = 12.0;
 /// Distance from the page's corner to a status chip.
 pub(super) const CHIP_INSET: f32 = 10.0;
 pub(super) const CHIP_HEIGHT: f32 = 26.0;
+/// A status chip's outer radius: its action radius plus the vertical inset.
+pub(super) const CHIP_RADIUS: f32 = SMALL_BUTTON_RADIUS + (CHIP_HEIGHT - SMALL_BUTTON_HEIGHT) / 2.0;
 pub(super) const CHIP_PADDING: f32 = 10.0;
 /// Right padding beside a chip's buttons, which bring their own.
 pub(super) const CHIP_TRAILING_PADDING: f32 = 3.0;
@@ -108,6 +110,8 @@ pub(super) const ICON_BUTTON_ICON_SIZE: f32 = 13.0;
 /// Opacity of a control that cannot be used right now.
 pub(super) const DISABLED_OPACITY: f32 = 0.4;
 pub(super) const SMALL_BUTTON_HEIGHT: f32 = 20.0;
+/// Small buttons use a pill radius, matching half their height.
+pub(super) const SMALL_BUTTON_RADIUS: f32 = SMALL_BUTTON_HEIGHT / 2.0;
 pub(super) const SMALL_BUTTON_HORIZONTAL_PADDING: f32 = 9.0;
 pub(super) const SMALL_BUTTON_FONT_SIZE: f32 = 12.0;
 

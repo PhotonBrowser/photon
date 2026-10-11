@@ -43,18 +43,20 @@ pub(super) fn button(
     on_click: ClickHandler,
 ) -> Stateful<Div> {
     let label = label.into();
-    let (height, min_width, padding, font_size) = match size {
+    let (height, min_width, padding, font_size, radius) = match size {
         ButtonSize::Regular => (
             metrics::BUTTON_HEIGHT,
             metrics::BUTTON_MIN_WIDTH,
             metrics::BUTTON_HORIZONTAL_PADDING,
             metrics::BUTTON_FONT_SIZE,
+            metrics::CONTROL_RADIUS,
         ),
         ButtonSize::Small => (
             metrics::SMALL_BUTTON_HEIGHT,
             0.0,
             metrics::SMALL_BUTTON_HORIZONTAL_PADDING,
             metrics::SMALL_BUTTON_FONT_SIZE,
+            metrics::SMALL_BUTTON_RADIUS,
         ),
     };
     let primary = kind == ButtonKind::Primary;
@@ -77,6 +79,7 @@ pub(super) fn button(
         .min_w(px(min_width))
         .px(px(padding))
         .control_surface(palette)
+        .rounded(px(radius))
         .text_size(px(font_size))
         .child(label);
     let button = match kind {

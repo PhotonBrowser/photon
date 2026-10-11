@@ -1,0 +1,49 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Photon recovery test</title>
+<style>
+  :root { color-scheme: light dark; font: 16px/1.5 system-ui, sans-serif; }
+  body { max-width: 680px; margin: 12vh auto; padding: 0 24px; }
+  h1 { font-size: 1.8rem; }
+  section { margin: 1.5rem 0; padding: 1rem; border: 1px solid #8888; border-radius: 12px; }
+  button { font: inherit; padding: .7rem 1rem; margin: .35rem .35rem .35rem 0; cursor: pointer; }
+  code { overflow-wrap: anywhere; }
+  #status { position: sticky; top: 8px; padding: .8rem 1rem; border: 1px solid #8888; border-radius: 10px; background: Canvas; }
+  .spacer { min-height: 100vh; display: grid; place-items: center; opacity: .7; }
+</style>
+<h1>Photon page recovery test</h1>
+<div id="status">JavaScript heartbeat: <strong id="heartbeat">starting</strong> · Page clicks: <strong id="clicks">0</strong></div>
+<p>The heartbeat and page click count update through this page’s JavaScript. They stop during a freeze. Photon’s browser controls and compositor scrolling can remain responsive.</p>
+<section>
+  <h2>Normal page interaction</h2>
+  <button id="click-test">Click test</button>
+  <span id="click-result">Not clicked yet</span>
+</section>
+<section>
+  <h2>Temporary freeze</h2>
+  <p>Blocks JavaScript for 20 seconds. Photon should show “Page isn’t responding” after roughly 8 seconds; the heartbeat should resume at 20 seconds.</p>
+  <button id="temporary">Freeze for 20 seconds</button>
+</section>
+<section>
+  <h2>Freeze until restarted</h2>
+  <p>Blocks JavaScript indefinitely. After Photon reports the page isn’t responding, choose <strong>Restart</strong> in its status chip. The WebContent process should be replaced and this page should reload.</p>
+  <button id="permanent">Freeze until Restart</button>
+</section>
+<div class="spacer">Scroll still moving? That can be handled outside the frozen JavaScript thread.</div>
+<script>
+  let beats = 0;
+  let clicks = 0;
+  setInterval(() => { document.querySelector("#heartbeat").textContent = String(++beats); }, 250);
+  document.querySelector("#click-test").addEventListener("click", () => {
+    document.querySelector("#clicks").textContent = String(++clicks);
+    document.querySelector("#click-result").textContent = "Page JavaScript handled the click.";
+  });
+  document.querySelector("#temporary").addEventListener("click", () => {
+    const deadline = Date.now() + 20_000;
+    while (Date.now() < deadline) {}
+  });
+  document.querySelector("#permanent").addEventListener("click", () => {
+    while (true) {}
+  });
+</script>
