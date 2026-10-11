@@ -49,6 +49,17 @@ unsafe extern "C" {
     fn photon_presentation_xpc_release_object(object: *mut c_void);
 }
 
+/// An IOSurface the producer shares with the broker, as it describes it.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct BackingDescriptor {
+    pub id: u64,
+    /// The producer's pool generation, which rises when it replaces the pool.
+    pub generation: u64,
+    pub width: u32,
+    pub height: u32,
+    pub pixel_format: u32,
+}
+
 pub struct Channel(NonNull<c_void>);
 unsafe impl Send for Channel {}
 unsafe impl Sync for Channel {}
@@ -96,20 +107,23 @@ impl Channel {
     pub fn register_backing(
         &self,
         channel: &str,
-        backing: u64,
-        generation: u64,
-        width: u32,
-        height: u32,
-        pixel_format: u32,
+        backing: BackingDescriptor,
         port: mach_port_t,
     ) -> Result<()> {
+        let BackingDescriptor {
+            id,
+            generation,
+            width,
+            height,
+            pixel_format,
+        } = backing;
         let channel = CString::new(channel).context("channel ID contains NUL")?;
         ensure!(
             unsafe {
                 photon_presentation_xpc_register_backing(
                     self.0.as_ptr(),
                     channel.as_ptr(),
-                    backing,
+                    id,
                     generation,
                     width,
                     height,

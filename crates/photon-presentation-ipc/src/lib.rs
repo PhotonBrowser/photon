@@ -8,4 +8,4 @@
 mod macos;
 
 #[cfg(target_os = "macos")]
-pub use macos::{Channel, run_service};
+pub use macos::{BackingDescriptor, Channel, run_service};

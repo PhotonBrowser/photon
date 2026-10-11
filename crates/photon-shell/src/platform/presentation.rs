@@ -19,7 +19,7 @@ use std::{
 };
 
 use super::{ffi::embedder, trace};
-use photon_presentation_ipc::Channel;
+use photon_presentation_ipc::{BackingDescriptor, Channel};
 
 pub(super) struct MachPortGuard(pub(super) mach_port_t);
 impl Drop for MachPortGuard {
@@ -284,22 +284,18 @@ impl PresentationRuntime {
 
     pub(super) fn register_backing(
         &self,
-        backing: u64,
-        generation: u64,
-        width: u32,
-        height: u32,
-        pixel_format: u32,
+        descriptor: BackingDescriptor,
         port: mach_port_t,
     ) -> anyhow::Result<()> {
-        self.channel.register_backing(
-            &self.channel_id,
-            backing,
+        self.channel
+            .register_backing(&self.channel_id, descriptor, port)?;
+        let BackingDescriptor {
+            id: backing,
             generation,
             width,
             height,
             pixel_format,
-            port,
-        )?;
+        } = descriptor;
         let (imported_port, got_width, got_height, got_format) =
             self.channel
                 .import_backing(&self.channel_id, backing, generation)?;
