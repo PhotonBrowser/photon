@@ -6,13 +6,16 @@
 //! `reset` returns every setting to its default, after asking.
 
 mod appearance;
+mod general;
 mod new_tab;
 mod privacy;
 mod reset;
 mod search;
 mod sites;
 mod tabs;
+mod workspace_presets;
 
+use super::super::controls::OwnsClicks;
 use super::super::icons::{
     appearance_icon, globe_icon, grid_icon, search_icon_sized, settings_icon, shield_icon,
     sidebar_icon,
@@ -20,14 +23,17 @@ use super::super::icons::{
 use super::super::layout::{h_stack, v_stack};
 use super::super::motion::{AnimateIn, Entrance, Presence};
 use super::super::settings::Settings;
-use super::super::{metrics, theme::ThemeColors, theme::palette};
+use super::super::{ClickHandler, metrics, theme::ThemeColors, theme::palette};
 use super::layout::{heading, scrolling_column, secondary_text};
 use super::{PageContext, PageDefinition, PageIcon};
 use gpui::{
-    AnyElement, Context, ElementId, FocusHandle, FontWeight, MouseButton, Render, Role,
-    Subscription, Window, div, prelude::*, px, rgb, rgba,
+    AnyElement, Context, ElementId, FocusHandle, FontWeight, Render, Role, Subscription, Window,
+    div, prelude::*, px, rgb, rgba,
 };
+use gpui_elements::editable_text::EditableTextState;
+use photon_core::{SidebarSide, TabLayout, WorkspacePreset};
 use privacy::ClearForm;
+use std::rc::Rc;
 use std::time::Instant;
 
 /// How a picked section appears.
@@ -36,6 +42,7 @@ const SECTION_MOTION: Entrance = Entrance::fade();
 /// A part of the settings, shown on its own.
 #[derive(Clone, Copy, PartialEq)]
 enum Section {
+    General,
     Appearance,
     Search,
     NewTab,
@@ -45,7 +52,8 @@ enum Section {
 }
 
 impl Section {
-    const ALL: [Self; 6] = [
+    const ALL: [Self; 7] = [
+        Self::General,
         Self::Appearance,
         Self::Search,
         Self::NewTab,
@@ -56,6 +64,7 @@ impl Section {
 
     fn id(self) -> &'static str {
         match self {
+            Self::General => "general",
             Self::Appearance => "appearance",
             Self::Search => "search",
             Self::NewTab => "new-tab",
@@ -67,6 +76,7 @@ impl Section {
 
     fn title(self) -> &'static str {
         match self {
+            Self::General => "General",
             Self::Appearance => "Appearance",
             Self::Search => "Search",
             Self::NewTab => "New tab page",
@@ -79,6 +89,7 @@ impl Section {
     fn description(self) -> String {
         let name = photon_brand::NAME;
         match self {
+            Self::General => format!("How {name} fits in with your Mac."),
             Self::Appearance => format!("How {name} looks."),
             Self::Search => {
                 "Where searches from the address bar go, and how it shows addresses.".to_owned()
@@ -93,6 +104,7 @@ impl Section {
     fn icon(self, color: u32) -> AnyElement {
         let size = metrics::SETTINGS_SIDEBAR_ICON_SIZE;
         match self {
+            Self::General => settings_icon(color, size).into_any_element(),
             Self::Appearance => appearance_icon(color, size).into_any_element(),
             Self::Search => search_icon_sized(color, size).into_any_element(),
             Self::NewTab => grid_icon(color, size).into_any_element(),
@@ -123,19 +135,38 @@ pub(in super::super) struct SettingsPage {
     confirming_reset: bool,
     reset_presence: Presence<()>,
     reset_focus: FocusHandle,
+    workspace_preset_draft: Option<WorkspacePresetDraft>,
+    workspace_preset_presence: Presence<()>,
+    pending_delete_preset: Option<WorkspacePreset>,
+    delete_preset_presence: Presence<()>,
+    delete_preset_focus: FocusHandle,
     _settings_observer: Subscription,
+}
+
+struct WorkspacePresetDraft {
+    preset_id: Option<String>,
+    name: gpui::Entity<EditableTextState>,
+    tab_layout: TabLayout,
+    sidebar_side: SidebarSide,
+    invalid: bool,
+    _name_observer: Subscription,
 }
 
 impl SettingsPage {
     fn new(context: PageContext, cx: &mut Context<Self>) -> Self {
         Self {
             context,
-            section: Section::Appearance,
+            section: Section::General,
             section_picked_at: None,
             clearing: ClearForm::new(cx),
             confirming_reset: false,
             reset_presence: Presence::default(),
             reset_focus: cx.focus_handle(),
+            workspace_preset_draft: None,
+            workspace_preset_presence: Presence::default(),
+            pending_delete_preset: None,
+            delete_preset_presence: Presence::default(),
+            delete_preset_focus: cx.focus_handle(),
             // Follow changes made here, on the new tab page, or in another window.
             _settings_observer: cx.observe_global::<Settings>(|_, cx| cx.notify()),
         }
@@ -154,8 +185,32 @@ impl Render for SettingsPage {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = palette(window, cx);
         let section = self.section;
+        let create_preset =
+            Box::new(cx.listener(|this, _, window, cx| this.start_workspace_preset(window, cx)));
+        let page = cx.entity().downgrade();
+        let edit_preset: Rc<dyn Fn(String) -> ClickHandler> = Rc::new(move |id| {
+            let page = page.clone();
+            Box::new(move |_, window, cx| {
+                page.update(cx, |this, cx| this.edit_workspace_preset(&id, window, cx))
+                    .ok();
+            })
+        });
+        let page = cx.entity().downgrade();
+        let delete_preset: Rc<dyn Fn(String) -> ClickHandler> = Rc::new(move |id| {
+            let page = page.clone();
+            Box::new(move |_, window, cx| {
+                page.update(cx, |this, cx| {
+                    this.ask_to_delete_workspace_preset(&id, window, cx)
+                })
+                .ok();
+            })
+        });
         let body = match section {
-            Section::Appearance => appearance::settings(palette, cx).into_any_element(),
+            Section::General => general::settings(palette, cx).into_any_element(),
+            Section::Appearance => {
+                appearance::settings(palette, cx, create_preset, edit_preset, delete_preset)
+                    .into_any_element()
+            }
             Section::Search => search::settings(palette, cx).into_any_element(),
             Section::NewTab => new_tab::settings(palette, cx).into_any_element(),
             Section::Tabs => tabs::settings(palette, cx).into_any_element(),
@@ -184,6 +239,8 @@ impl Render for SettingsPage {
             _ => content.into_any_element(),
         };
         let reset_dialog = self.reset_dialog(palette, cx);
+        let workspace_preset_dialog = self.workspace_preset_dialog(palette, cx);
+        let workspace_preset_delete_dialog = self.workspace_preset_delete_dialog(palette, cx);
         h_stack()
             .relative()
             .size_full()
@@ -197,6 +254,8 @@ impl Render for SettingsPage {
                     .child(scrolling_column("settings-content", content)),
             )
             .children(reset_dialog)
+            .children(workspace_preset_dialog)
+            .children(workspace_preset_delete_dialog)
     }
 }
 
@@ -223,7 +282,7 @@ impl SettingsPage {
                 .rounded(px(metrics::CONTROL_RADIUS))
                 .text_size(px(metrics::BUTTON_FONT_SIZE))
                 .text_color(rgb(color))
-                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .owns_clicks()
                 .on_click(cx.listener(move |this, _, _, cx| this.show(section, cx)))
                 .child(section.icon(color))
                 .child(section.title());

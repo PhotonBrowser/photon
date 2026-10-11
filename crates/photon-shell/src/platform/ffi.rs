@@ -87,7 +87,6 @@ pub(super) mod embedder {
         pub navigation_committed_callback: Option<unsafe extern "C" fn(*mut c_void)>,
         pub history_swipe_candidate_callback:
             Option<unsafe extern "C" fn(*mut c_void, u64, bool, f64)>,
-        pub vertical_overscroll_callback: Option<unsafe extern "C" fn(*mut c_void, u64, f64)>,
         pub crash_recovered_callback: Option<unsafe extern "C" fn(*mut c_void)>,
         pub new_web_view_callback: Option<NewWebViewCallback>,
         pub find_result_callback: Option<unsafe extern "C" fn(*mut c_void, usize, bool, usize)>,
@@ -239,6 +238,9 @@ pub(super) mod embedder {
             callback: Option<unsafe extern "C" fn(*mut c_void, bool, bool)>,
         ) -> *mut c_void;
         pub fn photon_window_observer_destroy(observer: *mut c_void);
+        pub fn photon_default_browser_available() -> bool;
+        pub fn photon_default_browser_is_current() -> bool;
+        pub fn photon_default_browser_request();
         pub fn photon_view_navigate(view: *mut c_void, url: *const c_char);
         pub fn photon_view_reload(view: *mut c_void);
         pub fn photon_view_stop_loading(view: *mut c_void);

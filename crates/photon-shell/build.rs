@@ -31,6 +31,7 @@ fn main() {
     for source in [
         "native/embedder/PhotonEmbedderBridge.cpp",
         "native/embedder/PhotonEmbedderBridge.h",
+        "native/embedder/DefaultBrowser.mm",
         "native/embedder/ReducedMotionObserver.mm",
         "native/embedder/SystemClipboard.h",
         "native/embedder/SystemClipboard.mm",
@@ -52,6 +53,7 @@ fn main() {
     if cfg!(target_os = "macos") {
         cc::Build::new()
             .cpp(true)
+            .file(root.join("native/embedder/DefaultBrowser.mm"))
             .file(root.join("native/embedder/ReducedMotionObserver.mm"))
             .file(root.join("native/embedder/SystemClipboard.mm"))
             .file(root.join("native/embedder/WindowObserver.mm"))

@@ -38,7 +38,6 @@ using PhotonDialogCallback = void (*)(void*, int, char const*, char const*,
 // Called when the page shown may open dialogs again after a navigation.
 using PhotonNavigationCommittedCallback = void (*)(void*);
 using PhotonHistorySwipeCandidateCallback = void (*)(void*, uint64_t, bool, double);
-using PhotonVerticalOverscrollCallback = void (*)(void*, uint64_t, double);
 // Called when the page that replaced a crashed one presents its first frame.
 using PhotonCrashRecoveredCallback = void (*)(void*);
 // Called with a find-in-page result: the current match's index, whether the
@@ -106,7 +105,6 @@ struct PhotonViewCallbacks {
     PhotonDialogCallback dialog_callback;
     PhotonNavigationCommittedCallback navigation_committed_callback;
     PhotonHistorySwipeCandidateCallback history_swipe_candidate_callback;
-    PhotonVerticalOverscrollCallback vertical_overscroll_callback;
     PhotonCrashRecoveredCallback crash_recovered_callback;
     PhotonNewWebViewCallback new_web_view_callback;
     PhotonFindResultCallback find_result_callback;
@@ -207,5 +205,11 @@ void photon_reduced_motion_observer_destroy(void* observer);
 void* photon_window_observer_create(void* ns_view, void* callback_data,
     PhotonWindowChangedCallback callback);
 void photon_window_observer_destroy(void* observer);
+// Whether the browser runs from an app bundle, which can be the default.
+bool photon_default_browser_available(void);
+// Whether macOS opens web links with this app.
+bool photon_default_browser_is_current(void);
+// Asks macOS to open web links with this app; it confirms with the person.
+void photon_default_browser_request(void);
 #endif
 }
