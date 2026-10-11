@@ -105,7 +105,7 @@ pub struct BrowserSettings {
     pub transparency: Transparency,
     pub tab_layout: TabLayout,
     /// Saved workspace presets and the profile default used by spaces without
-    /// their own layout override.
+    /// their own preset assignment.
     pub workspace: WorkspaceSettings,
     pub default_search_engine: String,
     /// Whether the address bar shows a page's full address while idle. When
@@ -122,6 +122,8 @@ pub struct BrowserSettings {
     pub spaces: Spaces,
     /// Whether unpinned tabs left unused for twelve hours are closed.
     pub archive_tabs: bool,
+    /// Whether the browser reopens its windows and tabs from last time.
+    pub restore_session: bool,
 }
 
 impl Default for BrowserSettings {
@@ -139,24 +141,41 @@ impl Default for BrowserSettings {
             close_window_with_last_tab: true,
             spaces: Spaces::default(),
             archive_tabs: false,
+            restore_session: true,
         }
     }
 }
 
 impl BrowserSettings {
     /// Returns every preference to its default, keeping what people made
-    /// themselves: the sidebar's favourites, the new tab page's shortcuts,
-    /// and the spaces with their pinned tabs, whose colours reset.
+    /// themselves: each space with its favourites and pinned tabs, and the
+    /// new tab page's shortcuts. Space colours and dismissed hints reset.
     pub fn reset_preferences(&mut self) {
-        let favourites = std::mem::take(&mut self.sidebar.favourites);
         let shortcuts = std::mem::take(&mut self.new_tab.pinned);
         let mut spaces = std::mem::take(&mut self.spaces);
         spaces.reset_colors();
         spaces.reset_layout_overrides();
+        spaces.reset_favourites_hint_dismissals();
         *self = Self::default();
-        self.sidebar.favourites = favourites;
         self.new_tab.pinned = shortcuts;
         self.spaces = spaces;
+    }
+
+    /// Moves profile-wide favourites from an older profile into its active
+    /// space. Returns whether the profile needs saving after migration.
+    pub fn migrate_legacy_favourites(&mut self) -> bool {
+        let favourites = std::mem::take(&mut self.sidebar.favourites);
+        if favourites.is_empty() {
+            return false;
+        }
+
+        let active_space = self.spaces.active().id;
+        if let Some(space) = self.spaces.get_mut(active_space) {
+            for favourite in favourites {
+                space.add_favourite(favourite);
+            }
+        }
+        true
     }
 }
 
@@ -181,7 +200,13 @@ mod tests {
             .spaces
             .add(Some("Work".to_owned()), WindowColor::Teal, true);
         settings.sidebar.width = 400;
-        settings.sidebar.favourites.push(site.clone());
+        let active_space = settings.spaces.active().id;
+        settings
+            .spaces
+            .get_mut(active_space)
+            .unwrap()
+            .favourites
+            .push(site.clone());
         settings.new_tab.pinned.push(site.clone());
         settings.new_tab.hidden.push("example.org".to_owned());
         let space = settings.spaces.get_mut(work).unwrap();
@@ -191,7 +216,13 @@ mod tests {
         settings.reset_preferences();
 
         let mut expected = BrowserSettings::default();
-        expected.sidebar.favourites.push(site.clone());
+        let active_space = expected.spaces.active().id;
+        expected
+            .spaces
+            .get_mut(active_space)
+            .unwrap()
+            .favourites
+            .push(site.clone());
         expected.new_tab.pinned.push(site.clone());
         let work = expected
             .spaces
@@ -203,5 +234,25 @@ mod tests {
             .pinned_tabs
             .push(site);
         assert_eq!(settings, expected);
+    }
+
+    #[test]
+    fn migrates_legacy_favourites_into_only_the_active_space() {
+        let favourite = Shortcut {
+            title: "Example".to_owned(),
+            url: "https://example.com/".to_owned(),
+        };
+        let mut settings = BrowserSettings::default();
+        let active = settings
+            .spaces
+            .add(Some("Work".to_owned()), WindowColor::System, false);
+        settings.spaces.activate(active);
+        settings.sidebar.favourites.push(favourite.clone());
+
+        assert!(settings.migrate_legacy_favourites());
+        assert_eq!(settings.spaces.get(active).unwrap().favourites, [favourite]);
+        assert!(settings.spaces.get(1).unwrap().favourites.is_empty());
+        assert!(settings.sidebar.favourites.is_empty());
+        assert!(!settings.migrate_legacy_favourites());
     }
 }

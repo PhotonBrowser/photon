@@ -1,6 +1,6 @@
 //! A profile folder and what is kept in it.
 
-use photon_core::{BrowserSettings, ClearBrowsingData, History, WorkspaceSettings};
+use photon_core::{BrowserSettings, ClearBrowsingData, History, Session, WorkspaceSettings};
 use std::collections::HashSet;
 use std::fs;
 use std::io;
@@ -11,6 +11,7 @@ use super::{atomic, history_file};
 
 const HISTORY_FILE: &str = "History.json";
 const SETTINGS_FILE: &str = "Settings.json";
+const SESSION_FILE: &str = "Session.json";
 const FAVICONS_DIR: &str = "Favicons";
 const ENGINE_DIR: &str = "Engine";
 /// Where in its folder the Engine keeps its network cache.
@@ -134,6 +135,21 @@ impl Profile {
         atomic::write(&self.root.join(SETTINGS_FILE), &bytes)
     }
 
+    /// The windows and tabs open when the browser last saved them, or none
+    /// when there is no session or it cannot be read.
+    pub fn load_session(&self) -> Session {
+        fs::read(self.root.join(SESSION_FILE))
+            .ok()
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+            .unwrap_or_default()
+    }
+
+    pub fn save_session(&self, session: &Session) -> io::Result<()> {
+        let bytes = serde_json::to_vec_pretty(session)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        atomic::write(&self.root.join(SESSION_FILE), &bytes)
+    }
+
     pub fn load_favicon(&self, url: &str) -> Option<FaviconPixels> {
         let bytes = fs::read(favicons::path(&self.favicons_dir(), url)).ok()?;
         FaviconPixels::decode(&bytes)
@@ -254,11 +270,31 @@ mod tests {
     }
 
     #[test]
+    fn saves_and_loads_the_session() {
+        let profile = TemporaryProfile::new("session");
+        assert_eq!(profile.0.load_session(), Session::default());
+        let session = Session {
+            windows: vec![photon_core::WindowSession {
+                tabs: vec![photon_core::SessionTab {
+                    url: "https://example.com/".to_owned(),
+                    title: "Example".to_owned(),
+                    space: 1,
+                }],
+                active: Some(0),
+            }],
+        };
+        profile.0.save_session(&session).expect("saves");
+        assert_eq!(profile.0.load_session(), session);
+    }
+
+    #[test]
     fn saves_and_loads_settings() {
         let profile = TemporaryProfile::new("settings");
         assert_eq!(profile.0.load_settings(), BrowserSettings::default());
-        let mut settings = BrowserSettings::default();
-        settings.theme = photon_core::ThemeMode::Dark;
+        let mut settings = BrowserSettings {
+            theme: photon_core::ThemeMode::Dark,
+            ..BrowserSettings::default()
+        };
         settings.new_tab.remove("https://example.com/");
         let layout = settings.workspace.default_preset().unwrap().layout.clone();
         settings
