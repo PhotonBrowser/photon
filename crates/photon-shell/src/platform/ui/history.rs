@@ -217,10 +217,12 @@ impl BrowsingHistory {
                         browsing.save = None;
                         browsing.snapshot()
                     });
+                    // Clearing `save` above dropped this task's handle, which
+                    // cancels it at its next await, so the write runs detached.
                     if let Some((profile, history)) = save {
                         cx.background_executor()
                             .spawn(async move { write_history(&profile, &history) })
-                            .await;
+                            .detach();
                     }
                 }));
             }
