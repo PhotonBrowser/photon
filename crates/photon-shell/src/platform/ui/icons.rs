@@ -67,6 +67,22 @@ pub(super) fn sidebar_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("panel-left"), color, size)
 }
 
+/// A sidebar with an arrow out of it, for expanding the collapsed sidebar.
+pub(super) fn sidebar_expand_icon(color: u32, size: f32) -> impl IntoElement {
+    icon(lucide!("panel-left-open"), color, size)
+}
+
+/// A frame of corners around nothing, for Zen mode, which leaves only the
+/// page.
+pub(super) fn zen_icon(color: u32, size: f32) -> impl IntoElement {
+    icon(lucide!("scan"), color, size)
+}
+
+/// A keyboard, for the list of keyboard shortcuts.
+pub(super) fn keyboard_icon(color: u32, size: f32) -> impl IntoElement {
+    icon(lucide!("keyboard"), color, size)
+}
+
 /// A pencil, for customising.
 pub(super) fn edit_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("pencil"), color, size)
@@ -92,12 +108,17 @@ pub(super) fn close_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("x"), color, size)
 }
 
-pub(super) fn add_icon(color: u32, size: f32) -> impl IntoElement {
-    icon(lucide!("plus"), color, size)
+/// A filled star, for the empty favourites hint.
+pub(super) fn favourite_star_icon(color: u32, size: f32) -> impl IntoElement {
+    svg()
+        .data(br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="m12 2.5 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5-5.8-3.1-5.8 3.1 1.1-6.5-4.7-4.6 6.5-.9z"/></svg>"##)
+        .size(px(size))
+        .flex_shrink_0()
+        .text_color(rgb(color))
 }
 
-pub(super) fn minus_icon(color: u32, size: f32) -> impl IntoElement {
-    icon(lucide!("minus"), color, size)
+pub(super) fn add_icon(color: u32, size: f32) -> impl IntoElement {
+    icon(lucide!("plus"), color, size)
 }
 
 pub(super) fn more_icon(color: u32, size: f32) -> impl IntoElement {

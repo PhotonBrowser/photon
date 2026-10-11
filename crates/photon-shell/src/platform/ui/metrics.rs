@@ -13,11 +13,24 @@ pub(in crate::platform) const POPUP_MAX_WINDOW_WIDTH: f32 = 1280.0;
 pub(in crate::platform) const POPUP_MIN_WINDOW_HEIGHT: f32 = 320.0;
 pub(in crate::platform) const POPUP_MAX_WINDOW_HEIGHT: f32 = 1000.0;
 const WINDOW_CONTROLS_HEIGHT: f32 = 14.0;
+/// AppKit's space between two native window control buttons.
+const WINDOW_CONTROLS_GAP: f32 = 6.0;
 /// Vertically centered origin of the native window control buttons.
 pub(in crate::platform) const WINDOW_CONTROLS_ORIGIN: (f32, f32) =
     (12.0, (TITLEBAR_HEIGHT - WINDOW_CONTROLS_HEIGHT) / 2.0);
 /// Space reserved at each side of the windowed titlebar for native controls.
 pub(super) const WINDOW_CONTROLS_INSET: f32 = 80.0;
+/// The native window controls stacked at the top of the collapsed sidebar,
+/// centred in it.
+pub(super) const WINDOW_CONTROLS_COLUMN_ORIGIN: (f32, f32) = (
+    (SIDEBAR_COLLAPSED_WIDTH - WINDOW_CONTROLS_HEIGHT) / 2.0,
+    WINDOW_CONTROLS_ORIGIN.1,
+);
+/// Space reserved at the top of the collapsed sidebar for the stacked
+/// controls, with the same margin below them as above.
+pub(super) const WINDOW_CONTROLS_COLUMN_INSET: f32 = WINDOW_CONTROLS_COLUMN_ORIGIN.1 * 2.0
+    + WINDOW_CONTROLS_HEIGHT * 3.0
+    + WINDOW_CONTROLS_GAP * 2.0;
 
 pub(super) const TAB_HEIGHT: f32 = 28.0;
 pub(super) const TAB_MIN_WIDTH: f32 = 72.0;
@@ -45,6 +58,14 @@ pub(super) const TOOLBAR_BUTTON_SIZE: f32 = 28.0;
 pub(super) const TOOLBAR_ICON_SIZE: f32 = 14.0;
 
 pub(super) const MENU_WIDTH: f32 = 220.0;
+
+/// A keycap in a keyboard shortcut.
+pub(super) const KBD_HEIGHT: f32 = 18.0;
+pub(super) const KBD_PADDING: f32 = 4.0;
+pub(super) const KBD_RADIUS: f32 = 4.0;
+pub(super) const KBD_FONT_SIZE: f32 = 11.0;
+/// Space between a shortcut's keycaps.
+pub(super) const KBD_GAP: f32 = 2.0;
 /// Space above the first and below the last menu row.
 pub(super) const MENU_PADDING: f32 = 4.0;
 pub(super) const SURFACE_RADIUS: f32 = 8.0;
@@ -53,8 +74,6 @@ pub(super) const MENU_ITEM_HEIGHT: f32 = 28.0;
 pub(super) const MENU_ITEM_HORIZONTAL_PADDING: f32 = 12.0;
 pub(super) const MENU_ITEM_RADIUS: f32 = 5.0;
 pub(super) const MENU_ITEM_GAP: f32 = 2.0;
-/// Room for "100%" between a menu stepper's buttons.
-pub(super) const MENU_STEPPER_VALUE_WIDTH: f32 = 48.0;
 pub(super) const MENU_SEPARATOR_HEIGHT: f32 = 1.0;
 /// Space above and below a menu separator.
 pub(super) const MENU_SEPARATOR_MARGIN: f32 = 4.0;
@@ -97,13 +116,11 @@ pub(super) const MODAL_PADDING: f32 = 18.0;
 pub(super) const MODAL_GAP: f32 = 12.0;
 pub(super) const MODAL_SURFACE_INSET: f32 = 16.0;
 pub(super) const DIALOG_MESSAGE_MAX_HEIGHT: f32 = 240.0;
-pub(super) const WORKSPACE_CANVAS_GAP: f32 = 8.0;
-pub(super) const WORKSPACE_DOCK_MIN_HEIGHT: f32 = 56.0;
-pub(super) const WORKSPACE_DOCK_SIDE_WIDTH: f32 = 210.0;
-pub(super) const WORKSPACE_DRAG_HANDLE_SIZE: f32 = 20.0;
-pub(super) const WORKSPACE_LIBRARY_HEIGHT: f32 = 96.0;
-pub(super) const WORKSPACE_LIBRARY_PADDING: f32 = 8.0;
-pub(super) const WORKSPACE_LIBRARY_GAP: f32 = 6.0;
+/// The keyboard shortcuts dialog, wider than a modal's default for its
+/// names and keys, and scrolling past this height.
+pub(super) const SHORTCUTS_DIALOG_WIDTH: f32 = 460.0;
+pub(super) const SHORTCUTS_DIALOG_MAX_HEIGHT: f32 = 520.0;
+pub(super) const SHORTCUTS_DIALOG_TITLE_SIZE: f32 = 16.0;
 
 /// The address field in the toolbar.
 pub(super) const OMNIBOX_HEIGHT: f32 = 28.0;
@@ -141,20 +158,11 @@ pub(super) const HISTORY_SWIPE_INDICATOR_SIZE: f32 = 42.0;
 pub(super) const HISTORY_SWIPE_INDICATOR_ICON_SIZE: f32 = 18.0;
 /// Gesture travel at which the edge arrow becomes fully visible.
 pub(super) const HISTORY_SWIPE_INDICATOR_REVEAL_DISTANCE: f32 = 20.0;
-/// Maximum vertical page-surface travel as a fraction of the viewport height.
-pub(super) const VERTICAL_OVERSCROLL_MAX_DISTANCE_FRACTION: f32 = 0.18;
-/// Absolute cap for vertical page-surface travel in logical pixels.
-pub(super) const VERTICAL_OVERSCROLL_MAX_DISTANCE: f32 = 150.0;
-/// Spring stiffness for settling vertical page overscroll.
-pub(super) const VERTICAL_OVERSCROLL_SPRING_STIFFNESS: f32 = 420.0;
-/// Spring damping for settling vertical page overscroll.
-pub(super) const VERTICAL_OVERSCROLL_SPRING_DAMPING: f32 = 42.0;
-/// Delay after a native touch phase ends before settling if momentum does not begin.
-pub(super) const VERTICAL_OVERSCROLL_END_DELAY_MS: u64 = 100;
 pub(super) const INTERNAL_PAGE_INSET: f32 = 32.0;
 pub(super) const INTERNAL_PAGE_MAX_WIDTH: f32 = 620.0;
 pub(super) const INTERNAL_PAGE_SECTION_GAP: f32 = 28.0;
 pub(super) const INTERNAL_PAGE_GROUP_GAP: f32 = 12.0;
+pub(super) const FORM_FIELD_GAP: f32 = 4.0;
 pub(super) const INTERNAL_PAGE_SECTION_SIZE: f32 = 18.0;
 pub(super) const INTERNAL_PAGE_BODY_SIZE: f32 = 14.0;
 pub(super) const SWITCH_WIDTH: f32 = 34.0;
@@ -187,6 +195,18 @@ pub(super) const SETTINGS_SIDEBAR_ICON_SIZE: f32 = 14.0;
 // The sidebar: navigation, address field, favourites, tabs and its footer.
 /// The grab area on the sidebar's edge for resizing it.
 pub(super) const SIDEBAR_RESIZE_HANDLE_WIDTH: f32 = 8.0;
+/// The sidebar collapsed to a column of icons.
+pub(super) const SIDEBAR_COLLAPSED_WIDTH: f32 = photon_core::SIDEBAR_COLLAPSED_WIDTH as f32;
+/// Space between the collapsed sidebar's edges and its icons.
+pub(super) const SIDEBAR_COLLAPSED_PADDING: f32 = 6.0;
+/// A tab, favourite or button in the collapsed sidebar: a square that fills
+/// it between its padding.
+pub(super) const SIDEBAR_COLLAPSED_ITEM_SIZE: f32 =
+    SIDEBAR_COLLAPSED_WIDTH - SIDEBAR_COLLAPSED_PADDING * 2.0;
+pub(super) const SIDEBAR_COLLAPSED_ITEM_RADIUS: f32 = 8.0;
+pub(super) const SIDEBAR_COLLAPSED_ICON_SIZE: f32 = 16.0;
+/// Space between the collapsed sidebar's icons, and around its dividers.
+pub(super) const SIDEBAR_COLLAPSED_GAP: f32 = 4.0;
 /// Space between the sidebar's edges and its content.
 pub(super) const SIDEBAR_PADDING: f32 = 8.0;
 /// Space between the sidebar's top-row buttons.
@@ -204,8 +224,59 @@ pub(super) const SIDEBAR_TAB_ICON_GAP: f32 = 10.0;
 pub(super) const SIDEBAR_FONT_SIZE: f32 = 14.0;
 pub(super) const SIDEBAR_ICON_SIZE: f32 = 18.0;
 pub(super) const SIDEBAR_FAVOURITE_COLUMNS: usize = 3;
+
+/// The sidebar's spacing and icon size, which tighten when it collapses to
+/// icons.
+#[derive(Clone, Copy)]
+pub(super) struct SidebarSpacing {
+    /// Between its edges and its content.
+    pub(super) padding: f32,
+    /// Between its sections.
+    pub(super) section_gap: f32,
+    /// Above and below a divider.
+    pub(super) separator_margin: f32,
+    /// Between tabs.
+    pub(super) item_gap: f32,
+    /// Between favourites.
+    pub(super) favourite_gap: f32,
+    /// A tab's or favourite's icon.
+    pub(super) icon_size: f32,
+}
+
+impl SidebarSpacing {
+    pub(super) const fn new(collapsed: bool) -> Self {
+        if collapsed {
+            Self {
+                padding: SIDEBAR_COLLAPSED_PADDING,
+                section_gap: SIDEBAR_COLLAPSED_GAP,
+                separator_margin: SIDEBAR_COLLAPSED_GAP,
+                item_gap: SIDEBAR_COLLAPSED_GAP,
+                favourite_gap: SIDEBAR_COLLAPSED_GAP,
+                icon_size: SIDEBAR_COLLAPSED_ICON_SIZE,
+            }
+        } else {
+            Self {
+                padding: SIDEBAR_PADDING,
+                section_gap: SIDEBAR_SECTION_GAP,
+                separator_margin: SIDEBAR_SEPARATOR_MARGIN,
+                item_gap: SIDEBAR_ITEM_GAP,
+                favourite_gap: SIDEBAR_FAVOURITE_GAP,
+                icon_size: SIDEBAR_ICON_SIZE,
+            }
+        }
+    }
+}
 pub(super) const SIDEBAR_FAVOURITE_HEIGHT: f32 = 50.0;
 pub(super) const SIDEBAR_FAVOURITE_ICON_SIZE: f32 = 20.0;
+pub(super) const SIDEBAR_FAVOURITES_HINT_PADDING: f32 = 10.0;
+pub(super) const SIDEBAR_FAVOURITES_HINT_GAP: f32 = 4.0;
+pub(super) const SIDEBAR_FAVOURITES_HINT_BADGE_SIZE: f32 = 26.0;
+pub(super) const SIDEBAR_FAVOURITES_HINT_ICON_SIZE: f32 = 14.0;
+pub(super) const SIDEBAR_FAVOURITES_HINT_TITLE_SIZE: f32 = 15.0;
+pub(super) const SIDEBAR_FAVOURITES_HINT_BODY_SIZE: f32 = 12.0;
+pub(super) const SIDEBAR_FAVOURITES_HINT_DISMISS_INSET: f32 = 2.0;
+pub(super) const SIDEBAR_FAVOURITES_HINT_DASH_LENGTH: f32 = 6.0;
+pub(super) const SIDEBAR_FAVOURITES_HINT_DASH_GAP: f32 = 2.0;
 pub(super) const SIDEBAR_FOOTER_HEIGHT: f32 = 40.0;
 pub(super) const SIDEBAR_SEPARATOR_MARGIN: f32 = 8.0;
 pub(super) const SIDEBAR_SEPARATOR_INSET: f32 = 10.0;

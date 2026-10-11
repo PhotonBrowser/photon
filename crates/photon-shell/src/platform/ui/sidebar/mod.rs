@@ -19,9 +19,17 @@ use gpui::{AnyElement, div, prelude::*, px, rgba};
 
 use super::layout::{h_stack, v_stack};
 use super::{metrics, theme::ThemeColors};
-pub(super) use favourites::{FavouriteTile, favourites_grid};
+pub(super) use favourites::{FavouriteTile, favourites_empty_state, favourites_grid};
 pub(super) use footer::{FooterActions, SpaceDot, footer};
-pub(super) use navigation::navigation_bar;
+pub(super) use navigation::{navigation_bar, navigation_column};
+
+/// Shapes a button, tab or favourite as one of the collapsed sidebar's
+/// square tiles, so every item in it shares a size and corners.
+pub(super) fn collapsed_tile<E: Styled>(item: E) -> E {
+    item.size(px(metrics::SIDEBAR_COLLAPSED_ITEM_SIZE))
+        .flex_shrink_0()
+        .rounded(px(metrics::SIDEBAR_COLLAPSED_ITEM_RADIUS))
+}
 
 /// One independently placed panel in the side dock.
 pub(super) enum SidebarSection {
@@ -31,14 +39,20 @@ pub(super) enum SidebarSection {
     Footer(AnyElement),
 }
 
-/// Lays individually selected panels out in their saved order.
-pub(super) fn sidebar(sections: Vec<SidebarSection>, palette: ThemeColors) -> impl IntoElement {
-    let inset = |content: AnyElement| {
-        h_stack()
-            .w_full()
-            .px(px(metrics::SIDEBAR_PADDING))
-            .child(content)
-    };
+/// Lays individually selected panels out in their saved order, tighter
+/// when collapsed to icons.
+pub(super) fn sidebar(
+    sections: Vec<SidebarSection>,
+    collapsed: bool,
+    palette: ThemeColors,
+) -> impl IntoElement {
+    let metrics::SidebarSpacing {
+        padding,
+        section_gap: gap,
+        separator_margin,
+        ..
+    } = metrics::SidebarSpacing::new(collapsed);
+    let inset = |content: AnyElement| h_stack().w_full().px(px(padding)).child(content);
     let mut content = v_stack().id("sidebar").size_full();
     let mut has_fixed_panel = false;
     let mut previous_was_fixed = false;
@@ -46,8 +60,7 @@ pub(super) fn sidebar(sections: Vec<SidebarSection>, palette: ThemeColors) -> im
         match section {
             SidebarSection::Address(panel) | SidebarSection::Favourites(panel) => {
                 if previous_was_fixed {
-                    content =
-                        content.child(div().h(px(metrics::SIDEBAR_SECTION_GAP)).flex_shrink_0());
+                    content = content.child(div().h(px(gap)).flex_shrink_0());
                 }
                 content = content.child(inset(panel));
                 has_fixed_panel = true;
@@ -57,8 +70,8 @@ pub(super) fn sidebar(sections: Vec<SidebarSection>, palette: ThemeColors) -> im
                 if has_fixed_panel {
                     content = content.child(
                         div()
-                            .mx(px(metrics::SIDEBAR_SEPARATOR_INSET))
-                            .my(px(metrics::SIDEBAR_SEPARATOR_MARGIN))
+                            .mx(px(metrics::SIDEBAR_SEPARATOR_INSET.min(padding)))
+                            .my(px(separator_margin))
                             .h(px(metrics::MENU_SEPARATOR_HEIGHT))
                             .bg(rgba(palette.menu_border)),
                     );
@@ -69,7 +82,7 @@ pub(super) fn sidebar(sections: Vec<SidebarSection>, palette: ThemeColors) -> im
                         .flex_1()
                         .min_h_0()
                         .overflow_y_scroll()
-                        .px(px(metrics::SIDEBAR_PADDING))
+                        .px(px(padding))
                         .child(tabs),
                 );
                 previous_was_fixed = false;

@@ -1,35 +1,41 @@
 //! The sidebar's vertical tab list: pinned tabs, then today's tabs under a
-//! row that opens a new tab.
+//! row that opens a new tab. Collapsed to icons, each is a square tile.
 
-use gpui::{MouseButton, Role, div, prelude::*, px, rgb, rgba};
+use gpui::{AnyElement, Role, div, prelude::*, px, rgb, rgba};
 
+use super::super::controls::OwnsClicks;
 use super::super::icons::add_icon;
 use super::super::layout::{h_stack, v_stack};
+use super::super::sidebar::collapsed_tile;
 use super::super::{ClickHandler, metrics, theme::ThemeColors};
 use super::{DraggedTab, TabDrop, TabItem, TabParts};
 
 /// The tabs, one row each: pinned tabs above a divider, then a row that
 /// opens a new tab and today's tabs. A tab dropped on the divider or that
-/// row joins today's tabs.
+/// row joins today's tabs. Collapsed, each row is only its icon.
 pub(in super::super) fn tab_list(
     tabs: Vec<TabItem>,
     on_new_tab: ClickHandler,
     on_drop_into_today: TabDrop,
+    collapsed: bool,
     palette: ThemeColors,
 ) -> impl IntoElement {
+    let spacing = metrics::SidebarSpacing::new(collapsed);
+    let layout_tab: fn(TabParts, ThemeColors) -> AnyElement =
+        if collapsed { tab_tile } else { tab_row };
     let tab_count = tabs.len();
     let mut focus_index = 1;
     let (mut pinned, mut today) = (Vec::new(), Vec::new());
     for (index, tab) in tabs.into_iter().enumerate() {
         let stops = TabParts::focus_stops(&tab.icon);
         let section = if tab.pinned { &mut pinned } else { &mut today };
-        section.push(tab_row(
+        section.push(layout_tab(
             TabParts::new(
                 tab,
                 index,
                 tab_count,
                 focus_index,
-                metrics::SIDEBAR_ICON_SIZE,
+                spacing.icon_size,
                 palette,
             ),
             palette,
@@ -42,7 +48,7 @@ pub(in super::super) fn tab_list(
             .role(Role::TabList)
             .aria_label(label)
             .w_full()
-            .gap(px(metrics::SIDEBAR_ITEM_GAP))
+            .gap(px(spacing.item_gap))
             .children(rows)
     };
     let on_drop_into_today = std::rc::Rc::new(on_drop_into_today);
@@ -51,8 +57,12 @@ pub(in super::super) fn tab_list(
         div()
             .id("browser-tab-divider")
             .w_full()
-            .py(px(metrics::SIDEBAR_SEPARATOR_MARGIN))
-            .px(px(metrics::SIDEBAR_TAB_PADDING))
+            .py(px(spacing.separator_margin))
+            .px(px(if collapsed {
+                spacing.padding
+            } else {
+                metrics::SIDEBAR_TAB_PADDING
+            }))
             .rounded(px(metrics::SIDEBAR_ITEM_RADIUS))
             .drag_over::<DraggedTab>(move |style, _, _, _| style.bg(rgba(palette.hover_surface)))
             .on_drop(move |dragged: &DraggedTab, window, cx| on_drop(dragged, window, cx))
@@ -64,14 +74,14 @@ pub(in super::super) fn tab_list(
     });
     v_stack()
         .w_full()
-        .gap(px(metrics::SIDEBAR_ITEM_GAP))
+        .gap(px(spacing.item_gap))
         .tab_group()
         .when(!pinned.is_empty(), |list| {
             list.child(section("browser-pinned-tabs", "Pinned tabs", pinned))
         })
         .children(divider)
         .child(
-            new_tab_row(on_new_tab, palette)
+            new_tab_row(on_new_tab, collapsed, palette)
                 .drag_over::<DraggedTab>(move |style, _, _, _| {
                     style.bg(rgba(palette.hover_surface))
                 })
@@ -85,7 +95,7 @@ pub(in super::super) fn tab_list(
 /// A full-width row: icon, title, and a close button on the active tab and
 /// on the row under the pointer. Hidden, the close button still sits under
 /// the pointer only when its row is hovered, so it is never clicked unseen.
-fn tab_row(parts: TabParts, palette: ThemeColors) -> impl IntoElement {
+fn tab_row(parts: TabParts, palette: ThemeColors) -> AnyElement {
     let row = parts
         .tab
         .w_full()
@@ -111,27 +121,50 @@ fn tab_row(parts: TabParts, palette: ThemeColors) -> impl IntoElement {
     row.child(parts.icon)
         .child(div().flex_1().min_w_0().truncate().child(parts.label))
         .child(close)
+        .into_any_element()
 }
 
-/// "+ New Tab", above the tabs.
-fn new_tab_row(on_click: ClickHandler, palette: ThemeColors) -> gpui::Stateful<gpui::Div> {
-    h_stack()
+/// A square holding only the tab's icon, for the collapsed sidebar. The
+/// tab's title stays its accessible name; middle-click still closes it.
+fn tab_tile(parts: TabParts, palette: ThemeColors) -> AnyElement {
+    let tile = collapsed_tile(parts.tab).justify_center();
+    let tile = if parts.active {
+        tile.bg(rgba(palette.surface))
+    } else {
+        tile.hover(|style| style.bg(rgba(palette.hover_surface)))
+    };
+    tile.child(parts.icon).into_any_element()
+}
+
+/// "+ New Tab", above the tabs; collapsed, only "+".
+fn new_tab_row(
+    on_click: ClickHandler,
+    collapsed: bool,
+    palette: ThemeColors,
+) -> gpui::Stateful<gpui::Div> {
+    let row = h_stack()
         .id("browser-new-tab")
         .role(Role::Button)
         .aria_label("New tab")
         .tab_index(0)
         .focus_visible(|style| style.border_1().border_color(rgb(palette.chosen)))
-        .w_full()
         .items_center()
-        .gap(px(metrics::SIDEBAR_TAB_ICON_GAP))
-        .h(px(metrics::SIDEBAR_TAB_HEIGHT))
-        .px(px(metrics::SIDEBAR_TAB_PADDING))
         .rounded(px(metrics::SIDEBAR_ITEM_RADIUS))
         .text_size(px(metrics::SIDEBAR_FONT_SIZE))
         .text_color(rgb(palette.text_secondary))
         .hover(|style| style.bg(rgba(palette.hover_surface)))
-        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .owns_clicks()
         .on_click(on_click)
-        .child(add_icon(palette.text_secondary, metrics::SIDEBAR_ICON_SIZE))
+        .child(add_icon(
+            palette.text_secondary,
+            metrics::SidebarSpacing::new(collapsed).icon_size,
+        ));
+    if collapsed {
+        return collapsed_tile(row).justify_center();
+    }
+    row.w_full()
+        .gap(px(metrics::SIDEBAR_TAB_ICON_GAP))
+        .h(px(metrics::SIDEBAR_TAB_HEIGHT))
+        .px(px(metrics::SIDEBAR_TAB_PADDING))
         .child("New Tab")
 }

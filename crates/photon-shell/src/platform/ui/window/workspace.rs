@@ -1,14 +1,17 @@
 //! Composes the browser chrome, active page, and window-wide overlays.
 
-use gpui::{Render, StyleRefinement, Window, div, prelude::*, px};
+use gpui::{
+    App, Edges, MouseButton, MouseUpEvent, Render, StyleRefinement, Window, div, prelude::*, px,
+};
+use photon_core::DockRegion;
 
 use super::super::find_bar::FIND_BAR_MOTION;
 use super::super::motion::{AnimateIn, mix};
+use super::super::tabs::DraggedTab;
 use super::super::titlebar::window_drag_area;
-use super::super::workspace_layout::ComponentId;
+use super::super::workspace_layout::WorkspaceLayout;
 use super::super::{metrics, theme::palette};
 use super::BrowserWindow;
-use photon_core::DockRegion;
 
 impl Render for BrowserWindow {
     fn render(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) -> impl IntoElement {
@@ -18,74 +21,32 @@ impl Render for BrowserWindow {
             FIND_BAR_MOTION,
             cx,
         );
-        let editing = self.workspace_edit.is_some();
-        let layout = self.workspace_layout(cx);
+        let layout = WorkspaceLayout::current(cx);
         let sidebar_region = layout.sidebar_region();
-        let has_sidebar = sidebar_region.is_some();
         self.sidebar.settle();
         if self.sidebar.is_moving() {
             window.request_animation_frame();
         }
-        let shown = if editing && has_sidebar {
-            1.0
-        } else if has_sidebar {
-            self.sidebar.shown()
-        } else {
-            0.0
-        };
-        let has_top_controls = layout
-            .components(DockRegion::Top)
-            .any(|component| component.id != ComponentId::TabStrip);
-        let has_bottom_tabs = layout
-            .components(DockRegion::Bottom)
-            .any(|component| component.id == ComponentId::TabStrip);
-        let has_bottom_controls = layout
-            .components(DockRegion::Bottom)
-            .any(|component| component.id != ComponentId::TabStrip);
-        let top_extent = layout.top_extent()
-            + if editing && has_top_controls {
-                metrics::WORKSPACE_CANVAS_GAP
-            } else {
-                0.0
-            };
-        let bottom_extent = layout.bottom_extent()
-            + if editing && has_bottom_tabs && has_bottom_controls {
-                metrics::WORKSPACE_CANVAS_GAP
-            } else {
-                0.0
-            }
-            + if editing {
-                metrics::WORKSPACE_LIBRARY_HEIGHT
-            } else {
-                0.0
-            };
-        let side_width = layout
-            .sidebar_extent()
-            .map_or_else(|| self.sidebar.width(cx), |width| width as f32)
-            * shown;
-        let page_top = if top_extent > 0.0 {
-            top_extent + metrics::PAGE_CHROME_GAP
-        } else if has_sidebar {
-            mix(metrics::TITLEBAR_HEIGHT, metrics::PAGE_INSET, shown)
-        } else {
-            metrics::PAGE_CHROME_GAP
-        };
-        let page_side_padding = mix(metrics::PAGE_INSET, 0.0, shown);
+        self.place_window_controls(window, cx);
+        self.follow_page_title(window, cx);
+        self.update_menu_bar(window, cx);
+        self.record_session(cx);
+        // Shortcuts dispatch from the focused element, so with none focused
+        // they would reach nothing.
+        if window.focused(cx).is_none() {
+            window.focus(&self.root_focus, cx);
+        }
+        let margins = self.page_margins(&layout, cx);
         let page = div()
             .absolute()
             .inset_0()
             .min_w_0()
             .min_h_0()
             .overflow_hidden()
-            .px(px(metrics::PAGE_INSET))
-            .pt(px(page_top))
-            .pb(px(bottom_extent + metrics::PAGE_INSET))
-            .when(sidebar_region == Some(DockRegion::Leading), |page| {
-                page.pl(px(side_width + page_side_padding))
-            })
-            .when(sidebar_region == Some(DockRegion::Trailing), |page| {
-                page.pr(px(side_width + page_side_padding))
-            })
+            .pt(px(margins.top))
+            .pr(px(margins.right))
+            .pb(px(margins.bottom))
+            .pl(px(margins.left))
             .child(self.active_view(palette))
             // The find bar floats in the page's top-right corner.
             .children(find_bar.map(|(bar, transition)| {
@@ -106,26 +67,18 @@ impl Render for BrowserWindow {
                     .right(px(metrics::PAGE_INSET + metrics::CHIP_INSET))
                     .bottom(px(metrics::PAGE_INSET + metrics::CHIP_INSET))
                     .child(chip)
-            }))
-            .when(editing, |page| {
-                page.child(
-                    div()
-                        .id("workspace-page-blocker")
-                        .absolute()
-                        .inset_0()
-                        .occlude(),
-                )
-            });
+            }));
 
-        let blank_titlebar = (!editing && has_sidebar && top_extent == 0.0).then(|| {
-            self.with_titlebar_menu(
+        // With no bar above the page, its margin moves the window.
+        let top_margin = (layout.top_extent() * self.sidebar.chrome_shown() == 0.0).then(|| {
+            self.with_browser_menu(
                 window_drag_area(
                     div()
                         .absolute()
                         .top_0()
                         .left_0()
                         .w_full()
-                        .h(px(metrics::TITLEBAR_HEIGHT)),
+                        .h(px(margins.top)),
                 ),
                 cx,
             )
@@ -134,28 +87,71 @@ impl Render for BrowserWindow {
             .chrome
             .clone()
             .cached(StyleRefinement::default().absolute().inset_0());
-        let reveal_edge = (!editing)
-            .then_some(sidebar_region)
-            .flatten()
-            .filter(|_| !self.sidebar.visible)
+        let reveal_edge = sidebar_region
+            .filter(|_| !self.sidebar.docked())
             .map(|region| self.reveal_edge(region, cx));
         let root = div()
+            .track_focus(&self.root_focus)
             .size_full()
             .relative()
             .bg(palette.window_background())
             .text_color(gpui::rgb(palette.text_primary))
             .child(page)
-            .children(blank_titlebar)
+            .children(top_margin)
             .child(chrome)
             .children(reveal_edge)
             .on_drag_move(
                 cx.listener(|this, event, window, cx| this.drag_sidebar_edge(event, window, cx)),
             )
+            .capture_any_mouse_up(cx.listener(|_, event: &MouseUpEvent, _, cx| {
+                if event.button == MouseButton::Left
+                    && cx
+                        .active_drag()
+                        .is_some_and(|drag| drag.value.downcast_ref::<DraggedTab>().is_some())
+                {
+                    // GPUI clears the active drag after mouse-up listeners run.
+                    // Rebuild the cached chrome afterward so a temporary hint
+                    // shown during the drag disappears when it is cancelled.
+                    cx.notify();
+                }
+            }))
             .child(
                 self.overlays
                     .clone()
                     .cached(StyleRefinement::default().absolute().inset_0()),
             );
         self.on_actions(root, cx)
+    }
+}
+
+impl BrowserWindow {
+    /// The page's margins inside the window: room for the bars around it
+    /// and the sidebar beside it, with a small inset elsewhere. Zen mode
+    /// tucks the bars away, leaving the inset in their place.
+    fn page_margins(&self, layout: &WorkspaceLayout, cx: &App) -> Edges<f32> {
+        let chrome_shown = self.sidebar.chrome_shown();
+        let inset = metrics::PAGE_INSET;
+        let top_extent = layout.top_extent();
+        let top = if top_extent > 0.0 {
+            mix(inset, top_extent + metrics::PAGE_CHROME_GAP, chrome_shown)
+        } else {
+            inset
+        };
+        let mut margins = Edges {
+            top,
+            right: inset,
+            bottom: layout.bottom_extent() * chrome_shown + inset,
+            left: inset,
+        };
+        if let Some(region) = layout.sidebar_region() {
+            // The sidebar brings its own padding, so the page meets it.
+            let shown = self.sidebar.shown();
+            let side = self.sidebar.docked_width(cx) * shown + mix(inset, 0.0, shown);
+            match region {
+                DockRegion::Trailing => margins.right = side,
+                _ => margins.left = side,
+            }
+        }
+        margins
     }
 }

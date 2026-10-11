@@ -1,13 +1,15 @@
 //! The sidebar's footer: settings at the left, the spaces in the middle, and
-//! the browser menu at the right.
+//! the browser menu at the right. Collapsed to icons, the spaces stack
+//! above the browser menu.
 
-use gpui::{App, MouseButton, MouseDownEvent, Role, Window, div, prelude::*, px, rgb, rgba};
+use gpui::{MouseButton, Role, div, prelude::*, px, rgb, rgba};
 
 use super::super::button::{menu_button, toolbar_button};
+use super::super::controls::OwnsClicks;
 use super::super::controls::toggled;
 use super::super::icons::{add_icon, settings_icon};
-use super::super::layout::h_stack;
-use super::super::{ClickHandler, metrics, theme::ThemeColors};
+use super::super::layout::{h_stack, v_stack};
+use super::super::{ClickHandler, MouseDownHandler, metrics, theme::ThemeColors};
 
 pub(in super::super) struct FooterActions {
     pub(in super::super) settings: ClickHandler,
@@ -23,22 +25,29 @@ pub(in super::super) struct SpaceDot {
     pub(in super::super) active: bool,
     pub(in super::super) on_select: ClickHandler,
     /// Right-click opens the space's menu.
-    pub(in super::super) on_context_menu: Box<dyn Fn(&MouseDownEvent, &mut Window, &mut App)>,
+    pub(in super::super) on_context_menu: MouseDownHandler,
 }
 
 pub(in super::super) fn footer(
-    menu_open: bool,
     spaces: Vec<SpaceDot>,
     actions: FooterActions,
+    collapsed: bool,
     palette: ThemeColors,
-) -> impl IntoElement {
-    // One space needs no switcher; the button to add another stays.
-    let dots = (spaces.len() > 1).then(|| {
-        spaces
-            .into_iter()
-            .enumerate()
-            .map(move |(index, space)| space_dot(index, space, palette))
-    });
+) -> gpui::AnyElement {
+    let menu = menu_button("sidebar-menu", 2, palette, actions.menu);
+    if collapsed {
+        let spacing = metrics::SidebarSpacing::new(collapsed);
+        let menu = super::collapsed_tile(menu);
+        return v_stack()
+            .w_full()
+            .flex_shrink_0()
+            .items_center()
+            .py(px(spacing.padding))
+            .gap(px(spacing.item_gap))
+            .child(space_switcher(v_stack(), spaces, palette))
+            .child(menu)
+            .into_any_element();
+    }
     h_stack()
         .w_full()
         .h(px(metrics::SIDEBAR_FOOTER_HEIGHT))
@@ -56,30 +65,40 @@ pub(in super::super) fn footer(
             actions.settings,
         ))
         .child(
-            h_stack()
-                .id("sidebar-spaces")
-                .role(Role::TabList)
-                .aria_label("Spaces")
-                .items_center()
-                .gap(px(metrics::SPACE_DOT_GAP))
-                .children(dots.into_iter().flatten())
-                .child(toolbar_button(
-                    "sidebar-new-space",
-                    "New space",
-                    1,
-                    true,
-                    add_icon(palette.text_secondary, metrics::TOOLBAR_ICON_SIZE),
-                    palette,
-                    actions.new_space,
-                )),
+            space_switcher(h_stack(), spaces, palette).child(toolbar_button(
+                "sidebar-new-space",
+                "New space",
+                1,
+                true,
+                add_icon(palette.text_secondary, metrics::TOOLBAR_ICON_SIZE),
+                palette,
+                actions.new_space,
+            )),
         )
-        .child(menu_button(
-            "sidebar-menu",
-            2,
-            menu_open,
-            palette,
-            actions.menu,
-        ))
+        .child(menu)
+        .into_any_element()
+}
+
+/// The spaces as dots in `stack`, a row or a column. One space needs no
+/// switcher, so it shows none.
+fn space_switcher(
+    stack: gpui::Div,
+    spaces: Vec<SpaceDot>,
+    palette: ThemeColors,
+) -> gpui::Stateful<gpui::Div> {
+    let dots = (spaces.len() > 1).then(|| {
+        spaces
+            .into_iter()
+            .enumerate()
+            .map(move |(index, space)| space_dot(index, space, palette))
+    });
+    stack
+        .id("sidebar-spaces")
+        .role(Role::TabList)
+        .aria_label("Spaces")
+        .items_center()
+        .gap(px(metrics::SPACE_DOT_GAP))
+        .children(dots.into_iter().flatten())
 }
 
 /// A dot of the space's colour, larger and ringed while it is shown.
@@ -102,7 +121,7 @@ fn space_dot(index: usize, space: SpaceDot, palette: ThemeColors) -> impl IntoEl
         .justify_center()
         .rounded_full()
         .hover(|style| style.bg(rgba(palette.hover_surface)))
-        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .owns_clicks()
         .on_mouse_down(MouseButton::Right, space.on_context_menu)
         .on_click(space.on_select)
         .child(
