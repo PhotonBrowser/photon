@@ -9,7 +9,7 @@ use std::{
     rc::Rc,
     sync::{
         Arc, Mutex,
-        atomic::{AtomicPtr, Ordering},
+        atomic::{AtomicPtr, AtomicU64, Ordering},
     },
 };
 
@@ -17,6 +17,8 @@ use super::super::presentation::{GpuActivity, LeaseLedger, PresentationRuntime, 
 use super::super::{ffi::embedder, trace};
 use super::callbacks::*;
 use super::{EngineRuntime, UiWake, ZoomStep};
+
+static NEXT_PERFORMANCE_TASK_ID: AtomicU64 = AtomicU64::new(1);
 
 pub(in crate::platform) struct EngineSession {
     _runtime: Rc<EngineRuntime>,
@@ -109,11 +111,13 @@ impl EngineSession {
             reason = "shared with Engine callbacks through a raw context pointer"
         )]
         let callbacks = Arc::new(CallbackState {
+            task_id: NEXT_PERFORMANCE_TASK_ID.fetch_add(1, Ordering::Relaxed),
             presentation: presentation.clone(),
             leases: leases.clone(),
             engine_view: AtomicPtr::new(std::ptr::null_mut()),
             ui_wake: Mutex::new(None),
             performance: PerformanceMonitor::default(),
+            page_details: Mutex::default(),
         });
         runtime
             .callbacks
@@ -159,6 +163,9 @@ impl EngineSession {
             anyhow::bail!("Photon Engine could not create a webpage view");
         }
         callbacks.engine_view.store(view, Ordering::Release);
+        if runtime.performance_dashboard_active() {
+            callbacks.set_dashboard_enabled(true);
+        }
         let session = Self {
             _runtime: runtime,
             view,
@@ -354,7 +361,6 @@ impl EngineSession {
 
     pub(in crate::platform) fn set_diagnostics_enabled(&mut self, enabled: bool) {
         self.callbacks.set_diagnostics_enabled(enabled);
-        unsafe { embedder::photon_view_set_performance_monitor_enabled(self.view, enabled) }
     }
 
     #[allow(clippy::too_many_arguments)]

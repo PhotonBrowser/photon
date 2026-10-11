@@ -12,6 +12,7 @@
 mod controls;
 mod layout;
 mod new_tab;
+mod performance;
 mod registry;
 mod settings;
 

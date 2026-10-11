@@ -8,7 +8,9 @@ mod session;
 use anyhow::Context as _;
 use gpui::{AsyncApp, WeakEntity};
 use photon_core::{ClearBrowsingData, PopupPolicy};
+use photon_performance::PerformanceTask;
 use std::{
+    cell::{Cell, RefCell},
     ffi::{CStr, CString, c_void},
     path::Path,
     rc::Rc,
@@ -23,7 +25,6 @@ use super::ui::PhotonWebView;
 use callbacks::*;
 use photon_core::EngineService;
 pub(super) use session::{EngineSession, RequestedWebView};
-use std::cell::RefCell;
 
 #[derive(Clone)]
 pub(super) struct UiWake {
@@ -38,6 +39,7 @@ pub(super) struct EngineRuntime {
     callbacks: Box<RuntimeCallbacks>,
     service_callback: RefCell<Option<Box<ServiceCallback>>>,
     popup_policy: AtomicU8,
+    performance_dashboard_users: Cell<usize>,
 }
 
 impl EngineRuntime {
@@ -92,6 +94,7 @@ impl EngineRuntime {
             callbacks,
             service_callback: RefCell::default(),
             popup_policy: AtomicU8::new(PopupPolicy::Ask as u8),
+            performance_dashboard_users: Cell::new(0),
         })
     }
 
@@ -105,6 +108,71 @@ impl EngineRuntime {
 
     pub(super) fn set_popup_policy(&self, policy: PopupPolicy) {
         self.popup_policy.store(policy as u8, Ordering::Relaxed);
+    }
+
+    pub(in crate::platform) fn performance_tasks(&self) -> Vec<PerformanceTask> {
+        let views = {
+            let mut views = self.callbacks.views.lock().unwrap();
+            views.retain(|view| view.strong_count() > 0);
+            views
+                .iter()
+                .filter_map(std::sync::Weak::upgrade)
+                .collect::<Vec<_>>()
+        };
+        views.iter().map(|view| view.performance_task()).collect()
+    }
+
+    pub(in crate::platform) fn acquire_performance_dashboard(
+        self: &Rc<Self>,
+    ) -> PerformanceDashboardLease {
+        let users = self.performance_dashboard_users.get();
+        self.performance_dashboard_users.set(users + 1);
+        if users == 0 {
+            self.set_performance_dashboard_enabled(true);
+        }
+        PerformanceDashboardLease {
+            runtime: self.clone(),
+        }
+    }
+
+    fn release_performance_dashboard(&self) {
+        let users = self.performance_dashboard_users.get();
+        debug_assert!(users > 0);
+        if users <= 1 {
+            self.performance_dashboard_users.set(0);
+            self.set_performance_dashboard_enabled(false);
+        } else {
+            self.performance_dashboard_users.set(users - 1);
+        }
+    }
+
+    fn set_performance_dashboard_enabled(&self, enabled: bool) {
+        let views = self
+            .callbacks
+            .views
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(std::sync::Weak::upgrade)
+            .collect::<Vec<_>>();
+        for view in views {
+            view.set_dashboard_enabled(enabled);
+        }
+    }
+
+    pub(super) fn performance_dashboard_active(&self) -> bool {
+        self.performance_dashboard_users.get() > 0
+    }
+}
+
+/// Keeps Engine sampling enabled while at least one performance page is open.
+pub(in crate::platform) struct PerformanceDashboardLease {
+    runtime: Rc<EngineRuntime>,
+}
+
+impl Drop for PerformanceDashboardLease {
+    fn drop(&mut self) {
+        self.runtime.release_performance_dashboard();
     }
 }
 

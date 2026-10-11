@@ -4,7 +4,7 @@ use gpui::{AnyElement, AnyView, App};
 use photon_core::internal_page_name;
 
 use super::PageContext;
-use super::{new_tab, settings};
+use super::{new_tab, performance, settings};
 
 /// What the shell needs to know about one of its pages.
 pub(in super::super) struct PageDefinition {
@@ -33,10 +33,11 @@ pub(in super::super) enum PageIcon {
 }
 
 pub(in super::super) const NEW_TAB: &PageDefinition = &new_tab::PAGE;
+pub(in super::super) const PERFORMANCE: &PageDefinition = &performance::PAGE;
 pub(in super::super) const SETTINGS: &PageDefinition = &settings::PAGE;
 
 /// Every page, found by name.
-const PAGES: [&PageDefinition; 2] = [NEW_TAB, SETTINGS];
+const PAGES: [&PageDefinition; 3] = [NEW_TAB, PERFORMANCE, SETTINGS];
 
 /// The page `url` names, if it is one of Photon's.
 pub(in super::super) fn find_page(url: &str) -> Option<&'static PageDefinition> {

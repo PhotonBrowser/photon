@@ -4,7 +4,7 @@
 use super::super::app_update::update_app;
 use gpui::Context;
 use photon_core::{BrowserState, DialogRequest, EngineEvent};
-use photon_performance::{EnginePerformanceStats, PerformanceMonitor};
+use photon_performance::{EnginePerformanceStats, PerformanceMonitor, PerformanceTask};
 use std::{
     ffi::c_void,
     sync::{
@@ -18,12 +18,21 @@ use super::super::ui::{Favicon, FindResult, PhotonWebView};
 use super::super::{ffi::embedder, trace};
 use super::UiWake;
 
+#[derive(Clone, Default)]
+pub(super) struct PageDetails {
+    title: String,
+    url: String,
+    loading: bool,
+}
+
 pub(super) struct CallbackState {
+    pub(super) task_id: u64,
     pub(super) presentation: Arc<PresentationRuntime>,
     pub(super) leases: Arc<Mutex<LeaseLedger>>,
     pub(super) engine_view: AtomicPtr<c_void>,
     pub(super) ui_wake: Mutex<Option<UiWake>>,
     pub(super) performance: PerformanceMonitor,
+    pub(super) page_details: Mutex<PageDetails>,
 }
 
 pub(super) struct RuntimeCallbacks {
@@ -50,6 +59,11 @@ impl CallbackState {
     }
 
     pub(super) fn set_page_state(&self, state: BrowserState) {
+        *self.page_details.lock().unwrap() = PageDetails {
+            title: state.title.clone(),
+            url: state.url.clone(),
+            loading: state.loading,
+        };
         self.update_webview(move |view, cx| view.set_state(state, cx));
     }
 
@@ -143,8 +157,40 @@ impl CallbackState {
         // Frames were not tracked while hidden; starting enabled resets the
         // interval so it does not span the hidden period.
         self.performance.set_enabled(enabled);
+        self.sync_engine_monitor();
         if enabled {
             self.publish_diagnostics();
+        }
+    }
+
+    pub(super) fn set_dashboard_enabled(&self, enabled: bool) {
+        self.performance.set_dashboard_enabled(enabled);
+        self.sync_engine_monitor();
+        if enabled {
+            self.publish_diagnostics();
+        }
+    }
+
+    pub(super) fn performance_task(&self) -> PerformanceTask {
+        let details = self.page_details.lock().unwrap().clone();
+        PerformanceTask {
+            id: self.task_id,
+            title: details.title,
+            url: details.url,
+            loading: details.loading,
+            diagnostics: self.performance.snapshot(),
+        }
+    }
+
+    fn sync_engine_monitor(&self) {
+        let view = self.engine_view.load(Ordering::Acquire);
+        if !view.is_null() {
+            unsafe {
+                embedder::photon_view_set_performance_monitor_enabled(
+                    view,
+                    self.performance.is_enabled(),
+                );
+            }
         }
     }
 
