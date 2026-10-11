@@ -1,8 +1,8 @@
 //! Reusable shell layout primitives.
 
-use gpui::{Div, div, prelude::*, px, rgba};
+use gpui::{Div, FontWeight, SharedString, div, prelude::*, px, rgb, rgba};
 
-use super::theme::ThemeColors;
+use super::{metrics, theme::ThemeColors};
 
 /// Start a horizontal flex layout. Add alignment, spacing, and sizing as needed.
 pub(super) fn h_stack() -> Div {
@@ -12,6 +12,38 @@ pub(super) fn h_stack() -> Div {
 /// Start a vertical flex layout. Add alignment, spacing, and sizing as needed.
 pub(super) fn v_stack() -> Div {
     div().flex().flex_col()
+}
+
+/// A label above a control, such as “Shortcuts” above its choices.
+pub(super) fn label(text: &'static str, palette: ThemeColors) -> impl IntoElement {
+    div()
+        .text_size(px(metrics::TAB_FONT_SIZE))
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(rgb(palette.text_secondary))
+        .child(text)
+}
+
+/// A label and its control, with the shell's standard form spacing.
+pub(super) fn form_field(
+    label_text: &'static str,
+    control: impl IntoElement,
+    palette: ThemeColors,
+) -> impl IntoElement {
+    v_stack()
+        .gap(px(metrics::FORM_FIELD_GAP))
+        .child(label(label_text, palette))
+        .child(control)
+}
+
+/// Secondary text that supports a control without competing with its label.
+pub(super) fn secondary_text(
+    text: impl Into<SharedString>,
+    palette: ThemeColors,
+) -> impl IntoElement {
+    div()
+        .text_size(px(metrics::TAB_FONT_SIZE))
+        .text_color(rgb(palette.text_secondary))
+        .child(text.into())
 }
 
 /// How far a surface floats above what is under it, shown by its shadow.
@@ -52,3 +84,15 @@ pub(super) trait Raised: Styled + Sized {
 }
 
 impl<E: Styled> Raised for E {}
+
+/// Gives inputs and secondary controls the same themed surface and outline.
+pub(super) trait ControlSurface: Styled + Sized {
+    fn control_surface(self, palette: ThemeColors) -> Self {
+        self.rounded(px(metrics::CONTROL_RADIUS))
+            .border_1()
+            .border_color(rgba(palette.control_border))
+            .bg(rgba(palette.surface))
+    }
+}
+
+impl<E: Styled> ControlSurface for E {}

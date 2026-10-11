@@ -60,6 +60,7 @@ mod opacity {
     /// How much of the text color tints the shared surface.
     pub(super) const SURFACE_TINT: f32 = 0.06;
     pub(super) const SELECTED: f32 = 0.12;
+    pub(super) const ACCENT_HOVER_BLEND: f32 = 0.12;
 }
 
 /// The direction a window gradient runs, in degrees: from the top left.
@@ -173,6 +174,8 @@ pub(super) struct ThemeColors {
     pub raised_blur: f32,
     pub menu_surface: u32,
     pub menu_border: u32,
+    /// The quiet outline around inputs and secondary controls.
+    pub control_border: u32,
     /// The one surface the window's parts sit on: the browser's own pages,
     /// the omnibox field, the active tab, buttons and text fields. A light
     /// tint over the window, exactly as see-through as the window is.
@@ -183,6 +186,10 @@ pub(super) struct ThemeColors {
     pub selected_surface: u32,
     /// What is chosen or on: a chosen option, a switch that is on, a checked box.
     pub chosen: u32,
+    /// The accent used while a chosen action is under the pointer.
+    pub chosen_hover: u32,
+    /// A quiet accent outline for contextual drop targets.
+    pub soft_accent_border: u32,
     /// Text and marks drawn on `chosen`.
     pub on_chosen: u32,
     /// Addresses in omnibox suggestions, set apart from page titles.
@@ -260,6 +267,8 @@ impl ThemeColors {
             Some(hue) => (tint(hue), tint(hue)),
         };
 
+        let menu_border = to_rgba_token(colors.text.opacity(opacity::MENU_BORDER));
+        let accent_adjustment = if dark { colors.text } else { rgb(0x000000) };
         Self {
             window_tint: to_rgba_token(window_tint),
             window_tint_end: to_rgba_token(window_tint_end),
@@ -283,14 +292,25 @@ impl ThemeColors {
             raised_blur: surfaces.raised_blur,
             // A light hairline that separates raised surfaces from what is under
             // them without a dark outline.
-            menu_border: to_rgba_token(colors.text.opacity(opacity::MENU_BORDER)),
+            menu_border,
+            control_border: menu_border,
             // A tint over the window rather than a layer of its own, so stacking
             // it never makes the window less see-through.
             surface: to_rgba_token(colors.text.opacity(opacity::SURFACE_TINT)),
             hover_surface: to_rgba_token(colors.text.opacity(opacity::HOVER)),
             selected_surface: to_rgba_token(colors.text.opacity(opacity::SELECTED)),
             chosen: to_rgb_token(link),
-            on_chosen: to_rgb_token(rgb(0xffffff)),
+            chosen_hover: to_rgb_token(mix_colors(
+                link,
+                accent_adjustment,
+                1.0 - opacity::ACCENT_HOVER_BLEND,
+            )),
+            soft_accent_border: to_rgba_token(link.opacity(0.48)),
+            on_chosen: if dark {
+                to_rgb_token(colors.background)
+            } else {
+                to_rgb_token(rgb(0xffffff))
+            },
             suggestion_address: to_rgb_token(link),
             modal_backdrop: to_rgba_token(Rgba::new(0.0, 0.0, 0.0, opacity::MODAL_BACKDROP)),
             peek_backdrop: to_rgba_token(Rgba::new(0.0, 0.0, 0.0, opacity::PEEK_BACKDROP)),
