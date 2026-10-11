@@ -12,6 +12,7 @@ use super::super::super::{metrics, theme::ThemeColors};
 use super::super::change;
 use super::super::controls::{control_row, switch_row};
 use super::super::layout::{group, secondary_text};
+use crate::platform::app_update::update_app;
 
 /// How long the page keeps checking for the person's answer to macOS.
 const DEFAULT_BROWSER_CHECKS: u32 = 40;
@@ -89,7 +90,7 @@ fn make_default_browser(cx: &mut App) {
                 .timer(DEFAULT_BROWSER_CHECK_INTERVAL)
                 .await;
             let answered = DefaultBrowser::current() == DefaultBrowser::Default;
-            cx.update(|cx| cx.refresh_windows());
+            update_app(cx, |cx| cx.refresh_windows()).await;
             if answered {
                 break;
             }

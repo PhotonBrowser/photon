@@ -10,6 +10,7 @@ use super::super::status_chip::{CHIP_MOTION, ChipIcon, status_chip};
 use super::super::theme::ThemeColors;
 use super::super::{ClickHandler, CrashNotice};
 use super::BrowserWindow;
+use crate::platform::app_update::update_app;
 
 /// What the window says about an Engine service that stopped.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -266,20 +267,23 @@ impl BrowserWindow {
         let delay = deadline.saturating_duration_since(Instant::now());
         self.notice_expiry = Some(cx.spawn(async move |this, cx| {
             cx.background_executor().timer(delay).await;
-            this.update(cx, |this, cx| {
-                this.notice_expiry = None;
-                if matches!(this.engine_notice, Some(EngineNotice::Restarted(_))) {
-                    this.engine_notice = None;
-                }
-                if this
-                    .zoom_shown_at
-                    .is_some_and(|shown_at| shown_at.elapsed() >= ZOOM_NOTICE_DURATION)
-                {
-                    this.zoom_shown_at = None;
-                }
-                cx.notify();
+            update_app(cx, |cx| {
+                this.update(cx, |this, cx| {
+                    this.notice_expiry = None;
+                    if matches!(this.engine_notice, Some(EngineNotice::Restarted(_))) {
+                        this.engine_notice = None;
+                    }
+                    if this
+                        .zoom_shown_at
+                        .is_some_and(|shown_at| shown_at.elapsed() >= ZOOM_NOTICE_DURATION)
+                    {
+                        this.zoom_shown_at = None;
+                    }
+                    cx.notify();
+                })
+                .ok()
             })
-            .ok();
+            .await;
         }));
     }
 }

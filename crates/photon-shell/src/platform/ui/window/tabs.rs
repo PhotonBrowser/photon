@@ -12,6 +12,7 @@ use super::BrowserWindow;
 use super::content::{
     BrowserTab, TabContent, create_webview, create_webview_from_session, follow_appearance,
 };
+use crate::platform::app_update::update_app;
 use crate::platform::engine::RequestedWebView;
 
 /// A closed tab's page and position, for reopening.
@@ -391,8 +392,8 @@ impl BrowserWindow {
         cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor().timer(SPINNER_STEP_INTERVAL).await;
-                let keep_running = this
-                    .update(cx, |this, cx| {
+                let keep_running = update_app(cx, |cx| {
+                    this.update(cx, |this, cx| {
                         let keep_running = !cx.reduce_motion() && this.spinner_shown(cx);
                         if keep_running {
                             this.spinner_step = (this.spinner_step + 1) % LOADING_SPINNER_STEPS;
@@ -407,7 +408,11 @@ impl BrowserWindow {
                         }
                         keep_running
                     })
-                    .unwrap_or(false);
+                    .ok()
+                })
+                .await
+                .flatten()
+                .unwrap_or(false);
                 if !keep_running {
                     break;
                 }

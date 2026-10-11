@@ -19,6 +19,7 @@ use super::super::settings::Settings;
 use super::command_bar::tab_summary;
 use super::content::create_webview;
 use super::{BrowserWindow, open_browser_window};
+use crate::platform::app_update::update_app;
 
 /// How long after a change the session is saved, so a burst saves once.
 const SAVE_DELAY: Duration = Duration::from_secs(1);
@@ -56,10 +57,14 @@ impl BrowsingSession {
         }
         self.save = Some(cx.spawn(async move |cx| {
             cx.background_executor().timer(SAVE_DELAY).await;
-            let save = cx.update_global::<Self, _>(|session, _| {
-                session.save = None;
-                session.snapshot()
-            });
+            let save = update_app(cx, |cx| {
+                cx.update_global::<Self, _>(|session, _| {
+                    session.save = None;
+                    session.snapshot()
+                })
+            })
+            .await
+            .flatten();
             // Clearing `save` above dropped this task's handle, which
             // cancels it at its next await, so the write runs detached.
             if let Some((profile, session)) = save {

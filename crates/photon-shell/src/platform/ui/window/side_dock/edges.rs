@@ -13,6 +13,7 @@ use super::super::super::metrics;
 use super::super::super::settings::Settings;
 use super::super::super::workspace_layout::WorkspaceLayout;
 use super::super::BrowserWindow;
+use crate::platform::app_update::update_app;
 
 /// How long the pointer may be away before the revealed sidebar leaves, so
 /// crossing from the edge into the sidebar does not close it.
@@ -97,29 +98,32 @@ impl BrowserWindow {
         let space_id = Settings::get(cx).spaces.active().id;
         self.sidebar._save_width = Some(cx.spawn(async move |this, cx| {
             cx.background_executor().timer(RESIZE_SAVE_DELAY).await;
-            this.update(cx, |this, cx| {
-                Settings::update(cx, |settings| {
-                    settings.sidebar.width = width;
-                    if let Some(layout) = settings
-                        .spaces
-                        .get_mut(space_id)
-                        .and_then(|space| space.layout_override.as_mut())
-                    {
-                        layout.set_preferred_extent(
-                            photon_core::SIDEBAR_TOGGLE_COMPONENT_ID,
-                            Some(width as u16),
-                        );
-                        // Older saved layouts still store the composite sidebar
-                        // until a space is edited and saved again.
-                        layout.set_preferred_extent(
-                            photon_core::SIDEBAR_COMPONENT_ID,
-                            Some(width as u16),
-                        );
-                    }
-                });
-                this.sidebar.dragged_width = None;
+            update_app(cx, |cx| {
+                this.update(cx, |this, cx| {
+                    Settings::update(cx, |settings| {
+                        settings.sidebar.width = width;
+                        if let Some(layout) = settings
+                            .spaces
+                            .get_mut(space_id)
+                            .and_then(|space| space.layout_override.as_mut())
+                        {
+                            layout.set_preferred_extent(
+                                photon_core::SIDEBAR_TOGGLE_COMPONENT_ID,
+                                Some(width as u16),
+                            );
+                            // Older saved layouts still store the composite sidebar
+                            // until a space is edited and saved again.
+                            layout.set_preferred_extent(
+                                photon_core::SIDEBAR_COMPONENT_ID,
+                                Some(width as u16),
+                            );
+                        }
+                    });
+                    this.sidebar.dragged_width = None;
+                })
+                .ok()
             })
-            .ok();
+            .await;
         }));
     }
 
@@ -163,16 +167,19 @@ impl BrowserWindow {
     fn hide_reveal_when_left(&mut self, cx: &mut Context<Self>) {
         self.sidebar._hide_check = Some(cx.spawn(async move |this, cx| {
             cx.background_executor().timer(REVEAL_GRACE).await;
-            this.update(cx, |this, cx| {
-                let sidebar = &this.sidebar;
-                if !sidebar.pointer_on_edge
-                    && !sidebar.pointer_on_sidebar
-                    && this.sidebar.set_revealed(false, cx)
-                {
-                    cx.notify();
-                }
+            update_app(cx, |cx| {
+                this.update(cx, |this, cx| {
+                    let sidebar = &this.sidebar;
+                    if !sidebar.pointer_on_edge
+                        && !sidebar.pointer_on_sidebar
+                        && this.sidebar.set_revealed(false, cx)
+                    {
+                        cx.notify();
+                    }
+                })
+                .ok()
             })
-            .ok();
+            .await;
         }));
     }
 }

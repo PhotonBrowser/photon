@@ -31,6 +31,7 @@
 // A toolkit: not every preset, curve and edge is in use yet.
 #![allow(dead_code)]
 
+use crate::platform::app_update::update_app;
 use gpui::{
     Animation, AnimationElement, AnimationExt, Context, ElementId, IntoElement, Motion,
     SpringConfig, Styled, Task, ease_in_out, ease_out_quint, linear, px,
@@ -422,7 +423,7 @@ impl<T: Clone + 'static> Presence<T> {
             self.leaving = Some((last, Instant::now()));
             self._expiry = Some(cx.spawn(async move |this, cx| {
                 cx.background_executor().timer(exit).await;
-                this.update(cx, |_, cx| cx.notify()).ok();
+                update_app(cx, |cx| this.update(cx, |_, cx| cx.notify()).ok()).await;
             }));
         }
         match &self.leaving {

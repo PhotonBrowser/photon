@@ -6,6 +6,8 @@ use gpui::{Context, Task, Window};
 use photon_core::{Shortcut, SpaceId, internal_page_url, pinned_after_drop, should_archive};
 use std::time::Duration;
 
+use crate::platform::app_update::update_app;
+
 use super::super::pages::find_page;
 use super::super::settings::Settings;
 use super::BrowserWindow;
@@ -146,13 +148,20 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Task<()> {
-        cx.spawn_in(window, async move |this, cx| {
+        let handle = window.window_handle();
+        cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor().timer(ARCHIVE_CHECK_INTERVAL).await;
-                let closed = this.update_in(cx, |this, window, cx| {
-                    this.archive_unused_tabs(window, cx);
-                });
-                if closed.is_err() {
+                // Waits while the app is busy; stops once the window is gone.
+                let open = update_app(cx, |cx| {
+                    handle
+                        .update(cx, |_, window, cx| {
+                            this.update(cx, |this, cx| this.archive_unused_tabs(window, cx))
+                        })
+                        .is_ok_and(|updated| updated.is_ok())
+                })
+                .await;
+                if open != Some(true) {
                     break;
                 }
             }

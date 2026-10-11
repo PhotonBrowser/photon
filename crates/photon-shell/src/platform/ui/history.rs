@@ -15,6 +15,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use super::super::engine::EngineRuntime;
 use super::super::trace;
 use super::Favicon;
+use crate::platform::app_update::update_app;
 
 /// How long after a change the history is saved, so a burst of changes
 /// saves once.
@@ -201,7 +202,8 @@ impl BrowsingHistory {
         }
         let app = cx.to_async();
         runtime.clear_browsing_data(&request, move || {
-            app.spawn(async move |cx| cx.update(done)).detach();
+            app.spawn(async move |cx| update_app(cx, done).await)
+                .detach();
         });
     }
 
@@ -213,10 +215,14 @@ impl BrowsingHistory {
             if changed && browsing.profile.is_some() && browsing.save.is_none() {
                 browsing.save = Some(cx.spawn(async move |cx| {
                     cx.background_executor().timer(SAVE_DELAY).await;
-                    let save = cx.update_global::<Self, _>(|browsing, _| {
-                        browsing.save = None;
-                        browsing.snapshot()
-                    });
+                    let save = update_app(cx, |cx| {
+                        cx.update_global::<Self, _>(|browsing, _| {
+                            browsing.save = None;
+                            browsing.snapshot()
+                        })
+                    })
+                    .await
+                    .flatten();
                     // Clearing `save` above dropped this task's handle, which
                     // cancels it at its next await, so the write runs detached.
                     if let Some((profile, history)) = save {
