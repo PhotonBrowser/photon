@@ -76,6 +76,10 @@ pub(in crate::platform) struct PhotonWebView {
     pub(super) _quit_subscription: Option<Subscription>,
     focus_subscriptions: Vec<Subscription>,
     pending_new_webviews: HashMap<u64, RequestedWebView>,
+    /// The page the tab was opened to show, by address and title, which
+    /// stands for the page until it loads, as for a tab reopened in the
+    /// background that has not been shown yet.
+    pub(in crate::platform) requested: Option<photon_core::Shortcut>,
 }
 
 /// Page changes the browser chrome shows. Engine frames do not emit it, so
@@ -276,6 +280,7 @@ impl PhotonWebView {
             session,
             focus_handle: cx.focus_handle(),
             last_viewport: None,
+            requested: None,
             sent_dark_color_scheme: None,
             input: WebViewInput::default(),
             history_swipe: history_swipe::HistorySwipe::default(),

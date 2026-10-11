@@ -53,17 +53,26 @@ impl BrowserWindow {
                         };
                         (page.definition.title.to_owned(), icon)
                     }
-                    // A pinned tab that has not loaded yet, as when it opens in
-                    // the background at launch, shows what it was pinned as.
+                    // A tab that has not loaded yet, as when it opens in the
+                    // background at launch, shows what it was pinned or
+                    // opened as.
                     TabContent::Web(webview)
                         if !webview.read(cx).has_page()
-                            && let Some(pin) = &tab.pin =>
+                            && let Some(saved) = tab
+                                .pin
+                                .clone()
+                                .or_else(|| webview.read(cx).requested.clone()) =>
                     {
-                        let icon = match BrowsingHistory::favicon(&pin.url, cx) {
+                        let icon = match BrowsingHistory::favicon(&saved.url, cx) {
                             Some(favicon) => TabIcon::Favicon(favicon),
                             None => TabIcon::Page,
                         };
-                        (pin.title.clone(), icon)
+                        let label = if saved.title.trim().is_empty() {
+                            saved.url
+                        } else {
+                            saved.title
+                        };
+                        (label, icon)
                     }
                     TabContent::Web(webview) => {
                         let view = webview.read(cx);

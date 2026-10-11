@@ -246,6 +246,12 @@ pub(super) fn create_webview(
         }
     };
     let webview = create_webview_from_session(cx, runtime, session);
+    webview.update(cx, |view, _| {
+        view.requested = Some(photon_core::Shortcut {
+            title: String::new(),
+            url: address.to_owned(),
+        });
+    });
     Some(webview)
 }
 

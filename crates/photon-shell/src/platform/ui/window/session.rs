@@ -208,6 +208,12 @@ impl BrowserWindow {
                     let Some(webview) = create_webview(cx, self.runtime.clone(), &tab.url) else {
                         continue;
                     };
+                    webview.update(cx, |view, _| {
+                        view.requested = Some(photon_core::Shortcut {
+                            title: tab.title.clone(),
+                            url: tab.url.clone(),
+                        });
+                    });
                     self.insert_webview(index, webview, None, false, window, cx);
                 }
             }
