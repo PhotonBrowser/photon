@@ -1,0 +1,203 @@
+//! What a tab's Engine callbacks share: the page state they update on the
+//! UI thread, the presentation they feed, and the frames they release.
+
+use super::super::app_update::update_app;
+use gpui::Context;
+use photon_core::{BrowserState, DialogRequest, EngineEvent};
+use photon_performance::{EnginePerformanceStats, PerformanceMonitor};
+use std::{
+    ffi::c_void,
+    sync::{
+        Arc, Mutex, Weak,
+        atomic::{AtomicPtr, Ordering},
+    },
+};
+
+use super::super::presentation::{LeaseLedger, PresentationRuntime};
+use super::super::ui::{Favicon, FindResult, PhotonWebView};
+use super::super::{ffi::embedder, trace};
+use super::UiWake;
+
+pub(super) struct CallbackState {
+    pub(super) presentation: Arc<PresentationRuntime>,
+    pub(super) leases: Arc<Mutex<LeaseLedger>>,
+    pub(super) engine_view: AtomicPtr<c_void>,
+    pub(super) ui_wake: Mutex<Option<UiWake>>,
+    pub(super) performance: PerformanceMonitor,
+}
+
+pub(super) struct RuntimeCallbacks {
+    pub(super) views: Mutex<Vec<Weak<CallbackState>>>,
+}
+
+impl CallbackState {
+    pub(super) fn set_ui_wake(&self, wake: UiWake) {
+        *self.ui_wake.lock().unwrap() = Some(wake);
+        self.request_redraw();
+    }
+
+    pub(super) fn request_redraw(&self) {
+        let diagnostics = self.performance.snapshot_if_enabled();
+        self.update_webview(move |view, cx| {
+            view.present_latest(cx);
+            if let Some(diagnostics) = diagnostics
+                && view.diagnostics != diagnostics
+            {
+                view.diagnostics = diagnostics;
+                cx.notify();
+            }
+        });
+    }
+
+    pub(super) fn set_page_state(&self, state: BrowserState) {
+        self.update_webview(move |view, cx| view.set_state(state, cx));
+    }
+
+    pub(super) fn set_page_error(&self, message: String) {
+        self.update_webview(move |view, cx| {
+            view.state.apply(EngineEvent::LoadFailed(message));
+            view.history_swipe_navigation_failed();
+            view.state_changed(cx);
+        });
+    }
+
+    pub(super) fn set_page_favicon(&self, favicon: Option<Favicon>) {
+        self.update_webview(move |view, cx| view.set_favicon(favicon, cx));
+    }
+
+    pub(super) fn set_audio_state(&self, playing: bool, muted: bool) {
+        self.update_webview(move |view, cx| view.set_audio_state(playing, muted, cx));
+    }
+
+    pub(super) fn navigation_committed(&self) {
+        self.update_webview(|view, _cx| {
+            view.dialogs.navigation_committed();
+            view.history_swipe_navigation_committed();
+        });
+    }
+
+    pub(super) fn history_swipe_candidate(
+        &self,
+        gesture_id: u64,
+        back: bool,
+        unconsumed_delta: f64,
+    ) {
+        self.update_webview(move |view, cx| {
+            view.history_swipe_candidate(gesture_id, back, unconsumed_delta as f32, cx);
+        });
+    }
+
+    pub(super) fn request_page_dialog(&self, request: DialogRequest) {
+        self.update_webview(move |view, cx| view.request_dialog(request, cx));
+    }
+
+    pub(super) fn handle_engine_crash(&self) {
+        self.update_webview(|view, cx| view.handle_engine_crash(cx));
+    }
+
+    pub(super) fn set_find_result(&self, result: FindResult) {
+        self.update_webview(move |view, cx| view.set_find_result(result, cx));
+    }
+
+    pub(super) fn set_zoom_level(&self, zoom_level: f64) {
+        self.update_webview(move |view, cx| view.set_zoom_level(zoom_level, cx));
+    }
+
+    pub(super) fn set_page_unresponsive(&self, unresponsive: bool) {
+        self.update_webview(move |view, cx| view.set_page_unresponsive(unresponsive, cx));
+    }
+
+    pub(super) fn crash_recovered(&self) {
+        self.update_webview(|view, cx| view.crash_recovered(cx));
+    }
+
+    pub(super) fn mark_input(&self) {
+        self.performance.mark_input();
+    }
+
+    /// Tracks frame gaps and input latency, which only the diagnostics
+    /// overlay shows, so frames skip this while it is hidden.
+    pub(super) fn record_frame(&self) {
+        self.performance.record_frame();
+    }
+
+    pub(super) fn set_engine_diagnostics(&self, stats: &embedder::PerformanceStats) {
+        self.performance.set_engine_stats(EnginePerformanceStats {
+            cpu_percent: stats.has_cpu_percent.then_some(stats.cpu_percent),
+            memory_bytes: stats.has_memory_bytes.then_some(stats.memory_bytes),
+            managed_heap_bytes: stats
+                .has_managed_heap_bytes
+                .then_some(stats.managed_heap_bytes),
+            download_bytes_per_second: stats.download_bytes_per_second,
+            upload_bytes_per_second: stats.upload_bytes_per_second,
+            frames_per_second: stats
+                .has_frames_per_second
+                .then_some(stats.frames_per_second),
+        });
+        if self.performance.is_enabled() {
+            self.publish_diagnostics();
+        }
+    }
+
+    pub(super) fn set_diagnostics_enabled(&self, enabled: bool) {
+        // Frames were not tracked while hidden; starting enabled resets the
+        // interval so it does not span the hidden period.
+        self.performance.set_enabled(enabled);
+        if enabled {
+            self.publish_diagnostics();
+        }
+    }
+
+    pub(super) fn publish_diagnostics(&self) {
+        let snapshot = self.performance.snapshot();
+        self.update_webview(move |view, cx| {
+            if view.diagnostics != snapshot {
+                view.diagnostics = snapshot;
+                cx.notify();
+            }
+        });
+    }
+
+    /// Runs `update` on the UI thread against the live WebView.
+    pub(super) fn update_webview(
+        &self,
+        update: impl FnOnce(&mut PhotonWebView, &mut Context<PhotonWebView>) + 'static,
+    ) {
+        let Some(wake) = self.ui_wake.lock().unwrap().clone() else {
+            return;
+        };
+        wake.app
+            .spawn(async move |cx| {
+                let Some(webview) = wake.webview.upgrade() else {
+                    return;
+                };
+                // Notifying the view is enough to schedule a frame; a window
+                // refresh would bypass every cached view.
+                update_app(cx, |cx| webview.update(cx, update)).await;
+            })
+            .detach();
+    }
+}
+
+pub(super) fn deliver_pending_releases(callbacks: &CallbackState) {
+    let view = callbacks.engine_view.load(Ordering::Acquire);
+    if view.is_null() {
+        return;
+    }
+    let pending = callbacks.leases.lock().unwrap().take_pending();
+    for release in pending {
+        unsafe {
+            embedder::photon_view_release_native_frame(
+                view,
+                release.key.backing,
+                release.key.generation,
+                release.key.frame,
+            );
+        }
+        trace(format_args!(
+            "FrameReleased frame={} gen={} delivered-to-engine",
+            release.key.frame, release.key.generation
+        ));
+        callbacks.leases.lock().unwrap().release(release.key);
+    }
+}
