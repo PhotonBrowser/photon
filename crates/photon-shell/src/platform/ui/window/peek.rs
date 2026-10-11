@@ -7,6 +7,7 @@ use gpui::{
 };
 
 use super::super::button::icon_button;
+use super::super::controls::OwnsClicks;
 use super::super::icons::{close_icon, open_in_tab_icon};
 use super::super::layout::{Elevated, Elevation, Raised, h_stack, v_stack};
 use super::super::motion::{AnimateIn, Entrance, Presence};
@@ -54,7 +55,6 @@ impl BrowserWindow {
             webview,
             _subscription: subscription,
         });
-        self.open_menu = None;
         cx.notify();
     }
 
@@ -65,14 +65,16 @@ impl BrowserWindow {
                 view.session.set_visible(false);
                 view.session.set_focus(false);
             });
-            self.activate_tab(self.active_tab, true, window, cx);
+            if let Some(active_tab) = self.active_tab {
+                self.activate_tab(active_tab, true, window, cx);
+            }
         }
     }
 
     /// Moves the previewed page, as it is, into a tab beside the one under it.
     fn keep_peek_as_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(peek) = self.peek.open.take() {
-            let index = self.active_tab + 1;
+            let index = self.active_tab.map_or(0, |active_tab| active_tab + 1);
             self.insert_webview(index, peek.webview, None, true, window, cx);
         }
     }
@@ -95,7 +97,7 @@ impl BrowserWindow {
             .border_1()
             .border_color(rgba(palette.menu_border))
             .raised(palette)
-            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .owns_clicks()
             .child(icon_button(
                 "peek-open-in-tab",
                 "Open in Tab",
@@ -123,7 +125,7 @@ impl BrowserWindow {
             .border_1()
             .border_color(rgba(palette.menu_border))
             .elevated(Elevation::High)
-            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .owns_clicks()
             .child(webview);
         let panel = v_stack()
             .size_full()

@@ -30,7 +30,6 @@ impl BrowserWindow {
             let was_empty = self.pending_popups.is_empty();
             self.pending_popups
                 .push_back(PendingPopup { request, origin });
-            self.open_menu = None;
             if was_empty {
                 window.focus(&self.popup_confirmation_focus, cx);
             }

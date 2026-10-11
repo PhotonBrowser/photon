@@ -5,10 +5,9 @@ use gpui::{App, Context, KeyDownEvent, MouseDownEvent, MouseUpEvent};
 
 use super::super::history::BrowsingHistory;
 use super::super::pages::PageIcon;
-use super::super::tabs::{DraggedTab, TabIcon, TabItem};
+use super::super::tabs::{DraggedTab, TabDragStart, TabIcon, TabItem};
 use super::BrowserWindow;
 use super::content::TabContent;
-use super::menu::OpenMenu;
 
 impl BrowserWindow {
     /// The tabs the layout lists, in order: in the sidebar, the space's own
@@ -41,6 +40,7 @@ impl BrowserWindow {
     }
 
     pub(super) fn tab_items(&self, cx: &mut Context<Self>) -> Vec<TabItem> {
+        let browser = cx.entity().downgrade();
         self.tabs
             .iter()
             .enumerate()
@@ -96,7 +96,7 @@ impl BrowserWindow {
                     icon,
                     index,
                     pinned: tab.pin.is_some(),
-                    active: index == self.active_tab,
+                    active: self.active_tab == Some(index),
                     focus_handle: self.tab_focus_handles[index].clone(),
                     on_select: Box::new(cx.listener(move |this, _, window, cx| {
                         cx.stop_propagation();
@@ -119,6 +119,13 @@ impl BrowserWindow {
                             webview.update(cx, |view, cx| view.toggle_audio_mute(cx));
                         }
                     })),
+                    on_drag_start: {
+                        let browser = browser.clone();
+                        let on_drag_start: TabDragStart = Box::new(move |cx| {
+                            browser.update(cx, |_, cx| cx.notify()).ok();
+                        });
+                        on_drag_start
+                    },
                     on_middle_click: Box::new(cx.listener(
                         move |this, _: &MouseUpEvent, window, cx| {
                             cx.stop_propagation();
@@ -126,10 +133,9 @@ impl BrowserWindow {
                         },
                     )),
                     on_context_menu: Box::new(cx.listener(
-                        move |this, event: &MouseDownEvent, _, cx| {
+                        move |this, _: &MouseDownEvent, _, cx| {
                             cx.stop_propagation();
-                            this.open_menu = Some(OpenMenu::Tab(index, event.position));
-                            cx.notify();
+                            this.show_tab_menu(index, cx);
                         },
                     )),
                     on_drop: Box::new(cx.listener(move |this, dragged: &DraggedTab, _, cx| {

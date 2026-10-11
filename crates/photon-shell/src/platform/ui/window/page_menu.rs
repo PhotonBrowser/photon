@@ -1,74 +1,72 @@
-//! The page's right-click menu, built from the items the Engine offers.
+//! The page's right-click menu, built from the items the Engine offers and
+//! shown as a native menu.
 
-use gpui::{Context, prelude::*};
+use gpui::{Context, MenuItem};
+use photon_shortcuts::ToggleZenMode;
 
-use super::super::layout::v_stack;
-use super::super::menu::{menu_action, menu_checkbox, menu_disabled, menu_separator, menu_surface};
-use super::super::motion::Transition;
-use super::super::{PageMenuItem, theme::ThemeColors};
-use super::{BrowserWindow, OpenMenu};
+use super::super::PageMenuItem;
+use super::BrowserWindow;
+
+/// Runs the item at `index` in the active page's context menu.
+#[derive(Clone, PartialEq, gpui::Action)]
+#[action(namespace = photon, no_json)]
+pub(super) struct ActivatePageMenuItem {
+    index: usize,
+}
 
 impl BrowserWindow {
-    /// Opens the active page's context menu where the page asked for it.
+    /// Opens the active page's context menu, which the page asked for.
     pub(super) fn open_page_menu(&mut self, cx: &mut Context<Self>) {
-        let position = self.active_webview().and_then(|webview| {
-            webview
-                .read(cx)
-                .context_menu
-                .as_ref()
-                .map(|menu| menu.position)
-        });
-        if let Some(position) = position {
-            self.open_menu = Some(OpenMenu::Page(position));
-            cx.notify();
+        let Some(webview) = self.active_webview() else {
+            return;
+        };
+        let Some(mut items) = webview
+            .read(cx)
+            .context_menu
+            .as_ref()
+            .map(|menu| page_menu_items(&menu.items))
+        else {
+            return;
+        };
+        // Zen mode hides every other way back to the chrome but its shortcut.
+        if self.sidebar.zen() {
+            items.extend([
+                MenuItem::separator(),
+                MenuItem::action("Exit Zen Mode", ToggleZenMode),
+            ]);
         }
+        cx.show_context_menu(items);
     }
 
-    pub(super) fn page_menu(
-        &self,
-        transition: Transition,
-        palette: ThemeColors,
+    pub(super) fn activate_page_menu_item(
+        &mut self,
+        item: &ActivatePageMenuItem,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement + use<> {
-        let Some(active_webview) = self.active_webview() else {
-            return menu_surface(v_stack(), transition, palette);
-        };
-        let webview = active_webview.read(cx);
-        let items = webview.context_menu.iter().flat_map(|menu| &menu.items);
-        let mut tab_index = 0;
-        let rows = items.enumerate().map(|(index, item)| {
-            let id = ("page-menu-item", index);
-            let PageMenuItem::Action {
+    ) {
+        if let Some(webview) = self.active_webview() {
+            webview.update(cx, |view, _| view.activate_context_menu_item(item.index));
+        }
+    }
+}
+
+/// The Engine's items as native menu items, each running its own index.
+fn page_menu_items(items: &[PageMenuItem]) -> Vec<MenuItem> {
+    items
+        .iter()
+        .enumerate()
+        .map(|(index, item)| match item {
+            PageMenuItem::Separator => MenuItem::separator(),
+            PageMenuItem::Action {
                 label,
                 enabled,
                 checked,
-            } = item
-            else {
-                return menu_separator(palette).into_any_element();
-            };
-            if !enabled {
-                return menu_disabled(id, label.clone(), palette).into_any_element();
-            }
-            let activate = Box::new(cx.listener(move |this: &mut Self, _, _, cx| {
-                cx.stop_propagation();
-                this.open_menu = None;
-                if let Some(webview) = this.active_webview() {
-                    webview.update(cx, |view, _| view.activate_context_menu_item(index));
-                }
-                cx.notify();
-            }));
-            tab_index += 1;
-            match checked {
-                Some(checked) => {
-                    menu_checkbox(id, label.clone(), tab_index, *checked, activate, palette)
-                        .into_any_element()
-                }
-                None => {
-                    menu_action(id, label.clone(), tab_index, activate, palette).into_any_element()
-                }
-            }
-        });
-        let content = v_stack().children(rows.collect::<Vec<_>>());
-        menu_surface(content, transition, palette)
-    }
+            } => MenuItem::Action {
+                name: label.clone(),
+                action: Box::new(ActivatePageMenuItem { index }),
+                os_action: None,
+                checked: checked.unwrap_or(false),
+                disabled: !enabled,
+            },
+        })
+        .collect()
 }

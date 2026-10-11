@@ -1,15 +1,13 @@
 //! A tab's and a favourite's right-click menus, and the tab actions behind
 //! them and drag-and-drop.
 
-use gpui::{Context, Window, prelude::*};
+use gpui::{Context, MenuItem, Window};
 use photon_core::BrowserCommand;
+use photon_shortcuts::CloseTab;
 
-use super::super::layout::v_stack;
-use super::super::menu::{menu_action, menu_separator, menu_surface};
-use super::super::motion::Transition;
-use super::super::theme::ThemeColors;
 use super::BrowserWindow;
 use super::content::TabContent;
+use super::menu::{MenuCommand, command_item};
 
 impl BrowserWindow {
     /// Moves the tab at `from` to `to`, keeping the same tab active. Callers
@@ -19,18 +17,14 @@ impl BrowserWindow {
         if from == to || from >= count || to >= count {
             return;
         }
-        let active = self.tabs[self.active_tab].id;
+        let active = self.active_tab.map(|index| self.tabs[index].id);
         let tab = self.tabs.remove(from);
         self.tabs.insert(to, tab);
         let subscription = self.tab_subscriptions.remove(from);
         self.tab_subscriptions.insert(to, subscription);
         let focus_handle = self.tab_focus_handles.remove(from);
         self.tab_focus_handles.insert(to, focus_handle);
-        self.active_tab = self
-            .tabs
-            .iter()
-            .position(|tab| tab.id == active)
-            .unwrap_or(0);
+        self.active_tab = active.and_then(|id| self.tabs.iter().position(|tab| tab.id == id));
         cx.notify();
     }
 
@@ -94,7 +88,7 @@ impl BrowserWindow {
         if index >= self.tabs.len() {
             return;
         }
-        if self.active_tab > index {
+        if self.active_tab.is_some_and(|active_tab| active_tab > index) {
             self.activate_tab(index, true, window, cx);
         }
         for right in (index + 1..self.tabs.len()).rev() {
@@ -102,102 +96,48 @@ impl BrowserWindow {
         }
     }
 
-    /// The menu for the tab at `index`.
-    pub(super) fn tab_menu(
-        &self,
-        index: usize,
-        transition: Transition,
-        palette: ThemeColors,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement + use<> {
+    /// Opens the native menu for the tab at `index`.
+    pub(super) fn show_tab_menu(&mut self, index: usize, cx: &mut Context<Self>) {
+        let items = self.tab_menu_items(index, cx);
+        cx.show_context_menu(items);
+    }
+
+    /// The menu for the tab at `index`: reloading, duplicating, pinning and
+    /// favouriting it, and closing it or others.
+    fn tab_menu_items(&self, index: usize, cx: &Context<Self>) -> Vec<MenuItem> {
         let count = self.tabs.len();
-        let mut content = v_stack()
-            .child(menu_action(
-                "tab-menu-reload",
-                "Reload Tab",
-                0,
-                Box::new(cx.listener(move |this, _, _, cx| {
-                    cx.stop_propagation();
-                    this.open_menu = None;
-                    this.reload_tab(index, cx);
-                })),
-                palette,
-            ))
-            .child(menu_action(
-                "tab-menu-duplicate",
-                "Duplicate Tab",
-                1,
-                Box::new(cx.listener(move |this, _, window, cx| {
-                    cx.stop_propagation();
-                    this.open_menu = None;
-                    this.duplicate_tab(index, window, cx);
-                })),
-                palette,
-            ))
-            .children(self.pin_action(index, palette, cx))
-            .children(self.favourite_action(index, palette, cx))
-            .child(menu_separator(palette))
-            .child(menu_action(
-                "tab-menu-close",
-                "Close Tab",
-                2,
-                Box::new(cx.listener(move |this, _, window, cx| {
-                    cx.stop_propagation();
-                    this.open_menu = None;
-                    this.close_tab(index, window, cx);
-                })),
-                palette,
+        let mut items = vec![
+            command_item("Reload Tab", MenuCommand::ReloadTab(index)),
+            command_item("Duplicate Tab", MenuCommand::DuplicateTab(index)),
+        ];
+        if self.can_pin(index, cx) {
+            let pinned = self.tabs[index].pin.is_some();
+            items.push(command_item(
+                if pinned { "Unpin Tab" } else { "Pin Tab" },
+                MenuCommand::TogglePin(index),
             ));
+        }
+        items.extend(self.favourite_item(index, cx));
+        items.push(MenuItem::separator());
+        // ⌘W closes the active tab, so its item is that shortcut's action
+        // and shows its keys.
+        items.push(if self.active_tab == Some(index) {
+            MenuItem::action("Close Tab", CloseTab)
+        } else {
+            command_item("Close Tab", MenuCommand::CloseTab(index))
+        });
         if count > 1 {
-            content = content.child(menu_action(
-                "tab-menu-close-others",
+            items.push(command_item(
                 "Close Other Tabs",
-                3,
-                Box::new(cx.listener(move |this, _, window, cx| {
-                    cx.stop_propagation();
-                    this.open_menu = None;
-                    this.close_other_tabs(index, window, cx);
-                })),
-                palette,
+                MenuCommand::CloseOtherTabs(index),
             ));
         }
         if index + 1 < count {
-            content = content.child(menu_action(
-                "tab-menu-close-right",
+            items.push(command_item(
                 "Close Tabs to the Right",
-                4,
-                Box::new(cx.listener(move |this, _, window, cx| {
-                    cx.stop_propagation();
-                    this.open_menu = None;
-                    this.close_tabs_to_right(index, window, cx);
-                })),
-                palette,
+                MenuCommand::CloseTabsToRight(index),
             ));
         }
-        menu_surface(content, transition, palette)
-    }
-
-    /// Pins the tab above today's tabs, or unpins it.
-    fn pin_action(
-        &self,
-        index: usize,
-        palette: ThemeColors,
-        cx: &mut Context<Self>,
-    ) -> Option<impl IntoElement + use<>> {
-        if !self.can_pin(index, cx) {
-            return None;
-        }
-        let pinned = self.tabs[index].pin.is_some();
-        Some(menu_action(
-            "tab-menu-pin",
-            if pinned { "Unpin Tab" } else { "Pin Tab" },
-            6,
-            Box::new(cx.listener(move |this, _, _, cx| {
-                cx.stop_propagation();
-                this.open_menu = None;
-                this.toggle_pin(index, cx);
-            })),
-            palette,
-        ))
+        items
     }
 }

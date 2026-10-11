@@ -3,16 +3,15 @@
 //! changing and removing spaces.
 
 use gpui::{
-    AnyElement, Context, Entity, MouseDownEvent, ScrollDelta, ScrollWheelEvent, Subscription,
-    TouchPhase, Window, div, prelude::*,
+    AnyElement, Context, Entity, MenuItem, MouseDownEvent, ScrollDelta, ScrollWheelEvent,
+    Subscription, TouchPhase, Window, div, prelude::*,
 };
 use photon_core::{SpaceId, WindowColor};
 use std::time::Instant;
 
-use super::super::layout::v_stack;
-use super::super::menu::{menu_action, menu_surface};
+use super::super::input::physical_horizontal_delta;
 use super::super::modal::{MODAL_MOTION, modal};
-use super::super::motion::{Edge, Presence, Transition};
+use super::super::motion::{Edge, Presence};
 use super::super::pages::NEW_TAB;
 use super::super::settings::Settings;
 use super::super::sidebar::SpaceDot;
@@ -20,7 +19,7 @@ use super::super::space_editor::{SpaceEditor, SpaceEditorEvent};
 use super::super::theme::{ThemeColors, window_color_swatch};
 use super::super::workspace_layout::WorkspaceLayout;
 use super::BrowserWindow;
-use super::menu::OpenMenu;
+use super::menu::{MenuCommand, command_item};
 
 /// How far two fingers move sideways across the sidebar to switch space.
 const SWIPE_DISTANCE: f32 = 80.0;
@@ -81,9 +80,6 @@ impl BrowserWindow {
     }
 
     pub(super) fn switch_space(&mut self, id: SpaceId, cx: &mut Context<Self>) {
-        if self.workspace_edit.is_some() {
-            return;
-        }
         Settings::update(cx, |settings| {
             settings.spaces.activate(id);
         });
@@ -91,9 +87,6 @@ impl BrowserWindow {
 
     /// Switches to the space `offset` places along, if there is one.
     pub(super) fn switch_space_by(&mut self, offset: isize, cx: &mut Context<Self>) {
-        if self.workspace_edit.is_some() {
-            return;
-        }
         if let Some(id) = Settings::get(cx).spaces.neighbour(offset) {
             self.switch_space(id, cx);
         }
@@ -116,7 +109,11 @@ impl BrowserWindow {
         };
         self.spaces.shown = active;
         self.spaces.switched = Some((edge, Instant::now()));
-        if !self.shows_spaces(cx) || self.tabs[self.active_tab].space == active {
+        let Some(active_tab) = self.active_tab else {
+            cx.notify();
+            return;
+        };
+        if !self.shows_spaces(cx) || self.tabs[active_tab].space == active {
             cx.notify();
             return;
         }
@@ -139,7 +136,7 @@ impl BrowserWindow {
         let ScrollDelta::Pixels(delta) = event.delta else {
             return;
         };
-        let (x, y) = (f32::from(delta.x), f32::from(delta.y));
+        let (x, y) = (physical_horizontal_delta(event), f32::from(delta.y));
         if event.touch_phase == TouchPhase::Started {
             self.spaces.swipe = 0.0;
             self.spaces.swiped = false;
@@ -175,10 +172,10 @@ impl BrowserWindow {
                         this.switch_space(id, cx);
                     })),
                     on_context_menu: Box::new(cx.listener(
-                        move |this, event: &MouseDownEvent, _, cx| {
+                        move |this, _: &MouseDownEvent, _, cx| {
                             cx.stop_propagation();
-                            this.open_menu = Some(OpenMenu::Space(id, event.position));
-                            cx.notify();
+                            let items = this.space_menu_items(id, cx);
+                            cx.show_context_menu(items);
                         },
                     )),
                 }
@@ -186,42 +183,14 @@ impl BrowserWindow {
             .collect()
     }
 
-    /// The menu for the space `id`: change it, or remove it unless it is the
-    /// last.
-    pub(super) fn space_menu(
-        &self,
-        id: SpaceId,
-        transition: Transition,
-        palette: ThemeColors,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement + use<> {
-        let removable = Settings::get(cx).spaces.all().len() > 1;
-        let content = v_stack()
-            .child(menu_action(
-                "space-menu-edit",
-                "Edit Space…",
-                0,
-                Box::new(cx.listener(move |this, _, window, cx| {
-                    cx.stop_propagation();
-                    this.open_menu = None;
-                    this.edit_space(Some(id), window, cx);
-                })),
-                palette,
-            ))
-            .when(removable, |menu| {
-                menu.child(menu_action(
-                    "space-menu-delete",
-                    "Delete Space",
-                    1,
-                    Box::new(cx.listener(move |this, _, window, cx| {
-                        cx.stop_propagation();
-                        this.open_menu = None;
-                        this.delete_space(id, window, cx);
-                    })),
-                    palette,
-                ))
-            });
-        menu_surface(content, transition, palette)
+    /// The menu for the space `id`: edit it, or delete it when it is not
+    /// the only one.
+    fn space_menu_items(&self, id: SpaceId, cx: &Context<Self>) -> Vec<MenuItem> {
+        let mut items = vec![command_item("Edit Space…", MenuCommand::EditSpace(id))];
+        if Settings::get(cx).spaces.all().len() > 1 {
+            items.push(command_item("Delete Space", MenuCommand::DeleteSpace(id)));
+        }
+        items
     }
 
     /// Opens the dialog for the space `id`, or for a new space.
@@ -259,32 +228,65 @@ impl BrowserWindow {
             name,
             color,
             gradient,
+            preset_id,
+            new_preset,
         } = event
         {
-            let (name, color, gradient) = (name.clone(), *color, *gradient);
-            Settings::update(cx, |settings| match editing.space {
-                Some(id) => {
-                    if let Some(space) = settings.spaces.get_mut(id) {
-                        if !name.is_empty() {
-                            space.name = name;
+            let (name, color, gradient, preset_id, new_preset) = (
+                name.clone(),
+                *color,
+                *gradient,
+                preset_id.clone(),
+                new_preset.clone(),
+            );
+            Settings::update(cx, move |settings| {
+                let preset_id = new_preset
+                    .and_then(|(name, layout)| settings.workspace.add_preset(&name, layout))
+                    .or(preset_id.filter(|id| {
+                        settings
+                            .workspace
+                            .presets
+                            .iter()
+                            .any(|preset| preset.id == *id)
+                    }));
+                let space_id = match editing.space {
+                    Some(id) => {
+                        if let Some(space) = settings.spaces.get_mut(id) {
+                            if !name.is_empty() {
+                                space.name = name;
+                            }
+                            space.color = color;
+                            space.gradient = gradient;
                         }
-                        space.color = color;
-                        space.gradient = gradient;
+                        id
                     }
-                }
-                None => {
-                    let id = settings.spaces.add(Some(name), color, gradient);
-                    settings.spaces.activate(id);
+                    None => {
+                        let id = settings.spaces.add(Some(name), color, gradient);
+                        settings.spaces.activate(id);
+                        id
+                    }
+                };
+                if let Some(preset_id) = preset_id {
+                    settings.spaces.set_preset_override(space_id, &preset_id);
+                } else {
+                    settings.spaces.clear_layout_override(space_id);
                 }
             });
         }
-        self.activate_tab(self.active_tab, true, window, cx);
+        if let Some(active_tab) = self.active_tab {
+            self.activate_tab(active_tab, true, window, cx);
+        }
         cx.notify();
     }
 
     /// Removes the space `id` and closes its tabs, after switching away from
     /// it when it is shown.
-    fn delete_space(&mut self, id: SpaceId, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn delete_space(
+        &mut self,
+        id: SpaceId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let mut removed = false;
         Settings::update(cx, |settings| removed = settings.spaces.remove(id));
         if !removed {
