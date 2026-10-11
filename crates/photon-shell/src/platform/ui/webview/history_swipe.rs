@@ -1,12 +1,12 @@
 //! Native trackpad history-swipe capture for one tab.
 
-use gpui::{
-    AnyElement, Context, ScrollDelta, ScrollWheelEvent, TouchPhase, div, prelude::*, px, rgba,
-};
+use gpui::HapticFeedbackStyle;
+use gpui::{AnyElement, Context, ScrollWheelEvent, TouchPhase, div, prelude::*, px, rgba};
 use photon_core::BrowserCommand;
 use std::time::Instant;
 
 use super::super::icons::{back_icon, forward_icon};
+use super::super::input::physical_horizontal_delta;
 use super::super::layout::Raised;
 use super::super::{metrics, theme::ThemeColors};
 use super::PhotonWebView;
@@ -52,6 +52,9 @@ pub(super) struct HistorySwipe {
     ended_gesture_id: u64,
     progress: f32,
     progress_velocity: f32,
+    /// Whether the swipe has gone far enough to navigate when released,
+    /// which a haptic tap marks as it crosses.
+    armed: bool,
     last_input_at: Option<Instant>,
     last_physical_velocity: f32,
 }
@@ -155,15 +158,15 @@ impl PhotonWebView {
         if self.history_swipe.phase == HistorySwipePhase::Tracking
             && self.history_swipe.gesture_id == gesture_id
             && !event.is_momentum
+            && let Some(direction) = self.history_swipe.direction
         {
-            if let Some(direction) = self.history_swipe.direction {
-                let progress_delta = physical_delta * direction.progress_sign();
-                if progress_delta != 0.0 {
-                    self.history_swipe.progress = (self.history_swipe.progress + progress_delta)
-                        .clamp(0.0, self.page_width());
-                    self.history_swipe.progress_velocity =
-                        sample_elapsed.map_or(0.0, |elapsed| progress_delta / elapsed);
-                }
+            let progress_delta = physical_delta * direction.progress_sign();
+            if progress_delta != 0.0 {
+                self.history_swipe.progress =
+                    (self.history_swipe.progress + progress_delta).clamp(0.0, self.page_width());
+                self.history_swipe.progress_velocity =
+                    sample_elapsed.map_or(0.0, |elapsed| progress_delta / elapsed);
+                self.follow_history_swipe_threshold(cx);
             }
         }
 
@@ -325,26 +328,24 @@ impl PhotonWebView {
         self.history_swipe.gesture_id = 0;
         self.history_swipe.progress = 0.0;
         self.history_swipe.progress_velocity = 0.0;
+        self.history_swipe.armed = false;
+    }
+
+    /// Taps the trackpad as the swipe passes the distance at which
+    /// releasing it navigates; drawing back below it disarms it quietly.
+    fn follow_history_swipe_threshold(&mut self, cx: &mut Context<Self>) {
+        let armed = self.history_swipe.progress
+            >= self.page_width() * metrics::HISTORY_SWIPE_COMMIT_FRACTION;
+        if armed != self.history_swipe.armed {
+            self.history_swipe.armed = armed;
+            if armed {
+                cx.play_haptic_feedback(HapticFeedbackStyle::Alignment);
+            }
+        }
     }
 
     fn page_width(&self) -> f32 {
         self.last_viewport.map_or(0.0, |viewport| viewport.0 as f32)
-    }
-}
-
-fn physical_horizontal_delta(event: &ScrollWheelEvent) -> f32 {
-    let delta = match event.delta {
-        ScrollDelta::Pixels(delta) => f32::from(delta.x),
-        ScrollDelta::Lines(_) => 0.0,
-    };
-    physical_delta_from_device(delta, event.is_direction_inverted_from_device)
-}
-
-fn physical_delta_from_device(delta: f32, direction_inverted_from_device: bool) -> f32 {
-    if direction_inverted_from_device {
-        -delta
-    } else {
-        delta
     }
 }
 
@@ -410,14 +411,6 @@ mod tests {
     #[test]
     fn swipe_never_commits_without_matching_history() {
         assert!(!should_commit_history_swipe(500.0, 1500.0, 1000.0, false));
-    }
-
-    #[test]
-    fn direction_inversion_keeps_navigation_tied_to_finger_motion() {
-        assert_eq!(physical_delta_from_device(12.0, false), 12.0);
-        assert_eq!(physical_delta_from_device(-12.0, true), 12.0);
-        assert_eq!(physical_delta_from_device(-12.0, false), -12.0);
-        assert_eq!(physical_delta_from_device(12.0, true), -12.0);
     }
 
     #[test]

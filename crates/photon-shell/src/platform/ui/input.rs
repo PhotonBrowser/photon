@@ -2,9 +2,60 @@
 
 use super::super::engine::EngineSession;
 use gpui::{
-    KeyDownEvent, KeyUpEvent, MouseButton, MouseDownEvent, MouseExitEvent, MouseMoveEvent,
-    MouseUpEvent, ScrollDelta, ScrollWheelEvent, TouchPhase,
+    KeyDownEvent, KeyUpEvent, Keystroke, Modifiers, MouseButton, MouseDownEvent, MouseExitEvent,
+    MouseMoveEvent, MouseUpEvent, ScrollDelta, ScrollWheelEvent, TouchPhase,
 };
+
+/// An editing command the page runs from its shortcut, such as ⌘C.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum EditCommand {
+    Undo,
+    Redo,
+    Cut,
+    Copy,
+    Paste,
+    SelectAll,
+}
+
+impl EditCommand {
+    /// The key that runs the command with the platform's shortcut modifier,
+    /// and whether Shift is held too.
+    fn shortcut(self) -> (&'static str, bool) {
+        match self {
+            Self::Undo => ("z", false),
+            Self::Redo => ("z", true),
+            Self::Cut => ("x", false),
+            Self::Copy => ("c", false),
+            Self::Paste => ("v", false),
+            Self::SelectAll => ("a", false),
+        }
+    }
+
+    /// The command `keystroke` runs, if it is one's shortcut.
+    fn for_keystroke(keystroke: &Keystroke) -> Option<Self> {
+        [
+            Self::Undo,
+            Self::Redo,
+            Self::Cut,
+            Self::Copy,
+            Self::Paste,
+            Self::SelectAll,
+        ]
+        .into_iter()
+        .find(|command| {
+            let (key, shift) = command.shortcut();
+            keystroke.key == key && keystroke.modifiers == shortcut_modifiers(shift)
+        })
+    }
+}
+
+/// The platform's shortcut modifier, with Shift when asked.
+fn shortcut_modifiers(shift: bool) -> Modifiers {
+    Modifiers {
+        shift,
+        ..Modifiers::secondary_key()
+    }
+}
 
 #[derive(Default)]
 pub(super) struct WebViewInput {
@@ -18,14 +69,6 @@ pub(super) struct WebViewInput {
 impl WebViewInput {
     pub(super) fn set_viewport_origin(&mut self, x: f32, y: f32) {
         self.viewport_origin = (x, y);
-    }
-
-    /// Where the page's top-left corner is in the window.
-    pub(super) fn viewport_origin(&self) -> gpui::Point<gpui::Pixels> {
-        gpui::point(
-            gpui::px(self.viewport_origin.0),
-            gpui::px(self.viewport_origin.1),
-        )
     }
 
     pub(super) fn mouse_down(&mut self, session: &mut EngineSession, event: &MouseDownEvent) {
@@ -138,11 +181,7 @@ impl WebViewInput {
                 false,
             ),
         };
-        let physical_delta_x = if event.is_direction_inverted_from_device {
-            -delta.0
-        } else {
-            delta.0
-        };
+        let physical_delta_x = f64::from(physical_horizontal_delta(event));
         let is_native_trackpad_gesture = precise
             && event.has_native_phase
             && event.is_swipe_tracking_enabled
@@ -253,9 +292,23 @@ impl WebViewInput {
             keyboard_key(&event.keystroke.key, event.keystroke.key_char.as_deref());
         let modifiers = event.keystroke.modifiers;
         let insert_text = code_point != 0 && !modifiers.control && !modifiers.platform;
-        let should_consume = insert_text || event.keystroke.key_char.is_none();
+        // The page runs editing shortcuts itself; consuming them keeps the
+        // Edit menu's matching item from running them a second time.
+        let should_consume = insert_text
+            || event.keystroke.key_char.is_none()
+            || EditCommand::for_keystroke(&event.keystroke).is_some();
         session.send_key(key, true, code_point, modifiers, event.is_held, insert_text);
         should_consume
+    }
+
+    /// Runs `command` in the page by pressing its shortcut, as the keyboard
+    /// would, since the page handles editing from those keys.
+    pub(super) fn edit(&mut self, session: &mut EngineSession, command: EditCommand) {
+        let (key, shift) = command.shortcut();
+        let (key_code, code_point) = keyboard_key(key, Some(key));
+        let modifiers = shortcut_modifiers(shift);
+        session.send_key(key_code, true, code_point, modifiers, false, false);
+        session.send_key(key_code, false, code_point, modifiers, false, false);
     }
 
     pub(super) fn key_up(&mut self, session: &mut EngineSession, event: &KeyUpEvent) {
@@ -302,6 +355,19 @@ impl WebViewInput {
             0,
         );
         self.pointer_inside = false;
+    }
+}
+
+/// Horizontal scroll distance in the direction the user's fingers moved.
+pub(super) fn physical_horizontal_delta(event: &ScrollWheelEvent) -> f32 {
+    let delta = match event.delta {
+        ScrollDelta::Pixels(delta) => f32::from(delta.x),
+        ScrollDelta::Lines(_) => 0.0,
+    };
+    if event.is_direction_inverted_from_device {
+        -delta
+    } else {
+        delta
     }
 }
 
@@ -403,5 +469,43 @@ mod tests {
 
         event.touch_phase = TouchPhase::Moved;
         assert_ne!(input.history_swipe_gesture_id(&event), interrupted_id);
+    }
+
+    #[test]
+    fn horizontal_scroll_direction_matches_physical_motion() {
+        let event = |x, inverted| ScrollWheelEvent {
+            delta: ScrollDelta::Pixels(gpui::point(gpui::px(x), gpui::px(0.0))),
+            is_direction_inverted_from_device: inverted,
+            ..Default::default()
+        };
+
+        assert_eq!(physical_horizontal_delta(&event(12.0, false)), 12.0);
+        assert_eq!(physical_horizontal_delta(&event(-12.0, true)), 12.0);
+        assert_eq!(physical_horizontal_delta(&event(-12.0, false)), -12.0);
+        assert_eq!(physical_horizontal_delta(&event(12.0, true)), -12.0);
+    }
+}
+
+#[cfg(test)]
+mod edit_tests {
+    use super::*;
+
+    #[test]
+    fn recognises_only_exact_editing_shortcuts() {
+        let keystroke = |text| Keystroke::parse(text).unwrap();
+        assert_eq!(
+            EditCommand::for_keystroke(&keystroke("secondary-c")),
+            Some(EditCommand::Copy)
+        );
+        assert_eq!(
+            EditCommand::for_keystroke(&keystroke("secondary-shift-z")),
+            Some(EditCommand::Redo)
+        );
+        assert_eq!(
+            EditCommand::for_keystroke(&keystroke("secondary-alt-c")),
+            None
+        );
+        assert_eq!(EditCommand::for_keystroke(&keystroke("c")), None);
+        assert_eq!(EditCommand::for_keystroke(&keystroke("secondary-t")), None);
     }
 }

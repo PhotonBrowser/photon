@@ -2,13 +2,14 @@
 
 use super::super::engine::{EngineSession, RequestedWebView};
 use super::super::presentation::PresentedSurface;
-use super::input::WebViewInput;
+use super::input::{EditCommand, WebViewInput};
 use super::{metrics::PAGE_RADIUS, settings::Settings, theme::palette};
 use gpui::{
     Context, EventEmitter, FocusHandle, InteractiveElement, KeyDownEvent, KeyUpEvent, MouseButton,
-    NavigationDirection, ObjectFit, Render, Subscription, SurfaceSource, Task, Window,
-    WindowAppearance, div, prelude::*, px, surface,
+    NavigationDirection, ObjectFit, Render, Subscription, SurfaceSource, Window, WindowAppearance,
+    div, prelude::*, px, surface,
 };
+use gpui_elements::editable_text::actions::{Copy, Cut, Paste, Redo, SelectAll, Undo};
 use photon_core::{BrowserCommand, BrowserState, EngineEvent, PageCrashes, PageDialogs};
 use photon_performance::{PerformanceDiagnostics, performance_overlay};
 use std::collections::HashMap;
@@ -25,8 +26,6 @@ mod favicon;
 mod find;
 mod history;
 mod history_swipe;
-#[cfg(target_os = "macos")]
-mod vertical_overscroll;
 mod zoom;
 
 pub(in crate::platform) use context_menu::{PageMenu, PageMenuItem};
@@ -74,12 +73,6 @@ pub(in crate::platform) struct PhotonWebView {
     sent_dark_color_scheme: Option<bool>,
     input: WebViewInput,
     history_swipe: history_swipe::HistorySwipe,
-    #[cfg(target_os = "macos")]
-    vertical_overscroll: vertical_overscroll::VerticalOverscroll,
-    #[cfg(target_os = "macos")]
-    vertical_overscroll_animation: Option<Task<()>>,
-    #[cfg(target_os = "macos")]
-    vertical_overscroll_settle_timer: Option<Task<()>>,
     pub(super) _quit_subscription: Option<Subscription>,
     focus_subscriptions: Vec<Subscription>,
     pending_new_webviews: HashMap<u64, RequestedWebView>,
@@ -106,6 +99,13 @@ impl EventEmitter<WebViewEvent> for PhotonWebView {}
 impl Drop for PhotonWebView {
     fn drop(&mut self) {
         self.prepare_shutdown();
+    }
+}
+
+impl PhotonWebView {
+    /// Runs an editing command in the page.
+    fn edit(&mut self, command: EditCommand) {
+        self.input.edit(&mut self.session, command);
     }
 }
 
@@ -138,8 +138,6 @@ impl PhotonWebView {
             return;
         }
         if state.url != self.state.url {
-            #[cfg(target_os = "macos")]
-            self.reset_vertical_overscroll();
             if self.history_swipe.phase == history_swipe::HistorySwipePhase::Committing {
                 self.history_swipe_navigation_committed();
             } else if self.history_swipe.phase == history_swipe::HistorySwipePhase::Tracking {
@@ -281,12 +279,6 @@ impl PhotonWebView {
             sent_dark_color_scheme: None,
             input: WebViewInput::default(),
             history_swipe: history_swipe::HistorySwipe::default(),
-            #[cfg(target_os = "macos")]
-            vertical_overscroll: vertical_overscroll::VerticalOverscroll::default(),
-            #[cfg(target_os = "macos")]
-            vertical_overscroll_animation: None,
-            #[cfg(target_os = "macos")]
-            vertical_overscroll_settle_timer: None,
             _quit_subscription: None,
             focus_subscriptions: Vec::new(),
             pending_new_webviews: HashMap::new(),
@@ -418,6 +410,13 @@ impl Render for PhotonWebView {
                 }),
             )
             .track_focus(&self.focus_handle)
+            // The Edit menu's commands, chosen while the page has focus.
+            .on_action(cx.listener(|this, _: &Undo, _, _| this.edit(EditCommand::Undo)))
+            .on_action(cx.listener(|this, _: &Redo, _, _| this.edit(EditCommand::Redo)))
+            .on_action(cx.listener(|this, _: &Cut, _, _| this.edit(EditCommand::Cut)))
+            .on_action(cx.listener(|this, _: &Copy, _, _| this.edit(EditCommand::Copy)))
+            .on_action(cx.listener(|this, _: &Paste, _, _| this.edit(EditCommand::Paste)))
+            .on_action(cx.listener(|this, _: &SelectAll, _, _| this.edit(EditCommand::SelectAll)))
             .on_mouse_down_all(move |event, phase, hitbox, window, app| {
                 if phase != gpui::DispatchPhase::Bubble || !hitbox.contains(&event.position) {
                     return;
@@ -481,8 +480,6 @@ impl Render for PhotonWebView {
             }))
             .on_scroll_wheel(cx.listener(|this, event, _, cx| {
                 let gesture_id = this.input.history_swipe_gesture_id(event);
-                #[cfg(target_os = "macos")]
-                this.observe_vertical_overscroll_scroll(event, gesture_id, cx);
                 let captured = this.handle_history_swipe_scroll(event, gesture_id, cx);
                 this.input.scroll(
                     &mut this.session,
@@ -514,8 +511,6 @@ impl Render for PhotonWebView {
                 .size_full()
                 .object_fit(ObjectFit::Fill)
                 .relative();
-            #[cfg(target_os = "macos")]
-            let page_surface = page_surface.top(px(self.vertical_overscroll.offset));
             webview = webview.child(page_surface.rounded(px(PAGE_RADIUS)));
         }
         if let Some(indicator) = self.history_swipe_indicator(palette) {
