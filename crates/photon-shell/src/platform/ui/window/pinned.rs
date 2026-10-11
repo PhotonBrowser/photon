@@ -133,7 +133,10 @@ impl BrowserWindow {
                         self.insert_tab_at(index, content, Some(pin), false, window, cx);
                     }
                     None => {
-                        let webview = create_webview(cx, self.runtime.clone(), &pin.url);
+                        let Some(webview) = create_webview(cx, self.runtime.clone(), &pin.url)
+                        else {
+                            continue;
+                        };
                         self.insert_webview(index, webview, Some(pin), false, window, cx);
                     }
                 }

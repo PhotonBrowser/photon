@@ -119,8 +119,9 @@ impl BrowserWindow {
             match find_page(url) {
                 Some(page) => self.insert_page(self.tabs.len(), page, window, cx),
                 None => {
-                    let webview = create_webview(cx, self.runtime.clone(), url);
-                    self.insert_webview(self.tabs.len(), webview, None, true, window, cx);
+                    if let Some(webview) = create_webview(cx, self.runtime.clone(), url) {
+                        self.insert_webview(self.tabs.len(), webview, None, true, window, cx);
+                    }
                 }
             }
             return;
@@ -139,7 +140,9 @@ impl BrowserWindow {
             cx.notify();
             return;
         }
-        let webview = create_webview(cx, self.runtime.clone(), url);
+        let Some(webview) = create_webview(cx, self.runtime.clone(), url) else {
+            return;
+        };
         self.replace_active_content(TabContent::Web(webview), window, cx);
     }
 
@@ -234,10 +237,16 @@ pub(super) fn create_webview(
     cx: &mut App,
     runtime: Rc<EngineRuntime>,
     address: &str,
-) -> Entity<PhotonWebView> {
-    let session = EngineSession::create(runtime.clone(), 1200, 760, 1.0, Some(address))
-        .unwrap_or_else(|error| panic!("could not start direct PhotonWebView: {error:#}"));
-    create_webview_from_session(cx, runtime, session)
+) -> Option<Entity<PhotonWebView>> {
+    let session = match EngineSession::create(runtime.clone(), 1200, 760, 1.0, Some(address)) {
+        Ok(session) => session,
+        Err(error) => {
+            trace(format_args!("could not open {address}: {error:#}"));
+            return None;
+        }
+    };
+    let webview = create_webview_from_session(cx, runtime, session);
+    Some(webview)
 }
 
 /// Wraps an Engine session in a web view, wired to redraw on Engine frames

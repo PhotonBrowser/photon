@@ -107,8 +107,9 @@ impl BrowserWindow {
         cx: &mut Context<Self>,
     ) {
         if let Some(address) = address {
-            let webview = create_webview(cx, self.runtime.clone(), address);
-            self.insert_webview(index, webview, None, true, window, cx);
+            if let Some(webview) = create_webview(cx, self.runtime.clone(), address) {
+                self.insert_webview(index, webview, None, true, window, cx);
+            }
         } else {
             self.insert_page(index, NEW_TAB, window, cx);
         }
@@ -165,8 +166,9 @@ impl BrowserWindow {
             .iter()
             .position(|tab| tab.content.webview().as_ref() == Some(opener))
             .map_or(self.tabs.len(), |index| index + 1);
-        let webview = create_webview(cx, self.runtime.clone(), address);
-        self.insert_webview(index, webview, None, activate, window, cx);
+        if let Some(webview) = create_webview(cx, self.runtime.clone(), address) {
+            self.insert_webview(index, webview, None, activate, window, cx);
+        }
     }
 
     pub(super) fn open_requested_tab(

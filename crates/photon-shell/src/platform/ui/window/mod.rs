@@ -268,7 +268,7 @@ fn open_browser_window(
     let initial_webview = startup_address
         .as_deref()
         .filter(|_| startup_page.is_none())
-        .map(|address| create_webview(cx, runtime.clone(), address));
+        .and_then(|address| create_webview(cx, runtime.clone(), address));
     let handle = cx.open_window(window_settings::options(cx), move |window, cx| {
         window_settings::configure_traffic_lights(window);
         window.set_window_title(photon_brand::NAME);

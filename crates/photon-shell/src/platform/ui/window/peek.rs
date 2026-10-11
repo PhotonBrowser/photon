@@ -34,7 +34,9 @@ pub(super) struct PeekState {
 impl BrowserWindow {
     /// Shows `url` in the preview, replacing a page already shown there.
     pub(super) fn open_peek(&mut self, url: &str, window: &mut Window, cx: &mut Context<Self>) {
-        let webview = create_webview(cx, self.runtime.clone(), url);
+        let Some(webview) = create_webview(cx, self.runtime.clone(), url) else {
+            return;
+        };
         follow_appearance(&webview, window, cx);
         let subscription = cx.subscribe_in(
             &webview,
