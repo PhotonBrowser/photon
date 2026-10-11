@@ -10,7 +10,7 @@ use io_surface::IOSurface;
 use mach2::{port::mach_port_t, traps::mach_task_self};
 use metal::SharedEvent;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     ffi::c_void,
     sync::{
         Arc, Condvar, Mutex,
@@ -48,39 +48,51 @@ pub(super) struct Release {
     pub(super) key: FrameKey,
 }
 
+/// Where a frame lease the Engine handed over has got to.
+#[derive(Default)]
+struct Lease {
+    accepted: bool,
+    completed: bool,
+}
+
+/// The frame leases still held, and how many passed each stage. A lease is
+/// forgotten once released, so the ledger stays as small as the frames in
+/// flight however long a page plays.
 #[derive(Default)]
 pub(super) struct LeaseLedger {
-    received: HashSet<FrameKey>,
-    accepted: HashSet<FrameKey>,
-    presented: HashSet<FrameKey>,
-    completed: HashSet<FrameKey>,
-    released: HashSet<FrameKey>,
+    held: HashMap<FrameKey, Lease>,
+    counts: LeaseCounts,
     pending: Vec<Release>,
 }
 
 impl LeaseLedger {
     pub(super) fn receive(&mut self, key: FrameKey) {
         assert!(
-            self.received.insert(key),
+            self.held.insert(key, Lease::default()).is_none(),
             "duplicate native frame lease {key:?}"
         );
+        self.counts.received += 1;
     }
 
     pub(super) fn accept(&mut self, key: FrameKey) {
-        assert!(self.received.contains(&key));
-        assert!(
-            self.accepted.insert(key),
-            "duplicate accepted frame {key:?}"
-        );
+        let lease = self.held.get_mut(&key).expect("accepted an unknown frame");
+        assert!(!lease.accepted, "duplicate accepted frame {key:?}");
+        lease.accepted = true;
+        self.counts.accepted += 1;
     }
 
     pub(super) fn present(&mut self, key: FrameKey) {
-        assert!(self.accepted.contains(&key));
-        self.presented.insert(key);
+        assert!(self.held.get(&key).is_some_and(|lease| lease.accepted));
+        self.counts.presented += 1;
     }
 
+    /// Queues a held lease's release, once.
     pub(super) fn complete(&mut self, key: FrameKey) {
-        if !self.released.contains(&key) && self.completed.insert(key) {
+        if let Some(lease) = self.held.get_mut(&key)
+            && !lease.completed
+        {
+            lease.completed = true;
+            self.counts.completed += 1;
             self.pending.push(Release { key });
         }
     }
@@ -94,28 +106,23 @@ impl LeaseLedger {
     }
 
     pub(super) fn release(&mut self, key: FrameKey) {
-        assert!(
-            self.completed.contains(&key),
-            "released incomplete frame lease {key:?}"
-        );
-        assert!(
-            self.released.insert(key),
-            "duplicate native frame release {key:?}"
-        );
+        let lease = self
+            .held
+            .remove(&key)
+            .unwrap_or_else(|| panic!("duplicate native frame release {key:?}"));
+        assert!(lease.completed, "released incomplete frame lease {key:?}");
+        self.counts.released += 1;
     }
 
     pub(super) fn counts(&self) -> LeaseCounts {
         LeaseCounts {
-            received: self.received.len(),
-            accepted: self.accepted.len(),
-            presented: self.presented.len(),
-            completed: self.completed.len(),
-            released: self.released.len(),
-            outstanding: self.received.difference(&self.released).count(),
+            outstanding: self.held.len(),
+            ..self.counts
         }
     }
 }
 
+#[derive(Clone, Copy, Default)]
 pub(super) struct LeaseCounts {
     pub(super) received: usize,
     pub(super) accepted: usize,
