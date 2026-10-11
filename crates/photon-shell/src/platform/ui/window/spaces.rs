@@ -298,7 +298,6 @@ impl BrowserWindow {
                 self.close_tab(index, window, cx);
             }
         }
-        self.save_pinned_tabs(cx);
     }
 
     /// The space dialog while open or closing, over the whole window.

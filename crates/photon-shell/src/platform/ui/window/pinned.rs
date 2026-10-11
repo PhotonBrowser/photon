@@ -39,9 +39,9 @@ impl BrowserWindow {
             Some(_) => self.pinned_count(),
             None => self.pinned_count() - 1,
         };
-        self.tabs[index].pin = pin;
+        let previous = std::mem::replace(&mut self.tabs[index].pin, pin);
+        self.save_pin_change(&self.tabs[index], previous, cx);
         self.move_tab_to(index, to, cx);
-        self.save_pinned_tabs(cx);
         cx.notify();
     }
 
@@ -66,9 +66,9 @@ impl BrowserWindow {
             if pinned && pin.is_none() {
                 return;
             }
-            self.tabs[from].pin = pin;
+            let previous = std::mem::replace(&mut self.tabs[from].pin, pin);
+            self.save_pin_change(&self.tabs[from], previous, cx);
             self.move_tab_to(from, to, cx);
-            self.save_pinned_tabs(cx);
             cx.notify();
         } else {
             self.move_tab_to(from, to, cx);
@@ -88,31 +88,42 @@ impl BrowserWindow {
         }
     }
 
-    /// Saves each space's pinned tabs, so they open again at launch.
-    pub(super) fn save_pinned_tabs(&self, cx: &mut Context<Self>) {
-        let pinned_in = |space: SpaceId| -> Vec<Shortcut> {
-            self.tabs
-                .iter()
-                .filter(|tab| tab.space == space)
-                .filter_map(|tab| tab.pin.clone())
-                .collect()
-        };
-        let changed = Settings::get(cx)
-            .spaces
-            .all()
-            .iter()
-            .any(|space| space.pinned_tabs != pinned_in(space.id));
-        if changed {
-            Settings::update(cx, |settings| {
-                let ids: Vec<SpaceId> =
-                    settings.spaces.all().iter().map(|space| space.id).collect();
-                for id in ids {
-                    if let Some(space) = settings.spaces.get_mut(id) {
-                        space.pinned_tabs = pinned_in(id);
-                    }
-                }
-            });
-        }
+    /// Keeps the tab's new pin in its space's saved pinned tabs, after the
+    /// others, or forgets the pin it had. The saved list changes only by the
+    /// pin itself, as other windows can hold the space's other pinned tabs.
+    fn save_pin_change(
+        &self,
+        tab: &BrowserTab,
+        previous: Option<Shortcut>,
+        cx: &mut Context<Self>,
+    ) {
+        let space = tab.space;
+        let added = tab.pin.clone();
+        Settings::update(cx, |settings| {
+            let Some(saved) = settings.spaces.get_mut(space) else {
+                return;
+            };
+            if let Some(previous) = &previous
+                && let Some(position) = saved
+                    .pinned_tabs
+                    .iter()
+                    .position(|pin| pin.url == previous.url)
+            {
+                saved.pinned_tabs.remove(position);
+            }
+            if let Some(added) = added
+                && !saved.pinned_tabs.iter().any(|pin| pin.url == added.url)
+            {
+                saved.pinned_tabs.push(added);
+            }
+        });
+    }
+
+    /// Forgets a closed pinned tab's pin in its space's saved pinned tabs.
+    pub(super) fn forget_pin(&self, tab: &BrowserTab, cx: &mut Context<Self>) {
+        let mut unpinned = tab.clone();
+        let previous = unpinned.pin.take();
+        self.save_pin_change(&unpinned, previous, cx);
     }
 
     /// Opens every space's saved pinned tabs at the start of the window, in

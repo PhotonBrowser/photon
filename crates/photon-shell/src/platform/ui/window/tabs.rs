@@ -321,7 +321,7 @@ impl BrowserWindow {
         self.remember_closed(index, &removed.content, cx);
 
         let was_active = self.active_tab == Some(index);
-        let was_pinned = self.tabs.remove(index).pin.is_some();
+        let closed = self.tabs.remove(index);
         drop(self.tab_subscriptions.remove(index));
         self.tab_focus_handles.remove(index);
         if let Some(active_tab) = self.active_tab {
@@ -333,8 +333,8 @@ impl BrowserWindow {
             }
         }
 
-        if was_pinned {
-            self.save_pinned_tabs(cx);
+        if closed.pin.is_some() {
+            self.forget_pin(&closed, cx);
         }
         if self.tabs.is_empty() {
             self.active_tab = None;
