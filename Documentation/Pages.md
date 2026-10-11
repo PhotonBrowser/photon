@@ -49,6 +49,14 @@ another page. The window needs no code for a new page.
 4. Read and change settings with `Settings::get` and `Settings::update`, and
    observe the `Settings` global to redraw when they change elsewhere.
 
+## Performance
+
+`photon://performance` is a native GPUI task and performance page. It samples
+the Photon shell process and the WebContent/worker processes owned by each tab
+while the page is open, and shows rolling CPU and memory charts. Shared Engine
+services and GPU allocations are not attributed to those totals. UI loop delay
+events are measured separately from page frame gaps.
+
 ## New tab page
 
 [`pages/new_tab/`](../crates/photon-shell/src/platform/ui/pages/new_tab/mod.rs)

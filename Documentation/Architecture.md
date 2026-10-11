@@ -49,9 +49,10 @@ API; it is not part of the desktop shell's internal state path.
   The performance diagnostics model and GPUI overlay live in
   `crates/photon-performance`; the shell supplies Engine samples and theme
   colors.
-- `crates/photon-performance` owns performance snapshots, monitor state, timing
-  accumulation, value formatting, and the GPUI debug overlay. It has no Engine
-  IPC, native embedder, or window-lifecycle dependencies.
+- `crates/photon-performance` owns performance snapshots, monitor state, bounded
+  chart history, current-process sampling, value formatting, chart drawing, and
+  the GPUI diagnostics overlay. It has no Engine IPC, native embedder, or
+  window-lifecycle dependencies.
 - `crates/photon-shortcuts` owns browser-level GPUI actions, their default
   key bindings, and the named, grouped catalog the shortcuts dialog lists.
   Views show an action's keys with `ui/kbd.rs`, which reads the keymap, so
