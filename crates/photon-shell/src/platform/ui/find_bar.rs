@@ -1,8 +1,8 @@
 //! The find-in-page bar, floating in the page's top-right corner.
 
 use gpui::{
-    Context, Entity, EventEmitter, Focusable, KeyDownEvent, MouseButton, Render, Role,
-    Subscription, Window, div, prelude::*, px, rgb, rgba,
+    Context, Entity, EventEmitter, Focusable, KeyDownEvent, Render, Role, Subscription, Window,
+    div, prelude::*, px, rgb, rgba,
 };
 use gpui_elements::editable_text::{
     EditableTextState, StringStorage, TextChanged,
@@ -11,6 +11,7 @@ use gpui_elements::editable_text::{
 };
 
 use super::button::icon_button;
+use super::controls::OwnsClicks;
 use super::controls::themed_text_input;
 use super::icons::{chevron_down_icon, chevron_up_icon, close_icon, search_icon_sized};
 use super::layout::h_stack;
@@ -125,7 +126,7 @@ impl Render for FindBar {
             .text_size(px(metrics::FIND_FONT_SIZE))
             .text_color(rgb(palette.text_primary))
             .elevated(Elevation::Medium)
-            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .owns_clicks()
             .capture_action(cx.listener(Self::next))
             .capture_action(cx.listener(Self::close))
             .on_key_down(cx.listener(Self::key_down))

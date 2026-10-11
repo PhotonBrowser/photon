@@ -4,11 +4,12 @@
 use std::rc::Rc;
 use std::time::Instant;
 
-use gpui::{App, ElementId, MouseButton, Role, Window, deferred, div, prelude::*, px, rgb, rgba};
+use gpui::{App, ElementId, Role, Window, deferred, div, prelude::*, px, rgb, rgba};
 
 use super::controls::Choice;
+use super::controls::OwnsClicks;
 use super::icons::chevron_down_icon;
-use super::layout::{h_stack, v_stack};
+use super::layout::{ControlSurface, h_stack, v_stack};
 use super::menu::{MENU_MOTION, menu_checkbox, popover_surface};
 use super::motion::Transition;
 use super::{metrics, theme::ThemeColors};
@@ -92,6 +93,7 @@ impl RenderOnce for Dropdown {
                     option.label,
                     0,
                     option.chosen,
+                    None,
                     Box::new(move |event, window, cx| {
                         on_choose(event, window, cx);
                         set_open(false, cx);
@@ -133,18 +135,14 @@ impl RenderOnce for Dropdown {
             .px(px(metrics::SEGMENT_HORIZONTAL_PADDING))
             .items_center()
             .justify_between()
-            .rounded(px(metrics::CONTROL_RADIUS))
-            .bg(rgba(if open {
-                palette.selected_surface
-            } else {
-                palette.surface
-            }))
+            .control_surface(palette)
+            .when(open, |control| control.bg(rgba(palette.selected_surface)))
             .hover(|style| style.bg(rgba(palette.selected_surface)))
             .text_size(px(metrics::BUTTON_FONT_SIZE))
             .text_color(rgb(palette.text_primary))
-            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .owns_clicks()
             .on_click(move |_, _, cx| set_open(!open, cx))
-            .child(chosen)
+            .child(div().flex_1().min_w_0().truncate().child(chosen))
             .child(chevron_down_icon(
                 palette.text_secondary,
                 metrics::TOOLBAR_ICON_SIZE,

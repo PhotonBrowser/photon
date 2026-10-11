@@ -1,7 +1,8 @@
 //! The new tab page's customise button and the menu it opens above itself.
 
-use gpui::{Context, MouseButton, Role, deferred, div, prelude::*, px, rgb, rgba};
+use gpui::{Context, Role, deferred, div, prelude::*, px, rgb, rgba};
 
+use super::super::super::controls::OwnsClicks;
 use super::super::super::controls::choices;
 use super::super::super::icons::edit_icon;
 use super::super::super::layout::{h_stack, v_stack};
@@ -59,7 +60,7 @@ impl NewTabPage {
                 palette.hover_surface
             }))
             .hover(|style| style.bg(rgba(palette.selected_surface)))
-            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .owns_clicks()
             .on_click(cx.listener(|this, _, _, cx| this.toggle_customising(cx)))
             .child(edit_icon(
                 palette.text_secondary,

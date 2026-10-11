@@ -1,7 +1,8 @@
 //! The horizontal tab strip in the titlebar.
 
-use gpui::{MouseButton, Role, div, prelude::*, px, rgb, rgba};
+use gpui::{Role, div, prelude::*, px, rgb, rgba};
 
+use super::super::controls::OwnsClicks;
 use super::super::icons::add_icon;
 use super::super::layout::h_stack;
 use super::super::{ClickHandler, metrics, theme::ThemeColors};
@@ -116,7 +117,7 @@ fn new_tab_button(
         .rounded(px(metrics::CONTROL_RADIUS))
         .text_color(rgb(palette.text_secondary))
         .hover(|style| style.bg(rgba(palette.hover_surface)))
-        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .owns_clicks()
         .on_click(on_click)
         .child(add_icon(palette.text_secondary, metrics::TAB_ICON_SIZE))
 }

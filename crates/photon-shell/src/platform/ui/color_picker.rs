@@ -2,12 +2,13 @@
 //! fades a colour into its neighbour. Settings → Appearance and the space
 //! dialog both use it.
 
-use gpui::{App, ElementId, MouseButton, Role, Window, prelude::*, px, rgb, rgba};
+use gpui::{App, ElementId, Role, Window, prelude::*, px, rgb, rgba};
 use photon_core::WindowColor;
 use std::rc::Rc;
 
+use super::controls::OwnsClicks;
 use super::controls::{Swatch, swatches, switch, toggled};
-use super::layout::{h_stack, v_stack};
+use super::layout::{ControlSurface, h_stack, v_stack};
 use super::{metrics, theme::ThemeColors, theme::window_color_swatch};
 
 /// Called with the colour and gradient chosen.
@@ -46,12 +47,11 @@ pub(super) fn color_picker(
             .w_full()
             .h(px(metrics::SETTINGS_ROW_HEIGHT))
             .px(px(metrics::MENU_ITEM_HORIZONTAL_PADDING))
-            .rounded(px(metrics::CONTROL_RADIUS))
-            .bg(rgba(palette.surface))
+            .control_surface(palette)
             .text_size(px(metrics::INTERNAL_PAGE_BODY_SIZE))
             .text_color(rgb(palette.text_primary))
             .hover(|style| style.bg(rgba(palette.hover_surface)))
-            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .owns_clicks()
             .on_click(move |_, window, cx| on_change(color, !gradient, window, cx))
             .child("Gradient")
             .child(switch(id, gradient, palette))

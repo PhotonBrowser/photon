@@ -1,12 +1,13 @@
 //! The new tab page's shortcut tiles.
 
 use gpui::{
-    AnyElement, Context, ElementId, ImageSource, MouseButton, ObjectFit, Role, SharedString, div,
-    img, prelude::*, px, rgb, rgba,
+    AnyElement, Context, ElementId, ImageSource, ObjectFit, Role, SharedString, div, img,
+    prelude::*, px, rgb, rgba,
 };
 use photon_core::{Shortcut, site_name};
 
 use super::super::super::button::icon_button;
+use super::super::super::controls::OwnsClicks;
 use super::super::super::history::BrowsingHistory;
 use super::super::super::icons::{add_icon, close_icon, globe_icon};
 use super::super::super::layout::{h_stack, v_stack};
@@ -134,7 +135,7 @@ fn tile(
         .px(px(metrics::SHORTCUT_GAP))
         .rounded(px(metrics::SURFACE_RADIUS))
         .hover(|style| style.bg(rgba(palette.hover_surface)))
-        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .owns_clicks()
         .child(
             h_stack()
                 .size(px(metrics::SHORTCUT_ICON_BOX_SIZE))

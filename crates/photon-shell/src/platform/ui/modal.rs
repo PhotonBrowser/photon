@@ -1,7 +1,8 @@
 //! A centered modal surface that dims and blocks what it covers.
 
-use gpui::{Div, ElementId, MouseButton, div, prelude::*, px, rgb, rgba};
+use gpui::{Div, ElementId, div, prelude::*, px, rgb, rgba};
 
+use super::controls::OwnsClicks;
 use super::layout::v_stack;
 use super::layout::{Elevated, Elevation, Raised};
 use super::motion::{AnimateIn, Entrance, Transition, distance};
@@ -57,10 +58,7 @@ where
         .bg(rgba(palette.modal_backdrop));
     // A closing modal no longer blocks what it covers.
     if transition == Transition::Enter {
-        modal = modal
-            .occlude()
-            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation());
+        modal = modal.occlude().owns_clicks();
     }
     modal.child(panel).animate(
         ElementId::Name(format!("{id}-backdrop").into()),

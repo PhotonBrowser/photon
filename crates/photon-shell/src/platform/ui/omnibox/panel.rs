@@ -1,9 +1,10 @@
 //! The field's content, and the panel it opens into while typing.
 
-use gpui::{AnyElement, Context, Focusable, MouseButton, deferred, prelude::*, px, rgb, rgba};
+use gpui::{AnyElement, Context, Focusable, deferred, prelude::*, px, rgb, rgba};
 use gpui_elements::editable_text::text_input;
 use std::rc::Rc;
 
+use super::super::controls::OwnsClicks;
 use super::super::controls::themed_text_input;
 use super::super::icons::search_icon_sized;
 use super::super::layout::{Elevated, Elevation, Raised};
@@ -18,7 +19,7 @@ impl Omnibox {
     /// closed or open, so the text does not move as it opens.
     pub(super) fn field_content(&self, palette: ThemeColors, cx: &mut Context<Self>) -> gpui::Div {
         let input_focus = self.input.focus_handle(cx).tab_index(3).tab_stop(true);
-        let style = FieldStyle::current(cx, None);
+        let style = FieldStyle::current(cx);
         let icon =
             (style.idle_icon || !self.suggestions.is_empty()).then(|| self.field_icon(palette, cx));
         h_stack()
@@ -79,13 +80,13 @@ impl Omnibox {
                 .right(border)
                 // A narrow field opens into a panel that reaches over the page.
                 .min_w(px(metrics::OMNIBOX_PANEL_MIN_WIDTH))
-                .rounded(px(FieldStyle::current(cx, None).radius))
+                .rounded(px(FieldStyle::current(cx).radius))
                 .border_1()
                 .border_color(rgba(palette.menu_border))
                 .raised(palette)
                 .elevated(Elevation::High)
                 .occlude()
-                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .owns_clicks()
                 .child(self.field_content(palette, cx))
                 .child(rows.animate_in("omnibox-suggestions-appear", Entrance::fade())),
         )

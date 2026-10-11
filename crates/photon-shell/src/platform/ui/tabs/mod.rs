@@ -8,18 +8,20 @@ mod list;
 mod strip;
 
 use gpui::{
-    AnyElement, App, Context, ElementId, FocusHandle, ImageSource, KeyDownEvent, MouseButton,
-    MouseDownEvent, MouseUpEvent, ObjectFit, Render, Role, SharedString, Stateful, Window, div,
-    img, prelude::*, px, rgb, rgba,
+    AnyElement, App, Context, ElementId, FocusHandle, ImageSource, MouseButton, ObjectFit, Render,
+    Role, SharedString, Stateful, Window, div, img, prelude::*, px, rgb, rgba,
 };
 
 use super::Favicon;
+use super::controls::OwnsClicks;
 use super::icons::{audio_icon, close_icon, globe_icon, loading_spinner, photon_logo};
 use super::layout::{Elevated, Elevation, Raised, h_stack};
 use super::motion::{AnimateIn, Entrance};
-use super::{ClickHandler, metrics, theme::ThemeColors};
+use super::{
+    ClickHandler, KeyDownHandler, MouseDownHandler, MouseUpHandler, metrics, theme::ThemeColors,
+};
 pub(super) use list::tab_list;
-pub(super) use strip::{tab_strip, tab_strip_content};
+pub(super) use strip::tab_strip;
 
 /// A tab being dragged to a new position.
 pub(super) struct DraggedTab {
@@ -53,12 +55,12 @@ impl Render for TabDragPreview {
     }
 }
 
-/// A callback for a mouse button pressed on a tab.
-pub(super) type TabMouseDown = Box<dyn Fn(&MouseDownEvent, &mut Window, &mut App)>;
-/// A callback for a mouse button released on a tab.
-pub(super) type TabMouseUp = Box<dyn Fn(&MouseUpEvent, &mut Window, &mut App)>;
 /// A callback for a tab dropped onto another.
 pub(super) type TabDrop = Box<dyn Fn(&DraggedTab, &mut Window, &mut App)>;
+
+/// Notifies the browser when a tab drag starts so cached drop targets can
+/// appear before the pointer reaches them.
+pub(super) type TabDragStart = Box<dyn Fn(&mut App)>;
 
 /// What a tab shows before its title.
 pub(super) enum TabIcon {
@@ -140,13 +142,14 @@ pub(super) struct TabItem {
     pub active: bool,
     pub focus_handle: FocusHandle,
     pub on_select: ClickHandler,
-    pub on_key_down: Box<dyn Fn(&KeyDownEvent, &mut Window, &mut App)>,
+    pub on_key_down: KeyDownHandler,
     pub on_close: ClickHandler,
     pub on_toggle_audio: ClickHandler,
+    pub on_drag_start: TabDragStart,
     /// Middle-click closes the tab.
-    pub on_middle_click: TabMouseUp,
+    pub on_middle_click: MouseUpHandler,
     /// Right-click opens the tab's menu.
-    pub on_context_menu: TabMouseDown,
+    pub on_context_menu: MouseDownHandler,
     /// A dragged tab dropped onto this one moves to its place.
     pub on_drop: TabDrop,
 }
@@ -197,14 +200,16 @@ impl TabParts {
             } else {
                 palette.text_secondary
             }))
-            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .owns_clicks()
             .on_click(tab.on_select)
             .on_key_down(tab.on_key_down)
             .on_mouse_up(MouseButton::Middle, tab.on_middle_click)
             .on_mouse_down(MouseButton::Right, tab.on_context_menu)
             .on_drag(DraggedTab { index: tab.index }, {
                 let label = SharedString::from(tab.label.clone());
+                let on_drag_start = tab.on_drag_start;
                 move |_, _, _, cx| {
+                    on_drag_start(cx);
                     let label = label.clone();
                     cx.new(|_| TabDragPreview { label, palette })
                 }
@@ -303,7 +308,7 @@ fn audio_control_button(
         .rounded(px(metrics::CONTROL_RADIUS))
         .text_color(rgb(icon_color))
         .hover(|style| style.bg(rgba(palette.hover_surface)))
-        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .owns_clicks()
         .on_click(on_click)
         .child(audio_icon(icon_color, metrics::TAB_AUDIO_ICON_SIZE, muted))
         .into_any_element()
@@ -328,7 +333,7 @@ fn close_tab_button(
         .size(px(metrics::TAB_CLOSE_BUTTON_SIZE))
         .rounded(px(metrics::CONTROL_RADIUS))
         .hover(|style| style.bg(rgba(palette.hover_surface)))
-        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .owns_clicks()
         .on_click(on_click)
         .child(close_icon(palette.text_secondary, metrics::TAB_ICON_SIZE))
 }

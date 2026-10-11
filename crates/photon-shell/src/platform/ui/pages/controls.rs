@@ -1,8 +1,9 @@
 //! Settings rows for Photon's own pages: a label with a switch or checkbox,
 //! the whole row clickable.
 
-use gpui::{ElementId, MouseButton, Role, SharedString, Stateful, prelude::*, px, rgb, rgba};
+use gpui::{ElementId, Role, SharedString, Stateful, prelude::*, px, rgb, rgba};
 
+use super::super::controls::OwnsClicks;
 use super::super::controls::{check_mark, switch, toggled};
 use super::super::layout::h_stack;
 use super::super::{ClickHandler, metrics, theme::ThemeColors};
@@ -16,6 +17,20 @@ pub(super) fn switch_row(
     on_toggle: ClickHandler,
 ) -> impl IntoElement {
     row(id, label, Role::Switch, on, palette, on_toggle).child(switch(id, on, palette))
+}
+
+/// A label with a control that is not part of the row, such as a button.
+pub(super) fn control_row(label: &'static str, control: impl IntoElement) -> impl IntoElement {
+    h_stack()
+        .items_center()
+        .justify_between()
+        .gap(px(metrics::INTERNAL_PAGE_GROUP_GAP))
+        .w_full()
+        .h(px(metrics::SETTINGS_ROW_HEIGHT))
+        .px(px(metrics::MENU_ITEM_HORIZONTAL_PADDING))
+        .text_size(px(metrics::INTERNAL_PAGE_BODY_SIZE))
+        .child(label)
+        .child(control)
 }
 
 /// A labelled checkbox.
@@ -58,7 +73,7 @@ fn row(
         .text_size(px(metrics::INTERNAL_PAGE_BODY_SIZE))
         .text_color(rgb(palette.text_primary))
         .hover(|style| style.bg(rgba(palette.hover_surface)))
-        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .owns_clicks()
         .on_click(on_toggle)
         .child(label)
 }

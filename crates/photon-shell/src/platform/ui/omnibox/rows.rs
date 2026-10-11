@@ -25,8 +25,11 @@ pub(super) struct SuggestionActions {
     /// Forgets a remembered page or search.
     pub(super) remove: SuggestionHandler,
     /// Called with the row under the pointer, or `None` when it leaves.
-    pub(super) hover: Rc<dyn Fn(Option<usize>, &mut Window, &mut App)>,
+    pub(super) hover: HoverHandler,
 }
+
+/// Called with the row under the pointer, or `None` when it leaves.
+pub(super) type HoverHandler = Rc<dyn Fn(Option<usize>, &mut Window, &mut App)>;
 
 /// The rows, with `selected` highlighted as what Enter opens. The selected
 /// or hovered row offers to forget what it remembers.
@@ -211,8 +214,14 @@ pub(in super::super) fn row_text(
         SuggestionKind::PastSearch => {
             // The rest of a past search stands out from what was typed.
             let typed = suggestion.text_matches.first().map_or(0, |range| range.end);
-            let rest = [typed..suggestion.text.len()];
-            push(&mut text, &mut highlights, &suggestion.text, &rest, None);
+            let rest = typed..suggestion.text.len();
+            push(
+                &mut text,
+                &mut highlights,
+                &suggestion.text,
+                std::slice::from_ref(&rest),
+                None,
+            );
         }
     }
     (text.into(), highlights)

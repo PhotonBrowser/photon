@@ -10,7 +10,7 @@ use gpui::{
 use gpui_elements::editable_text::EditableTextElement;
 
 use super::icons::check_icon;
-use super::layout::{Elevated, Elevation, h_stack};
+use super::layout::{ControlSurface, Elevated, Elevation, h_stack};
 use super::motion::{AnimateIn, Edge, Entrance, Speed};
 use super::{ClickHandler, metrics, theme::ThemeColors};
 
@@ -22,6 +22,18 @@ pub(super) struct Choice {
 }
 
 /// Mutually exclusive options in a segmented control, the chosen one filled.
+/// Keeps clicks on a control to itself, so they never reach what is behind
+/// it: no window move from the titlebar, and no browser menu from empty
+/// sidebar space.
+pub(super) trait OwnsClicks: InteractiveElement + Sized {
+    fn owns_clicks(self) -> Self {
+        self.on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
+    }
+}
+
+impl<E: InteractiveElement> OwnsClicks for E {}
+
 pub(super) fn choices(
     id: &'static str,
     label: &'static str,
@@ -43,13 +55,14 @@ pub(super) fn choices(
             .px(px(metrics::SEGMENT_HORIZONTAL_PADDING))
             .rounded(px(metrics::SEGMENT_RADIUS))
             .text_size(px(metrics::BUTTON_FONT_SIZE))
-            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .owns_clicks()
             .on_click(option.on_choose)
             .child(option.label);
         if option.chosen {
             segment
                 .bg(rgb(palette.chosen))
                 .text_color(rgb(palette.on_chosen))
+                .hover(|style| style.bg(rgb(palette.chosen_hover)))
         } else {
             segment
                 .text_color(rgb(palette.text_primary))
@@ -62,8 +75,7 @@ pub(super) fn choices(
         .aria_label(label)
         .gap(px(metrics::SEGMENT_GAP))
         .p(px(metrics::SEGMENT_INSET))
-        .rounded(px(metrics::CONTROL_RADIUS))
-        .bg(rgba(palette.surface))
+        .control_surface(palette)
         .children(options)
 }
 
@@ -104,14 +116,14 @@ pub(super) fn swatches(
                 ring.hover(|style| style.border_color(rgba(palette.selected_surface)))
             })
             .focus_visible(|style| style.border_color(rgb(palette.chosen)))
-            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .owns_clicks()
             .on_click(option.on_choose)
             .child(
                 div()
                     .size(px(metrics::SWATCH_SIZE))
                     .rounded_full()
                     .border_1()
-                    .border_color(rgba(palette.menu_border))
+                    .border_color(rgba(palette.control_border))
                     .bg(rgb(option.color)),
             )
     });
@@ -163,7 +175,12 @@ impl RenderOnce for Switch {
             .w(px(metrics::SWITCH_WIDTH))
             .p(px(metrics::SWITCH_INSET))
             .rounded_full()
-            .when(on, |track| track.justify_end().bg(rgb(palette.chosen)))
+            .when(on, |track| {
+                track
+                    .justify_end()
+                    .bg(rgb(palette.chosen))
+                    .hover(|style| style.bg(rgb(palette.chosen_hover)))
+            })
             .when(!on, |track| track.bg(rgba(palette.selected_surface)))
             .child(knob)
     }
@@ -202,7 +219,7 @@ impl RenderOnce for CheckMark {
             .rounded(px(metrics::CHECKBOX_RADIUS))
             .border_1();
         if !checked {
-            return mark.border_color(rgba(palette.menu_border));
+            return mark.border_color(rgba(palette.control_border));
         }
         let check = div().child(check_icon(palette.on_chosen, metrics::CHECKBOX_ICON_SIZE));
         mark.border_color(rgb(palette.chosen))
@@ -247,8 +264,7 @@ pub(super) fn text_field(input: EditableTextElement, palette: ThemeColors) -> gp
         .w_full()
         .h(px(metrics::BUTTON_HEIGHT))
         .px(px(metrics::MENU_ITEM_HORIZONTAL_PADDING))
-        .rounded(px(metrics::CONTROL_RADIUS))
-        .bg(rgba(palette.surface))
+        .control_surface(palette)
         .child(
             themed_text_input(input, palette)
                 .flex_1()

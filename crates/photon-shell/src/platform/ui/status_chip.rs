@@ -1,8 +1,9 @@
 //! A small status chip in the window's bottom-right corner.
 
-use gpui::{ElementId, MouseButton, Role, SharedString, prelude::*, px, rgb, rgba};
+use gpui::{ElementId, Role, SharedString, prelude::*, px, rgb, rgba};
 
 use super::button::{ButtonSize, button, icon_button};
+use super::controls::OwnsClicks;
 use super::icons::{check_icon, close_icon, loading_spinner, search_icon_sized, warning_icon};
 use super::layout::h_stack;
 use super::layout::{Elevated, Elevation, Raised};
@@ -65,7 +66,7 @@ pub(super) fn status_chip(
         .text_size(px(metrics::CHIP_FONT_SIZE))
         .text_color(rgb(palette.text_primary))
         .elevated(Elevation::Low)
-        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .owns_clicks()
         .child(icon)
         .child(message);
     if let Some((label, on_click)) = action {
