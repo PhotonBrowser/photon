@@ -1,20 +1,33 @@
 //! The browser's settings, shared by every window and saved to the profile.
 //!
 //! Views read settings with [`Settings::get`] and change them with
-//! [`Settings::update`], which saves them and notifies everything observing
-//! the `Settings` global, so every window follows a change.
+//! [`Settings::update`], which notifies everything observing the `Settings`
+//! global, so every window follows a change. Changes are saved a moment
+//! after they happen, off the main thread, and once more when the app quits.
 
-use gpui::{App, BorrowAppContext, Global, WindowAppearance};
+use gpui::{App, BorrowAppContext, Global, Task, WindowAppearance};
 use photon_core::{BrowserSettings, ThemeMode};
 use photon_omnibox::SearchEngines;
 use photon_storage::Profile;
+use std::sync::Mutex;
+use std::time::Duration;
 
+use super::super::app_update::update_app;
 use super::super::trace;
+
+/// How long after a change the settings are saved, so a burst of changes,
+/// as while dragging the sidebar's edge, saves once.
+const SAVE_DELAY: Duration = Duration::from_millis(500);
+
+/// Keeps saves in the order they were made.
+static WRITING: Mutex<()> = Mutex::new(());
 
 /// The settings, and where they are saved; `None` keeps them in memory only.
 pub(super) struct Settings {
     settings: BrowserSettings,
     profile: Option<Profile>,
+    /// The pending save.
+    save: Option<Task<()>>,
 }
 
 impl Global for Settings {}
@@ -38,7 +51,23 @@ pub(in crate::platform) fn load_settings(profile: Option<Profile>, cx: &mut App)
     {
         settings.default_search_engine = BrowserSettings::default().default_search_engine;
     }
-    cx.set_global(Settings { settings, profile });
+    cx.set_global(Settings {
+        settings,
+        profile,
+        save: None,
+    });
+    cx.on_app_quit(|cx| {
+        let save = cx.update_global::<Settings, _>(|store, _| {
+            store.save = None;
+            store.snapshot()
+        });
+        async move {
+            if let Some((profile, settings)) = save {
+                write_settings(&profile, &settings);
+            }
+        }
+    })
+    .detach();
 }
 
 impl Settings {
@@ -51,17 +80,41 @@ impl Settings {
         cx.global::<Self>().profile.is_some()
     }
 
-    /// Changes the settings, saves them, and notifies observers. The file is
-    /// small, so it is written at once, which keeps saves in order.
+    /// Changes the settings, notifies observers, and saves them shortly.
     pub(super) fn update(cx: &mut App, update: impl FnOnce(&mut BrowserSettings)) {
-        cx.update_global::<Self, _>(|store, _| {
+        cx.update_global::<Self, _>(|store, cx| {
             update(&mut store.settings);
-            if let Some(profile) = &store.profile
-                && let Err(error) = profile.save_settings(&store.settings)
-            {
-                trace(format_args!("saving settings: {error}"));
-            }
+            store.save_soon(cx);
         });
+    }
+
+    /// Saves the settings a moment from now, unless a save is waiting.
+    fn save_soon(&mut self, cx: &mut App) {
+        if self.profile.is_none() || self.save.is_some() {
+            return;
+        }
+        self.save = Some(cx.spawn(async move |cx| {
+            cx.background_executor().timer(SAVE_DELAY).await;
+            let save = update_app(cx, |cx| {
+                cx.update_global::<Self, _>(|store, _| {
+                    store.save = None;
+                    store.snapshot()
+                })
+            })
+            .await
+            .flatten();
+            // Clearing `save` above dropped this task's handle, which
+            // cancels it at its next await, so the write runs detached.
+            if let Some((profile, settings)) = save {
+                cx.background_executor()
+                    .spawn(async move { write_settings(&profile, &settings) })
+                    .detach();
+            }
+        }));
+    }
+
+    fn snapshot(&self) -> Option<(Profile, BrowserSettings)> {
+        Some((self.profile.clone()?, self.settings.clone()))
     }
 
     /// The search engines, with the chosen one as the default.
@@ -83,5 +136,14 @@ impl Settings {
             ThemeMode::Light => Some(WindowAppearance::Light),
             ThemeMode::Dark => Some(WindowAppearance::Dark),
         }
+    }
+}
+
+fn write_settings(profile: &Profile, settings: &BrowserSettings) {
+    let _writing = WRITING
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Err(error) = profile.save_settings(settings) {
+        trace(format_args!("saving settings: {error}"));
     }
 }
