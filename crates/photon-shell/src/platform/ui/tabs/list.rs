@@ -3,6 +3,7 @@
 
 use gpui::{AnyElement, Role, div, prelude::*, px, rgb, rgba};
 
+use super::super::controls::FocusRing;
 use super::super::controls::OwnsClicks;
 use super::super::icons::add_icon;
 use super::super::layout::{h_stack, v_stack};
@@ -106,15 +107,18 @@ fn tab_row(parts: TabParts, palette: ThemeColors) -> AnyElement {
         .rounded(px(metrics::SIDEBAR_ITEM_RADIUS))
         .text_size(px(metrics::SIDEBAR_FONT_SIZE));
     let row = if parts.active {
-        row.bg(rgba(palette.surface))
+        row.bg(rgba(palette.selected_surface))
     } else {
         row.hover(|style| style.bg(rgba(palette.hover_surface)))
     };
     let close = if parts.active {
         parts.close
     } else {
+        // Hidden, it is also left out of the tab order, so keyboard focus
+        // never lands on it unseen.
         parts
             .close
+            .tab_stop(false)
             .opacity(0.0)
             .group_hover(parts.group, |style| style.opacity(1.0))
     };
@@ -129,7 +133,7 @@ fn tab_row(parts: TabParts, palette: ThemeColors) -> AnyElement {
 fn tab_tile(parts: TabParts, palette: ThemeColors) -> AnyElement {
     let tile = collapsed_tile(parts.tab).justify_center();
     let tile = if parts.active {
-        tile.bg(rgba(palette.surface))
+        tile.bg(rgba(palette.selected_surface))
     } else {
         tile.hover(|style| style.bg(rgba(palette.hover_surface)))
     };
@@ -147,7 +151,7 @@ fn new_tab_row(
         .role(Role::Button)
         .aria_label("New tab")
         .tab_index(0)
-        .focus_visible(|style| style.border_1().border_color(rgb(palette.chosen)))
+        .focus_ring(palette)
         .items_center()
         .rounded(px(metrics::SIDEBAR_ITEM_RADIUS))
         .text_size(px(metrics::SIDEBAR_FONT_SIZE))
@@ -166,5 +170,5 @@ fn new_tab_row(
         .gap(px(metrics::SIDEBAR_TAB_ICON_GAP))
         .h(px(metrics::SIDEBAR_TAB_HEIGHT))
         .px(px(metrics::SIDEBAR_TAB_PADDING))
-        .child("New Tab")
+        .child("New tab")
 }

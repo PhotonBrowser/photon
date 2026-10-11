@@ -34,6 +34,25 @@ pub(super) trait OwnsClicks: InteractiveElement + Sized {
 
 impl<E: InteractiveElement> OwnsClicks for E {}
 
+/// The ring a control shows while it has keyboard focus: an accent border,
+/// transparent at rest so showing it never moves the control's content.
+/// Call it before any border the control has at rest, which then shows
+/// until it is focused.
+pub(super) trait FocusRing: InteractiveElement + Styled + Sized {
+    fn focus_ring(self, palette: ThemeColors) -> Self {
+        self.focus_ring_in(palette.chosen)
+    }
+
+    /// The ring in `color`, for a control whose own colour is the accent.
+    fn focus_ring_in(self, color: u32) -> Self {
+        self.border_1()
+            .border_color(gpui::transparent_black())
+            .focus_visible(move |style| style.border_color(rgb(color)))
+    }
+}
+
+impl<E: InteractiveElement + Styled> FocusRing for E {}
+
 pub(super) fn choices(
     id: &'static str,
     label: &'static str,
@@ -47,7 +66,12 @@ pub(super) fn choices(
             .aria_label(option.label.clone())
             .aria_toggled(toggled(option.chosen))
             .tab_index(0)
-            .focus_visible(|style| style.border_1().border_color(rgb(palette.chosen)))
+            // On the chosen segment's accent, the ring takes its text colour.
+            .focus_ring_in(if option.chosen {
+                palette.on_chosen
+            } else {
+                palette.chosen
+            })
             .flex_1()
             .items_center()
             .justify_center()
@@ -115,7 +139,9 @@ pub(super) fn swatches(
             .when(!option.chosen, |ring| {
                 ring.hover(|style| style.border_color(rgba(palette.selected_surface)))
             })
-            .focus_visible(|style| style.border_color(rgb(palette.chosen)))
+            // Focus rings in the text colour, apart from the chosen ring's
+            // accent, so a focused swatch never looks chosen.
+            .focus_visible(|style| style.border_color(rgb(palette.text_primary)))
             .owns_clicks()
             .on_click(option.on_choose)
             .child(

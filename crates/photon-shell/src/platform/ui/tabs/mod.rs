@@ -13,6 +13,7 @@ use gpui::{
 };
 
 use super::Favicon;
+use super::controls::FocusRing;
 use super::controls::OwnsClicks;
 use super::icons::{audio_icon, close_icon, globe_icon, loading_spinner, photon_logo};
 use super::layout::{Elevated, Elevation, Raised, h_stack};
@@ -193,7 +194,7 @@ impl TabParts {
             .aria_position_in_set(position + 1)
             .aria_size_of_set(tab_count)
             .track_focus(&focus_handle)
-            .focus_visible(|style| style.bg(rgba(palette.hover_surface)))
+            .focus_ring(palette)
             .items_center()
             .text_color(rgb(if tab.active {
                 palette.text_primary
@@ -299,7 +300,7 @@ fn audio_control_button(
         .role(Role::Button)
         .aria_label(label)
         .tab_index(focus_index)
-        .focus_visible(|style| style.border_1().border_color(rgb(palette.chosen)))
+        .focus_ring(palette)
         .flex_shrink_0()
         .relative()
         .items_center()
@@ -326,7 +327,7 @@ fn close_tab_button(
         .role(Role::Button)
         .aria_label(label)
         .tab_index(focus_index)
-        .focus_visible(|style| style.border_1().border_color(rgb(palette.chosen)))
+        .focus_ring(palette)
         .flex_shrink_0()
         .items_center()
         .justify_center()

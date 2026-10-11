@@ -5,8 +5,8 @@
 use gpui::{MouseButton, Role, div, prelude::*, px, rgb, rgba};
 
 use super::super::button::{menu_button, toolbar_button};
+use super::super::controls::FocusRing;
 use super::super::controls::OwnsClicks;
-use super::super::controls::toggled;
 use super::super::icons::{add_icon, settings_icon};
 use super::super::layout::{h_stack, v_stack};
 use super::super::{ClickHandler, MouseDownHandler, metrics, theme::ThemeColors};
@@ -113,9 +113,8 @@ fn space_dot(index: usize, space: SpaceDot, palette: ThemeColors) -> impl IntoEl
         .role(Role::Tab)
         .aria_label(space.name)
         .aria_selected(space.active)
-        .aria_toggled(toggled(space.active))
         .tab_index(0)
-        .focus_visible(|style| style.border_1().border_color(rgb(palette.chosen)))
+        .focus_ring(palette)
         .size(px(metrics::SPACE_DOT_BUTTON_SIZE))
         .items_center()
         .justify_center()

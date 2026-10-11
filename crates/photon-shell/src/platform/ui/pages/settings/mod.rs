@@ -15,6 +15,7 @@ mod sites;
 mod tabs;
 mod workspace_presets;
 
+use super::super::controls::FocusRing;
 use super::super::controls::OwnsClicks;
 use super::super::icons::{
     appearance_icon, globe_icon, grid_icon, search_icon_sized, settings_icon, shield_icon,
@@ -274,7 +275,7 @@ impl SettingsPage {
                 .aria_label(section.title())
                 .aria_selected(selected)
                 .tab_index(0)
-                .focus_visible(|style| style.border_1().border_color(rgb(palette.chosen)))
+                .focus_ring(palette)
                 .items_center()
                 .gap(px(metrics::OMNIBOX_GAP))
                 .h(px(metrics::SETTINGS_SIDEBAR_ITEM_HEIGHT))

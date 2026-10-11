@@ -1,12 +1,13 @@
 //! The new tab page's shortcut tiles.
 
 use gpui::{
-    AnyElement, Context, ElementId, ImageSource, ObjectFit, Role, SharedString, div, img,
-    prelude::*, px, rgb, rgba,
+    AnyElement, Context, ElementId, ImageSource, KeyDownEvent, ObjectFit, Role, SharedString, div,
+    img, prelude::*, px, rgb, rgba,
 };
 use photon_core::{Shortcut, site_name};
 
 use super::super::super::button::icon_button;
+use super::super::super::controls::FocusRing;
 use super::super::super::controls::OwnsClicks;
 use super::super::super::history::BrowsingHistory;
 use super::super::super::icons::{add_icon, close_icon, globe_icon};
@@ -81,12 +82,25 @@ impl NewTabPage {
             site_name(&shortcut.url)
         };
         let url = shortcut.url.clone();
-        let mut tile =
-            tile(("new-tab-shortcut", index), name, icon, palette)
-                .on_click(cx.listener(move |this, _, _, cx| this.context.open(url.clone(), cx)))
-                .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+        let removed = shortcut.url.clone();
+        let mut tile = tile(("new-tab-shortcut", index), name, icon, palette)
+            .aria_description("Press Delete to remove")
+            .on_click(cx.listener(move |this, _, _, cx| this.context.open(url.clone(), cx)))
+            // The remove button shows under the pointer; from the
+            // keyboard, Delete removes the focused shortcut.
+            .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, cx| {
+                let key = event.keystroke.key.as_str();
+                if !event.keystroke.modifiers.modified() && (key == "delete" || key == "backspace")
+                {
+                    cx.stop_propagation();
+                    this.remove(&removed, cx);
+                }
+            }))
+            .on_hover(
+                cx.listener(move |this, hovered: &bool, _, cx| {
                     this.hover_tile(index, *hovered, cx)
-                }));
+                }),
+            );
         if self.hovered == Some(index) {
             let url = shortcut.url;
             tile = tile.child(
@@ -123,10 +137,10 @@ fn tile(
     let name = name.into();
     v_stack()
         .id(id)
-        .role(Role::ListItem)
+        .role(Role::Button)
         .aria_label(name.clone())
         .tab_index(0)
-        .focus_visible(|style| style.border_1().border_color(rgb(palette.chosen)))
+        .focus_ring(palette)
         .relative()
         .items_center()
         .gap(px(metrics::SHORTCUT_GAP))

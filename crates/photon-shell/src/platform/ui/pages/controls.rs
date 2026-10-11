@@ -3,6 +3,7 @@
 
 use gpui::{ElementId, Role, SharedString, Stateful, prelude::*, px, rgb, rgba};
 
+use super::super::controls::FocusRing;
 use super::super::controls::OwnsClicks;
 use super::super::controls::{check_mark, switch, toggled};
 use super::super::layout::h_stack;
@@ -62,7 +63,7 @@ fn row(
         .aria_label(label.clone())
         .aria_toggled(toggled(on))
         .tab_index(0)
-        .focus_visible(|style| style.border_1().border_color(rgb(palette.chosen)))
+        .focus_ring(palette)
         .items_center()
         .justify_between()
         .gap(px(metrics::INTERNAL_PAGE_GROUP_GAP))

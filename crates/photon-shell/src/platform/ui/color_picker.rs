@@ -6,6 +6,7 @@ use gpui::{App, ElementId, Role, Window, prelude::*, px, rgb, rgba};
 use photon_core::WindowColor;
 use std::rc::Rc;
 
+use super::controls::FocusRing;
 use super::controls::OwnsClicks;
 use super::controls::{Swatch, swatches, switch, toggled};
 use super::layout::{ControlSurface, h_stack, v_stack};
@@ -41,7 +42,7 @@ pub(super) fn color_picker(
             .aria_label("Gradient")
             .aria_toggled(toggled(gradient))
             .tab_index(0)
-            .focus_visible(|style| style.border_1().border_color(rgb(palette.chosen)))
+            .focus_ring(palette)
             .items_center()
             .justify_between()
             .w_full()

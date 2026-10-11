@@ -2,6 +2,7 @@
 
 use gpui::{Role, div, prelude::*, px, rgb, rgba};
 
+use super::super::controls::FocusRing;
 use super::super::controls::OwnsClicks;
 use super::super::icons::add_icon;
 use super::super::layout::h_stack;
@@ -73,7 +74,7 @@ fn strip_tab(parts: TabParts, palette: ThemeColors) -> impl IntoElement {
             .h(px(metrics::TAB_HEIGHT))
             .rounded(px(metrics::CONTROL_RADIUS));
         let tab = if parts.active {
-            tab.bg(rgba(palette.surface))
+            tab.bg(rgba(palette.selected_surface))
         } else {
             tab.hover(|style| style.bg(rgba(palette.hover_surface)))
         };
@@ -90,7 +91,7 @@ fn strip_tab(parts: TabParts, palette: ThemeColors) -> impl IntoElement {
         .rounded(px(metrics::CONTROL_RADIUS))
         .text_size(px(metrics::TAB_FONT_SIZE));
     let tab = if parts.active {
-        tab.bg(rgba(palette.surface))
+        tab.bg(rgba(palette.selected_surface))
     } else {
         tab.hover(|style| style.bg(rgba(palette.hover_surface)))
     };
@@ -109,7 +110,7 @@ fn new_tab_button(
         .role(Role::Button)
         .aria_label("New tab")
         .tab_index(focus_index)
-        .focus_visible(|style| style.border_1().border_color(rgb(palette.chosen)))
+        .focus_ring(palette)
         .flex_shrink_0()
         .items_center()
         .justify_center()

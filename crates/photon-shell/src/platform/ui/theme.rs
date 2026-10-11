@@ -60,7 +60,10 @@ mod opacity {
     /// How much of the text color tints the shared surface.
     pub(super) const SURFACE_TINT: f32 = 0.06;
     pub(super) const SELECTED: f32 = 0.12;
+    /// Between the surface and a selected row, for a surface under the pointer.
+    pub(super) const SURFACE_HOVER: f32 = 0.09;
     pub(super) const ACCENT_HOVER_BLEND: f32 = 0.12;
+    pub(super) const SOFT_ACCENT_BORDER: f32 = 0.48;
 }
 
 /// The direction a window gradient runs, in degrees: from the top left.
@@ -177,12 +180,16 @@ pub(super) struct ThemeColors {
     /// The quiet outline around inputs and secondary controls.
     pub control_border: u32,
     /// The one surface the window's parts sit on: the browser's own pages,
-    /// the omnibox field, the active tab, buttons and text fields. A light
+    /// the omnibox field, buttons and text fields. A light
     /// tint over the window, exactly as see-through as the window is.
     pub surface: u32,
     /// A row or control under the pointer.
     pub hover_surface: u32,
-    /// The selected row, such as the open settings section.
+    /// Something resting on `surface`, such as a favourite tile, under the
+    /// pointer: stronger than its rest, weaker than when selected.
+    pub surface_hover: u32,
+    /// The selected row, such as the active tab or the open settings
+    /// section, stronger than a row under the pointer.
     pub selected_surface: u32,
     /// What is chosen or on: a chosen option, a switch that is on, a checked box.
     pub chosen: u32,
@@ -298,6 +305,7 @@ impl ThemeColors {
             // it never makes the window less see-through.
             surface: to_rgba_token(colors.text.opacity(opacity::SURFACE_TINT)),
             hover_surface: to_rgba_token(colors.text.opacity(opacity::HOVER)),
+            surface_hover: to_rgba_token(colors.text.opacity(opacity::SURFACE_HOVER)),
             selected_surface: to_rgba_token(colors.text.opacity(opacity::SELECTED)),
             chosen: to_rgb_token(link),
             chosen_hover: to_rgb_token(mix_colors(
@@ -305,7 +313,7 @@ impl ThemeColors {
                 accent_adjustment,
                 1.0 - opacity::ACCENT_HOVER_BLEND,
             )),
-            soft_accent_border: to_rgba_token(link.opacity(0.48)),
+            soft_accent_border: to_rgba_token(link.opacity(opacity::SOFT_ACCENT_BORDER)),
             on_chosen: if dark {
                 to_rgb_token(colors.background)
             } else {

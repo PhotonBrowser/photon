@@ -3,6 +3,7 @@
 use gpui::{AnyElement, FontWeight, MouseButton, Role, div, prelude::*, px, rgb, rgba};
 
 use super::super::button::icon_button;
+use super::super::controls::FocusRing;
 use super::super::controls::OwnsClicks;
 use super::super::icons::{close_icon, favourite_star_icon};
 use super::super::layout::{h_stack, v_stack};
@@ -143,7 +144,7 @@ pub(in super::super) fn favourites_empty_state(
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(rgb(palette.text_primary))
                     .text_center()
-                    .child("Drag to add Favourites"),
+                    .child("Drag to add favourites"),
             )
         })
         .when(!collapsed, |hint| {
@@ -174,20 +175,23 @@ fn favourite_tile(
 ) -> AnyElement {
     let tile_element = h_stack()
         .id(("sidebar-favourite", index))
-        .role(Role::ListItem)
+        .role(Role::Button)
         .aria_label(tile.label)
         .aria_selected(tile.active)
         .tab_index(0)
-        .focus_visible(|style| style.border_1().border_color(gpui::rgb(palette.chosen)))
+        .focus_ring(palette)
         .items_center()
         .justify_center()
+        // At rest, under the pointer and open, in rising strength, as tabs.
         .bg(rgba(if tile.active {
             palette.selected_surface
         } else {
             palette.surface
         }))
-        .hover(|style| style.bg(rgba(palette.selected_surface)))
-        .active(|style| style.bg(rgba(palette.hover_surface)))
+        .when(!tile.active, |tile| {
+            tile.hover(|style| style.bg(rgba(palette.surface_hover)))
+                .active(|style| style.bg(rgba(palette.selected_surface)))
+        })
         .owns_clicks()
         .on_mouse_down(MouseButton::Right, tile.on_context_menu)
         .on_click(tile.on_open)
