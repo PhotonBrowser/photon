@@ -324,6 +324,11 @@ impl BrowserWindow {
         self.remember_closed(index, &removed.content, cx);
 
         let was_active = self.active_tab == Some(index);
+        let next = if was_active {
+            self.tab_after_closing(index, cx)
+        } else {
+            None
+        };
         let closed = self.tabs.remove(index);
         drop(self.tab_subscriptions.remove(index));
         self.tab_focus_handles.remove(index);
@@ -331,8 +336,7 @@ impl BrowserWindow {
             if index < active_tab {
                 self.active_tab = Some(active_tab - 1);
             } else if was_active {
-                self.active_tab =
-                    (!self.tabs.is_empty()).then_some(index.min(self.tabs.len().saturating_sub(1)));
+                self.active_tab = next;
             }
         }
 
@@ -350,12 +354,35 @@ impl BrowserWindow {
             return;
         }
         if was_active {
-            if let Some(active_tab) = self.active_tab {
-                self.activate_tab(active_tab, true, window, cx);
+            match self.active_tab {
+                Some(active_tab) => self.activate_tab(active_tab, true, window, cx),
+                // The space has no other tab; show it a new tab page, as an
+                // empty space does when switched to.
+                None => self.insert_page(self.tabs.len(), NEW_TAB, window, cx),
             }
         } else {
             cx.notify();
         }
+    }
+
+    /// The tab to show once the active tab at `index` closes, by its index
+    /// after the close: its neighbour in the list, after it or else before
+    /// it, so closing a tab never moves to another space. A tab not listed,
+    /// such as a favourite's, gives way to the list's most recent tab.
+    /// `None` when the list has no other tab.
+    fn tab_after_closing(&self, index: usize, cx: &Context<Self>) -> Option<usize> {
+        let listed = self.listed_tabs(cx);
+        let next = match listed.iter().position(|&listed| listed == index) {
+            Some(position) => listed
+                .get(position + 1)
+                .or_else(|| listed.get(position.checked_sub(1)?))
+                .copied(),
+            None => listed
+                .iter()
+                .copied()
+                .max_by_key(|&listed| self.tabs[listed].last_active),
+        };
+        next.map(|next| if next > index { next - 1 } else { next })
     }
 
     /// Keeps a closed web page so it can be reopened.
