@@ -7,6 +7,16 @@ use std::{
     time::Instant,
 };
 
+/// A browser tab and the performance data its Engine view currently reports.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct PerformanceTask {
+    pub id: u64,
+    pub title: String,
+    pub url: String,
+    pub loading: bool,
+    pub diagnostics: PerformanceDiagnostics,
+}
+
 /// Values delivered by the Photon Engine performance monitor.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct EnginePerformanceStats {
@@ -102,12 +112,14 @@ impl PerformanceAccumulator {
 #[derive(Default)]
 pub struct PerformanceMonitor {
     accumulator: Mutex<PerformanceAccumulator>,
-    enabled: AtomicBool,
+    overlay_enabled: AtomicBool,
+    dashboard_enabled: AtomicBool,
 }
 
 impl PerformanceMonitor {
     pub fn is_enabled(&self) -> bool {
-        self.enabled.load(Ordering::Acquire)
+        self.overlay_enabled.load(Ordering::Acquire)
+            || self.dashboard_enabled.load(Ordering::Acquire)
     }
 
     pub fn snapshot(&self) -> PerformanceDiagnostics {
@@ -135,9 +147,95 @@ impl PerformanceMonitor {
     }
 
     pub fn set_enabled(&self, enabled: bool) {
-        if enabled {
+        self.set_source_enabled(&self.overlay_enabled, enabled);
+    }
+
+    /// Enables collection while the internal performance page is open.
+    pub fn set_dashboard_enabled(&self, enabled: bool) {
+        self.set_source_enabled(&self.dashboard_enabled, enabled);
+    }
+
+    fn set_source_enabled(&self, source: &AtomicBool, enabled: bool) {
+        let was_enabled = self.is_enabled();
+        source.store(enabled, Ordering::Release);
+        if !was_enabled && self.is_enabled() {
             self.accumulator.lock().unwrap().reset_timing();
         }
-        self.enabled.store(enabled, Ordering::Release);
+    }
+}
+
+/// One point in the performance page's rolling history.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct PerformanceSample {
+    pub elapsed_seconds: f64,
+    pub cpu_percent: Option<f64>,
+    pub memory_bytes: Option<u64>,
+}
+
+/// A bounded history for the aggregate values shown by the performance page.
+#[derive(Default)]
+pub struct PerformanceHistory {
+    started_at: Option<Instant>,
+    samples: VecDeque<(Instant, PerformanceSample)>,
+}
+
+impl PerformanceHistory {
+    const WINDOW_SECONDS: f64 = 60.0;
+
+    pub fn push(&mut self, cpu_percent: Option<f64>, memory_bytes: Option<u64>) {
+        let now = Instant::now();
+        self.push_at(now, cpu_percent, memory_bytes);
+    }
+
+    fn push_at(&mut self, now: Instant, cpu_percent: Option<f64>, memory_bytes: Option<u64>) {
+        let started_at = *self.started_at.get_or_insert(now);
+        let sample = PerformanceSample {
+            elapsed_seconds: now.duration_since(started_at).as_secs_f64(),
+            cpu_percent,
+            memory_bytes,
+        };
+        self.samples.push_back((now, sample));
+        while self
+            .samples
+            .front()
+            .is_some_and(|(at, _)| now.duration_since(*at).as_secs_f64() > Self::WINDOW_SECONDS)
+        {
+            self.samples.pop_front();
+        }
+    }
+
+    pub fn samples(&self) -> Vec<PerformanceSample> {
+        self.samples.iter().map(|(_, sample)| *sample).collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn performance_history_keeps_only_the_last_minute() {
+        let start = Instant::now();
+        let mut history = PerformanceHistory::default();
+        history.push_at(start, Some(1.0), Some(10));
+        history.push_at(start + Duration::from_secs(30), Some(2.0), Some(20));
+        history.push_at(start + Duration::from_secs(61), Some(3.0), Some(30));
+
+        let samples = history.samples();
+        assert_eq!(samples.len(), 2);
+        assert_eq!(samples[0].elapsed_seconds, 30.0);
+        assert_eq!(samples[1].cpu_percent, Some(3.0));
+    }
+
+    #[test]
+    fn diagnostics_remain_enabled_until_all_sources_are_disabled() {
+        let monitor = PerformanceMonitor::default();
+        monitor.set_enabled(true);
+        monitor.set_dashboard_enabled(true);
+        monitor.set_enabled(false);
+        assert!(monitor.is_enabled());
+        monitor.set_dashboard_enabled(false);
+        assert!(!monitor.is_enabled());
     }
 }

@@ -121,7 +121,7 @@ fn optional_number(value: Option<f64>, suffix: &str) -> String {
     value.map_or_else(|| "—".into(), |value| format!("{value:.1}{suffix}"))
 }
 
-fn format_bytes(bytes: u64) -> String {
+pub fn format_bytes(bytes: u64) -> String {
     const KB: f64 = 1_000.0;
     const MB: f64 = 1_000_000.0;
     const GB: f64 = 1_000_000_000.0;
@@ -137,6 +137,6 @@ fn format_bytes(bytes: u64) -> String {
     }
 }
 
-fn format_rate(bytes_per_second: u64) -> String {
+pub fn format_rate(bytes_per_second: u64) -> String {
     format!("{}/s", format_bytes(bytes_per_second))
 }

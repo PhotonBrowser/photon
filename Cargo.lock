@@ -4226,6 +4226,8 @@ name = "photon-performance"
 version = "0.1.0"
 dependencies = [
  "gpui-ce",
+ "libc",
+ "mach2",
 ]
 
 [[package]]
