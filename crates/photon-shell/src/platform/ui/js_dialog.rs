@@ -1,8 +1,8 @@
 //! A page's JavaScript alert, confirm or prompt, shown over the page.
 
 use gpui::{
-    App, Context, Entity, FocusHandle, Focusable, KeyDownEvent, Render, Role, Subscription, Window,
-    div, prelude::*, px, rgb,
+    AnyElement, App, Context, Entity, FocusHandle, Focusable, KeyDownEvent, Render, Role,
+    Subscription, Window, div, prelude::*, px, rgb,
 };
 use gpui_elements::editable_text::{
     EditableTextState, StringStorage,
@@ -14,9 +14,65 @@ use photon_core::{DialogKind, DialogRequest};
 use super::button::{ButtonSize, button};
 use super::controls::text_field;
 use super::layout::h_stack;
-use super::modal::{modal, modal_panel};
-use super::motion::Transition;
+use super::modal::{MODAL_MOTION, modal, modal_panel};
+use super::motion::{Presence, Transition};
 use super::{PhotonWebView, metrics, theme::palette};
+
+/// The JavaScript dialog a window shows for one of its pages, modal to the
+/// whole window, and kept drawn while it animates away.
+#[derive(Default)]
+pub(super) struct DialogHost {
+    dialog: Option<Entity<JavaScriptDialog>>,
+    presence: Presence<Entity<JavaScriptDialog>>,
+}
+
+impl DialogHost {
+    /// Shows `webview`'s open dialog in place of the one shown, if it
+    /// differs, and returns focus to the page when a dialog that had it
+    /// closes. Returns whether the shown dialog changed.
+    pub(super) fn sync(
+        &mut self,
+        webview: Option<&Entity<PhotonWebView>>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> bool {
+        let open = webview.and_then(|webview| webview.read(cx).dialogs.open().cloned());
+        let shown = self
+            .dialog
+            .as_ref()
+            .map(|dialog| dialog.read(cx).request().clone());
+        if open == shown {
+            return false;
+        }
+        let closed = self.dialog.take();
+        let had_focus = closed
+            .as_ref()
+            .is_some_and(|dialog| dialog.read(cx).contains_focus(window, cx));
+        if let Some(closed) = closed {
+            closed.update(cx, |dialog, cx| dialog.leave(cx));
+        }
+        match (open, webview) {
+            (Some(request), Some(webview)) => {
+                let dialog = cx.new(|cx| JavaScriptDialog::new(webview.clone(), request, cx));
+                dialog.update(cx, |dialog, cx| dialog.focus(window, cx));
+                self.dialog = Some(dialog);
+            }
+            (None, Some(webview)) if had_focus => {
+                let page_focus = webview.read(cx).focus_handle.clone();
+                window.focus(&page_focus, cx);
+            }
+            _ => {}
+        }
+        true
+    }
+
+    /// The dialog over the window, while shown or animating away.
+    pub(super) fn overlay<V: 'static>(&mut self, cx: &mut Context<V>) -> Option<AnyElement> {
+        self.presence
+            .sync(self.dialog.clone(), MODAL_MOTION, cx)
+            .map(|(dialog, _)| dialog.into_any_element())
+    }
+}
 
 pub(super) struct JavaScriptDialog {
     webview: Entity<PhotonWebView>,
@@ -32,16 +88,12 @@ pub(super) struct JavaScriptDialog {
 impl JavaScriptDialog {
     /// Marks the dialog answered, so it animates away while the window keeps
     /// it drawn.
-    pub(super) fn leave(&mut self, cx: &mut Context<Self>) {
+    fn leave(&mut self, cx: &mut Context<Self>) {
         self.transition = Transition::Exit;
         cx.notify();
     }
 
-    pub(super) fn new(
-        webview: Entity<PhotonWebView>,
-        request: DialogRequest,
-        cx: &mut Context<Self>,
-    ) -> Self {
+    fn new(webview: Entity<PhotonWebView>, request: DialogRequest, cx: &mut Context<Self>) -> Self {
         let input = match &request.kind {
             DialogKind::Prompt { default_text } => Some(cx.new(|cx| {
                 let mut input = EditableTextState::new(StringStorage::default(), cx);
@@ -64,12 +116,12 @@ impl JavaScriptDialog {
         }
     }
 
-    pub(super) fn request(&self) -> &DialogRequest {
+    fn request(&self) -> &DialogRequest {
         &self.request
     }
 
     /// Focuses the prompt's text, selected, or the dialog itself.
-    pub(super) fn focus(&self, window: &mut Window, cx: &mut Context<Self>) {
+    fn focus(&self, window: &mut Window, cx: &mut Context<Self>) {
         match &self.input {
             Some(input) => {
                 window.focus(&input.focus_handle(cx), cx);
@@ -79,7 +131,7 @@ impl JavaScriptDialog {
         }
     }
 
-    pub(super) fn contains_focus(&self, window: &Window, cx: &App) -> bool {
+    fn contains_focus(&self, window: &Window, cx: &App) -> bool {
         self.focus_handle.contains_focused(window, cx)
             || self
                 .input

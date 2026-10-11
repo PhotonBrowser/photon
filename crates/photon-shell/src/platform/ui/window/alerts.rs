@@ -5,7 +5,6 @@ use photon_core::BrowserCommand;
 use std::time::{Duration, Instant};
 
 use super::super::super::engine::ZoomStep;
-use super::super::js_dialog::JavaScriptDialog;
 use super::super::status_chip::{CHIP_MOTION, ChipIcon, status_chip};
 use super::super::theme::ThemeColors;
 use super::super::{ClickHandler, CrashNotice};
@@ -48,43 +47,18 @@ pub(super) struct Notice {
 }
 
 impl BrowserWindow {
-    /// Shows the active tab's JavaScript dialog, if it has one, and returns
-    /// focus to the page when it closes.
+    /// Shows the JavaScript dialog of the page in view: the preview's while
+    /// it has one open, otherwise the active tab's. Focus returns to the
+    /// page when the dialog closes.
     pub(super) fn sync_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(webview) = self.active_webview() else {
-            if let Some(dialog) = self.dialog.take() {
-                dialog.update(cx, |dialog, cx| dialog.leave(cx));
-            }
-            return;
-        };
-        let open = webview.read(cx).dialogs.open().cloned();
-        let shown = self
-            .dialog
-            .as_ref()
-            .map(|dialog| dialog.read(cx).request().clone());
-        if open == shown {
-            return;
+        let active = self.active_webview();
+        let peek = self.peek_webview();
+        let webview = peek
+            .filter(|peek| peek.read(cx).dialogs.open().is_some())
+            .or(active);
+        if self.dialog.sync(webview.as_ref(), window, cx) {
+            cx.notify();
         }
-        let closed = self.dialog.take();
-        let had_focus = closed
-            .as_ref()
-            .is_some_and(|dialog| dialog.read(cx).contains_focus(window, cx));
-        if let Some(closed) = closed {
-            closed.update(cx, |dialog, cx| dialog.leave(cx));
-        }
-        match open {
-            Some(request) => {
-                let dialog = cx.new(|cx| JavaScriptDialog::new(webview, request, cx));
-                dialog.update(cx, |dialog, cx| dialog.focus(window, cx));
-                self.dialog = Some(dialog);
-            }
-            None if had_focus => {
-                let page_focus = webview.read(cx).focus_handle.clone();
-                window.focus(&page_focus, cx);
-            }
-            None => {}
-        }
-        cx.notify();
     }
 
     /// An Engine service stopped (`restarted` false) or is running again.

@@ -45,8 +45,7 @@ use super::super::window_observer::WindowObserver;
 use super::super::window_settings;
 use super::command_bar::CommandBar;
 use super::find_bar::FindBar;
-use super::js_dialog::JavaScriptDialog;
-use super::modal::MODAL_MOTION;
+use super::js_dialog::DialogHost;
 use super::motion::Presence;
 use super::omnibox::{Omnibox, OmniboxEvent};
 use super::pages::find_page;
@@ -97,7 +96,6 @@ struct BrowserWindow {
     command_bar: Option<Entity<CommandBar>>,
     command_bar_presence: Presence<Entity<CommandBar>>,
     _command_bar_subscription: Option<Subscription>,
-    dialog_presence: Presence<Entity<JavaScriptDialog>>,
     notice_presence: Presence<alerts::Notice>,
     /// Pages of closed tabs, most recent last, for reopening.
     closed_tabs: Vec<ClosedTab>,
@@ -108,7 +106,7 @@ struct BrowserWindow {
     /// The open find bar, for the active tab.
     find_bar: Option<(Entity<FindBar>, Subscription)>,
     /// The active tab's open JavaScript dialog.
-    dialog: Option<Entity<JavaScriptDialog>>,
+    dialog: DialogHost,
     pending_popups: VecDeque<PendingPopup>,
     popup_confirmation_focus: FocusHandle,
     /// The title last given to the window, so it changes only with the page.
@@ -238,10 +236,7 @@ impl BrowserWindow {
     /// Everything that floats over the window, drawn by `BrowserOverlays`.
     fn render_overlays(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let palette = self.palette(window, cx);
-        // The dialog animates itself; this keeps a closed one drawn while it does.
-        let dialog = self
-            .dialog_presence
-            .sync(self.dialog.clone(), MODAL_MOTION, cx);
+        let dialog = self.dialog.overlay(cx);
         div()
             .size_full()
             .children(self.peek_overlay(palette, cx))
@@ -249,7 +244,7 @@ impl BrowserWindow {
             .children(self.space_editor_overlay(palette, cx))
             .children(self.shortcuts_dialog_overlay(palette, cx))
             // A JavaScript dialog is modal to the whole window.
-            .children(dialog.map(|(dialog, _)| dialog))
+            .children(dialog)
             .children(self.popup_confirmation(palette, cx))
             .into_any_element()
     }
@@ -341,13 +336,12 @@ fn open_browser_window(
                 command_bar: None,
                 command_bar_presence: Presence::default(),
                 _command_bar_subscription: None,
-                dialog_presence: Presence::default(),
                 notice_presence: Presence::default(),
                 closed_tabs: Vec::new(),
                 spinner_step: 0,
                 spinner_running: false,
                 find_bar: None,
-                dialog: None,
+                dialog: DialogHost::default(),
                 pending_popups: VecDeque::new(),
                 popup_confirmation_focus: cx.focus_handle(),
                 root_focus: cx.focus_handle(),

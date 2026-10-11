@@ -46,7 +46,10 @@ impl BrowserWindow {
                 WebViewEvent::OpenInNewTab { url, activate } => {
                     this.open_tab_beside(webview, url, *activate, window, cx);
                 }
-                WebViewEvent::StateChanged => cx.notify(),
+                WebViewEvent::StateChanged => {
+                    this.sync_dialog(window, cx);
+                    cx.notify();
+                }
                 WebViewEvent::ContextMenuRequested | WebViewEvent::NewWebViewRequested(_) => {}
             },
         );
@@ -60,6 +63,11 @@ impl BrowserWindow {
         cx.notify();
     }
 
+    /// The page in the preview, while it is open.
+    pub(super) fn peek_webview(&self) -> Option<Entity<PhotonWebView>> {
+        self.peek.open.as_ref().map(|peek| peek.webview.clone())
+    }
+
     /// Closes the preview and returns to the page under it.
     pub(super) fn close_peek(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(peek) = self.peek.open.take() {
@@ -70,6 +78,8 @@ impl BrowserWindow {
             if let Some(active_tab) = self.active_tab {
                 self.activate_tab(active_tab, true, window, cx);
             }
+            // A dialog the preview's page had open goes with it.
+            self.sync_dialog(window, cx);
         }
     }
 

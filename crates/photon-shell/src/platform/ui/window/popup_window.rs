@@ -8,6 +8,7 @@ use std::rc::Rc;
 
 use crate::platform::engine::{EngineRuntime, RequestedWebView};
 
+use super::super::js_dialog::DialogHost;
 use super::super::layout::v_stack;
 use super::super::modal::{modal, modal_panel};
 use super::super::motion::Transition;
@@ -30,6 +31,8 @@ struct MinimalPopupWindow {
     runtime: Rc<EngineRuntime>,
     pending_popups: Vec<PendingPopup>,
     confirmation_focus: FocusHandle,
+    /// The page's JavaScript dialog, as a tab shows it.
+    dialog: DialogHost,
     _webview_subscription: Subscription,
     _settings_subscription: Subscription,
 }
@@ -58,7 +61,10 @@ pub(super) fn open_minimal_window(
                 window,
                 |this: &mut MinimalPopupWindow, webview, event: &WebViewEvent, window, cx| {
                     match event {
-                        WebViewEvent::StateChanged => cx.notify(),
+                        WebViewEvent::StateChanged => {
+                            this.dialog.sync(Some(webview), window, cx);
+                            cx.notify();
+                        }
                         WebViewEvent::NewWebViewRequested(id) => {
                             let request = webview.update(cx, |view, _| view.take_new_web_view(*id));
                             if let Some(request) = request {
@@ -77,6 +83,7 @@ pub(super) fn open_minimal_window(
                 runtime,
                 pending_popups: Vec::new(),
                 confirmation_focus: cx.focus_handle(),
+                dialog: DialogHost::default(),
                 _webview_subscription: webview_subscription,
                 // Follow theme and transparency changes made in any window.
                 _settings_subscription: cx.observe_global::<Settings>(|this, cx| {
@@ -236,6 +243,7 @@ impl Render for MinimalPopupWindow {
                     .p(px(metrics::PAGE_INSET))
                     .child(self.webview.clone()),
             )
+            .children(self.dialog.overlay(cx))
             .children(self.popup_confirmation(palette, cx))
     }
 }
