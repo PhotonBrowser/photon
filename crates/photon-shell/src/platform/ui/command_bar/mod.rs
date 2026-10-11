@@ -19,6 +19,7 @@ use gpui_elements::editable_text::{
 use photon_core::{Command, CommandBarResult, OpenTab, SuggestionKind, command_bar_results};
 use photon_omnibox::{OmniboxTarget, resolve_with};
 
+use super::controls::OwnsClicks;
 use super::controls::themed_text_input;
 use super::history::BrowsingHistory;
 use super::icons::search_icon_sized;
@@ -229,7 +230,7 @@ impl Render for CommandBar {
             .text_color(rgb(palette.text_primary))
             .elevated(Elevation::High)
             .occlude()
-            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .owns_clicks()
             .capture_action(cx.listener(Self::submit))
             .capture_action(cx.listener(Self::dismiss))
             .capture_action(cx.listener(Self::select_previous))

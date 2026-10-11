@@ -7,13 +7,19 @@ use gpui::{
     prelude::*, px, rgb, rgba,
 };
 use photon_core::{Command, CommandBarResult};
+use photon_shortcuts::{
+    CloseTab, FindInPage, NewWindow, NextSpace, OpenSettings, PreviousSpace, Reload,
+    ReopenClosedTab, ShowKeyboardShortcuts, ToggleSidebar, ToggleSidebarIcons, ToggleZenMode,
+};
 use std::rc::Rc;
 
 use super::super::history::BrowsingHistory;
 use super::super::icons::{
     add_icon, back_icon, close_icon, copy_icon, forward_icon, globe_icon, history_icon,
-    reload_icon, search_icon_sized, settings_icon, sidebar_icon, window_icon,
+    keyboard_icon, reload_icon, search_icon_sized, settings_icon, sidebar_expand_icon,
+    sidebar_icon, window_icon, zen_icon,
 };
+use super::super::kbd::action_kbd;
 use super::super::layout::{h_stack, v_stack};
 use super::super::omnibox::{icon_slot, matched_text, row_text, suggestion_icon};
 use super::super::{metrics, theme::ThemeColors};
@@ -59,13 +65,7 @@ pub(super) fn result_rows(
                 })
                 .child(icon)
                 .child(div().flex_1().min_w_0().truncate().child(label))
-                .child(
-                    div()
-                        .flex_shrink_0()
-                        .text_size(px(metrics::COMMAND_BAR_DETAIL_FONT_SIZE))
-                        .text_color(rgb(palette.text_secondary))
-                        .child(detail),
-                );
+                .child(detail);
             if index == selected {
                 row.bg(rgba(palette.selected_surface))
             } else {
@@ -84,19 +84,28 @@ pub(super) fn result_rows(
         .children(rows)
 }
 
-/// A row's icon, text and what choosing it does.
+/// A row's icon, its text, and at its end what choosing it does or, for a
+/// command with a shortcut, its keys.
 fn row_parts(
     result: &CommandBarResult,
     palette: ThemeColors,
     cx: &mut App,
-) -> (AnyElement, StyledText, &'static str) {
+) -> (AnyElement, StyledText, AnyElement) {
+    let detail = |text: &'static str| {
+        div()
+            .flex_shrink_0()
+            .text_size(px(metrics::COMMAND_BAR_DETAIL_FONT_SIZE))
+            .text_color(rgb(palette.text_secondary))
+            .child(text)
+            .into_any_element()
+    };
     match result {
         CommandBarResult::Open(suggestion) => {
             let (text, highlights) = row_text(suggestion, palette);
             (
                 suggestion_icon(suggestion, palette, cx),
                 StyledText::new(text).with_highlights(highlights),
-                "Open in New Tab",
+                detail("Open in New Tab"),
             )
         }
         CommandBarResult::SwitchToTab {
@@ -117,7 +126,7 @@ fn row_parts(
             (
                 icon_slot(icon),
                 StyledText::new(text).with_highlights(highlights),
-                "Switch to Tab",
+                detail("Switch to Tab"),
             )
         }
         CommandBarResult::Run {
@@ -125,10 +134,13 @@ fn row_parts(
             name_matches,
         } => {
             let (text, highlights) = matched_text(command.name(), name_matches);
+            let keys = command_action(*command)
+                .and_then(|action| action_kbd(action.as_ref(), palette, cx))
+                .map(IntoElement::into_any_element);
             (
                 icon_slot(command_icon(*command, palette)),
                 StyledText::new(text).with_highlights(highlights),
-                "Command",
+                keys.unwrap_or_else(|| detail("Command")),
             )
         }
     }
@@ -145,9 +157,31 @@ fn command_icon(command: Command, palette: ThemeColors) -> AnyElement {
         Command::FindInPage => search_icon_sized(color, size).into_any_element(),
         Command::CopyAddress => copy_icon(color, size).into_any_element(),
         Command::ToggleSidebar => sidebar_icon(color, size).into_any_element(),
+        Command::ToggleSidebarIcons => sidebar_expand_icon(color, size).into_any_element(),
+        Command::ToggleZenMode => zen_icon(color, size).into_any_element(),
         Command::NewSpace => add_icon(color, size).into_any_element(),
         Command::NextSpace => forward_icon(color, size).into_any_element(),
         Command::PreviousSpace => back_icon(color, size).into_any_element(),
         Command::OpenSettings => settings_icon(color, size).into_any_element(),
+        Command::ShowKeyboardShortcuts => keyboard_icon(color, size).into_any_element(),
     }
+}
+
+/// The action whose shortcut also runs `command`, if it has one.
+fn command_action(command: Command) -> Option<Box<dyn gpui::Action>> {
+    Some(match command {
+        Command::NewWindow => Box::new(NewWindow),
+        Command::ReopenClosedTab => Box::new(ReopenClosedTab),
+        Command::CloseTab => Box::new(CloseTab),
+        Command::ReloadPage => Box::new(Reload),
+        Command::FindInPage => Box::new(FindInPage),
+        Command::ToggleSidebar => Box::new(ToggleSidebar),
+        Command::ToggleSidebarIcons => Box::new(ToggleSidebarIcons),
+        Command::ToggleZenMode => Box::new(ToggleZenMode),
+        Command::NextSpace => Box::new(NextSpace),
+        Command::PreviousSpace => Box::new(PreviousSpace),
+        Command::OpenSettings => Box::new(OpenSettings),
+        Command::ShowKeyboardShortcuts => Box::new(ShowKeyboardShortcuts),
+        Command::NewTab | Command::CopyAddress | Command::NewSpace => return None,
+    })
 }
