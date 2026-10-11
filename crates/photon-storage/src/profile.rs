@@ -110,6 +110,7 @@ impl Profile {
             return BrowserSettings::default();
         };
         let Ok(mut document) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+            self.keep_unreadable_settings(&bytes);
             return BrowserSettings::default();
         };
         let saved_workspace = document
@@ -120,13 +121,31 @@ impl Profile {
                     workspace.contains_key("default_preset_id") && workspace.contains_key("presets")
                 })
             });
-        let mut settings = serde_json::from_value::<BrowserSettings>(document).unwrap_or_default();
+        let mut settings = match serde_json::from_value::<BrowserSettings>(document.clone()) {
+            Ok(settings) => settings,
+            Err(_) => {
+                self.keep_unreadable_settings(&bytes);
+                readable_settings(document)
+            }
+        };
         settings.workspace = saved_workspace
             .and_then(|workspace| serde_json::from_value::<WorkspaceSettings>(workspace).ok())
             .filter(WorkspaceSettings::is_valid)
             .unwrap_or_else(|| WorkspaceSettings::for_tab_layout(settings.tab_layout));
         settings.spaces.validate_layout_overrides();
         settings
+    }
+
+    /// Keeps a settings file that could not be read in full beside the
+    /// profile, as the next save replaces it with what could be read.
+    fn keep_unreadable_settings(&self, bytes: &[u8]) {
+        let seconds = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_secs());
+        let backup = self
+            .root
+            .join(format!("Settings.unreadable-{seconds}.json"));
+        let _ = atomic::write(&backup, bytes);
     }
 
     pub fn save_settings(&self, settings: &BrowserSettings) -> io::Result<()> {
@@ -228,6 +247,23 @@ fn folder_size(path: &Path) -> u64 {
         .sum()
 }
 
+/// The settings in `document` that can be read, each other preference at its
+/// default, when the document as a whole cannot be, as when a newer build
+/// saved a value this one does not know.
+fn readable_settings(document: serde_json::Value) -> BrowserSettings {
+    let serde_json::Value::Object(fields) = document else {
+        return BrowserSettings::default();
+    };
+    let readable = fields
+        .into_iter()
+        .filter(|(key, value)| {
+            let single = serde_json::Map::from_iter([(key.clone(), value.clone())]);
+            serde_json::from_value::<BrowserSettings>(serde_json::Value::Object(single)).is_ok()
+        })
+        .collect();
+    serde_json::from_value(serde_json::Value::Object(readable)).unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -267,6 +303,30 @@ mod tests {
         history.record_search("photon browser", 6);
         profile.0.save_history(&history).expect("saves");
         assert_eq!(profile.0.load_history(), history);
+    }
+
+    #[test]
+    fn keeps_readable_settings_and_backs_up_the_file_when_one_is_not() {
+        let profile = TemporaryProfile::new("lenient");
+        std::fs::write(
+            profile.0.root().join(SETTINGS_FILE),
+            r#"{"show_full_address": true, "theme": "from-a-newer-build"}"#,
+        )
+        .unwrap();
+        let settings = profile.0.load_settings();
+        assert!(settings.show_full_address);
+        assert_eq!(settings.theme, BrowserSettings::default().theme);
+        let backups = std::fs::read_dir(profile.0.root())
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("Settings.unreadable-")
+            })
+            .count();
+        assert_eq!(backups, 1);
     }
 
     #[test]
