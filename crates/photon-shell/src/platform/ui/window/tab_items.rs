@@ -160,6 +160,10 @@ impl BrowserWindow {
                             }
                             browser
                                 .update(cx, |this, _cx| {
+                                    // A previous drag released outside a tab may not
+                                    // synthesize a click to consume this one-shot guard.
+                                    // A new press starts a fresh gesture either way.
+                                    this.suppress_tab_click_until = None;
                                     this.tab_drag_layout = Some(super::TabDragLayout {
                                         id: stable_id,
                                         source_window: window.window_handle(),

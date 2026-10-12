@@ -38,6 +38,7 @@ impl Render for BrowserWindow {
             webview.update(cx, |view, _| view.set_layout_animating(moving));
         }
         self.place_window_controls(window, cx);
+        let browser = cx.entity().downgrade();
         if std::mem::take(&mut self.state_changed) {
             self.follow_page_title(window, cx);
             self.update_menu_bar(window, cx);
@@ -120,11 +121,15 @@ impl Render for BrowserWindow {
             .on_drag_move(
                 cx.listener(|this, event, window, cx| this.drag_sidebar_edge(event, window, cx)),
             )
-            .capture_any_mouse_up(cx.listener(|this, event: &MouseUpEvent, window, cx| {
-                if event.button == MouseButton::Left {
-                    this.finish_tab_drag(window, cx);
+            .on_mouse_up_all(move |event: &MouseUpEvent, phase, _, window, cx| {
+                if phase == gpui::DispatchPhase::Capture && event.button == MouseButton::Left {
+                    browser
+                        .update(cx, |this, cx| {
+                            this.finish_tab_drag(event.position, window, cx);
+                        })
+                        .ok();
                 }
-            }))
+            })
             .child(
                 self.overlays
                     .clone()

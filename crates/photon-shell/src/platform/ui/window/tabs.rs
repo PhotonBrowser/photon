@@ -234,14 +234,8 @@ impl BrowserWindow {
         };
         candidates.retain(|&id| id != dragged_id);
         candidates.sort_by(|left, right| {
-            let left = self
-                .tab_geometry
-                .get(left)
-                .map(|bounds| axis_origin(*bounds, axis));
-            let right = self
-                .tab_geometry
-                .get(right)
-                .map(|bounds| axis_origin(*bounds, axis));
+            let left = self.tab_slot_origin(*left, axis);
+            let right = self.tab_slot_origin(*right, axis);
             left.partial_cmp(&right)
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
@@ -249,9 +243,13 @@ impl BrowserWindow {
         let coordinate = axis_coordinate(position, axis);
         let insertion = midpoint_insertion_index(
             candidates.iter().map(|id| {
-                self.tab_geometry
-                    .get(id)
-                    .map(|bounds| axis_origin(*bounds, axis) + axis_size(*bounds, axis) / 2.0)
+                self.tab_geometry.get(id).map(|bounds| {
+                    stable_slot_midpoint(
+                        axis_origin(*bounds, axis),
+                        axis_size(*bounds, axis),
+                        self.tab_offset(*id, axis),
+                    )
+                })
             }),
             coordinate,
         );
@@ -278,12 +276,7 @@ impl BrowserWindow {
 
         let start = candidates
             .iter()
-            .filter_map(|id| {
-                self.tab_geometry
-                    .get(id)
-                    .copied()
-                    .map(|bounds| axis_origin(bounds, axis) - self.tab_offset(*id, axis))
-            })
+            .filter_map(|id| self.tab_slot_origin(*id, axis))
             .fold(f32::INFINITY, f32::min);
         if !start.is_finite() {
             return;
@@ -303,7 +296,11 @@ impl BrowserWindow {
             })
             .unwrap_or(0.0);
         let mut target_position = start;
-        let mut neighbor_animations = Vec::with_capacity(candidates.len());
+        let mut neighbor_animations = if order_changed {
+            Vec::with_capacity(candidates.len())
+        } else {
+            Vec::new()
+        };
         let mut dragged_offset = 0.0;
         for id in &candidates {
             let Some(bounds) = self.tab_geometry.get(id).copied() else {
@@ -313,19 +310,27 @@ impl BrowserWindow {
             let size = axis_size(bounds, axis);
             if *id == dragged_id {
                 dragged_offset = coordinate - grab - target_position;
-            } else {
+            } else if order_changed {
                 neighbor_animations.push((*id, current_visual - target_position));
             }
             target_position += size + gap;
         }
         for (id, from) in neighbor_animations {
-            self.tab_position_animations.insert(
-                id,
-                super::TabPositionAnimation::new(
-                    from,
-                    super::super::metrics::TAB_REORDER_DURATION_MS,
-                ),
-            );
+            match animation_retarget_offset(order_changed, from) {
+                Some(from) => {
+                    self.tab_position_animations.insert(
+                        id,
+                        super::TabPositionAnimation::new(
+                            from,
+                            super::super::metrics::TAB_REORDER_DURATION_MS,
+                        ),
+                    );
+                }
+                None if order_changed => {
+                    self.tab_position_animations.remove(&id);
+                }
+                None => {}
+            }
         }
         if let Some(layout) = self.tab_drag_layout.as_mut() {
             layout.visual_offset = dragged_offset;
@@ -378,6 +383,16 @@ impl BrowserWindow {
             .get(&id)
             .map(|animation| animation.value())
             .unwrap_or(0.0)
+    }
+
+    /// The tab's layout slot with its temporary drag animation removed. Using
+    /// these stable slot coordinates keeps insertion thresholds from drifting
+    /// as neighboring tabs animate around the pointer.
+    fn tab_slot_origin(&self, id: u64, axis: TabDragAxis) -> Option<f32> {
+        self.tab_geometry
+            .get(&id)
+            .copied()
+            .map(|bounds| axis_origin(bounds, axis) - self.tab_offset(id, axis))
     }
 
     fn external_drop_target(
@@ -623,23 +638,21 @@ impl BrowserWindow {
                 .is_some_and(|index| self.tabs[index].pin.is_some() == pinned)
         });
         candidates.sort_by(|left, right| {
-            let left = self
-                .tab_geometry
-                .get(left)
-                .map(|bounds| axis_origin(*bounds, axis));
-            let right = self
-                .tab_geometry
-                .get(right)
-                .map(|bounds| axis_origin(*bounds, axis));
+            let left = self.tab_slot_origin(*left, axis);
+            let right = self.tab_slot_origin(*right, axis);
             left.partial_cmp(&right)
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
         let coordinate = axis_coordinate(position, axis);
         let insertion = midpoint_insertion_index(
             candidates.iter().map(|id| {
-                self.tab_geometry
-                    .get(id)
-                    .map(|bounds| axis_origin(*bounds, axis) + axis_size(*bounds, axis) / 2.0)
+                self.tab_geometry.get(id).map(|bounds| {
+                    stable_slot_midpoint(
+                        axis_origin(*bounds, axis),
+                        axis_size(*bounds, axis),
+                        self.tab_offset(*id, axis),
+                    )
+                })
             }),
             coordinate,
         );
@@ -725,7 +738,12 @@ impl BrowserWindow {
         }
     }
 
-    pub(super) fn finish_tab_drag(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn finish_tab_drag(
+        &mut self,
+        release_position: gpui::Point<gpui::Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if let Some(dragged) = cx
             .active_drag()
             .and_then(|drag| drag.value.downcast_ref::<DraggedTab>())
@@ -752,6 +770,25 @@ impl BrowserWindow {
             Self::notify_other_tab_drop_targets(cx, window.window_handle());
             return;
         }
+
+        let release_target = self.tab_drag_layout.as_ref().and_then(|drag| {
+            (drag.source_window == window.window_handle()
+                && matches!(
+                    drag.phase,
+                    super::TabDragPhase::Reordering | super::TabDragPhase::OutsideTarget
+                )
+                && self
+                    .tab_container_bounds
+                    .is_some_and(|bounds| bounds.contains(&release_position))
+                && !self
+                    .favourites_bounds
+                    .is_some_and(|bounds| bounds.contains(&release_position)))
+            .then_some((drag.id, drag.axis))
+        });
+        if let Some((id, axis)) = release_target {
+            self.reorder_tab_at_pointer(id, axis, release_position, cx, window);
+        }
+
         self.clear_previous_target(cx);
         let Some(mut drag) = self.tab_drag_layout.take() else {
             return;
@@ -760,12 +797,7 @@ impl BrowserWindow {
             return;
         }
         drag.phase = super::TabDragPhase::Completing;
-        let current_offset = self
-            .tab_geometry
-            .get(&drag.id)
-            .copied()
-            .map(|bounds| axis_origin(bounds, drag.axis) - self.slot_origin(drag.id, drag.axis))
-            .unwrap_or(drag.visual_offset);
+        let current_offset = drag.visual_offset;
         if current_offset.abs() > 0.1 {
             self.tab_position_animations.insert(
                 drag.id,
@@ -774,19 +806,13 @@ impl BrowserWindow {
                     super::super::metrics::TAB_DROP_SETTLE_DURATION_MS,
                 ),
             );
+        } else {
+            self.tab_position_animations.remove(&drag.id);
         }
         self.suppress_tab_click_until = Some(Instant::now() + Duration::from_millis(250));
         Self::notify_other_tab_drop_targets(cx, window.window_handle());
         cx.notify();
         window.refresh();
-    }
-
-    fn slot_origin(&self, id: u64, axis: TabDragAxis) -> f32 {
-        self.tab_geometry
-            .get(&id)
-            .copied()
-            .map(|bounds| axis_origin(bounds, axis) - self.tab_offset(id, axis))
-            .unwrap_or(0.0)
     }
 
     pub(super) fn favourite_drop_handler(&self, cx: &Context<Self>) -> TabDrop {
@@ -1024,23 +1050,21 @@ impl BrowserWindow {
         .filter(|&index| self.tabs[index].pin.is_some() == pinned)
         .collect();
         candidates.sort_by(|left, right| {
-            let left = self
-                .tab_geometry
-                .get(&self.tabs[*left].id)
-                .map(|bounds| axis_origin(*bounds, axis));
-            let right = self
-                .tab_geometry
-                .get(&self.tabs[*right].id)
-                .map(|bounds| axis_origin(*bounds, axis));
+            let left = self.tab_slot_origin(self.tabs[*left].id, axis);
+            let right = self.tab_slot_origin(self.tabs[*right].id, axis);
             left.partial_cmp(&right)
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
         let coordinate = axis_coordinate(position, axis);
         let insertion = midpoint_insertion_index(
             candidates.iter().map(|&index| {
-                self.tab_geometry
-                    .get(&self.tabs[index].id)
-                    .map(|bounds| axis_origin(*bounds, axis) + axis_size(*bounds, axis) / 2.0)
+                self.tab_geometry.get(&self.tabs[index].id).map(|bounds| {
+                    stable_slot_midpoint(
+                        axis_origin(*bounds, axis),
+                        axis_size(*bounds, axis),
+                        self.tab_offset(self.tabs[index].id, axis),
+                    )
+                })
             }),
             coordinate,
         );
@@ -1067,9 +1091,11 @@ impl BrowserWindow {
         cx: &mut Context<Self>,
     ) {
         let Some(index) = self.tab_index_by_id(dragged.id) else {
+            self.cancel_tab_drag(dragged.id, window, cx);
             return;
         };
         if !can_detach_tab_count(self.tabs.len()) {
+            self.set_tab_drag_outside_target(dragged.id, cx);
             return;
         }
         let tab = self.tabs[index].clone();
@@ -1102,6 +1128,7 @@ impl BrowserWindow {
             Some(new_window_origin),
             cx,
         ) else {
+            self.set_tab_drag_outside_target(dragged.id, cx);
             return;
         };
         let transfer = new_window.update(cx, |browser, window, cx| {
@@ -1134,6 +1161,7 @@ impl BrowserWindow {
         });
         let Ok(preview) = transfer else {
             let _ = new_window.update(cx, |_, window, _| window.remove_window());
+            self.set_tab_drag_outside_target(dragged.id, cx);
             return;
         };
 
@@ -1157,6 +1185,29 @@ impl BrowserWindow {
                 browser.activate_tab(index, true, window, cx);
             }
         });
+    }
+
+    fn set_tab_drag_outside_target(&mut self, id: u64, cx: &mut Context<Self>) {
+        if let Some(drag) = self.tab_drag_layout.as_mut().filter(|drag| drag.id == id) {
+            drag.phase = super::TabDragPhase::OutsideTarget;
+            drag.target_window = None;
+        }
+        cx.notify();
+    }
+
+    fn cancel_tab_drag(&mut self, id: u64, window: &mut Window, cx: &mut Context<Self>) {
+        if self
+            .tab_drag_layout
+            .as_ref()
+            .is_some_and(|drag| drag.id == id)
+        {
+            self.clear_previous_target(cx);
+            let _ = cx.stop_active_drag(window);
+            window.release_pointer();
+            self.tab_drag_layout = None;
+            self.tab_position_animations.remove(&id);
+            cx.notify();
+        }
     }
 
     fn remove_tab_for_detach(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
@@ -1782,6 +1833,14 @@ fn midpoint_insertion_index(
     count
 }
 
+fn stable_slot_midpoint(visual_origin: f32, extent: f32, visual_offset: f32) -> f32 {
+    visual_origin - visual_offset + extent / 2.0
+}
+
+fn animation_retarget_offset(order_changed: bool, current_offset: f32) -> Option<f32> {
+    (order_changed && current_offset.abs() > 0.1).then_some(current_offset)
+}
+
 fn insert_id_at(order: &mut Vec<u64>, id: u64, index: usize) {
     order.retain(|candidate| *candidate != id);
     order.insert(index.min(order.len()), id);
@@ -1815,7 +1874,10 @@ fn plan_tab_transfer(
 
 #[cfg(test)]
 mod tab_drag_tests {
-    use super::{can_detach_tab_count, insert_id_at, midpoint_insertion_index, plan_tab_transfer};
+    use super::{
+        animation_retarget_offset, can_detach_tab_count, insert_id_at, midpoint_insertion_index,
+        plan_tab_transfer, stable_slot_midpoint,
+    };
 
     #[test]
     fn midpoint_insertion_tracks_both_directions_and_edges() {
@@ -1832,6 +1894,24 @@ mod tab_drag_tests {
         assert_eq!(order, [20, 30, 40, 10]);
         insert_id_at(&mut order, 10, 0);
         assert_eq!(order, [10, 20, 30, 40]);
+    }
+
+    #[test]
+    fn insertion_grid_stays_fixed_while_tabs_animate() {
+        let horizontal_midpoint = stable_slot_midpoint(140.0, 80.0, 40.0);
+        let horizontal_midpoint_mid_animation = stable_slot_midpoint(119.0, 80.0, 19.0);
+        let vertical_midpoint = stable_slot_midpoint(92.0, 36.0, 12.0);
+
+        assert_eq!(horizontal_midpoint, 140.0);
+        assert_eq!(horizontal_midpoint_mid_animation, horizontal_midpoint);
+        assert_eq!(vertical_midpoint, 98.0);
+    }
+
+    #[test]
+    fn neighbor_animation_only_retargets_after_the_slot_changes() {
+        assert_eq!(animation_retarget_offset(false, 24.0), None);
+        assert_eq!(animation_retarget_offset(true, 24.0), Some(24.0));
+        assert_eq!(animation_retarget_offset(true, 0.05), None);
     }
 
     #[test]
