@@ -7,7 +7,6 @@ use photon_core::DockRegion;
 
 use super::super::find_bar::FIND_BAR_MOTION;
 use super::super::motion::{AnimateIn, mix};
-use super::super::tabs::DraggedTab;
 use super::super::titlebar::window_drag_area;
 use super::super::workspace_layout::WorkspaceLayout;
 use super::super::{metrics, theme::palette};
@@ -16,8 +15,11 @@ use super::background_noise;
 
 impl Render for BrowserWindow {
     fn render(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) -> impl IntoElement {
+        self.tab_container_bounds = None;
+        self.favourites_bounds = None;
         let palette = palette(window, cx);
-        let background_noise_enabled = super::super::settings::Settings::get(cx).background_noise;
+        let background_noise_intensity =
+            super::super::settings::Settings::get(cx).background_noise_intensity;
         let animations = super::super::settings::Settings::get(cx).animations;
         let find_bar = self.find_bar_presence.sync(
             self.find_bar.as_ref().map(|(bar, _)| bar.clone()),
@@ -107,7 +109,10 @@ impl Render for BrowserWindow {
             .relative()
             .bg(palette.window_background())
             .text_color(gpui::rgb(palette.text_primary))
-            .children(background_noise_enabled.then(background_noise::overlay))
+            .children(
+                (background_noise_intensity > 0)
+                    .then(|| background_noise::overlay(background_noise_intensity)),
+            )
             .child(page)
             .children(top_margin)
             .child(chrome)
@@ -115,16 +120,9 @@ impl Render for BrowserWindow {
             .on_drag_move(
                 cx.listener(|this, event, window, cx| this.drag_sidebar_edge(event, window, cx)),
             )
-            .capture_any_mouse_up(cx.listener(|_, event: &MouseUpEvent, _, cx| {
-                if event.button == MouseButton::Left
-                    && cx
-                        .active_drag()
-                        .is_some_and(|drag| drag.value.downcast_ref::<DraggedTab>().is_some())
-                {
-                    // GPUI clears the active drag after mouse-up listeners run.
-                    // Rebuild the cached chrome afterward so a temporary hint
-                    // shown during the drag disappears when it is cancelled.
-                    cx.notify();
+            .capture_any_mouse_up(cx.listener(|this, event: &MouseUpEvent, window, cx| {
+                if event.button == MouseButton::Left {
+                    this.finish_tab_drag(window, cx);
                 }
             }))
             .child(

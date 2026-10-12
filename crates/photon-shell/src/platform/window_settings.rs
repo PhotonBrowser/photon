@@ -69,6 +69,23 @@ pub(super) fn options(cx: &App) -> WindowOptions {
     )
 }
 
+/// Builds normal browser window options at a known screen position.
+pub(super) fn options_at(cx: &App, origin: gpui::Point<gpui::Pixels>) -> WindowOptions {
+    let bounds = Bounds {
+        origin,
+        size: size(
+            px(metrics::INITIAL_WINDOW_WIDTH),
+            px(metrics::INITIAL_WINDOW_HEIGHT),
+        ),
+    };
+    options_for_size(
+        cx,
+        metrics::INITIAL_WINDOW_WIDTH,
+        metrics::INITIAL_WINDOW_HEIGHT,
+    )
+    .window_bounds(Some(WindowBounds::Windowed(bounds)))
+}
+
 pub(super) fn popup_options(cx: &App, width: Option<i32>, height: Option<i32>) -> WindowOptions {
     let width = width
         .map(|width| width as f32)

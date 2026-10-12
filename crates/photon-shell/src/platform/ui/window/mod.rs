@@ -30,8 +30,8 @@ mod workspace;
 mod zoom;
 
 use gpui::{
-    AnyElement, App, Context, Entity, FocusHandle, Render, Subscription, Task, WeakEntity, Window,
-    WindowHandle, div, prelude::*,
+    AnyElement, AnyWindowHandle, App, Bounds, Context, Entity, FocusHandle, Pixels, Point, Render,
+    Subscription, Task, WeakEntity, Window, WindowHandle, div, prelude::*,
 };
 use photon_core::{BrowserCommand, WindowBackgroundStyle};
 use std::cell::RefCell;
@@ -52,7 +52,7 @@ use super::omnibox::{Omnibox, OmniboxEvent};
 use super::pages::find_page;
 use super::settings::Settings;
 use super::shortcuts_dialog::ShortcutsDialog;
-use super::tabs::RevealedIcon;
+use super::tabs::{RevealedIcon, TabDragAxis};
 use super::theme::{ThemeColors, palette};
 use alerts::{EngineNotice, NoticeExpiry};
 use content::{BrowserTab, TabContent, create_webview};
@@ -83,7 +83,14 @@ struct BrowserWindow {
     /// Closes today's tabs left unused, when the setting asks.
     _archive_task: Task<()>,
     active_tab: Option<usize>,
-    next_tab_id: u64,
+    /// The active tab drag, its measured geometry, and the temporary motion.
+    tab_drag_layout: Option<TabDragLayout>,
+    tab_geometry: HashMap<u64, Bounds<Pixels>>,
+    tab_container_bounds: Option<Bounds<Pixels>>,
+    favourites_bounds: Option<Bounds<Pixels>>,
+    incoming_tab_drag: Option<IncomingTabDrag>,
+    tab_position_animations: HashMap<u64, TabPositionAnimation>,
+    suppress_tab_click_until: Option<Instant>,
     omnibox: Entity<Omnibox>,
     _omnibox_subscription: Subscription,
     runtime: Rc<EngineRuntime>,
@@ -142,6 +149,76 @@ struct BrowserWindow {
     _window_observer: Option<WindowObserver>,
     /// Forgets the window's tabs in the saved session as it closes.
     _session_release: Subscription,
+}
+
+struct TabDragLayout {
+    id: u64,
+    source_window: AnyWindowHandle,
+    axis: TabDragAxis,
+    pointer_start: Point<Pixels>,
+    pointer_position: Point<Pixels>,
+    grab_offset: Point<Pixels>,
+    tab_bounds: Bounds<Pixels>,
+    label: String,
+    pinned: bool,
+    phase: TabDragPhase,
+    visual_offset: f32,
+    target_window: Option<AnyWindowHandle>,
+}
+
+#[derive(Clone)]
+struct IncomingTabDrag {
+    source: AnyWindowHandle,
+    id: u64,
+    axis: TabDragAxis,
+    before_id: Option<u64>,
+    after_id: Option<u64>,
+    size: f32,
+    pinned: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TabDragPhase {
+    PendingDrag,
+    Reordering,
+    DraggingOverFavourites,
+    OutsideTarget,
+    Detaching,
+    DraggingDetachedWindow,
+    CrossWindowTargeting,
+    Completing,
+    Cancelled,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct TabPositionAnimation {
+    from: f32,
+    started: Instant,
+    duration: std::time::Duration,
+}
+
+impl TabPositionAnimation {
+    fn new(from: f32, duration_ms: u64) -> Self {
+        Self {
+            from,
+            started: Instant::now(),
+            duration: std::time::Duration::from_millis(duration_ms),
+        }
+    }
+
+    fn value(self) -> f32 {
+        let elapsed = self.started.elapsed();
+        if elapsed >= self.duration || self.duration.is_zero() {
+            return 0.0;
+        }
+        let progress = elapsed.as_secs_f32() / self.duration.as_secs_f32();
+        let eased = progress * progress * (3.0 - 2.0 * progress);
+        self.from * (1.0 - eased)
+    }
+
+    fn is_running(self) -> bool {
+        self.started.elapsed() < self.duration
+    }
 }
 
 /// The tab strip and toolbar, or the sidebar. A cached view re-renders only when it is
@@ -271,6 +348,16 @@ fn open_browser_window(
     restore_pinned_tabs: bool,
     cx: &mut App,
 ) -> anyhow::Result<WindowHandle<BrowserWindow>> {
+    open_browser_window_at(runtime, startup_address, restore_pinned_tabs, None, cx)
+}
+
+fn open_browser_window_at(
+    runtime: Rc<EngineRuntime>,
+    startup_address: Option<String>,
+    restore_pinned_tabs: bool,
+    origin: Option<Point<Pixels>>,
+    cx: &mut App,
+) -> anyhow::Result<WindowHandle<BrowserWindow>> {
     // A page's address opens that page; any other address a web page.
     let startup_page = startup_address.as_deref().and_then(find_page);
     let initial_webview = startup_address
@@ -278,7 +365,11 @@ fn open_browser_window(
         .filter(|_| startup_page.is_none())
         .and_then(|address| create_webview(cx, runtime.clone(), address));
     let animations = Settings::get(cx).animations;
-    let handle = cx.open_window(window_settings::options(cx), move |window, cx| {
+    let options = origin.map_or_else(
+        || window_settings::options(cx),
+        |origin| window_settings::options_at(cx, origin),
+    );
+    let handle = cx.open_window(options, move |window, cx| {
         window_settings::configure_traffic_lights(window, &animations);
         window.set_window_title(photon_brand::NAME);
         let omnibox = cx.new(|cx| Omnibox::new(window, cx));
@@ -340,7 +431,13 @@ fn open_browser_window(
                 tab_focus_handles: Vec::new(),
                 _archive_task: BrowserWindow::archive_unused_tabs_regularly(window, cx),
                 active_tab: None,
-                next_tab_id: 1,
+                tab_drag_layout: None,
+                tab_geometry: HashMap::new(),
+                tab_container_bounds: None,
+                favourites_bounds: None,
+                incoming_tab_drag: None,
+                tab_position_animations: HashMap::new(),
+                suppress_tab_click_until: None,
                 omnibox,
                 _omnibox_subscription: omnibox_subscription,
                 runtime,

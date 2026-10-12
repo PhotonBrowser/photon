@@ -7,7 +7,8 @@ use super::super::controls::FocusRing;
 use super::super::controls::OwnsClicks;
 use super::super::icons::{close_icon, favourite_star_icon};
 use super::super::layout::{h_stack, v_stack};
-use super::super::tabs::{DraggedTab, TabDrop};
+use super::super::tabs::{DraggedTab, TabDrop, TabPrepaint};
+use super::super::tooltip::label_tooltip;
 use super::super::{ClickHandler, MouseDownHandler, metrics, theme::ThemeColors};
 use super::collapsed_tile;
 
@@ -30,6 +31,7 @@ pub(in super::super) fn favourites_grid(
     collapsed: bool,
     palette: ThemeColors,
     on_drop: TabDrop,
+    on_prepaint: TabPrepaint,
 ) -> impl IntoElement {
     let columns = if collapsed {
         1
@@ -66,15 +68,16 @@ pub(in super::super) fn favourites_grid(
                 .border_color(rgba(palette.soft_accent_border))
         })
         .on_drop(move |dragged: &DraggedTab, window, cx| on_drop(dragged, window, cx))
+        .on_prepaint(move |prepaint, window, cx| on_prepaint(prepaint.bounds, window, cx))
         .children(rows)
 }
 
-/// Empty favourites area, which teaches new users to drag or menu-favourite a
-/// tab and accepts the same tab drop as the populated grid.
+/// Empty favourites area, which teaches new users to menu-favourite a tab.
 pub(in super::super) fn favourites_empty_state(
     palette: ThemeColors,
     on_dismiss: ClickHandler,
     on_drop: TabDrop,
+    on_prepaint: TabPrepaint,
     collapsed: bool,
 ) -> impl IntoElement {
     let dismiss = icon_button(
@@ -116,6 +119,7 @@ pub(in super::super) fn favourites_empty_state(
                 .border_color(rgba(palette.chosen))
         })
         .on_drop(move |dragged: &DraggedTab, window, cx| on_drop(dragged, window, cx))
+        .on_prepaint(move |prepaint, window, cx| on_prepaint(prepaint.bounds, window, cx))
         .when(collapsed, |hint| {
             hint.child(favourite_star_icon(
                 palette.chosen,
@@ -173,6 +177,7 @@ fn favourite_tile(
     collapsed: bool,
     palette: ThemeColors,
 ) -> AnyElement {
+    let tooltip = collapsed.then(|| label_tooltip(tile.label.clone(), palette));
     let tile_element = h_stack()
         .id(("sidebar-favourite", index))
         .role(Role::Button)
@@ -195,7 +200,8 @@ fn favourite_tile(
         .owns_clicks()
         .on_mouse_down(MouseButton::Right, tile.on_context_menu)
         .on_click(tile.on_open)
-        .child(tile.icon);
+        .child(tile.icon)
+        .when_some(tooltip, |tile, tooltip| tile.tooltip(tooltip));
     if collapsed {
         return collapsed_tile(tile_element).into_any_element();
     }

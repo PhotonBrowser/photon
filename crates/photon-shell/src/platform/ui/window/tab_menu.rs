@@ -1,5 +1,5 @@
 //! A tab's and a favourite's right-click menus, and the tab actions behind
-//! them and drag-and-drop.
+//! them.
 
 use gpui::{Context, MenuItem, Window};
 use photon_core::BrowserCommand;
@@ -11,7 +11,7 @@ use super::menu::{MenuCommand, command_item};
 
 impl BrowserWindow {
     /// Moves the tab at `from` to `to`, keeping the same tab active. Callers
-    /// keep pinned tabs first; see `drop_tab`.
+    /// keep pinned tabs first.
     pub(super) fn move_tab_to(&mut self, from: usize, to: usize, cx: &mut Context<Self>) {
         let count = self.tabs.len();
         if from == to || from >= count || to >= count {

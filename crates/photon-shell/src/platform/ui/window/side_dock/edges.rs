@@ -9,6 +9,7 @@ use gpui::{
 use photon_core::{DockRegion, SidebarResize};
 use std::time::Duration;
 
+use super::super::super::controls::OwnsClicks;
 use super::super::super::metrics;
 use super::super::super::settings::Settings;
 use super::super::super::workspace_layout::WorkspaceLayout;
@@ -51,6 +52,7 @@ impl BrowserWindow {
             .bottom(px(layout.bottom_extent()))
             .w(px(metrics::SIDEBAR_RESIZE_HANDLE_WIDTH))
             .cursor_col_resize()
+            .owns_clicks()
             .on_drag(SidebarEdgeDrag, |_, _, _, cx| cx.new(|_| SidebarEdgeDrag));
         let edge = self.sidebar.docked_width(cx) - metrics::SIDEBAR_RESIZE_HANDLE_WIDTH / 2.0;
         at_side(handle, region, edge).into_any_element()

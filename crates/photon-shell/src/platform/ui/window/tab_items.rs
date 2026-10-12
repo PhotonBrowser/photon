@@ -1,14 +1,15 @@
 //! The window's tabs as both tab layouts draw them: label, icon and what
 //! each interaction does.
 
-use gpui::{App, Context, KeyDownEvent, MouseDownEvent, MouseUpEvent};
+use gpui::{App, Context, DispatchPhase, KeyDownEvent, MouseButton, MouseDownEvent, MouseUpEvent};
 
 use super::super::history::BrowsingHistory;
 use super::super::pages::PageIcon;
 use super::super::settings::Settings;
-use super::super::tabs::{DraggedTab, TabDragStart, TabIcon, TabItem};
+use super::super::tabs::{TabIcon, TabItem};
 use super::BrowserWindow;
 use super::content::TabContent;
+use std::time::Instant;
 
 impl BrowserWindow {
     /// The tabs the layout lists, in order: in the sidebar, the space's own
@@ -100,8 +101,18 @@ impl BrowserWindow {
                         (label, icon)
                     }
                 };
+                let stable_id = tab.id;
+                let tab_label = label.clone();
+                let insertion_before = self.incoming_tab_drag.as_ref().and_then(|incoming| {
+                    (incoming.pinned == tab.pin.is_some() && incoming.before_id == Some(stable_id))
+                        .then_some(incoming.size)
+                });
+                let insertion_after = self.incoming_tab_drag.as_ref().and_then(|incoming| {
+                    (incoming.pinned == tab.pin.is_some() && incoming.after_id == Some(stable_id))
+                        .then_some(incoming.size)
+                });
                 TabItem {
-                    id: format!("browser-tab-{}", tab.id),
+                    id: format!("browser-tab-{stable_id}"),
                     label,
                     icon_appearing: self.icon_appearing(tab.id, &icon, &animations),
                     animations,
@@ -112,6 +123,11 @@ impl BrowserWindow {
                     focus_handle: self.tab_focus_handles[index].clone(),
                     on_select: Box::new(cx.listener(move |this, _, window, cx| {
                         cx.stop_propagation();
+                        if let Some(until) = this.suppress_tab_click_until.take() {
+                            if Instant::now() <= until {
+                                return;
+                            }
+                        }
                         this.activate_tab(index, true, window, cx);
                     })),
                     on_key_down: Box::new(cx.listener(
@@ -131,13 +147,71 @@ impl BrowserWindow {
                             webview.update(cx, |view, cx| view.toggle_audio_mute(cx));
                         }
                     })),
-                    on_drag_start: {
+                    on_pointer_down: {
                         let browser = browser.clone();
-                        let on_drag_start: TabDragStart = Box::new(move |cx| {
-                            browser.update(cx, |_, cx| cx.notify()).ok();
-                        });
-                        on_drag_start
+                        let label = tab_label.clone();
+                        let pinned = tab.pin.is_some();
+                        Box::new(move |event, phase, hitbox, axis, window, cx| {
+                            if phase != DispatchPhase::Bubble
+                                || event.button != MouseButton::Left
+                                || !hitbox.contains(&event.position)
+                            {
+                                return;
+                            }
+                            browser
+                                .update(cx, |this, _cx| {
+                                    this.tab_drag_layout = Some(super::TabDragLayout {
+                                        id: stable_id,
+                                        source_window: window.window_handle(),
+                                        axis,
+                                        pointer_start: event.position,
+                                        pointer_position: event.position,
+                                        grab_offset: event.position - hitbox.bounds.origin,
+                                        tab_bounds: hitbox.bounds,
+                                        label: label.clone(),
+                                        pinned,
+                                        phase: super::TabDragPhase::PendingDrag,
+                                        visual_offset: 0.0,
+                                        target_window: None,
+                                    });
+                                })
+                                .ok();
+                        })
                     },
+                    on_prepaint: {
+                        let browser = browser.clone();
+                        Box::new(move |bounds, window, cx| {
+                            let running = browser
+                                .update(cx, |this, _| {
+                                    this.tab_geometry.insert(stable_id, bounds);
+                                    this.tab_position_animations
+                                        .get(&stable_id)
+                                        .is_some_and(|animation| animation.is_running())
+                                })
+                                .unwrap_or(false);
+                            if running {
+                                window.request_animation_frame();
+                            }
+                        })
+                    },
+                    on_drop: self.tab_target_drop_handler(stable_id, cx),
+                    position_offset: self
+                        .tab_drag_layout
+                        .as_ref()
+                        .filter(|drag| drag.id == stable_id)
+                        .map(|drag| drag.visual_offset)
+                        .or_else(|| {
+                            self.tab_position_animations
+                                .get(&stable_id)
+                                .map(|animation| animation.value())
+                        })
+                        .unwrap_or(0.0),
+                    dragging: self.tab_drag_layout.as_ref().is_some_and(|drag| {
+                        drag.id == stable_id
+                            && !matches!(drag.phase, super::TabDragPhase::PendingDrag)
+                    }),
+                    insertion_before,
+                    insertion_after,
                     on_middle_click: Box::new(cx.listener(
                         move |this, _: &MouseUpEvent, window, cx| {
                             cx.stop_propagation();
@@ -150,9 +224,6 @@ impl BrowserWindow {
                             this.show_tab_menu(index, window, cx);
                         },
                     )),
-                    on_drop: Box::new(cx.listener(move |this, dragged: &DraggedTab, _, cx| {
-                        this.drop_tab(dragged.index, index, cx);
-                    })),
                 }
             })
             .collect()

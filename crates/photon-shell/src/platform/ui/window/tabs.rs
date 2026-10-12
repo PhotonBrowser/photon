@@ -1,14 +1,21 @@
 //! Opening, closing and switching tabs, and the tab strip they show in.
 
-use gpui::{App, Context, KeyDownEvent, Window};
+use gpui::{
+    AnyDrag, App, AppContext, Context, DispatchPhase, HapticFeedbackStyle, Hitbox, KeyDownEvent,
+    MouseMoveEvent, Window,
+};
 use photon_core::Shortcut;
 use photon_core::WindowSession;
+use std::rc::Rc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use super::super::icons::LOADING_SPINNER_STEPS;
 use super::super::pages::{NEW_TAB, PageDefinition, find_page};
 use super::super::settings::Settings;
-use super::super::tabs::{ICON_ENTRANCE, TabIcon};
+use super::super::tabs::{
+    DraggedTab, ICON_ENTRANCE, TabDragAxis, TabDragPreview, TabDrop, TabIcon, TabPrepaint,
+};
 use super::super::workspace_layout::WorkspaceLayout;
 use super::BrowserWindow;
 use super::content::{
@@ -25,8 +32,1193 @@ pub(super) struct ClosedTab {
 
 /// How many closed tabs a window remembers.
 const CLOSED_TAB_LIMIT: usize = 25;
+static NEXT_TAB_ID: AtomicU64 = AtomicU64::new(1);
 
 impl BrowserWindow {
+    pub(super) fn update_tab_drag(
+        &mut self,
+        event: &MouseMoveEvent,
+        phase: DispatchPhase,
+        hitbox: &Hitbox,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if phase != DispatchPhase::Capture || !event.dragging() {
+            return;
+        }
+        let position = event.position;
+        self.tab_container_bounds = Some(hitbox.bounds);
+        let current_window = window.window_handle();
+
+        if let Some(dragged) = cx
+            .active_drag()
+            .and_then(|drag| drag.value.downcast_ref::<DraggedTab>())
+            .cloned()
+            && dragged.source != current_window
+        {
+            self.update_incoming_drag(&dragged, position, current_window, cx);
+            return;
+        }
+
+        let Some(layout) = self.tab_drag_layout.as_ref() else {
+            return;
+        };
+        if layout.axis != self.tab_axis(cx) {
+            self.clear_previous_target(cx);
+            let _ = cx.stop_active_drag(window);
+            window.release_pointer();
+            self.tab_drag_layout = None;
+            Self::notify_other_tab_drop_targets(cx, current_window);
+            cx.notify();
+            return;
+        }
+        if layout.phase == super::TabDragPhase::PendingDrag {
+            if (position - layout.pointer_start).magnitude()
+                < f64::from(super::super::metrics::TAB_DRAG_THRESHOLD)
+            {
+                return;
+            }
+
+            let Some(index) = self.tab_index_by_id(layout.id) else {
+                self.tab_drag_layout = None;
+                return;
+            };
+            let tab = &self.tabs[index];
+            let bounds = self
+                .tab_geometry
+                .get(&tab.id)
+                .copied()
+                .unwrap_or(layout.tab_bounds);
+            let dragged = DraggedTab {
+                source: window.window_handle(),
+                id: tab.id,
+                label: layout.label.clone().into(),
+                axis: layout.axis,
+                size: match layout.axis {
+                    TabDragAxis::Horizontal => f32::from(bounds.size.width),
+                    TabDragAxis::Vertical => f32::from(bounds.size.height),
+                },
+                pinned: layout.pinned,
+            };
+            let offset = layout.grab_offset;
+            let palette = self.palette(window, cx);
+            let preview_label = dragged.label.clone();
+            let preview = cx.new(move |_| TabDragPreview {
+                label: preview_label,
+                palette,
+            });
+            if let Some(layout) = self.tab_drag_layout.as_mut() {
+                layout.phase = super::TabDragPhase::Reordering;
+                layout.pointer_position = position;
+            }
+            self.suppress_tab_click_until = Some(Instant::now() + Duration::from_millis(250));
+            cx.start_drag(AnyDrag::new(dragged, preview).offset(offset));
+            window.capture_pointer(hitbox.id);
+            Self::notify_other_tab_drop_targets(cx, current_window);
+            cx.notify();
+            window.refresh();
+            return;
+        }
+
+        let Some(dragged) = cx
+            .active_drag()
+            .and_then(|drag| drag.value.downcast_ref::<DraggedTab>())
+            .cloned()
+        else {
+            return;
+        };
+        if dragged.source != current_window || dragged.id != layout.id {
+            return;
+        }
+
+        let axis = layout.axis;
+        let previous_position = layout.pointer_position;
+        let was_over_favourites = layout.phase == super::TabDragPhase::DraggingOverFavourites;
+        if let Some(layout) = self.tab_drag_layout.as_mut() {
+            layout.pointer_position = position;
+        }
+        let in_favourites = self
+            .favourites_bounds
+            .is_some_and(|bounds| bounds.contains(&position));
+        if in_favourites {
+            self.clear_previous_target(cx);
+            if let Some(layout) = self.tab_drag_layout.as_mut() {
+                layout.phase = super::TabDragPhase::DraggingOverFavourites;
+            }
+            return;
+        }
+
+        let global_position = window.bounds().origin + position;
+        if let Some((target, over_favourites, target_position)) =
+            self.external_drop_target(global_position, current_window, cx)
+        {
+            if over_favourites {
+                self.clear_previous_target(cx);
+                if let Some(layout) = self.tab_drag_layout.as_mut() {
+                    layout.phase = super::TabDragPhase::DraggingOverFavourites;
+                }
+                return;
+            }
+            self.set_cross_window_target(target, &dragged, target_position, cx);
+            return;
+        }
+        self.clear_previous_target(cx);
+
+        let in_tab_container = self
+            .tab_container_bounds
+            .is_some_and(|bounds| bounds.contains(&position));
+        if in_tab_container {
+            if let Some(layout) = self.tab_drag_layout.as_mut() {
+                layout.phase = super::TabDragPhase::Reordering;
+            }
+            self.reorder_tab_at_pointer(dragged.id, axis, position, cx, window);
+            return;
+        }
+
+        let moving_toward_favourites = !was_over_favourites
+            && self.favourites_bounds.is_some_and(|bounds| {
+                bounds_distance(bounds, position) < bounds_distance(bounds, previous_position)
+            });
+        if moving_toward_favourites {
+            if let Some(layout) = self.tab_drag_layout.as_mut() {
+                layout.phase = super::TabDragPhase::OutsideTarget;
+            }
+            return;
+        }
+
+        let outside = bounds_distance(hitbox.bounds, position);
+        if outside < super::super::metrics::TAB_DETACH_DISTANCE {
+            if let Some(layout) = self.tab_drag_layout.as_mut() {
+                layout.phase = super::TabDragPhase::OutsideTarget;
+            }
+            return;
+        }
+        if !can_detach_tab_count(self.tabs.len()) {
+            if let Some(layout) = self.tab_drag_layout.as_mut() {
+                layout.phase = super::TabDragPhase::OutsideTarget;
+            }
+            return;
+        }
+
+        if let Some(layout) = self.tab_drag_layout.as_mut() {
+            layout.phase = super::TabDragPhase::Detaching;
+        }
+        self.detach_tab(dragged, position, window, cx);
+    }
+
+    fn reorder_tab_at_pointer(
+        &mut self,
+        dragged_id: u64,
+        axis: TabDragAxis,
+        position: gpui::Point<gpui::Pixels>,
+        cx: &mut Context<Self>,
+        _window: &mut Window,
+    ) {
+        let Some(dragged_index) = self.tab_index_by_id(dragged_id) else {
+            return;
+        };
+        let pinned = self.tabs[dragged_index].pin.is_some();
+        let mut candidates: Vec<u64> = match axis {
+            TabDragAxis::Horizontal => self
+                .tabs
+                .iter()
+                .filter(|tab| tab.pin.is_some() == pinned)
+                .map(|tab| tab.id)
+                .collect(),
+            TabDragAxis::Vertical => self
+                .listed_tabs(cx)
+                .into_iter()
+                .filter(|&index| self.tabs[index].pin.is_some() == pinned)
+                .map(|index| self.tabs[index].id)
+                .collect(),
+        };
+        candidates.retain(|&id| id != dragged_id);
+        candidates.sort_by(|left, right| {
+            let left = self
+                .tab_geometry
+                .get(left)
+                .map(|bounds| axis_origin(*bounds, axis));
+            let right = self
+                .tab_geometry
+                .get(right)
+                .map(|bounds| axis_origin(*bounds, axis));
+            left.partial_cmp(&right)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        let coordinate = axis_coordinate(position, axis);
+        let insertion = midpoint_insertion_index(
+            candidates.iter().map(|id| {
+                self.tab_geometry
+                    .get(id)
+                    .map(|bounds| axis_origin(*bounds, axis) + axis_size(*bounds, axis) / 2.0)
+            }),
+            coordinate,
+        );
+        insert_id_at(&mut candidates, dragged_id, insertion);
+
+        let current_order: Vec<u64> = match axis {
+            TabDragAxis::Horizontal => self
+                .tabs
+                .iter()
+                .filter(|tab| tab.pin.is_some() == pinned)
+                .map(|tab| tab.id)
+                .collect(),
+            TabDragAxis::Vertical => self
+                .listed_tabs(cx)
+                .into_iter()
+                .filter(|&index| self.tabs[index].pin.is_some() == pinned)
+                .map(|index| self.tabs[index].id)
+                .collect(),
+        };
+        let order_changed = current_order != candidates;
+        if order_changed {
+            self.move_tab_to_visible_order(dragged_id, &candidates);
+        }
+
+        let start = candidates
+            .iter()
+            .filter_map(|id| {
+                self.tab_geometry
+                    .get(id)
+                    .copied()
+                    .map(|bounds| axis_origin(bounds, axis) - self.tab_offset(*id, axis))
+            })
+            .fold(f32::INFINITY, f32::min);
+        if !start.is_finite() {
+            return;
+        }
+        let gap = match axis {
+            TabDragAxis::Horizontal => super::super::metrics::TAB_STRIP_GAP,
+            TabDragAxis::Vertical => {
+                super::super::metrics::SidebarSpacing::new(self.sidebar.shows_icons()).item_gap
+            }
+        };
+        let grab = self
+            .tab_drag_layout
+            .as_ref()
+            .map(|layout| match axis {
+                TabDragAxis::Horizontal => f32::from(layout.grab_offset.x),
+                TabDragAxis::Vertical => f32::from(layout.grab_offset.y),
+            })
+            .unwrap_or(0.0);
+        let mut target_position = start;
+        let mut neighbor_animations = Vec::with_capacity(candidates.len());
+        let mut dragged_offset = 0.0;
+        for id in &candidates {
+            let Some(bounds) = self.tab_geometry.get(id).copied() else {
+                continue;
+            };
+            let current_visual = axis_origin(bounds, axis);
+            let size = axis_size(bounds, axis);
+            if *id == dragged_id {
+                dragged_offset = coordinate - grab - target_position;
+            } else {
+                neighbor_animations.push((*id, current_visual - target_position));
+            }
+            target_position += size + gap;
+        }
+        for (id, from) in neighbor_animations {
+            self.tab_position_animations.insert(
+                id,
+                super::TabPositionAnimation::new(
+                    from,
+                    super::super::metrics::TAB_REORDER_DURATION_MS,
+                ),
+            );
+        }
+        if let Some(layout) = self.tab_drag_layout.as_mut() {
+            layout.visual_offset = dragged_offset;
+        }
+        cx.notify();
+    }
+
+    fn move_tab_to_visible_order(&mut self, dragged_id: u64, order: &[u64]) {
+        let Some(current_index) = self.tab_index_by_id(dragged_id) else {
+            return;
+        };
+        let Some(position) = order.iter().position(|&id| id == dragged_id) else {
+            return;
+        };
+        let before_id = order.get(position + 1).copied();
+        let after_id = position
+            .checked_sub(1)
+            .and_then(|previous| order.get(previous).copied());
+        let active_id = self.active_tab.map(|index| self.tabs[index].id);
+
+        let tab = self.tabs.remove(current_index);
+        let subscription = self.tab_subscriptions.remove(current_index);
+        let focus_handle = self.tab_focus_handles.remove(current_index);
+        let insertion_index = before_id
+            .and_then(|id| self.tab_index_by_id(id))
+            .or_else(|| {
+                after_id
+                    .and_then(|id| self.tab_index_by_id(id))
+                    .map(|index| index + 1)
+            })
+            .unwrap_or_else(|| {
+                if tab.pin.is_some() {
+                    self.pinned_count()
+                } else {
+                    self.tabs.len()
+                }
+            });
+        self.tabs.insert(insertion_index, tab);
+        self.tab_subscriptions.insert(insertion_index, subscription);
+        self.tab_focus_handles.insert(insertion_index, focus_handle);
+        self.active_tab = active_id.and_then(|id| self.tab_index_by_id(id));
+    }
+
+    fn tab_offset(&self, id: u64, axis: TabDragAxis) -> f32 {
+        if let Some(drag) = self.tab_drag_layout.as_ref().filter(|drag| drag.id == id) {
+            return drag.visual_offset;
+        }
+        let _ = axis;
+        self.tab_position_animations
+            .get(&id)
+            .map(|animation| animation.value())
+            .unwrap_or(0.0)
+    }
+
+    fn external_drop_target(
+        &self,
+        global_position: gpui::Point<gpui::Pixels>,
+        current_window: gpui::AnyWindowHandle,
+        cx: &mut Context<Self>,
+    ) -> Option<(
+        gpui::WindowHandle<BrowserWindow>,
+        bool,
+        gpui::Point<gpui::Pixels>,
+    )> {
+        let mut strip_target = None;
+        for handle in cx.windows() {
+            if handle.window_id() == current_window.window_id() {
+                continue;
+            }
+            let Some(target) = handle.downcast::<BrowserWindow>() else {
+                continue;
+            };
+            let Ok(window_bounds) = target.update(cx, |_, window, _| window.bounds()) else {
+                continue;
+            };
+            let local_position = global_position - window_bounds.origin;
+            let Ok((favourites, tab_container)) = target
+                .read(cx)
+                .map(|browser| (browser.favourites_bounds, browser.tab_container_bounds))
+            else {
+                continue;
+            };
+            if favourites.is_some_and(|bounds| bounds.contains(&local_position)) {
+                return Some((target, true, local_position));
+            }
+            if strip_target.is_none()
+                && tab_container.is_some_and(|bounds| bounds.contains(&local_position))
+            {
+                strip_target = Some((target, false, local_position));
+            }
+        }
+        strip_target
+    }
+
+    fn notify_other_tab_drop_targets(cx: &mut App, current_window: gpui::AnyWindowHandle) {
+        for handle in cx.windows() {
+            if handle.window_id() == current_window.window_id() {
+                continue;
+            }
+            let Some(browser) = handle.downcast::<BrowserWindow>() else {
+                continue;
+            };
+            browser.update(cx, |_, _, cx| cx.notify()).ok();
+        }
+    }
+
+    fn set_cross_window_target(
+        &mut self,
+        target: gpui::WindowHandle<BrowserWindow>,
+        dragged: &DraggedTab,
+        position: gpui::Point<gpui::Pixels>,
+        cx: &mut Context<Self>,
+    ) {
+        let target_handle = target.into();
+        let previous = self
+            .tab_drag_layout
+            .as_ref()
+            .and_then(|layout| layout.target_window);
+        if previous != Some(target_handle) {
+            self.clear_previous_target(cx);
+        }
+        if target
+            .update(cx, |browser, _, cx| {
+                browser.set_incoming_tab_drag(dragged, position, cx);
+            })
+            .is_err()
+        {
+            return;
+        }
+        if let Some(layout) = self.tab_drag_layout.as_mut() {
+            layout.phase = super::TabDragPhase::CrossWindowTargeting;
+            layout.target_window = Some(target_handle);
+        }
+    }
+
+    fn update_incoming_drag(
+        &mut self,
+        dragged: &DraggedTab,
+        position: gpui::Point<gpui::Pixels>,
+        current_window: gpui::AnyWindowHandle,
+        cx: &mut Context<Self>,
+    ) {
+        if self
+            .favourites_bounds
+            .is_some_and(|bounds| bounds.contains(&position))
+        {
+            self.clear_incoming_tab_drag(dragged.source, dragged.id, cx);
+            self.set_source_drag_phase(
+                dragged.source,
+                dragged.id,
+                super::TabDragPhase::DraggingOverFavourites,
+                None,
+                cx,
+            );
+            return;
+        }
+        if self
+            .tab_container_bounds
+            .is_some_and(|bounds| bounds.contains(&position))
+        {
+            self.set_incoming_tab_drag(dragged, position, cx);
+            self.set_source_drag_phase(
+                dragged.source,
+                dragged.id,
+                super::TabDragPhase::CrossWindowTargeting,
+                Some(current_window),
+                cx,
+            );
+            return;
+        }
+        self.clear_incoming_tab_drag(dragged.source, dragged.id, cx);
+        self.set_source_drag_phase(
+            dragged.source,
+            dragged.id,
+            super::TabDragPhase::OutsideTarget,
+            None,
+            cx,
+        );
+    }
+
+    fn set_source_drag_phase(
+        &self,
+        source: gpui::AnyWindowHandle,
+        id: u64,
+        phase: super::TabDragPhase,
+        target: Option<gpui::AnyWindowHandle>,
+        cx: &mut App,
+    ) {
+        let Some(source) = source.downcast::<BrowserWindow>() else {
+            return;
+        };
+        source
+            .update(cx, |browser, _, _| {
+                if let Some(drag) = browser
+                    .tab_drag_layout
+                    .as_mut()
+                    .filter(|drag| drag.id == id)
+                {
+                    drag.phase = phase;
+                    drag.target_window = target;
+                }
+            })
+            .ok();
+    }
+
+    fn clear_previous_target(&mut self, cx: &mut App) {
+        let Some((target, source, id)) = self.tab_drag_layout.as_mut().and_then(|layout| {
+            layout
+                .target_window
+                .take()
+                .map(|target| (target, layout.source_window, layout.id))
+        }) else {
+            return;
+        };
+        let Some(target) = target.downcast::<BrowserWindow>() else {
+            return;
+        };
+        target
+            .update(cx, |browser, _, cx| {
+                browser.clear_incoming_tab_drag(source, id, cx)
+            })
+            .ok();
+    }
+
+    fn set_incoming_tab_drag(
+        &mut self,
+        dragged: &DraggedTab,
+        position: gpui::Point<gpui::Pixels>,
+        cx: &mut Context<Self>,
+    ) {
+        let axis = self.tab_axis(cx);
+        let (before_id, after_id) = self.insertion_neighbors(dragged.pinned, axis, position, cx);
+        let unchanged = self.incoming_tab_drag.as_ref().is_some_and(|incoming| {
+            incoming.source == dragged.source
+                && incoming.id == dragged.id
+                && incoming.axis == axis
+                && incoming.before_id == before_id
+                && incoming.after_id == after_id
+        });
+        if unchanged {
+            return;
+        }
+        let incoming = super::IncomingTabDrag {
+            source: dragged.source,
+            id: dragged.id,
+            axis,
+            before_id,
+            after_id,
+            size: incoming_marker_size(axis, dragged.size, dragged.pinned),
+            pinned: dragged.pinned,
+        };
+        self.animate_incoming_layout(&incoming, true, cx);
+        self.incoming_tab_drag = Some(incoming);
+        cx.notify();
+    }
+
+    fn clear_incoming_tab_drag(
+        &mut self,
+        source: gpui::AnyWindowHandle,
+        id: u64,
+        cx: &mut Context<Self>,
+    ) {
+        if !self
+            .incoming_tab_drag
+            .as_ref()
+            .is_some_and(|incoming| incoming.source == source && incoming.id == id)
+        {
+            return;
+        }
+        let Some(incoming) = self.incoming_tab_drag.clone() else {
+            return;
+        };
+        self.animate_incoming_layout(&incoming, false, cx);
+        self.incoming_tab_drag = None;
+        cx.notify();
+    }
+
+    fn insertion_neighbors(
+        &self,
+        pinned: bool,
+        axis: TabDragAxis,
+        position: gpui::Point<gpui::Pixels>,
+        cx: &App,
+    ) -> (Option<u64>, Option<u64>) {
+        let mut candidates: Vec<u64> = match axis {
+            TabDragAxis::Horizontal => self.tabs.iter().map(|tab| tab.id).collect(),
+            TabDragAxis::Vertical => self
+                .listed_tabs(cx)
+                .into_iter()
+                .map(|index| self.tabs[index].id)
+                .collect(),
+        };
+        candidates.retain(|id| {
+            self.tab_index_by_id(*id)
+                .is_some_and(|index| self.tabs[index].pin.is_some() == pinned)
+        });
+        candidates.sort_by(|left, right| {
+            let left = self
+                .tab_geometry
+                .get(left)
+                .map(|bounds| axis_origin(*bounds, axis));
+            let right = self
+                .tab_geometry
+                .get(right)
+                .map(|bounds| axis_origin(*bounds, axis));
+            left.partial_cmp(&right)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        let coordinate = axis_coordinate(position, axis);
+        let insertion = midpoint_insertion_index(
+            candidates.iter().map(|id| {
+                self.tab_geometry
+                    .get(id)
+                    .map(|bounds| axis_origin(*bounds, axis) + axis_size(*bounds, axis) / 2.0)
+            }),
+            coordinate,
+        );
+        (
+            candidates.get(insertion).copied(),
+            insertion
+                .checked_sub(1)
+                .and_then(|index| candidates.get(index).copied()),
+        )
+    }
+
+    fn animate_incoming_layout(
+        &mut self,
+        incoming: &super::IncomingTabDrag,
+        include_marker: bool,
+        cx: &App,
+    ) {
+        let axis = incoming.axis;
+        let mut ids: Vec<u64> = match axis {
+            TabDragAxis::Horizontal => self.tabs.iter().map(|tab| tab.id).collect(),
+            TabDragAxis::Vertical => self
+                .listed_tabs(cx)
+                .into_iter()
+                .map(|index| self.tabs[index].id)
+                .collect(),
+        };
+        ids.retain(|id| {
+            self.tab_index_by_id(*id)
+                .is_some_and(|index| self.tabs[index].pin.is_some() == incoming.pinned)
+        });
+        if ids.is_empty() {
+            return;
+        }
+        let mut start = ids
+            .iter()
+            .filter_map(|id| {
+                self.tab_geometry
+                    .get(id)
+                    .copied()
+                    .map(|bounds| axis_origin(bounds, axis) - self.tab_offset(*id, axis))
+            })
+            .fold(f32::INFINITY, f32::min);
+        if !start.is_finite() {
+            return;
+        }
+        let gap = match axis {
+            TabDragAxis::Horizontal => super::super::metrics::TAB_STRIP_GAP,
+            TabDragAxis::Vertical => {
+                super::super::metrics::SidebarSpacing::new(self.sidebar.shows_icons()).item_gap
+            }
+        };
+        let leading_gap = self
+            .incoming_tab_drag
+            .as_ref()
+            .filter(|previous| previous.before_id == ids.first().copied())
+            .map_or(0.0, |previous| previous.size + gap);
+        start -= leading_gap;
+        let mut cursor = start;
+        let mut animations = Vec::with_capacity(ids.len());
+        for id in ids {
+            if include_marker && incoming.before_id == Some(id) {
+                cursor += incoming.size + gap;
+            }
+            let Some(bounds) = self.tab_geometry.get(&id).copied() else {
+                continue;
+            };
+            animations.push((id, axis_origin(bounds, axis) - cursor));
+            cursor += axis_size(bounds, axis) + gap;
+            if include_marker && incoming.after_id == Some(id) {
+                cursor += incoming.size + gap;
+            }
+        }
+        for (id, from) in animations {
+            if from.abs() > 0.1 {
+                self.tab_position_animations.insert(
+                    id,
+                    super::TabPositionAnimation::new(
+                        from,
+                        super::super::metrics::TAB_REORDER_DURATION_MS,
+                    ),
+                );
+            }
+        }
+    }
+
+    pub(super) fn finish_tab_drag(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(dragged) = cx
+            .active_drag()
+            .and_then(|drag| drag.value.downcast_ref::<DraggedTab>())
+            .filter(|dragged| dragged.source != window.window_handle())
+            .cloned()
+        {
+            self.clear_incoming_tab_drag(dragged.source, dragged.id, cx);
+            if let Some(source) = dragged.source.downcast::<BrowserWindow>() {
+                source
+                    .update(cx, |browser, _, cx| {
+                        if browser
+                            .tab_drag_layout
+                            .as_ref()
+                            .is_some_and(|layout| layout.id == dragged.id)
+                        {
+                            browser.tab_drag_layout = None;
+                            browser.suppress_tab_click_until =
+                                Some(Instant::now() + Duration::from_millis(250));
+                            cx.notify();
+                        }
+                    })
+                    .ok();
+            }
+            Self::notify_other_tab_drop_targets(cx, window.window_handle());
+            return;
+        }
+        self.clear_previous_target(cx);
+        let Some(mut drag) = self.tab_drag_layout.take() else {
+            return;
+        };
+        if drag.phase == super::TabDragPhase::PendingDrag {
+            return;
+        }
+        drag.phase = super::TabDragPhase::Completing;
+        let current_offset = self
+            .tab_geometry
+            .get(&drag.id)
+            .copied()
+            .map(|bounds| axis_origin(bounds, drag.axis) - self.slot_origin(drag.id, drag.axis))
+            .unwrap_or(drag.visual_offset);
+        if current_offset.abs() > 0.1 {
+            self.tab_position_animations.insert(
+                drag.id,
+                super::TabPositionAnimation::new(
+                    current_offset,
+                    super::super::metrics::TAB_DROP_SETTLE_DURATION_MS,
+                ),
+            );
+        }
+        self.suppress_tab_click_until = Some(Instant::now() + Duration::from_millis(250));
+        Self::notify_other_tab_drop_targets(cx, window.window_handle());
+        cx.notify();
+        window.refresh();
+    }
+
+    fn slot_origin(&self, id: u64, axis: TabDragAxis) -> f32 {
+        self.tab_geometry
+            .get(&id)
+            .copied()
+            .map(|bounds| axis_origin(bounds, axis) - self.tab_offset(id, axis))
+            .unwrap_or(0.0)
+    }
+
+    pub(super) fn favourite_drop_handler(&self, cx: &Context<Self>) -> TabDrop {
+        let browser = cx.entity().downgrade();
+        Rc::new(move |dragged, window, cx| {
+            if dragged.source == window.window_handle() {
+                browser
+                    .update(cx, |this, cx| this.add_dragged_favourite(dragged.id, cx))
+                    .ok();
+            } else if let Some(source) = dragged.source.downcast::<BrowserWindow>() {
+                source
+                    .update(cx, |this, _, cx| this.add_dragged_favourite(dragged.id, cx))
+                    .ok();
+            }
+        })
+    }
+
+    pub(super) fn favourite_bounds_handler(&self, cx: &Context<Self>) -> TabPrepaint {
+        let browser = cx.entity().downgrade();
+        Box::new(move |bounds, _, cx| {
+            browser
+                .update(cx, |this, _| this.favourites_bounds = Some(bounds))
+                .ok();
+        })
+    }
+
+    pub(super) fn tab_container_bounds_handler(&self, cx: &Context<Self>) -> TabPrepaint {
+        let browser = cx.entity().downgrade();
+        Box::new(move |bounds, _, cx| {
+            browser
+                .update(cx, |this, _| this.tab_container_bounds = Some(bounds))
+                .ok();
+        })
+    }
+
+    pub(super) fn tab_target_drop_handler(&self, target_id: u64, cx: &Context<Self>) -> TabDrop {
+        let target = cx.entity().downgrade();
+        let transfer = self.tab_drop_handler(cx);
+        Rc::new(move |dragged, window, cx| {
+            if dragged.source != window.window_handle() {
+                let Some(target_pinned) = target
+                    .update(cx, |browser, _| {
+                        browser
+                            .tab_index_by_id(target_id)
+                            .map(|index| browser.tabs[index].pin.is_some())
+                    })
+                    .ok()
+                    .flatten()
+                else {
+                    return;
+                };
+                let Some(source) = dragged.source.downcast::<BrowserWindow>() else {
+                    return;
+                };
+                let can_transfer = source
+                    .update(cx, |browser, _, cx| {
+                        let Some(index) = browser.tab_index_by_id(dragged.id) else {
+                            return false;
+                        };
+                        if browser.tabs[index].pin.is_some() != target_pinned {
+                            if target_pinned && !browser.can_pin(index, cx) {
+                                return false;
+                            }
+                            browser.toggle_pin(index, cx);
+                        }
+                        true
+                    })
+                    .unwrap_or(false);
+                if !can_transfer {
+                    return;
+                }
+                transfer(dragged, window, cx);
+                return;
+            }
+            target
+                .update(cx, |browser, cx| {
+                    let Some(from) = browser.tab_index_by_id(dragged.id) else {
+                        return;
+                    };
+                    let Some(to) = browser.tab_index_by_id(target_id) else {
+                        return;
+                    };
+                    if browser.tabs[from].pin.is_some() != browser.tabs[to].pin.is_some() {
+                        browser.drop_tab(from, to, cx);
+                    }
+                })
+                .ok();
+        })
+    }
+
+    pub(super) fn drop_tab_into_today_handler(&self, cx: &Context<Self>) -> TabDrop {
+        let transfer = self.tab_drop_handler(cx);
+        Rc::new(move |dragged, window, cx| {
+            if let Some(source) = dragged.source.downcast::<BrowserWindow>() {
+                source
+                    .update(cx, |browser, _, cx| {
+                        if let Some(index) = browser.tab_index_by_id(dragged.id) {
+                            browser.drop_tab_into_today(index, cx);
+                        }
+                    })
+                    .ok();
+            }
+            if dragged.source != window.window_handle() {
+                transfer(dragged, window, cx);
+            }
+        })
+    }
+
+    pub(super) fn tab_drop_handler(&self, cx: &Context<Self>) -> TabDrop {
+        let target = cx.entity().downgrade();
+        Rc::new(move |dragged, window, cx| {
+            if dragged.source == window.window_handle() {
+                return;
+            }
+            let Some(source) = dragged.source.downcast::<BrowserWindow>() else {
+                return;
+            };
+            let Ok(Some((source_tab, source_ids))) = source.read(cx).map(|browser| {
+                browser.tab_index_by_id(dragged.id).and_then(|index| {
+                    browser.tabs.get(index).cloned().map(|tab| {
+                        (
+                            tab,
+                            browser.tabs.iter().map(|tab| tab.id).collect::<Vec<_>>(),
+                        )
+                    })
+                })
+            }) else {
+                return;
+            };
+            let target_position = window.mouse_position();
+            let inserted_id = target
+                .update(cx, |browser, cx| {
+                    let axis = browser.tab_axis(cx);
+                    let pinned = source_tab.pin.is_some();
+                    let index = browser.insertion_index_for_tab(pinned, axis, target_position, cx);
+                    let target_ids: Vec<_> = browser.tabs.iter().map(|tab| tab.id).collect();
+                    let desired_id = if target_ids.contains(&dragged.id) {
+                        BrowserWindow::allocate_tab_id()
+                    } else {
+                        dragged.id
+                    };
+                    let plan =
+                        plan_tab_transfer(&source_ids, &target_ids, dragged.id, desired_id, index)?;
+                    browser.insert_tab_at(
+                        plan.target_index,
+                        source_tab.content.clone(),
+                        source_tab.pin.clone(),
+                        true,
+                        window,
+                        cx,
+                    );
+                    let inserted = browser.tabs[plan.target_index].id;
+                    if let Some(inserted_index) = browser.tab_index_by_id(inserted) {
+                        browser.tabs[inserted_index].id = plan.target_id;
+                        browser.tabs[inserted_index].space = source_tab.space;
+                        browser.tabs[inserted_index].favourite = source_tab.favourite.clone();
+                    }
+                    if browser.incoming_tab_drag.as_ref().is_some_and(|incoming| {
+                        incoming.source == dragged.source && incoming.id == dragged.id
+                    }) {
+                        browser.incoming_tab_drag = None;
+                    }
+                    Some(plan)
+                })
+                .ok();
+            let Some(Some(plan)) = inserted_id else {
+                return;
+            };
+            source
+                .update(cx, |browser, source_window, cx| {
+                    let index = browser
+                        .tabs
+                        .get(plan.source_index)
+                        .filter(|tab| tab.id == dragged.id)
+                        .map(|_| plan.source_index)
+                        .or_else(|| browser.tab_index_by_id(dragged.id));
+                    if let Some(index) = index {
+                        browser.tab_drag_layout = None;
+                        browser.remove_tab_for_transfer(index, source_window, cx);
+                    }
+                })
+                .ok();
+            target
+                .update(cx, |browser, cx| {
+                    if let Some(index) = browser.tab_index_by_id(plan.target_id) {
+                        browser.activate_tab(index, true, window, cx);
+                    }
+                })
+                .ok();
+        })
+    }
+
+    fn add_dragged_favourite(&mut self, id: u64, cx: &mut Context<Self>) {
+        let Some(index) = self.tab_index_by_id(id) else {
+            return;
+        };
+        let Some(view) = self.tabs[index].content.webview() else {
+            return;
+        };
+        let shortcut = {
+            let view = view.read(cx);
+            if !view.has_page() {
+                return;
+            }
+            Shortcut {
+                title: view.state.title.clone(),
+                url: view.state.url.clone(),
+            }
+        };
+        self.clear_previous_target(cx);
+        self.tab_drag_layout = None;
+        self.add_favourite(index, shortcut, cx);
+    }
+
+    fn tab_axis(&self, cx: &App) -> TabDragAxis {
+        if WorkspaceLayout::current(cx).saved().tab_layout() == photon_core::TabLayout::Vertical {
+            TabDragAxis::Vertical
+        } else {
+            TabDragAxis::Horizontal
+        }
+    }
+
+    fn insertion_index_for_tab(
+        &self,
+        pinned: bool,
+        axis: TabDragAxis,
+        position: gpui::Point<gpui::Pixels>,
+        cx: &App,
+    ) -> usize {
+        let mut candidates: Vec<usize> = match axis {
+            TabDragAxis::Horizontal => (0..self.tabs.len()).collect(),
+            TabDragAxis::Vertical => self.listed_tabs(cx),
+        }
+        .into_iter()
+        .filter(|&index| self.tabs[index].pin.is_some() == pinned)
+        .collect();
+        candidates.sort_by(|left, right| {
+            let left = self
+                .tab_geometry
+                .get(&self.tabs[*left].id)
+                .map(|bounds| axis_origin(*bounds, axis));
+            let right = self
+                .tab_geometry
+                .get(&self.tabs[*right].id)
+                .map(|bounds| axis_origin(*bounds, axis));
+            left.partial_cmp(&right)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        let coordinate = axis_coordinate(position, axis);
+        let insertion = midpoint_insertion_index(
+            candidates.iter().map(|&index| {
+                self.tab_geometry
+                    .get(&self.tabs[index].id)
+                    .map(|bounds| axis_origin(*bounds, axis) + axis_size(*bounds, axis) / 2.0)
+            }),
+            coordinate,
+        );
+        if let Some(index) = candidates.get(insertion) {
+            return *index;
+        }
+        candidates.last().map_or_else(
+            || {
+                if pinned {
+                    self.pinned_count()
+                } else {
+                    self.tabs.len()
+                }
+            },
+            |last| last + 1,
+        )
+    }
+
+    fn detach_tab(
+        &mut self,
+        dragged: DraggedTab,
+        position: gpui::Point<gpui::Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(index) = self.tab_index_by_id(dragged.id) else {
+            return;
+        };
+        if !can_detach_tab_count(self.tabs.len()) {
+            return;
+        }
+        let tab = self.tabs[index].clone();
+        let source_bounds = window.bounds();
+        let source_tab_bounds = self
+            .tab_geometry
+            .get(&dragged.id)
+            .copied()
+            .unwrap_or_default();
+        let grab_offset = self
+            .tab_drag_layout
+            .as_ref()
+            .map(|layout| layout.grab_offset)
+            .unwrap_or_default();
+        let new_tab_origin = match dragged.axis {
+            TabDragAxis::Horizontal => gpui::point(
+                gpui::px(
+                    super::super::metrics::WINDOW_CONTROLS_INSET
+                        + super::super::metrics::TAB_STRIP_INSET,
+                ),
+                gpui::px(super::super::metrics::TAB_STRIP_INSET),
+            ),
+            TabDragAxis::Vertical => source_tab_bounds.origin,
+        };
+        let new_window_origin = source_bounds.origin + position - new_tab_origin - grab_offset;
+        let Ok(new_window) = super::open_browser_window_at(
+            self.runtime.clone(),
+            None,
+            false,
+            Some(new_window_origin),
+            cx,
+        ) else {
+            return;
+        };
+        let transfer = new_window.update(cx, |browser, window, cx| {
+            browser.insert_tab_at(0, tab.content.clone(), tab.pin.clone(), true, window, cx);
+            browser.tabs[0].id = tab.id;
+            browser.tabs[0].space = tab.space;
+            browser.tabs[0].favourite = tab.favourite.clone();
+            browser.tab_drag_layout = Some(super::TabDragLayout {
+                id: tab.id,
+                source_window: window.window_handle(),
+                axis: dragged.axis,
+                pointer_start: position,
+                pointer_position: position,
+                grab_offset,
+                tab_bounds: source_tab_bounds,
+                label: dragged.label.to_string(),
+                pinned: dragged.pinned,
+                phase: super::TabDragPhase::DraggingDetachedWindow,
+                visual_offset: 0.0,
+                target_window: None,
+            });
+            let palette = browser.palette(window, cx);
+            let preview_label = dragged.label.clone();
+            let preview = cx.new(move |_| TabDragPreview {
+                label: preview_label,
+                palette,
+            });
+            window.start_window_move();
+            preview
+        });
+        let Ok(preview) = transfer else {
+            let _ = new_window.update(cx, |_, window, _| window.remove_window());
+            return;
+        };
+
+        cx.play_haptic_feedback(HapticFeedbackStyle::Alignment);
+        let new_payload = DraggedTab {
+            source: new_window.into(),
+            id: tab.id,
+            label: dragged.label,
+            axis: dragged.axis,
+            size: dragged.size,
+            pinned: dragged.pinned,
+        };
+        let _ = cx.stop_drag(window);
+        cx.start_drag(AnyDrag::new(new_payload, preview).offset(grab_offset));
+        self.tab_drag_layout = None;
+        self.suppress_tab_click_until = Some(Instant::now() + Duration::from_millis(250));
+        self.remove_tab_for_detach(index, window, cx);
+        Self::notify_other_tab_drop_targets(cx, window.window_handle());
+        let _ = new_window.update(cx, |browser, window, cx| {
+            if let Some(index) = browser.tab_index_by_id(tab.id) {
+                browser.activate_tab(index, true, window, cx);
+            }
+        });
+    }
+
+    fn remove_tab_for_detach(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if !can_detach_tab_count(self.tabs.len()) {
+            return;
+        }
+        self.remove_tab_for_transfer(index, window, cx);
+    }
+
+    fn remove_tab_for_transfer(
+        &mut self,
+        index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if index >= self.tabs.len() {
+            return;
+        }
+        let was_active = self.active_tab == Some(index);
+        let next = was_active
+            .then(|| self.tab_after_closing(index, cx))
+            .flatten();
+        if let Some(webview) = self.tabs[index].content.webview() {
+            webview.update(cx, |view, _| {
+                view.session.set_visible(false);
+                view.session.set_focus(false);
+            });
+        }
+        self.revealed_icons
+            .borrow_mut()
+            .remove(&self.tabs[index].id);
+        self.tab_position_animations.remove(&self.tabs[index].id);
+        self.tabs.remove(index);
+        drop(self.tab_subscriptions.remove(index));
+        self.tab_focus_handles.remove(index);
+        if was_active {
+            self.active_tab = next;
+        } else if self.active_tab.is_some_and(|active| index < active) {
+            self.active_tab = self.active_tab.map(|active| active - 1);
+        }
+
+        if self.tabs.is_empty() {
+            self.active_tab = None;
+            self.close_find_bar(false, window, cx);
+            self.omnibox.update(cx, |omnibox, cx| {
+                omnibox.set_content(None, None, window, cx)
+            });
+            if Settings::get(cx).close_window_with_last_tab {
+                self.record_session_state(WindowSession::default(), cx);
+                window.remove_window();
+                return;
+            } else {
+                self.show_empty_new_tab_page(window, cx);
+            }
+        } else if was_active {
+            if let Some(next) = self.active_tab {
+                self.activate_tab(next, true, window, cx);
+            }
+        }
+        cx.notify();
+    }
+
     pub(super) fn activate_tab(
         &mut self,
         index: usize,
@@ -241,7 +1433,7 @@ impl BrowserWindow {
     ) {
         let index = index.min(self.tabs.len());
         let subscription = self.subscribe_to_content(&content, window, cx);
-        let id = self.allocate_tab_id();
+        let id = Self::allocate_tab_id();
         let space = self.current_space(cx);
         self.tabs
             .insert(index, BrowserTab::new(id, content.clone(), pin, space));
@@ -271,10 +1463,8 @@ impl BrowserWindow {
         }
     }
 
-    fn allocate_tab_id(&mut self) -> u64 {
-        let id = self.next_tab_id;
-        self.next_tab_id += 1;
-        id
+    fn allocate_tab_id() -> u64 {
+        NEXT_TAB_ID.fetch_add(1, Ordering::Relaxed)
     }
 
     pub(super) fn reopen_closed_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -301,6 +1491,21 @@ impl BrowserWindow {
         }
 
         let removed = self.tabs[index].clone();
+        let cancel_drag = self
+            .tab_drag_layout
+            .as_ref()
+            .is_some_and(|drag| drag.id == removed.id);
+        if cancel_drag {
+            if let Some(drag) = self.tab_drag_layout.as_mut() {
+                drag.phase = super::TabDragPhase::Cancelled;
+            }
+            self.clear_previous_target(cx);
+            let _ = cx.stop_active_drag(window);
+            window.release_pointer();
+            self.tab_drag_layout = None;
+            self.tab_position_animations.remove(&removed.id);
+            Self::notify_other_tab_drop_targets(cx, window.window_handle());
+        }
         if let Some(webview) = removed.content.webview() {
             let favicon = webview.update(cx, |view, _| {
                 view.session.set_visible(false);
@@ -512,5 +1717,145 @@ impl BrowserWindow {
                 true
             }
         }
+    }
+}
+
+fn axis_coordinate(point: gpui::Point<gpui::Pixels>, axis: TabDragAxis) -> f32 {
+    match axis {
+        TabDragAxis::Horizontal => f32::from(point.x),
+        TabDragAxis::Vertical => f32::from(point.y),
+    }
+}
+
+fn axis_origin(bounds: gpui::Bounds<gpui::Pixels>, axis: TabDragAxis) -> f32 {
+    match axis {
+        TabDragAxis::Horizontal => f32::from(bounds.origin.x),
+        TabDragAxis::Vertical => f32::from(bounds.origin.y),
+    }
+}
+
+fn axis_size(bounds: gpui::Bounds<gpui::Pixels>, axis: TabDragAxis) -> f32 {
+    match axis {
+        TabDragAxis::Horizontal => f32::from(bounds.size.width),
+        TabDragAxis::Vertical => f32::from(bounds.size.height),
+    }
+}
+
+fn bounds_distance(bounds: gpui::Bounds<gpui::Pixels>, point: gpui::Point<gpui::Pixels>) -> f32 {
+    let left = f32::from(bounds.origin.x);
+    let top = f32::from(bounds.origin.y);
+    let dx = (left - f32::from(point.x))
+        .max(f32::from(point.x) - left - f32::from(bounds.size.width))
+        .max(0.0);
+    let dy = (top - f32::from(point.y))
+        .max(f32::from(point.y) - top - f32::from(bounds.size.height))
+        .max(0.0);
+    dx.hypot(dy)
+}
+
+fn incoming_marker_size(axis: TabDragAxis, size: f32, pinned: bool) -> f32 {
+    match axis {
+        TabDragAxis::Horizontal if pinned => size.max(super::super::metrics::PINNED_TAB_WIDTH),
+        TabDragAxis::Horizontal => size.max(super::super::metrics::TAB_MIN_WIDTH),
+        TabDragAxis::Vertical => super::super::metrics::SIDEBAR_TAB_HEIGHT,
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct TabTransferPlan {
+    source_index: usize,
+    target_index: usize,
+    target_id: u64,
+}
+
+fn midpoint_insertion_index(
+    midpoints: impl IntoIterator<Item = Option<f32>>,
+    coordinate: f32,
+) -> usize {
+    let mut count = 0;
+    for (index, midpoint) in midpoints.into_iter().enumerate() {
+        count = index + 1;
+        if midpoint.is_some_and(|midpoint| coordinate < midpoint) {
+            return index;
+        }
+    }
+    count
+}
+
+fn insert_id_at(order: &mut Vec<u64>, id: u64, index: usize) {
+    order.retain(|candidate| *candidate != id);
+    order.insert(index.min(order.len()), id);
+}
+
+fn can_detach_tab_count(tab_count: usize) -> bool {
+    tab_count > 1
+}
+
+fn plan_tab_transfer(
+    source_ids: &[u64],
+    target_ids: &[u64],
+    moving_id: u64,
+    target_id: u64,
+    target_index: usize,
+) -> Option<TabTransferPlan> {
+    let mut source_matches = source_ids
+        .iter()
+        .enumerate()
+        .filter(|(_, id)| **id == moving_id);
+    let source_index = source_matches.next()?.0;
+    if source_matches.next().is_some() || target_ids.contains(&target_id) {
+        return None;
+    }
+    Some(TabTransferPlan {
+        source_index,
+        target_index: target_index.min(target_ids.len()),
+        target_id,
+    })
+}
+
+#[cfg(test)]
+mod tab_drag_tests {
+    use super::{can_detach_tab_count, insert_id_at, midpoint_insertion_index, plan_tab_transfer};
+
+    #[test]
+    fn midpoint_insertion_tracks_both_directions_and_edges() {
+        let midpoints = [Some(50.0), Some(120.0), Some(190.0)];
+        assert_eq!(midpoint_insertion_index(midpoints, 49.0), 0);
+        assert_eq!(midpoint_insertion_index(midpoints, 120.0), 2);
+        assert_eq!(midpoint_insertion_index(midpoints, 250.0), 3);
+    }
+
+    #[test]
+    fn reorder_keeps_stable_ids_and_can_reverse_direction() {
+        let mut order = vec![10, 20, 30, 40];
+        insert_id_at(&mut order, 10, 3);
+        assert_eq!(order, [20, 30, 40, 10]);
+        insert_id_at(&mut order, 10, 0);
+        assert_eq!(order, [10, 20, 30, 40]);
+    }
+
+    #[test]
+    fn transfer_plan_preserves_identity_and_rejects_duplicates() {
+        let plan = plan_tab_transfer(&[1, 2, 3], &[7, 8], 2, 2, 1).unwrap();
+        assert_eq!(plan.source_index, 1);
+        assert_eq!(plan.target_index, 1);
+        assert_eq!(plan.target_id, 2);
+
+        assert!(plan_tab_transfer(&[1, 2], &[2, 8], 1, 2, 0).is_none());
+        assert!(plan_tab_transfer(&[1, 2, 2], &[8], 2, 3, 0).is_none());
+        assert!(plan_tab_transfer(&[1, 2], &[8], 3, 3, 0).is_none());
+    }
+
+    #[test]
+    fn transfer_plan_clamps_to_the_target_end() {
+        let plan = plan_tab_transfer(&[4], &[7, 8], 4, 4, 9).unwrap();
+        assert_eq!(plan.target_index, 2);
+    }
+
+    #[test]
+    fn a_window_with_one_tab_cannot_detach_it() {
+        assert!(!can_detach_tab_count(0));
+        assert!(!can_detach_tab_count(1));
+        assert!(can_detach_tab_count(2));
     }
 }

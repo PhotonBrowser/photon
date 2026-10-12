@@ -149,7 +149,7 @@ impl SidebarState {
 
     /// Whether it shows only icons now: collapsed beside the page. Revealed
     /// over the page, it always shows its labels.
-    fn shows_icons(&self) -> bool {
+    pub(super) fn shows_icons(&self) -> bool {
         self.collapsed && !self.over_page()
     }
 
@@ -193,17 +193,23 @@ impl SidebarState {
         true
     }
 
-    /// Keeps it beside the page, out of Zen mode. Kept from a reveal, it
-    /// stays where it is while the page makes room.
+    /// Keeps it beside the page, out of Zen mode. Clicking the toggle on a
+    /// revealed sidebar pins it in place without animating the page reflow.
     fn dock(&mut self, cx: &App) {
         if self.docked() {
             return;
         }
+        let was_revealed = self.over_page();
         self.visible = true;
         self.zen = false;
-        self.tucked
-            .animate_to(0.0, Speed::Gentle, &Settings::get(cx).animations, cx);
-        self.follow_docked(cx);
+        if was_revealed {
+            self.shown.jump_to(1.0);
+            self.tucked.jump_to(0.0);
+        } else {
+            self.tucked
+                .animate_to(0.0, Speed::Gentle, &Settings::get(cx).animations, cx);
+            self.follow_docked(cx);
+        }
     }
 
     fn set_zen(&mut self, zen: bool, cx: &App) -> bool {

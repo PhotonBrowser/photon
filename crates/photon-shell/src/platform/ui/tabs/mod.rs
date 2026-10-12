@@ -8,32 +8,52 @@ mod list;
 mod strip;
 
 use gpui::{
-    AnyElement, App, Context, ElementId, FocusHandle, ImageSource, MouseButton, ObjectFit, Render,
-    Role, SharedString, Stateful, Window, div, img, prelude::*, px, rgb, rgba,
+    AnyElement, AnyWindowHandle, App, Bounds, Context, DispatchPhase, ElementId, FocusHandle,
+    Hitbox, ImageSource, MouseButton, MouseDownEvent, MouseMoveEvent, ObjectFit, Render, Role,
+    SharedString, Stateful, Window, div, img, prelude::*, px, rgb, rgba,
 };
 
 use super::Favicon;
 use super::controls::FocusRing;
 use super::controls::OwnsClicks;
 use super::icons::{audio_icon, close_icon, globe_icon, loading_spinner, photon_logo};
-use super::layout::{Elevated, Elevation, Raised, h_stack};
+use super::layout::h_stack;
 use super::motion::{AnimateIn, Entrance};
 use super::{
     ClickHandler, KeyDownHandler, MouseDownHandler, MouseUpHandler, metrics, theme::ThemeColors,
 };
 pub(super) use list::tab_list;
+use std::rc::Rc;
 pub(super) use strip::tab_strip;
 
-/// A tab being dragged to a new position.
-pub(super) struct DraggedTab {
-    /// The tab's position when the drag started.
-    pub index: usize,
+pub(super) type TabPointerDown =
+    Box<dyn Fn(&MouseDownEvent, DispatchPhase, &Hitbox, TabDragAxis, &mut Window, &mut App)>;
+pub(super) type TabDragMove =
+    Rc<dyn Fn(&MouseMoveEvent, DispatchPhase, &Hitbox, &mut Window, &mut App)>;
+pub(super) type TabPrepaint = Box<dyn Fn(Bounds<gpui::Pixels>, &mut Window, &mut App)>;
+pub(super) type TabDrop = Rc<dyn Fn(&DraggedTab, &mut Window, &mut App)>;
+
+pub(super) fn is_foreign_tab_drag(value: &dyn std::any::Any, window: &Window) -> bool {
+    value
+        .downcast_ref::<DraggedTab>()
+        .is_some_and(|dragged| dragged.source != window.window_handle())
 }
 
-/// What follows the cursor while a tab is dragged.
-struct TabDragPreview {
-    label: SharedString,
-    palette: ThemeColors,
+/// A stable drag payload shared by both tab layouts and native drop targets.
+#[derive(Clone)]
+pub(super) struct DraggedTab {
+    pub source: AnyWindowHandle,
+    pub id: u64,
+    pub label: SharedString,
+    pub axis: TabDragAxis,
+    pub size: f32,
+    pub pinned: bool,
+}
+
+/// The lightweight view GPUI keeps under the pointer during a tab drag.
+pub(super) struct TabDragPreview {
+    pub label: SharedString,
+    pub palette: ThemeColors,
 }
 
 impl Render for TabDragPreview {
@@ -47,21 +67,19 @@ impl Render for TabDragPreview {
             .rounded(px(metrics::CONTROL_RADIUS))
             .border_1()
             .border_color(rgba(palette.menu_border))
-            .raised(palette)
+            .bg(rgba(palette.selected_surface))
             .text_size(px(metrics::TAB_FONT_SIZE))
             .text_color(rgb(palette.text_primary))
-            .elevated(Elevation::Medium)
             .opacity(metrics::TAB_DRAG_PREVIEW_OPACITY)
             .child(div().truncate().child(self.label.clone()))
     }
 }
 
-/// A callback for a tab dropped onto another.
-pub(super) type TabDrop = Box<dyn Fn(&DraggedTab, &mut Window, &mut App)>;
-
-/// Notifies the browser when a tab drag starts so cached drop targets can
-/// appear before the pointer reaches them.
-pub(super) type TabDragStart = Box<dyn Fn(&mut App)>;
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum TabDragAxis {
+    Horizontal,
+    Vertical,
+}
 
 /// What a tab shows before its title.
 pub(super) enum TabIcon {
@@ -153,13 +171,17 @@ pub(super) struct TabItem {
     pub on_key_down: KeyDownHandler,
     pub on_close: ClickHandler,
     pub on_toggle_audio: ClickHandler,
-    pub on_drag_start: TabDragStart,
+    pub on_pointer_down: TabPointerDown,
+    pub on_prepaint: TabPrepaint,
+    pub on_drop: TabDrop,
+    pub position_offset: f32,
+    pub dragging: bool,
+    pub insertion_before: Option<f32>,
+    pub insertion_after: Option<f32>,
     /// Middle-click closes the tab.
     pub on_middle_click: MouseUpHandler,
     /// Right-click opens the tab's menu.
     pub on_context_menu: MouseDownHandler,
-    /// A dragged tab dropped onto this one moves to its place.
-    pub on_drop: TabDrop,
 }
 
 /// A tab's parts, ready for the strip or the list to lay out.
@@ -171,7 +193,6 @@ struct TabParts {
     close: Stateful<gpui::Div>,
     active: bool,
     pinned: bool,
-    /// The group name for hover styles inside the tab.
     group: String,
 }
 
@@ -186,11 +207,14 @@ impl TabParts {
         focus_index: isize,
         icon_size: f32,
         palette: ThemeColors,
+        axis: TabDragAxis,
     ) -> Self {
         let close_label = format!("Close {}", tab.label);
         let close_id = format!("{}-close", tab.id);
         let tab_id = tab.id.clone();
         let audio_control = matches!(&tab.icon, TabIcon::Audio { .. });
+        let position_offset = tab.position_offset;
+        let dragged = tab.dragging;
         let focus_handle = tab.focus_handle.tab_index(focus_index).tab_stop(tab.active);
         let element = h_stack()
             .id(tab.id.clone())
@@ -212,18 +236,31 @@ impl TabParts {
             .on_click(tab.on_select)
             .on_key_down(tab.on_key_down)
             .on_mouse_up(MouseButton::Middle, tab.on_middle_click)
-            .on_mouse_down(MouseButton::Right, tab.on_context_menu)
-            .on_drag(DraggedTab { index: tab.index }, {
-                let label = SharedString::from(tab.label.clone());
-                let on_drag_start = tab.on_drag_start;
-                move |_, _, _, cx| {
-                    on_drag_start(cx);
-                    let label = label.clone();
-                    cx.new(|_| TabDragPreview { label, palette })
-                }
-            })
+            .on_mouse_down(MouseButton::Right, tab.on_context_menu);
+        let on_prepaint = tab.on_prepaint;
+        let element = element.on_prepaint(move |prepaint, window, cx| {
+            on_prepaint(prepaint.bounds, window, cx);
+        });
+        let element = element.on_mouse_down_all(move |event, phase, hitbox, window, cx| {
+            (tab.on_pointer_down)(event, phase, hitbox, axis, window, cx);
+        });
+        let on_drop = tab.on_drop;
+        let element = element
             .drag_over::<DraggedTab>(move |style, _, _, _| style.bg(rgba(palette.hover_surface)))
-            .on_drop(tab.on_drop);
+            .on_drop(move |dragged: &DraggedTab, window, cx| on_drop(dragged, window, cx));
+        let element = element
+            .relative()
+            .when(axis == TabDragAxis::Horizontal, |element| {
+                element.left(px(position_offset))
+            })
+            .when(axis == TabDragAxis::Vertical, |element| {
+                element.top(px(position_offset))
+            })
+            .opacity(if dragged {
+                metrics::TAB_DRAG_SOURCE_OPACITY
+            } else {
+                1.0
+            });
 
         let animations = tab.animations;
         let icon_color = if tab.active {
@@ -291,6 +328,21 @@ impl TabParts {
     }
 }
 
+/// The temporary insertion gap shown when a drag hovers over another strip.
+pub(super) fn insertion_marker(axis: TabDragAxis, size: f32, palette: ThemeColors) -> AnyElement {
+    let marker = div()
+        .flex_shrink_0()
+        .rounded(px(metrics::CONTROL_RADIUS))
+        .bg(rgba(palette.chosen));
+    match axis {
+        TabDragAxis::Horizontal => marker
+            .w(px(size))
+            .h(px(metrics::TAB_HEIGHT))
+            .into_any_element(),
+        TabDragAxis::Vertical => marker.w_full().h(px(size)).into_any_element(),
+    }
+}
+
 fn audio_control_button(
     id: String,
     tab_label: String,
@@ -305,6 +357,7 @@ fn audio_control_button(
     } else {
         format!("Mute {tab_label}")
     };
+    let tooltip = super::tooltip::label_tooltip(label.clone(), palette);
     div()
         .id(id)
         .role(Role::Button)
@@ -321,6 +374,12 @@ fn audio_control_button(
         .hover(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
         .on_click(on_click)
+        .on_mouse_down_all(|event, phase, _, _, cx| {
+            if phase == DispatchPhase::Capture && event.button == MouseButton::Left {
+                cx.stop_propagation();
+            }
+        })
+        .tooltip(tooltip)
         .child(audio_icon(icon_color, metrics::TAB_AUDIO_ICON_SIZE, muted))
         .into_any_element()
 }
@@ -346,5 +405,10 @@ fn close_tab_button(
         .hover(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
         .on_click(on_click)
+        .on_mouse_down_all(|event, phase, _, _, cx| {
+            if phase == DispatchPhase::Capture && event.button == MouseButton::Left {
+                cx.stop_propagation();
+            }
+        })
         .child(close_icon(palette.text_secondary, metrics::TAB_ICON_SIZE))
 }

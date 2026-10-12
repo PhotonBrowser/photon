@@ -157,22 +157,6 @@ impl BrowserWindow {
         cx.notify();
     }
 
-    /// Adds the dragged web tab to its own space's favourites.
-    pub(super) fn add_tab_to_favourites(&mut self, index: usize, cx: &mut Context<Self>) {
-        let Some(webview) = self.tabs.get(index).and_then(|tab| tab.content.webview()) else {
-            return;
-        };
-        let view = webview.read(cx);
-        if !view.has_page() {
-            return;
-        }
-        let shortcut = Shortcut {
-            title: view.state.title.clone(),
-            url: view.state.url.clone(),
-        };
-        self.add_favourite(index, shortcut, cx);
-    }
-
     /// Removes the favourite for `url`'s site. Its tab returns to the tab
     /// list.
     pub(super) fn remove_favourite(

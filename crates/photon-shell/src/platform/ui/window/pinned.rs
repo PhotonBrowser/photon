@@ -3,7 +3,7 @@
 //! once left unused for twelve hours.
 
 use gpui::{Context, Task, Window};
-use photon_core::{Shortcut, SpaceId, internal_page_url, pinned_after_drop, should_archive};
+use photon_core::{Shortcut, SpaceId, internal_page_url, should_archive};
 use std::time::Duration;
 
 use crate::platform::app_update::update_app;
@@ -17,6 +17,10 @@ use super::content::{BrowserTab, TabContent, create_webview};
 const ARCHIVE_CHECK_INTERVAL: Duration = Duration::from_secs(5 * 60);
 
 impl BrowserWindow {
+    pub(super) fn tab_index_by_id(&self, id: u64) -> Option<usize> {
+        self.tabs.iter().position(|tab| tab.id == id)
+    }
+
     /// How many tabs at the start of the window are pinned.
     pub(super) fn pinned_count(&self) -> usize {
         self.tabs.iter().take_while(|tab| tab.pin.is_some()).count()
@@ -53,14 +57,26 @@ impl BrowserWindow {
             .is_some_and(|tab| tab.pin.is_some() || pin_for(tab, cx).is_some())
     }
 
-    /// Moves the tab at `from` onto the tab at `to`, joining that tab's
-    /// section: dropped among the pinned tabs it is pinned, among today's
-    /// it is not.
+    /// Unpins a tab dropped below the pinned section, placing it first among
+    /// today's tabs. An unpinned tab dropped there also moves to the front.
+    pub(super) fn drop_tab_into_today(&mut self, from: usize, cx: &mut Context<Self>) {
+        match self.tabs.get(from) {
+            Some(tab) if tab.pin.is_some() => self.toggle_pin(from, cx),
+            Some(_) => {
+                let first_today = self.pinned_count();
+                self.move_tab_to(from, first_today, cx);
+            }
+            None => {}
+        }
+    }
+
+    /// Moves a tab onto another tab, pinning or unpinning it to join that
+    /// section while preserving the section's existing ordering rules.
     pub(super) fn drop_tab(&mut self, from: usize, to: usize, cx: &mut Context<Self>) {
         let Some(tab) = self.tabs.get(from) else {
             return;
         };
-        let pinned = pinned_after_drop(to, self.pinned_count());
+        let pinned = to < self.pinned_count();
         if pinned != tab.pin.is_some() {
             let pin = if pinned { pin_for(tab, cx) } else { None };
             if pinned && pin.is_none() {
@@ -72,19 +88,6 @@ impl BrowserWindow {
             cx.notify();
         } else {
             self.move_tab_to(from, to, cx);
-        }
-    }
-
-    /// Unpins a tab dropped below the pinned tabs, making it the first of
-    /// today's.
-    pub(super) fn drop_tab_into_today(&mut self, from: usize, cx: &mut Context<Self>) {
-        match self.tabs.get(from) {
-            Some(tab) if tab.pin.is_some() => self.toggle_pin(from, cx),
-            Some(_) => {
-                let first = self.pinned_count();
-                self.move_tab_to(from, first, cx);
-            }
-            None => {}
         }
     }
 

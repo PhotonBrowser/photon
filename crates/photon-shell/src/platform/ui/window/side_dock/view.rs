@@ -16,8 +16,9 @@ use super::super::super::sidebar::{
     FooterActions, SidebarSection, collapsed_tile, favourites_empty_state, favourites_grid, footer,
     navigation_bar, navigation_column, sidebar,
 };
-use super::super::super::tabs::{DraggedTab, TabDrop, tab_list};
+use super::super::super::tabs::{DraggedTab, TabDragMove, tab_list};
 use super::super::super::titlebar::window_drag_area;
+use super::super::super::tooltip::label_tooltip;
 use super::super::super::workspace_layout::{ComponentId, WorkspaceLayout};
 use super::super::super::{ClickHandler, metrics, theme::ThemeColors};
 use super::super::BrowserWindow;
@@ -91,25 +92,33 @@ impl BrowserWindow {
 
         let chrome_shown = sidebar.chrome_shown();
         let offset = px((out - 1.0) * width);
+        let reveal_inset = if over_page {
+            metrics::SIDEBAR_REVEAL_INSET
+        } else {
+            0.0
+        };
         let mut panel = window_drag_area(
             div()
                 .id("sidebar-panel")
                 .absolute()
-                .top(px(layout.top_extent() * chrome_shown))
-                .bottom(px(layout.bottom_extent() * chrome_shown))
+                .top(px(layout.top_extent() * chrome_shown + reveal_inset))
+                .bottom(px(layout.bottom_extent() * chrome_shown + reveal_inset))
                 .w(px(width))
+                .when(over_page, |panel| {
+                    panel.rounded(px(metrics::SIDEBAR_REVEAL_RADIUS))
+                })
                 .overflow_hidden()
                 .occlude()
                 .on_scroll_wheel(cx.listener(|this, event, _, cx| this.swipe_spaces(event, cx))),
         );
         panel = if leading {
-            panel.left(offset)
+            panel.left(offset + px(reveal_inset))
         } else {
-            panel.right(offset)
+            panel.right(offset + px(reveal_inset))
         };
         if over_page {
             panel = panel
-                .child(revealed_surface(leading, palette).opacity(1.0 - sidebar.shown()))
+                .child(revealed_surface(palette).opacity(1.0 - sidebar.shown()))
                 .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
                     this.revealed_sidebar_hovered(*hovered, cx);
                 }));
@@ -140,6 +149,7 @@ impl BrowserWindow {
                     palette,
                     cx,
                 ))
+                .tooltip(label_tooltip(self.sidebar_toggle_label(), palette))
                 .into_any_element()
             });
             navigation_column(fullscreen, leading, toggle)
@@ -166,15 +176,7 @@ impl BrowserWindow {
     ) -> Stateful<Div> {
         let sidebar = &self.sidebar;
         let color = palette.text_secondary;
-        let label = if sidebar.over_page() {
-            "Keep sidebar open"
-        } else if !sidebar.docked() {
-            "Show sidebar"
-        } else if sidebar.collapsed() {
-            "Expand sidebar"
-        } else {
-            "Hide sidebar"
-        };
+        let label = self.sidebar_toggle_label();
         let icon = if sidebar.docked() && sidebar.shows_icons() {
             sidebar_expand_icon(color, icon_size).into_any_element()
         } else {
@@ -189,6 +191,19 @@ impl BrowserWindow {
             palette,
             Box::new(cx.listener(|this, _, _, cx| this.press_sidebar_toggle(cx))),
         )
+    }
+
+    fn sidebar_toggle_label(&self) -> &'static str {
+        let sidebar = &self.sidebar;
+        if sidebar.over_page() {
+            "Keep sidebar open"
+        } else if !sidebar.docked() {
+            "Show sidebar"
+        } else if sidebar.collapsed() {
+            "Expand sidebar"
+        } else {
+            "Hide sidebar"
+        }
     }
 
     /// The panels the workspace places in the sidebar, in its order.
@@ -237,16 +252,22 @@ impl BrowserWindow {
             space.favourites.clone(),
             space.favourites_hint_dismissed,
         );
+        let tiles = self.favourite_tiles(&saved, collapsed, palette, cx);
+        if !tiles.is_empty() {
+            return Some(
+                favourites_grid(
+                    tiles,
+                    collapsed,
+                    palette,
+                    self.favourite_drop_handler(cx),
+                    self.favourite_bounds_handler(cx),
+                )
+                .into_any_element(),
+            );
+        }
         let dragging_tab = cx
             .active_drag()
             .is_some_and(|drag| drag.value.downcast_ref::<DraggedTab>().is_some());
-        let on_drop: TabDrop = Box::new(cx.listener(|this, dragged: &DraggedTab, _, cx| {
-            this.add_tab_to_favourites(dragged.index, cx);
-        }));
-        let tiles = self.favourite_tiles(&saved, collapsed, palette, cx);
-        if !tiles.is_empty() {
-            return Some(favourites_grid(tiles, collapsed, palette, on_drop).into_any_element());
-        }
         if !dragging_tab && (hint_dismissed || collapsed) {
             return None;
         }
@@ -257,7 +278,16 @@ impl BrowserWindow {
                 }
             });
         }));
-        Some(favourites_empty_state(palette, on_dismiss, on_drop, collapsed).into_any_element())
+        Some(
+            favourites_empty_state(
+                palette,
+                on_dismiss,
+                self.favourite_drop_handler(cx),
+                self.favourite_bounds_handler(cx),
+                collapsed,
+            )
+            .into_any_element(),
+        )
     }
 
     /// The space's tabs, sliding in from the side the space came from.
@@ -274,15 +304,25 @@ impl BrowserWindow {
             .into_iter()
             .filter(|item| listed.contains(&item.index))
             .collect();
+        let browser = cx.entity().downgrade();
+        let on_drag_move: TabDragMove =
+            std::rc::Rc::new(move |event, phase, hitbox, window, cx| {
+                browser
+                    .update(cx, |this, cx| {
+                        this.update_tab_drag(event, phase, hitbox, window, cx);
+                    })
+                    .ok();
+            });
         let tabs = tab_list(
             items,
             Box::new(cx.listener(|this, _, window, cx| {
                 cx.stop_propagation();
                 this.open_command_bar(window, cx);
             })),
-            Box::new(cx.listener(|this, dragged: &DraggedTab, _, cx| {
-                this.drop_tab_into_today(dragged.index, cx);
-            })),
+            self.drop_tab_into_today_handler(cx),
+            on_drag_move,
+            self.tab_drop_handler(cx),
+            self.tab_container_bounds_handler(cx),
             collapsed,
             palette,
         );
@@ -328,18 +368,14 @@ impl BrowserWindow {
     }
 }
 
-/// The raised surface under a sidebar revealed over the page, bordered on
-/// its page-facing side.
-fn revealed_surface(leading: bool, palette: ThemeColors) -> Div {
-    let surface = div()
+/// The floating raised surface under a sidebar revealed over the page.
+fn revealed_surface(palette: ThemeColors) -> Div {
+    div()
         .absolute()
         .inset_0()
-        .raised(palette)
+        .rounded(px(metrics::SIDEBAR_REVEAL_RADIUS))
+        .border_1()
         .border_color(rgba(palette.menu_border))
-        .elevated(Elevation::High);
-    if leading {
-        surface.border_r_1()
-    } else {
-        surface.border_l_1()
-    }
+        .raised(palette)
+        .elevated(Elevation::High)
 }

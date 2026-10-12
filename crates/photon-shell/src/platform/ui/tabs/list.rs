@@ -8,16 +8,22 @@ use super::super::controls::OwnsClicks;
 use super::super::icons::add_icon;
 use super::super::layout::{h_stack, v_stack};
 use super::super::sidebar::collapsed_tile;
+use super::super::tooltip::label_tooltip;
 use super::super::{ClickHandler, metrics, theme::ThemeColors};
-use super::{DraggedTab, TabDrop, TabItem, TabParts};
+use super::{
+    DraggedTab, TabDragAxis, TabDragMove, TabDrop, TabItem, TabParts, TabPrepaint,
+    insertion_marker, is_foreign_tab_drag,
+};
 
 /// The tabs, one row each: pinned tabs above a divider, then a row that
-/// opens a new tab and today's tabs. A tab dropped on the divider or that
-/// row joins today's tabs. Collapsed, each row is only its icon.
+/// opens a new tab and today's tabs. Collapsed, each row is only its icon.
 pub(in super::super) fn tab_list(
     tabs: Vec<TabItem>,
     on_new_tab: ClickHandler,
     on_drop_into_today: TabDrop,
+    on_drag_move: TabDragMove,
+    on_drop: TabDrop,
+    on_bounds: TabPrepaint,
     collapsed: bool,
     palette: ThemeColors,
 ) -> impl IntoElement {
@@ -30,6 +36,11 @@ pub(in super::super) fn tab_list(
     for (index, tab) in tabs.into_iter().enumerate() {
         let stops = TabParts::focus_stops(&tab.icon);
         let section = if tab.pinned { &mut pinned } else { &mut today };
+        let before = tab.insertion_before;
+        let after = tab.insertion_after;
+        if let Some(size) = before {
+            section.push(insertion_marker(TabDragAxis::Vertical, size, palette));
+        }
         section.push(layout_tab(
             TabParts::new(
                 tab,
@@ -38,9 +49,13 @@ pub(in super::super) fn tab_list(
                 focus_index,
                 spacing.icon_size,
                 palette,
+                TabDragAxis::Vertical,
             ),
             palette,
         ));
+        if let Some(size) = after {
+            section.push(insertion_marker(TabDragAxis::Vertical, size, palette));
+        }
         focus_index += stops;
     }
     let section = |id: &'static str, label: &'static str, rows: Vec<_>| {
@@ -52,9 +67,9 @@ pub(in super::super) fn tab_list(
             .gap(px(spacing.item_gap))
             .children(rows)
     };
-    let on_drop_into_today = std::rc::Rc::new(on_drop_into_today);
+    let on_drop_into_today = std::rc::Rc::clone(&on_drop_into_today);
     let divider = (!pinned.is_empty()).then(|| {
-        let on_drop = on_drop_into_today.clone();
+        let on_drop = std::rc::Rc::clone(&on_drop_into_today);
         div()
             .id("browser-tab-divider")
             .w_full()
@@ -74,6 +89,7 @@ pub(in super::super) fn tab_list(
             )
     });
     v_stack()
+        .id("sidebar-tab-list-drag-target")
         .w_full()
         .gap(px(spacing.item_gap))
         .tab_group()
@@ -91,6 +107,19 @@ pub(in super::super) fn tab_list(
                 }),
         )
         .child(section("browser-tab-list", "Browser tabs", today))
+        .on_mouse_move_all(move |event, phase, hitbox, window, cx| {
+            on_drag_move(event, phase, hitbox, window, cx);
+        })
+        .on_prepaint(move |prepaint, window, cx| {
+            on_bounds(prepaint.bounds, window, cx);
+        })
+        .on_drag_over::<DraggedTab>(move |style, _, _, _| {
+            style
+                .border_1()
+                .border_color(rgba(palette.soft_accent_border))
+        })
+        .can_drop(|value, window, _| is_foreign_tab_drag(value, window))
+        .on_drop(move |dragged: &DraggedTab, window, cx| on_drop(dragged, window, cx))
 }
 
 /// A full-width row: icon, title, and a close button on the active tab and
@@ -131,7 +160,11 @@ fn tab_row(parts: TabParts, palette: ThemeColors) -> AnyElement {
 /// A square holding only the tab's icon, for the collapsed sidebar. The
 /// tab's title stays its accessible name; middle-click still closes it.
 fn tab_tile(parts: TabParts, palette: ThemeColors) -> AnyElement {
-    let tile = collapsed_tile(parts.tab).justify_center();
+    let tooltip = label_tooltip(parts.label.clone(), palette);
+    let tile = collapsed_tile(parts.tab)
+        .relative()
+        .justify_center()
+        .tooltip(tooltip);
     let tile = if parts.active {
         tile.bg(rgba(palette.selected_surface))
     } else {
@@ -164,7 +197,9 @@ fn new_tab_row(
             metrics::SidebarSpacing::new(collapsed).icon_size,
         ));
     if collapsed {
-        return collapsed_tile(row).justify_center();
+        return collapsed_tile(row)
+            .justify_center()
+            .tooltip(label_tooltip("New tab", palette));
     }
     row.w_full()
         .gap(px(metrics::SIDEBAR_TAB_ICON_GAP))

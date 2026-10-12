@@ -7,7 +7,7 @@ use photon_core::{BrowserCommand, DockRegion};
 use super::super::button::{menu_button, toolbar_button};
 use super::super::icons::{back_icon, close_icon, forward_icon, reload_icon};
 use super::super::layout::{h_stack, v_stack};
-use super::super::tabs::tab_strip;
+use super::super::tabs::{TabDragMove, tab_strip};
 use super::super::titlebar::{titlebar, window_drag_area};
 use super::super::toolbar::toolbar_row;
 use super::super::workspace_layout::{ComponentId, WorkspaceLayout};
@@ -113,7 +113,23 @@ impl BrowserWindow {
     ) -> AnyElement {
         if component == ComponentId::TabStrip {
             let palette = self.palette(window, cx);
-            let strip = tab_strip(self.tab_items(cx), self.new_tab_handler(cx), palette);
+            let browser = cx.entity().downgrade();
+            let on_drag_move: TabDragMove =
+                std::rc::Rc::new(move |event, phase, hitbox, window, cx| {
+                    browser
+                        .update(cx, |this, cx| {
+                            this.update_tab_drag(event, phase, hitbox, window, cx);
+                        })
+                        .ok();
+                });
+            let strip = tab_strip(
+                self.tab_items(cx),
+                self.new_tab_handler(cx),
+                on_drag_move,
+                self.tab_drop_handler(cx),
+                self.tab_container_bounds_handler(cx),
+                palette,
+            );
             return if region == DockRegion::Top {
                 self.with_browser_menu(titlebar(strip, window), cx)
                     .into_any_element()

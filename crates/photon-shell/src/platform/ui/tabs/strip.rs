@@ -7,15 +7,21 @@ use super::super::controls::OwnsClicks;
 use super::super::icons::add_icon;
 use super::super::layout::h_stack;
 use super::super::{ClickHandler, metrics, theme::ThemeColors};
-use super::{TabItem, TabParts};
+use super::{
+    DraggedTab, TabDragAxis, TabDragMove, TabDrop, TabItem, TabParts, TabPrepaint,
+    insertion_marker, is_foreign_tab_drag,
+};
 
 /// The tabs side by side, then a button that opens a new tab.
 pub(in super::super) fn tab_strip(
     tabs: Vec<TabItem>,
     on_new_tab: ClickHandler,
+    on_drag_move: TabDragMove,
+    on_drop: TabDrop,
+    on_bounds: TabPrepaint,
     palette: ThemeColors,
 ) -> impl IntoElement {
-    tab_strip_content(tabs, on_new_tab, palette).w_full()
+    tab_strip_content(tabs, on_new_tab, on_drag_move, on_drop, on_bounds, palette).w_full()
 }
 
 /// The intrinsic-width tab controls, without the full-width titlebar row.
@@ -24,6 +30,9 @@ pub(in super::super) fn tab_strip(
 pub(in super::super) fn tab_strip_content(
     tabs: Vec<TabItem>,
     on_new_tab: ClickHandler,
+    on_drag_move: TabDragMove,
+    on_drop: TabDrop,
+    on_bounds: TabPrepaint,
     palette: ThemeColors,
 ) -> gpui::Div {
     let tab_count = tabs.len();
@@ -39,6 +48,11 @@ pub(in super::super) fn tab_strip_content(
         .overflow_x_scroll();
     for (index, tab) in tabs.into_iter().enumerate() {
         let stops = TabParts::focus_stops(&tab.icon);
+        let before = tab.insertion_before;
+        let after = tab.insertion_after;
+        if let Some(size) = before {
+            strip = strip.child(insertion_marker(TabDragAxis::Horizontal, size, palette));
+        }
         strip = strip.child(strip_tab(
             TabParts::new(
                 tab,
@@ -47,11 +61,29 @@ pub(in super::super) fn tab_strip_content(
                 focus_index,
                 metrics::TAB_FAVICON_SIZE,
                 palette,
+                TabDragAxis::Horizontal,
             ),
             palette,
         ));
+        if let Some(size) = after {
+            strip = strip.child(insertion_marker(TabDragAxis::Horizontal, size, palette));
+        }
         focus_index += stops;
     }
+    let strip = strip
+        .on_prepaint(move |prepaint, window, cx| {
+            on_bounds(prepaint.bounds, window, cx);
+        })
+        .on_mouse_move_all(move |event, phase, hitbox, window, cx| {
+            on_drag_move(event, phase, hitbox, window, cx);
+        })
+        .on_drag_over::<DraggedTab>(move |style, _, _, _| {
+            style
+                .border_1()
+                .border_color(rgba(palette.soft_accent_border))
+        })
+        .can_drop(|value, window, _| is_foreign_tab_drag(value, window))
+        .on_drop(move |dragged: &DraggedTab, window, cx| on_drop(dragged, window, cx));
     h_stack()
         .items_center()
         .gap(px(metrics::TAB_STRIP_GAP))
