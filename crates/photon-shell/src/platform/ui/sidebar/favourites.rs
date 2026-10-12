@@ -79,6 +79,7 @@ pub(in super::super) fn favourites_empty_state(
     on_drop: TabDrop,
     on_prepaint: TabPrepaint,
     collapsed: bool,
+    show_guidance: bool,
 ) -> impl IntoElement {
     let dismiss = icon_button(
         "sidebar-favourites-hint-dismiss",
@@ -105,6 +106,11 @@ pub(in super::super) fn favourites_empty_state(
                 .items_center()
                 .gap(px(metrics::SIDEBAR_FAVOURITES_HINT_GAP))
                 .p(px(metrics::SIDEBAR_FAVOURITES_HINT_PADDING))
+        })
+        .when(!collapsed && !show_guidance, |hint| {
+            hint.h(px(metrics::SIDEBAR_FAVOURITES_HINT_BADGE_SIZE
+                + 2.0 * metrics::SIDEBAR_FAVOURITES_HINT_PADDING))
+                .justify_center()
         })
         .rounded(px(metrics::SIDEBAR_ITEM_RADIUS))
         .border_1()
@@ -141,7 +147,7 @@ pub(in super::super) fn favourites_empty_state(
                     )),
             )
         })
-        .when(!collapsed, |hint| {
+        .when(!collapsed && show_guidance, |hint| {
             hint.child(
                 div()
                     .text_size(px(metrics::SIDEBAR_FAVOURITES_HINT_TITLE_SIZE))
@@ -151,7 +157,7 @@ pub(in super::super) fn favourites_empty_state(
                     .child("Drag to add favourites"),
             )
         })
-        .when(!collapsed, |hint| {
+        .when(!collapsed && show_guidance, |hint| {
             hint.child(
                 div()
                     .text_size(px(metrics::SIDEBAR_FAVOURITES_HINT_BODY_SIZE))
@@ -160,7 +166,7 @@ pub(in super::super) fn favourites_empty_state(
                     .child("Or right-click a tab to add it."),
             )
         })
-        .when(!collapsed, |hint| {
+        .when(!collapsed && show_guidance, |hint| {
             hint.child(
                 div()
                     .absolute()

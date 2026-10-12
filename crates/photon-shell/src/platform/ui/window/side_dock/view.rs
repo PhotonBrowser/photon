@@ -283,6 +283,7 @@ impl BrowserWindow {
                 self.favourite_drop_handler(cx),
                 self.favourite_bounds_handler(cx),
                 collapsed,
+                should_show_favourites_guidance(hint_dismissed),
             )
             .into_any_element(),
         )
@@ -386,15 +387,25 @@ fn should_show_empty_favourites_hint(
     !collapsed && (!hint_dismissed || dragging_over_favourites)
 }
 
+fn should_show_favourites_guidance(hint_dismissed: bool) -> bool {
+    !hint_dismissed
+}
+
 #[cfg(test)]
 mod tests {
-    use super::should_show_empty_favourites_hint;
+    use super::{should_show_empty_favourites_hint, should_show_favourites_guidance};
 
     #[test]
-    fn dismissed_hint_only_returns_during_a_favourites_drag_hover() {
+    fn dismissed_hint_returns_as_a_compact_drop_target_during_a_favourites_drag_hover() {
         assert!(!should_show_empty_favourites_hint(true, false, false));
         assert!(should_show_empty_favourites_hint(true, false, true));
         assert!(should_show_empty_favourites_hint(false, false, false));
         assert!(!should_show_empty_favourites_hint(false, true, false));
+    }
+
+    #[test]
+    fn drag_hover_does_not_restore_dismissed_favourites_guidance() {
+        assert!(!should_show_favourites_guidance(true));
+        assert!(should_show_favourites_guidance(false));
     }
 }
