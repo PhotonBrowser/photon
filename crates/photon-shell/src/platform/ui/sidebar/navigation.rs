@@ -1,12 +1,10 @@
-//! The side dock's titlebar: the toggle and navigation controls in a row
-//! beside the window controls, or, collapsed to icons, the toggle beneath
-//! the stacked window controls.
+//! The side dock's navigation controls: in a row beside the window controls,
+//! or, collapsed to icons, the toggle beneath the stacked window controls.
 
 use gpui::{AnyElement, div, prelude::*, px};
 
 use super::super::layout::{h_stack, v_stack};
 use super::super::metrics;
-use super::super::titlebar::window_drag_area;
 
 pub(in super::super) fn navigation_bar(
     width: f32,
@@ -33,7 +31,7 @@ pub(in super::super) fn navigation_bar(
     } else {
         contents.pl(px(metrics::SIDEBAR_PADDING))
     };
-    window_drag_area(contents)
+    contents
         .child(toggle.unwrap_or_else(|| div().into_any_element()))
         .child(div().flex_1())
         .child(
@@ -55,14 +53,12 @@ pub(in super::super) fn navigation_column(
     } else {
         metrics::SIDEBAR_PADDING
     };
-    window_drag_area(
-        v_stack()
-            .w(px(metrics::SIDEBAR_COLLAPSED_WIDTH))
-            .flex_shrink_0()
-            .items_center()
-            .pt(px(controls_inset))
-            .pb(px(metrics::SIDEBAR_COLLAPSED_GAP))
-            .tab_group(),
-    )
-    .children(toggle)
+    v_stack()
+        .w(px(metrics::SIDEBAR_COLLAPSED_WIDTH))
+        .flex_shrink_0()
+        .items_center()
+        .pt(px(controls_inset))
+        .pb(px(metrics::SIDEBAR_COLLAPSED_GAP))
+        .tab_group()
+        .children(toggle)
 }

@@ -207,8 +207,8 @@ pub(super) const SETTINGS_SIDEBAR_ITEM_HEIGHT: f32 = 30.0;
 pub(super) const SETTINGS_SIDEBAR_ICON_SIZE: f32 = 14.0;
 
 // The sidebar: navigation, address field, favourites, tabs and its footer.
-/// The grab area on the sidebar's edge for resizing it.
-pub(super) const SIDEBAR_RESIZE_HANDLE_WIDTH: f32 = 8.0;
+/// Width of the invisible hit area centred on the sidebar's resize edge.
+pub(super) const SIDEBAR_RESIZE_HANDLE_WIDTH: f32 = 20.0;
 /// The sidebar collapsed to a column of icons.
 pub(super) const SIDEBAR_COLLAPSED_WIDTH: f32 = photon_core::SIDEBAR_COLLAPSED_WIDTH as f32;
 /// Space between the collapsed sidebar's edges and its icons.

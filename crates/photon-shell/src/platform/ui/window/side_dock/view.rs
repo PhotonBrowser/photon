@@ -17,6 +17,7 @@ use super::super::super::sidebar::{
     navigation_bar, navigation_column, sidebar,
 };
 use super::super::super::tabs::{DraggedTab, TabDrop, tab_list};
+use super::super::super::titlebar::window_drag_area;
 use super::super::super::workspace_layout::{ComponentId, WorkspaceLayout};
 use super::super::super::{ClickHandler, metrics, theme::ThemeColors};
 use super::super::BrowserWindow;
@@ -90,15 +91,17 @@ impl BrowserWindow {
 
         let chrome_shown = sidebar.chrome_shown();
         let offset = px((out - 1.0) * width);
-        let mut panel = div()
-            .id("sidebar-panel")
-            .absolute()
-            .top(px(layout.top_extent() * chrome_shown))
-            .bottom(px(layout.bottom_extent() * chrome_shown))
-            .w(px(width))
-            .overflow_hidden()
-            .occlude()
-            .on_scroll_wheel(cx.listener(|this, event, _, cx| this.swipe_spaces(event, cx)));
+        let mut panel = window_drag_area(
+            div()
+                .id("sidebar-panel")
+                .absolute()
+                .top(px(layout.top_extent() * chrome_shown))
+                .bottom(px(layout.bottom_extent() * chrome_shown))
+                .w(px(width))
+                .overflow_hidden()
+                .occlude()
+                .on_scroll_wheel(cx.listener(|this, event, _, cx| this.swipe_spaces(event, cx))),
+        );
         panel = if leading {
             panel.left(offset)
         } else {
