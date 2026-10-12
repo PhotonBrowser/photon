@@ -285,6 +285,7 @@ impl BrowserWindow {
                 self.favourite_bounds_handler(cx),
                 collapsed,
                 should_show_favourites_guidance(hint_dismissed),
+                should_show_favourites_drag_label(hint_dismissed, dragging_over_favourites),
             )
             .into_any_element(),
         )
@@ -392,9 +393,16 @@ fn should_show_favourites_guidance(hint_dismissed: bool) -> bool {
     !hint_dismissed
 }
 
+fn should_show_favourites_drag_label(hint_dismissed: bool, dragging_over_favourites: bool) -> bool {
+    !hint_dismissed || dragging_over_favourites
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{should_show_empty_favourites_hint, should_show_favourites_guidance};
+    use super::{
+        should_show_empty_favourites_hint, should_show_favourites_drag_label,
+        should_show_favourites_guidance,
+    };
 
     #[test]
     fn dismissed_hint_returns_as_a_compact_drop_target_during_a_favourites_drag_hover() {
@@ -405,8 +413,11 @@ mod tests {
     }
 
     #[test]
-    fn drag_hover_does_not_restore_dismissed_favourites_guidance() {
+    fn drag_hover_restores_the_favourites_label_without_restoring_dismissed_guidance() {
         assert!(!should_show_favourites_guidance(true));
         assert!(should_show_favourites_guidance(false));
+        assert!(should_show_favourites_drag_label(true, true));
+        assert!(!should_show_favourites_drag_label(true, false));
+        assert!(should_show_favourites_drag_label(false, false));
     }
 }

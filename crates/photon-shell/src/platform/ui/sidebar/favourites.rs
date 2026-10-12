@@ -81,6 +81,7 @@ pub(in super::super) fn favourites_empty_state(
     on_prepaint: TabPrepaint,
     collapsed: bool,
     show_guidance: bool,
+    show_drag_label: bool,
 ) -> impl IntoElement {
     let dismiss = icon_button(
         "sidebar-favourites-hint-dismiss",
@@ -108,7 +109,7 @@ pub(in super::super) fn favourites_empty_state(
                 .gap(px(metrics::SIDEBAR_FAVOURITES_HINT_GAP))
                 .p(px(metrics::SIDEBAR_FAVOURITES_HINT_PADDING))
         })
-        .when(!collapsed && !show_guidance, |hint| {
+        .when(!collapsed && !show_drag_label, |hint| {
             hint.h(px(metrics::SIDEBAR_FAVOURITES_HINT_BADGE_SIZE
                 + 2.0 * metrics::SIDEBAR_FAVOURITES_HINT_PADDING))
                 .justify_center()
@@ -148,7 +149,7 @@ pub(in super::super) fn favourites_empty_state(
                     )),
             )
         })
-        .when(!collapsed && show_guidance, |hint| {
+        .when(!collapsed && show_drag_label, |hint| {
             hint.child(
                 div()
                     .text_size(px(metrics::SIDEBAR_FAVOURITES_HINT_TITLE_SIZE))
