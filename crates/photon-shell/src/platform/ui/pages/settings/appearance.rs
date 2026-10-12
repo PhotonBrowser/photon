@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use super::super::super::button::{ButtonKind, ButtonSize, button};
 use super::super::super::color_picker::color_picker;
-use super::super::super::controls::{Choice, choices};
+use super::super::super::controls::{Choice, choices, intensity_slider};
 use super::super::super::dropdown::dropdown;
 use super::super::super::layout::{form_field, h_stack, v_stack};
 use super::super::super::metrics;
@@ -15,7 +15,6 @@ use super::super::super::theme::ThemeColors;
 use super::super::super::workspace_layout::WorkspaceLayout;
 use super::super::ClickHandler;
 use super::super::change;
-use super::super::controls::switch_row;
 use super::super::layout::{label, secondary_text};
 
 pub(super) fn settings(
@@ -336,15 +335,26 @@ pub(super) fn settings(
                     palette,
                 )),
         )
-        .child(switch_row(
-            "settings-background-noise",
-            "Film grain",
-            current.background_noise,
+        .child(form_field(
+            "Grain",
+            intensity_slider(
+                "settings-background-noise",
+                "Grain intensity",
+                noise_intensity_percent(current.background_noise_intensity),
+                NOISE_SLIDER_PERCENT_MAX,
+                NOISE_SLIDER_PERCENT_STEP,
+                palette,
+                |intensity, cx| {
+                    Settings::update(cx, |settings| {
+                        settings.background_noise_intensity =
+                            noise_intensity_from_percent(intensity);
+                    });
+                },
+            ),
             palette,
-            change(|settings| settings.background_noise = !settings.background_noise),
         ))
         .child(secondary_text(
-            "Add subtle, static grain to the window background.",
+            "Adjust static grain on the window background.",
             palette,
         ))
         .child(
@@ -360,4 +370,23 @@ pub(super) fn settings(
                 .children(presets)
                 .children(remaining_preset_note),
         )
+}
+
+const NOISE_SLIDER_PERCENT_MAX: u8 = 100;
+const NOISE_SLIDER_PERCENT_STEP: u8 =
+    NOISE_SLIDER_PERCENT_MAX / photon_core::BACKGROUND_NOISE_INTENSITY_MAX;
+
+/// Shows the stored 0–20 strength on the settings slider's 0–100% scale.
+fn noise_intensity_percent(intensity: u8) -> u8 {
+    (u16::from(intensity.min(photon_core::BACKGROUND_NOISE_INTENSITY_MAX))
+        * u16::from(NOISE_SLIDER_PERCENT_MAX)
+        / u16::from(photon_core::BACKGROUND_NOISE_INTENSITY_MAX)) as u8
+}
+
+/// Maps the slider's displayed percentage back to the stored 0–20 strength.
+fn noise_intensity_from_percent(percent: u8) -> u8 {
+    ((u16::from(percent.min(NOISE_SLIDER_PERCENT_MAX))
+        * u16::from(photon_core::BACKGROUND_NOISE_INTENSITY_MAX)
+        + u16::from(NOISE_SLIDER_PERCENT_MAX / 2))
+        / u16::from(NOISE_SLIDER_PERCENT_MAX)) as u8
 }

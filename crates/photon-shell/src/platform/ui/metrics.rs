@@ -39,13 +39,19 @@ pub(super) const PINNED_TAB_WIDTH: f32 = 36.0;
 pub(super) const TAB_STRIP_GAP: f32 = 2.0;
 pub(super) const TAB_STRIP_INSET: f32 = 4.0;
 pub(super) const TAB_CLOSE_GAP: f32 = 6.0;
+/// How far a pointer must pass a tab container's detachable edge before it opens a window.
+pub(super) const TAB_DETACH_DISTANCE: f32 = 40.0;
+/// Pointer travel before a press becomes a tab drag.
+pub(super) const TAB_DRAG_THRESHOLD: f32 = 4.0;
+pub(super) const TAB_DRAG_SOURCE_OPACITY: f32 = 0.28;
+pub(super) const TAB_DRAG_PREVIEW_OPACITY: f32 = 0.96;
+pub(super) const TAB_REORDER_DURATION_MS: u64 = 150;
+pub(super) const TAB_DROP_SETTLE_DURATION_MS: u64 = 120;
 pub(super) const TAB_MAX_WIDTH: f32 = 220.0;
 pub(super) const TAB_HORIZONTAL_PADDING: f32 = 10.0;
 pub(super) const TAB_CLOSE_BUTTON_SIZE: f32 = 22.0;
 pub(super) const TAB_ICON_SIZE: f32 = 12.0;
 pub(super) const TAB_FAVICON_SIZE: f32 = 16.0;
-/// A dragged tab's preview is slightly see-through, showing where it lands.
-pub(super) const TAB_DRAG_PREVIEW_OPACITY: f32 = 0.9;
 pub(super) const TAB_AUDIO_BUTTON_SIZE: f32 = 22.0;
 pub(super) const TAB_AUDIO_ICON_SIZE: f32 = TAB_FAVICON_SIZE;
 pub(super) const TAB_FONT_SIZE: f32 = 12.0;
@@ -114,6 +120,11 @@ pub(super) const SMALL_BUTTON_HEIGHT: f32 = 20.0;
 pub(super) const SMALL_BUTTON_RADIUS: f32 = SMALL_BUTTON_HEIGHT / 2.0;
 pub(super) const SMALL_BUTTON_HORIZONTAL_PADDING: f32 = 9.0;
 pub(super) const SMALL_BUTTON_FONT_SIZE: f32 = 12.0;
+
+pub(super) const TOOLTIP_FONT_SIZE: f32 = 12.0;
+pub(super) const TOOLTIP_HORIZONTAL_PADDING: f32 = 10.0;
+pub(super) const TOOLTIP_VERTICAL_PADDING: f32 = 6.0;
+pub(super) const TOOLTIP_RADIUS: f32 = 7.0;
 
 pub(super) const MODAL_WIDTH: f32 = 400.0;
 pub(super) const MODAL_PADDING: f32 = 18.0;
@@ -201,14 +212,18 @@ pub(super) const SEGMENT_HORIZONTAL_PADDING: f32 = 12.0;
 pub(super) const SEGMENT_RADIUS: f32 = 5.0;
 pub(super) const SEGMENT_GAP: f32 = 2.0;
 pub(super) const SEGMENT_INSET: f32 = 2.0;
+pub(super) const INTENSITY_SLIDER_HEIGHT: f32 = 26.0;
+pub(super) const INTENSITY_SLIDER_THUMB_SIZE: f32 = 14.0;
+pub(super) const INTENSITY_SLIDER_TRACK_HEIGHT: f32 = 4.0;
+pub(super) const INTENSITY_SLIDER_VALUE_WIDTH: f32 = 40.0;
 pub(super) const SETTINGS_ROW_HEIGHT: f32 = 34.0;
 pub(super) const SETTINGS_SIDEBAR_WIDTH: f32 = 200.0;
 pub(super) const SETTINGS_SIDEBAR_ITEM_HEIGHT: f32 = 30.0;
 pub(super) const SETTINGS_SIDEBAR_ICON_SIZE: f32 = 14.0;
 
 // The sidebar: navigation, address field, favourites, tabs and its footer.
-/// Width of the invisible hit area centred on the sidebar's resize edge.
-pub(super) const SIDEBAR_RESIZE_HANDLE_WIDTH: f32 = 20.0;
+/// Width of the hit area centred on the sidebar's resize edge.
+pub(super) const SIDEBAR_RESIZE_HANDLE_WIDTH: f32 = 36.0;
 /// The sidebar collapsed to a column of icons.
 pub(super) const SIDEBAR_COLLAPSED_WIDTH: f32 = photon_core::SIDEBAR_COLLAPSED_WIDTH as f32;
 /// Space between the collapsed sidebar's edges and its icons.
@@ -294,6 +309,9 @@ pub(super) const SIDEBAR_FAVOURITES_HINT_DASH_GAP: f32 = 2.0;
 pub(super) const SIDEBAR_FOOTER_HEIGHT: f32 = 40.0;
 pub(super) const SIDEBAR_SEPARATOR_MARGIN: f32 = 8.0;
 pub(super) const SIDEBAR_SEPARATOR_INSET: f32 = 10.0;
+/// Gap around a sidebar temporarily revealed over the page.
+pub(super) const SIDEBAR_REVEAL_INSET: f32 = 8.0;
+pub(super) const SIDEBAR_REVEAL_RADIUS: f32 = 16.0;
 /// The spaces in the sidebar's footer: a dot each, larger while shown.
 pub(super) const SPACE_DOT_SIZE: f32 = 7.0;
 pub(super) const SPACE_DOT_ACTIVE_SIZE: f32 = 10.0;

@@ -27,6 +27,7 @@ mod tabs;
 pub(super) mod theme;
 mod titlebar;
 mod toolbar;
+mod tooltip;
 mod webview;
 mod window;
 mod workspace_layout;

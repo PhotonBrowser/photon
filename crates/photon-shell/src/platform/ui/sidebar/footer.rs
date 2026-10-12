@@ -9,6 +9,7 @@ use super::super::controls::FocusRing;
 use super::super::controls::OwnsClicks;
 use super::super::icons::{add_icon, settings_icon};
 use super::super::layout::{h_stack, v_stack};
+use super::super::tooltip::label_tooltip;
 use super::super::{ClickHandler, MouseDownHandler, metrics, theme::ThemeColors};
 
 pub(in super::super) struct FooterActions {
@@ -34,7 +35,8 @@ pub(in super::super) fn footer(
     collapsed: bool,
     palette: ThemeColors,
 ) -> gpui::AnyElement {
-    let menu = menu_button("sidebar-menu", 2, palette, actions.menu);
+    let menu = menu_button("sidebar-menu", 2, palette, actions.menu)
+        .tooltip(label_tooltip("Open browser menu", palette));
     if collapsed {
         let spacing = metrics::SidebarSpacing::new(collapsed);
         let menu = super::collapsed_tile(menu);
@@ -103,6 +105,7 @@ fn space_switcher(
 
 /// A dot of the space's colour, larger and ringed while it is shown.
 fn space_dot(index: usize, space: SpaceDot, palette: ThemeColors) -> impl IntoElement {
+    let tooltip = label_tooltip(space.name.clone(), palette);
     let size = if space.active {
         metrics::SPACE_DOT_ACTIVE_SIZE
     } else {
@@ -123,6 +126,7 @@ fn space_dot(index: usize, space: SpaceDot, palette: ThemeColors) -> impl IntoEl
         .owns_clicks()
         .on_mouse_down(MouseButton::Right, space.on_context_menu)
         .on_click(space.on_select)
+        .tooltip(tooltip)
         .child(
             div()
                 .size(px(size))

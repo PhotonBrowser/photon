@@ -34,6 +34,7 @@ impl Omnibox {
                 themed_text_input(text_input("titlebar-omnibox-input"), palette)
                     .state(self.input.downgrade())
                     .track_focus(&input_focus)
+                    .aria_label("Search or enter address")
                     .placeholder("Search or enter address")
                     .placeholder_color(rgb(palette.text_secondary))
                     .flex_1()

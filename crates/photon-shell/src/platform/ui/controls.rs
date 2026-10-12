@@ -4,15 +4,26 @@
 //! is in `dropdown`.
 
 use gpui::{
-    App, ElementId, MouseButton, Role, SharedString, Toggled, Window, div, prelude::*, px, rgb,
-    rgb_to_hsla, rgba,
+    AccessibleAction, App, Bounds, Context, DispatchPhase, DragMoveEvent, ElementId, FontWeight,
+    KeyDownEvent, MouseButton, Pixels, Render, Role, SharedString, Toggled, Window, div,
+    prelude::*, px, rgb, rgb_to_hsla, rgba,
 };
 use gpui_elements::editable_text::EditableTextElement;
 
 use super::icons::check_icon;
+use super::layout::v_stack;
 use super::layout::{ControlSurface, Elevated, Elevation, h_stack};
-use super::motion::{AnimateIn, Edge, Entrance, Speed};
+use super::motion::{AnimateIn, Curve, Edge, Entrance, Speed};
 use super::{ClickHandler, metrics, theme::ThemeColors};
+use std::rc::Rc;
+
+struct IntensitySliderDrag;
+
+impl Render for IntensitySliderDrag {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div().size(px(1.0)).opacity(0.0)
+    }
+}
 
 /// One option in [`choices`].
 pub(super) struct Choice {
@@ -101,6 +112,170 @@ pub(super) fn choices(
         .p(px(metrics::SEGMENT_INSET))
         .control_surface(palette)
         .children(options)
+}
+
+pub(super) fn intensity_slider(
+    id: &'static str,
+    label: &'static str,
+    value: u8,
+    max_value: u8,
+    value_step: u8,
+    palette: ThemeColors,
+    on_change: impl Fn(u8, &mut App) + 'static,
+) -> IntensitySlider {
+    IntensitySlider {
+        id,
+        label,
+        value,
+        max_value,
+        value_step,
+        palette,
+        on_change: Rc::new(on_change),
+    }
+}
+
+#[derive(IntoElement)]
+pub(super) struct IntensitySlider {
+    id: &'static str,
+    label: &'static str,
+    value: u8,
+    max_value: u8,
+    value_step: u8,
+    palette: ThemeColors,
+    on_change: Rc<dyn Fn(u8, &mut App)>,
+}
+
+impl RenderOnce for IntensitySlider {
+    fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
+        let Self {
+            id,
+            label,
+            value,
+            max_value,
+            value_step,
+            palette,
+            on_change,
+        } = self;
+        let max_value = max_value.max(1);
+        let value = value.min(max_value);
+        let fraction = f32::from(value) / f32::from(max_value);
+        let click_change = on_change.clone();
+        let drag_change = on_change.clone();
+        let key_change = on_change.clone();
+        let increment_change = on_change.clone();
+        let decrement_change = on_change.clone();
+        let thumb = div()
+            .size(px(metrics::INTENSITY_SLIDER_THUMB_SIZE))
+            .flex_shrink_0()
+            .rounded_full()
+            .bg(rgb(palette.chosen))
+            .elevated(Elevation::Low);
+        let active_track = div()
+            .h(px(metrics::INTENSITY_SLIDER_TRACK_HEIGHT))
+            .flex_grow(fraction)
+            .rounded_full()
+            .bg(rgb(palette.chosen));
+        let remaining_track = div()
+            .h(px(metrics::INTENSITY_SLIDER_TRACK_HEIGHT))
+            .flex_grow(1.0 - fraction)
+            .rounded_full()
+            .bg(rgba(palette.control_border));
+        let track = div()
+            .id(id)
+            .role(Role::Slider)
+            .aria_label(label)
+            .aria_value(format!("{value}%"))
+            .aria_numeric_value(f64::from(value))
+            .aria_min_numeric_value(0.0)
+            .aria_max_numeric_value(f64::from(max_value))
+            .aria_numeric_value_step(f64::from(value_step.max(1)))
+            .tab_index(0)
+            .focus_ring(palette)
+            .cursor_col_resize()
+            .flex_1()
+            .h(px(metrics::INTENSITY_SLIDER_HEIGHT))
+            .px(px(metrics::INTENSITY_SLIDER_THUMB_SIZE / 2.0))
+            .on_mouse_down_all(move |event, phase, hitbox, window, cx| {
+                if phase == DispatchPhase::Bubble
+                    && event.button == MouseButton::Left
+                    && hitbox.is_hovered(window)
+                {
+                    click_change(
+                        slider_value_at(event.position.x, hitbox.bounds, max_value),
+                        cx,
+                    );
+                }
+            })
+            .on_drag(IntensitySliderDrag, |_, _, _, cx| {
+                cx.new(|_| IntensitySliderDrag)
+            })
+            .on_drag_move(move |event: &DragMoveEvent<IntensitySliderDrag>, _, cx| {
+                drag_change(
+                    slider_value_at(event.event.position.x, event.bounds, max_value),
+                    cx,
+                );
+            })
+            .on_key_down(move |event: &KeyDownEvent, _, cx| {
+                if event.keystroke.modifiers.modified() {
+                    return;
+                }
+                let next = match event.keystroke.key.as_str() {
+                    "left" | "down" => Some(value.saturating_sub(value_step.max(1))),
+                    "right" | "up" => Some(value.saturating_add(value_step.max(1)).min(max_value)),
+                    "home" => Some(0),
+                    "end" => Some(max_value),
+                    _ => None,
+                };
+                if let Some(next) = next {
+                    cx.stop_propagation();
+                    key_change(next, cx);
+                }
+            })
+            .on_a11y_action(AccessibleAction::Increment, move |_, _, cx| {
+                increment_change(value.saturating_add(value_step.max(1)).min(max_value), cx);
+            })
+            .on_a11y_action(AccessibleAction::Decrement, move |_, _, cx| {
+                decrement_change(value.saturating_sub(value_step.max(1)), cx);
+            })
+            .child(
+                gpui::div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .w_full()
+                    .h(px(metrics::INTENSITY_SLIDER_THUMB_SIZE))
+                    .child(active_track)
+                    .child(thumb)
+                    .child(remaining_track),
+            );
+
+        v_stack().gap(px(metrics::FORM_FIELD_GAP)).child(
+            gpui::div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(metrics::MENU_ITEM_GAP))
+                .child(track)
+                .child(
+                    gpui::div()
+                        .w(px(metrics::INTENSITY_SLIDER_VALUE_WIDTH))
+                        .text_size(px(metrics::INTERNAL_PAGE_BODY_SIZE))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(rgb(palette.text_secondary))
+                        .child(format!("{value}%")),
+                ),
+        )
+    }
+}
+
+fn slider_value_at(position: Pixels, bounds: Bounds<Pixels>, max_value: u8) -> u8 {
+    let width = f32::from(bounds.size.width) - metrics::INTENSITY_SLIDER_THUMB_SIZE;
+    let offset = f32::from(position)
+        - f32::from(bounds.origin.x)
+        - metrics::INTENSITY_SLIDER_THUMB_SIZE / 2.0;
+    (offset / width.max(1.0) * f32::from(max_value))
+        .round()
+        .clamp(0.0, f32::from(max_value)) as u8
 }
 
 /// One colour in [`swatches`].
@@ -192,6 +367,7 @@ impl RenderOnce for Switch {
                     (ElementId::from(id), changes.to_string()),
                     Entrance::new()
                         .slide_from(if on { Edge::Left } else { Edge::Right }, travel)
+                        .curve(Curve::BOUNCY)
                         .speed(Speed::Quick),
                     &super::settings::Settings::get(cx).animations,
                 )

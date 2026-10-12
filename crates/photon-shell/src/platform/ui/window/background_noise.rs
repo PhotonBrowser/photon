@@ -5,14 +5,17 @@ use image::{Frame, Rgba, RgbaImage};
 use std::sync::{Arc, OnceLock};
 
 const TEXTURE_SIZE: u32 = 1_024;
-const GRAIN_ALPHA: u8 = 14;
+const MAX_NOISE_OPACITY: f32 = 0.16;
 
-pub(super) fn overlay() -> impl IntoElement {
+pub(super) fn overlay(intensity: u8) -> impl IntoElement {
+    let opacity = f32::from(intensity.min(photon_core::BACKGROUND_NOISE_INTENSITY_MAX))
+        / f32::from(photon_core::BACKGROUND_NOISE_INTENSITY_MAX);
     img(ImageSource::Render(texture()))
         .absolute()
         .inset_0()
         .size_full()
         .object_fit(ObjectFit::Cover)
+        .opacity(opacity * MAX_NOISE_OPACITY)
 }
 
 fn texture() -> Arc<RenderImage> {
@@ -29,7 +32,7 @@ fn texture() -> Arc<RenderImage> {
                 value = value.wrapping_mul(0x7feb_352d);
                 value ^= value >> 15;
                 let grain = (value >> 24) as u8;
-                Rgba([grain, grain, grain, GRAIN_ALPHA])
+                Rgba([grain, grain, grain, u8::MAX])
             });
             Arc::new(RenderImage::new([Frame::new(pixels)]))
         })

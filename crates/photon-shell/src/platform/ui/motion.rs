@@ -100,7 +100,7 @@ impl Curve {
     /// A firm spring that settles quickly with almost no bounce.
     pub(super) const SNAPPY: Self = Self::Spring(SpringConfig::new(420.0, 32.0, 1.0));
     /// A softer spring with a visible bounce.
-    pub(super) const BOUNCY: Self = Self::Spring(SpringConfig::new(300.0, 14.0, 1.0));
+    pub(super) const BOUNCY: Self = Self::Spring(BOUNCY_SPRING);
 
     fn motion(self, duration: Duration) -> Motion {
         let motion = Motion::new(duration);
@@ -113,6 +113,8 @@ impl Curve {
         }
     }
 }
+
+pub(super) const BOUNCY_SPRING: SpringConfig = SpringConfig::new(300.0, 14.0, 1.0);
 
 /// The edge an element slides in from.
 #[derive(Clone, Copy, Debug)]
