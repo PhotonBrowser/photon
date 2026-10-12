@@ -1088,7 +1088,7 @@ impl BrowserWindow {
                         .or_else(|| browser.tab_index_by_id(dragged.id));
                     if let Some(index) = index {
                         browser.tab_drag_layout = None;
-                        browser.remove_tab_for_transfer(index, source_window, cx);
+                        browser.remove_tab_for_transfer(index, true, source_window, cx);
                     }
                 })
                 .ok();
@@ -1315,12 +1315,13 @@ impl BrowserWindow {
         ) {
             return;
         }
-        self.remove_tab_for_transfer(index, window, cx);
+        self.remove_tab_for_transfer(index, false, window, cx);
     }
 
     fn remove_tab_for_transfer(
         &mut self,
         index: usize,
+        close_empty_window: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -1356,7 +1357,10 @@ impl BrowserWindow {
             self.omnibox.update(cx, |omnibox, cx| {
                 omnibox.set_content(None, None, window, cx)
             });
-            if Settings::get(cx).close_window_with_last_tab {
+            if should_close_empty_source_window(
+                close_empty_window,
+                Settings::get(cx).close_window_with_last_tab,
+            ) {
                 self.record_session_state(WindowSession::default(), cx);
                 window.remove_window();
                 return;
@@ -1951,6 +1955,13 @@ fn can_detach_tab_count(tab_count: usize, close_window_with_last_tab: bool) -> b
     tab_count > 1 || (tab_count == 1 && !close_window_with_last_tab)
 }
 
+fn should_close_empty_source_window(
+    close_source_after_transfer: bool,
+    close_window_with_last_tab: bool,
+) -> bool {
+    close_source_after_transfer || close_window_with_last_tab
+}
+
 fn plan_tab_transfer(
     source_ids: &[u64],
     target_ids: &[u64],
@@ -1977,7 +1988,7 @@ fn plan_tab_transfer(
 mod tab_drag_tests {
     use super::{
         animation_retarget_offset, can_detach_tab_count, insert_id_at, midpoint_insertion_index,
-        plan_tab_transfer, stable_slot_midpoint,
+        plan_tab_transfer, should_close_empty_source_window, stable_slot_midpoint,
     };
 
     #[test]
@@ -2041,5 +2052,13 @@ mod tab_drag_tests {
         assert!(!can_detach_tab_count(1, true));
         assert!(can_detach_tab_count(2, false));
         assert!(can_detach_tab_count(2, true));
+    }
+
+    #[test]
+    fn transferring_the_last_tab_to_another_window_closes_the_empty_source() {
+        assert!(should_close_empty_source_window(true, false));
+        assert!(should_close_empty_source_window(true, true));
+        assert!(should_close_empty_source_window(false, true));
+        assert!(!should_close_empty_source_window(false, false));
     }
 }
