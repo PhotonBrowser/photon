@@ -45,24 +45,34 @@ pub(super) struct DraggedTab {
     pub source: AnyWindowHandle,
     pub id: u64,
     pub label: SharedString,
+    pub icon: TabIcon,
     pub axis: TabDragAxis,
     pub size: f32,
+    pub preview_width: f32,
+    pub preview_height: f32,
     pub pinned: bool,
 }
 
-/// The lightweight view GPUI keeps under the pointer during a tab drag.
+/// A tab-shaped view GPUI keeps directly under the pointer during a drag.
 pub(super) struct TabDragPreview {
     pub label: SharedString,
+    pub icon: TabIcon,
+    pub width: f32,
+    pub height: f32,
+    pub pinned: bool,
     pub palette: ThemeColors,
 }
 
 impl Render for TabDragPreview {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         let palette = self.palette;
-        h_stack()
+        let icon = drag_preview_icon(&self.icon, palette);
+        let preview = h_stack()
             .items_center()
-            .h(px(metrics::TAB_HEIGHT))
-            .max_w(px(metrics::TAB_MAX_WIDTH))
+            .h(px(self.height))
+            .w(px(self.width.min(metrics::TAB_MAX_WIDTH)))
+            .flex_shrink_0()
+            .gap(px(metrics::TAB_CLOSE_GAP))
             .px(px(metrics::TAB_HORIZONTAL_PADDING))
             .rounded(px(metrics::CONTROL_RADIUS))
             .border_1()
@@ -70,8 +80,32 @@ impl Render for TabDragPreview {
             .bg(rgba(palette.selected_surface))
             .text_size(px(metrics::TAB_FONT_SIZE))
             .text_color(rgb(palette.text_primary))
-            .opacity(metrics::TAB_DRAG_PREVIEW_OPACITY)
-            .child(div().truncate().child(self.label.clone()))
+            .opacity(metrics::TAB_DRAG_PREVIEW_OPACITY);
+        if self.pinned || self.width < metrics::TAB_MIN_WIDTH {
+            return preview.justify_center().child(icon).into_any_element();
+        }
+        preview
+            .child(icon)
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .child(self.label.clone()),
+            )
+            .child(
+                div()
+                    .flex_shrink_0()
+                    .size(px(metrics::TAB_CLOSE_BUTTON_SIZE))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(close_icon(
+                        palette.text_secondary,
+                        metrics::CHIP_CLOSE_ICON_SIZE,
+                    )),
+            )
+            .into_any_element()
     }
 }
 
@@ -82,6 +116,7 @@ pub(super) enum TabDragAxis {
 }
 
 /// What a tab shows before its title.
+#[derive(Clone)]
 pub(super) enum TabIcon {
     /// The page is loading; the value is the spinner's animation step.
     Loading(usize),
@@ -97,6 +132,32 @@ pub(super) enum TabIcon {
     Logo,
     /// A monochrome symbol, drawn in the tab's text color at the given size.
     Symbol(fn(u32, f32) -> AnyElement),
+}
+
+fn drag_preview_icon(icon: &TabIcon, palette: ThemeColors) -> AnyElement {
+    let size = metrics::TAB_FAVICON_SIZE;
+    match icon {
+        TabIcon::Loading(step) => div()
+            .size(px(size))
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(loading_spinner(palette.text_secondary, size, *step))
+            .into_any_element(),
+        TabIcon::Favicon(favicon) => img(ImageSource::Render(favicon.image.clone()))
+            .object_fit(ObjectFit::Contain)
+            .size(px(size))
+            .into_any_element(),
+        TabIcon::Audio { muted, .. } => {
+            audio_icon(palette.text_secondary, size, *muted).into_any_element()
+        }
+        TabIcon::Page => globe_icon(palette.text_secondary, size).into_any_element(),
+        TabIcon::Logo => img(photon_logo())
+            .object_fit(ObjectFit::Contain)
+            .size(px(size))
+            .into_any_element(),
+        TabIcon::Symbol(symbol) => symbol(palette.text_secondary, size),
+    }
 }
 
 /// Identifies an icon a tab reveals with the appear animation.
@@ -176,6 +237,7 @@ pub(super) struct TabItem {
     pub on_drop: TabDrop,
     pub position_offset: f32,
     pub dragging: bool,
+    pub suppress_tooltips: bool,
     pub insertion_before: Option<f32>,
     pub insertion_after: Option<f32>,
     /// Middle-click closes the tab.
@@ -193,6 +255,7 @@ struct TabParts {
     close: Stateful<gpui::Div>,
     active: bool,
     pinned: bool,
+    suppress_tooltips: bool,
     group: String,
 }
 
@@ -215,6 +278,7 @@ impl TabParts {
         let audio_control = matches!(&tab.icon, TabIcon::Audio { .. });
         let position_offset = tab.position_offset;
         let dragged = tab.dragging;
+        let suppress_tooltips = tab.suppress_tooltips;
         let focus_handle = tab.focus_handle.tab_index(focus_index).tab_stop(tab.active);
         let element = h_stack()
             .id(tab.id.clone())
@@ -289,6 +353,7 @@ impl TabParts {
                 tab.on_toggle_audio,
                 focus_index + 1,
                 icon_color,
+                !suppress_tooltips,
                 palette,
             ),
             TabIcon::Logo => sized_icon(
@@ -313,6 +378,7 @@ impl TabParts {
             close,
             active: tab.active,
             pinned: tab.pinned,
+            suppress_tooltips,
             group: tab_id,
         }
     }
@@ -350,6 +416,7 @@ fn audio_control_button(
     on_click: ClickHandler,
     focus_index: isize,
     icon_color: u32,
+    show_tooltip: bool,
     palette: ThemeColors,
 ) -> AnyElement {
     let label = if muted {
@@ -374,7 +441,7 @@ fn audio_control_button(
         .hover(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
         .on_click(on_click)
-        .tooltip(tooltip)
+        .when(show_tooltip, |button| button.tooltip(tooltip))
         .child(audio_icon(icon_color, metrics::TAB_AUDIO_ICON_SIZE, muted))
         .into_any_element()
 }

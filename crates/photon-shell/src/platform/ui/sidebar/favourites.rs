@@ -32,6 +32,7 @@ pub(in super::super) fn favourites_grid(
     palette: ThemeColors,
     on_drop: TabDrop,
     on_prepaint: TabPrepaint,
+    suppress_tooltips: bool,
 ) -> impl IntoElement {
     let columns = if collapsed {
         1
@@ -45,7 +46,7 @@ pub(in super::super) fn favourites_grid(
         let row: Vec<AnyElement> = tiles
             .by_ref()
             .take(columns)
-            .map(|(index, tile)| favourite_tile(index, tile, collapsed, palette))
+            .map(|(index, tile)| favourite_tile(index, tile, collapsed, suppress_tooltips, palette))
             .collect();
         let filler = columns - row.len();
         rows.push(
@@ -181,9 +182,11 @@ fn favourite_tile(
     index: usize,
     tile: FavouriteTile,
     collapsed: bool,
+    suppress_tooltips: bool,
     palette: ThemeColors,
 ) -> AnyElement {
-    let tooltip = collapsed.then(|| label_tooltip(tile.label.clone(), palette));
+    let tooltip =
+        (collapsed && !suppress_tooltips).then(|| label_tooltip(tile.label.clone(), palette));
     let tile_element = h_stack()
         .id(("sidebar-favourite", index))
         .role(Role::Button)

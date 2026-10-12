@@ -261,6 +261,7 @@ impl BrowserWindow {
                     palette,
                     self.favourite_drop_handler(cx),
                     self.favourite_bounds_handler(cx),
+                    self.tab_drag_active(),
                 )
                 .into_any_element(),
             );

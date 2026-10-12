@@ -28,6 +28,7 @@ pub(in super::super) fn tab_list(
     palette: ThemeColors,
 ) -> impl IntoElement {
     let spacing = metrics::SidebarSpacing::new(collapsed);
+    let suppress_tooltips = tabs.iter().any(|tab| tab.suppress_tooltips);
     let layout_tab: fn(TabParts, ThemeColors) -> AnyElement =
         if collapsed { tab_tile } else { tab_row };
     let tab_count = tabs.len();
@@ -91,6 +92,7 @@ pub(in super::super) fn tab_list(
     v_stack()
         .id("sidebar-tab-list-drag-target")
         .w_full()
+        .h_full()
         .gap(px(spacing.item_gap))
         .tab_group()
         .when(!pinned.is_empty(), |list| {
@@ -98,7 +100,7 @@ pub(in super::super) fn tab_list(
         })
         .children(divider)
         .child(
-            new_tab_row(on_new_tab, collapsed, palette)
+            new_tab_row(on_new_tab, collapsed, suppress_tooltips, palette)
                 .drag_over::<DraggedTab>(move |style, _, _, _| {
                     style.bg(rgba(palette.hover_surface))
                 })
@@ -160,11 +162,11 @@ fn tab_row(parts: TabParts, palette: ThemeColors) -> AnyElement {
 /// A square holding only the tab's icon, for the collapsed sidebar. The
 /// tab's title stays its accessible name; middle-click still closes it.
 fn tab_tile(parts: TabParts, palette: ThemeColors) -> AnyElement {
-    let tooltip = label_tooltip(parts.label.clone(), palette);
+    let tooltip = (!parts.suppress_tooltips).then(|| label_tooltip(parts.label.clone(), palette));
     let tile = collapsed_tile(parts.tab)
         .relative()
         .justify_center()
-        .tooltip(tooltip);
+        .when_some(tooltip, |tile, tooltip| tile.tooltip(tooltip));
     let tile = if parts.active {
         tile.bg(rgba(palette.selected_surface))
     } else {
@@ -177,6 +179,7 @@ fn tab_tile(parts: TabParts, palette: ThemeColors) -> AnyElement {
 fn new_tab_row(
     on_click: ClickHandler,
     collapsed: bool,
+    suppress_tooltip: bool,
     palette: ThemeColors,
 ) -> gpui::Stateful<gpui::Div> {
     let row = h_stack()
@@ -197,9 +200,12 @@ fn new_tab_row(
             metrics::SidebarSpacing::new(collapsed).icon_size,
         ));
     if collapsed {
-        return collapsed_tile(row)
-            .justify_center()
-            .tooltip(label_tooltip("New tab", palette));
+        let row = collapsed_tile(row).justify_center();
+        return if suppress_tooltip {
+            row
+        } else {
+            row.tooltip(label_tooltip("New tab", palette))
+        };
     }
     row.w_full()
         .gap(px(metrics::SIDEBAR_TAB_ICON_GAP))
