@@ -2,7 +2,9 @@
 //! titlebar or sidebar space. Its items dispatch the browser's actions, so
 //! they show their shortcuts and behave as the shortcuts do.
 
-use gpui::{Context, Div, Menu, MenuItem, MouseButton, MouseDownEvent, prelude::*};
+use gpui::{
+    App, Context, Div, Menu, MenuItem, MouseButton, MouseDownEvent, Window, point, prelude::*, px,
+};
 use photon_shortcuts::{
     FindInPage, NewTab, NewWindow, OpenSettings, ResetZoom, ShowKeyboardShortcuts, ToggleDebugInfo,
     ToggleSidebarIcons, ToggleZenMode, ZoomIn, ZoomOut,
@@ -11,6 +13,19 @@ use photon_shortcuts::{
 use super::super::workspace_layout::WorkspaceLayout;
 use super::BrowserWindow;
 
+/// Opens a native menu anchored to this window's pointer position. Keeping an
+/// AppKit view anchor associates the popup with the browser window instead of
+/// asking the platform to place it at a detached global pointer location.
+pub(super) fn show_window_context_menu(window: &Window, items: Vec<MenuItem>, cx: &App) {
+    let viewport = window.viewport_size();
+    let pointer = window.mouse_position();
+    let position = point(
+        pointer.x.max(px(0.)).min(viewport.width),
+        pointer.y.max(px(0.)).min(viewport.height),
+    );
+    drop(window.show_menu_at(items, position, px(0.), cx));
+}
+
 impl BrowserWindow {
     /// Opens the browser's context menu on a right-click in `area`'s empty
     /// space. Controls inside that have their own menu, or none, stop the
@@ -18,16 +33,16 @@ impl BrowserWindow {
     pub(super) fn with_browser_menu(&self, area: Div, cx: &mut Context<Self>) -> Div {
         area.on_mouse_down(
             MouseButton::Right,
-            cx.listener(|this, _: &MouseDownEvent, _, cx| {
+            cx.listener(|this, _: &MouseDownEvent, window, cx| {
                 cx.stop_propagation();
-                this.show_browser_menu(cx);
+                this.show_browser_menu(window, cx);
             }),
         )
     }
 
-    pub(super) fn show_browser_menu(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn show_browser_menu(&mut self, window: &Window, cx: &mut Context<Self>) {
         let items = self.browser_menu_items(cx);
-        cx.show_context_menu(items);
+        show_window_context_menu(window, items, cx);
     }
 
     /// New tabs and windows and settings; for a web page, finding, zoom and

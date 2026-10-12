@@ -308,9 +308,9 @@ impl BrowserWindow {
                 settings: Box::new(cx.listener(|this, _, window, cx| {
                     this.open_page_tab(SETTINGS, window, cx);
                 })),
-                menu: Box::new(cx.listener(|this, _, _, cx| {
+                menu: Box::new(cx.listener(|this, _, window, cx| {
                     cx.stop_propagation();
-                    this.show_browser_menu(cx);
+                    this.show_browser_menu(window, cx);
                 })),
                 new_space: Box::new(cx.listener(|this, _, window, cx| {
                     this.edit_space(None, window, cx);

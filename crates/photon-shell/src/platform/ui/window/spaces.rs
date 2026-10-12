@@ -19,6 +19,7 @@ use super::super::space_editor::{SpaceEditor, SpaceEditorEvent};
 use super::super::theme::{ThemeColors, window_color_swatch};
 use super::super::workspace_layout::WorkspaceLayout;
 use super::BrowserWindow;
+use super::context_menu::show_window_context_menu;
 use super::menu::{MenuCommand, command_item};
 
 /// How far two fingers move sideways across the sidebar to switch space.
@@ -172,10 +173,10 @@ impl BrowserWindow {
                         this.switch_space(id, cx);
                     })),
                     on_context_menu: Box::new(cx.listener(
-                        move |this, _: &MouseDownEvent, _, cx| {
+                        move |this, _: &MouseDownEvent, window, cx| {
                             cx.stop_propagation();
                             let items = this.space_menu_items(id, cx);
-                            cx.show_context_menu(items);
+                            show_window_context_menu(window, items, cx);
                         },
                     )),
                 }

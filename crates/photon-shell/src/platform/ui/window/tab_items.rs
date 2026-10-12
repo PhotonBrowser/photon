@@ -142,9 +142,9 @@ impl BrowserWindow {
                         },
                     )),
                     on_context_menu: Box::new(cx.listener(
-                        move |this, _: &MouseDownEvent, _, cx| {
+                        move |this, _: &MouseDownEvent, window, cx| {
                             cx.stop_propagation();
-                            this.show_tab_menu(index, cx);
+                            this.show_tab_menu(index, window, cx);
                         },
                     )),
                     on_drop: Box::new(cx.listener(move |this, dragged: &DraggedTab, _, cx| {
