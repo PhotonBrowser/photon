@@ -647,8 +647,11 @@ mod tests {
     #[test]
     fn presets_cannot_delete_the_last_preset() {
         let mut settings = WorkspaceSettings::default();
-        settings.presets.truncate(1);
-        assert!(!settings.remove_preset(HORIZONTAL_PRESET_ID));
+        let last_preset_id = settings.default_preset_id.clone();
+        settings
+            .presets
+            .retain(|preset| preset.id == last_preset_id);
+        assert!(!settings.remove_preset(&last_preset_id));
         assert!(settings.is_valid());
     }
 

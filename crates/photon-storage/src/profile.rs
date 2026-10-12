@@ -494,7 +494,7 @@ mod tests {
         assert_eq!(loaded.spaces.get(space_id).unwrap().layout_override, None);
         assert_eq!(
             loaded.workspace.default_preset_id,
-            photon_core::HORIZONTAL_PRESET_ID
+            photon_core::VERTICAL_PRESET_ID
         );
     }
 
