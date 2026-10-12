@@ -30,8 +30,8 @@ pub use photon_omnibox::{
 };
 pub use session::{Session, SessionTab, WindowSession};
 pub use settings::{
-    AnimationSettings, BrowserSettings, PopupPolicy, TabLayout, ThemeMode, Transparency,
-    WindowBackgroundStyle, WindowColor,
+    AnimationSettings, BACKGROUND_NOISE_INTENSITY_MAX, BrowserSettings, PopupPolicy, TabLayout,
+    ThemeMode, Transparency, WindowBackgroundStyle, WindowColor,
 };
 pub use sidebar::{
     SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH, SidebarResize,
@@ -39,7 +39,7 @@ pub use sidebar::{
 };
 pub use spaces::{MAX_FAVOURITES, Space, SpaceId, Spaces};
 pub use state::{BrowserCommand, BrowserState, EngineEvent, normalize_url};
-pub use tabs::{ARCHIVE_AFTER, pinned_after_drop, should_archive};
+pub use tabs::{ARCHIVE_AFTER, should_archive};
 pub use workspace::{
     ADDRESS_FIELD_COMPONENT_ID, ADDRESS_TOOLBAR_COMPONENT_ID, BACK_BUTTON_COMPONENT_ID,
     BROWSER_MENU_BUTTON_COMPONENT_ID, DockRegion, FAVOURITES_PANEL_COMPONENT_ID,

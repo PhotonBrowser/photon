@@ -400,7 +400,7 @@ pub struct WorkspaceSettings {
 impl Default for WorkspaceSettings {
     fn default() -> Self {
         Self {
-            default_preset_id: HORIZONTAL_PRESET_ID.to_owned(),
+            default_preset_id: VERTICAL_PRESET_ID.to_owned(),
             presets: vec![
                 WorkspacePreset {
                     id: HORIZONTAL_PRESET_ID.to_owned(),
@@ -584,9 +584,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn defaults_to_horizontal_and_keeps_both_builtin_presets() {
+    fn defaults_to_vertical_and_keeps_both_builtin_presets() {
         let settings = WorkspaceSettings::default();
-        assert_eq!(settings.default_preset_id, HORIZONTAL_PRESET_ID);
+        assert_eq!(settings.default_preset_id, VERTICAL_PRESET_ID);
         assert!(settings.default_preset().is_some());
         assert!(settings.is_valid());
     }

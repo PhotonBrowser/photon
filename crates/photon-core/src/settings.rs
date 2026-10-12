@@ -7,6 +7,9 @@ use super::sidebar::SidebarSettings;
 use super::spaces::Spaces;
 use super::workspace::WorkspaceSettings;
 
+/// Maximum selectable strength for the window background's static noise.
+pub const BACKGROUND_NOISE_INTENSITY_MAX: u8 = 20;
+
 /// The shell's selected appearance.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -91,9 +94,9 @@ impl WindowColor {
 #[serde(rename_all = "kebab-case")]
 pub enum TabLayout {
     /// A tab strip in the titlebar, over an address toolbar.
-    #[default]
     Horizontal,
     /// A sidebar beside the page.
+    #[default]
     Vertical,
 }
 
@@ -115,8 +118,14 @@ pub struct BrowserSettings {
     pub theme: ThemeMode,
     pub transparency: Transparency,
     pub window_background_style: WindowBackgroundStyle,
-    /// Whether a static film-grain texture overlays the window background.
-    pub background_noise: bool,
+    /// How strongly static noise overlays the window background, from 0 to 20.
+    /// Legacy boolean values under `background_noise` are migrated on load.
+    #[serde(
+        default,
+        alias = "background_noise",
+        deserialize_with = "deserialize_background_noise_intensity"
+    )]
+    pub background_noise_intensity: u8,
     pub tab_layout: TabLayout,
     /// Saved workspace presets and the profile default used by spaces without
     /// their own preset assignment.
@@ -216,8 +225,8 @@ impl Default for BrowserSettings {
             theme: ThemeMode::System,
             transparency: Transparency::default(),
             window_background_style: WindowBackgroundStyle::default(),
-            background_noise: false,
-            tab_layout: TabLayout::default(),
+            background_noise_intensity: 5,
+            tab_layout: TabLayout::Vertical,
             workspace: WorkspaceSettings::default(),
             default_search_engine: "google".to_owned(),
             show_full_address: false,
@@ -231,6 +240,27 @@ impl Default for BrowserSettings {
             animations: AnimationSettings::default(),
         }
     }
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum BackgroundNoiseSetting {
+    Intensity(u64),
+    Enabled(bool),
+}
+
+fn deserialize_background_noise_intensity<'de, D>(deserializer: D) -> Result<u8, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Ok(match BackgroundNoiseSetting::deserialize(deserializer)? {
+        BackgroundNoiseSetting::Intensity(intensity) => {
+            intensity.min(u64::from(BACKGROUND_NOISE_INTENSITY_MAX)) as u8
+        }
+        // Preserve the old on/off setting's appearance when it was enabled.
+        BackgroundNoiseSetting::Enabled(true) => 7,
+        BackgroundNoiseSetting::Enabled(false) => 0,
+    })
 }
 
 impl BrowserSettings {
