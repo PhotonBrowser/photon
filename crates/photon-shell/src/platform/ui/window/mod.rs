@@ -4,6 +4,7 @@ mod actions;
 mod alerts;
 mod app;
 mod app_menus;
+mod background_noise;
 mod chrome;
 mod command_bar;
 mod content;

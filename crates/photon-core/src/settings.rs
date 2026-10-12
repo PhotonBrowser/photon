@@ -115,6 +115,8 @@ pub struct BrowserSettings {
     pub theme: ThemeMode,
     pub transparency: Transparency,
     pub window_background_style: WindowBackgroundStyle,
+    /// Whether a static film-grain texture overlays the window background.
+    pub background_noise: bool,
     pub tab_layout: TabLayout,
     /// Saved workspace presets and the profile default used by spaces without
     /// their own preset assignment.
@@ -214,6 +216,7 @@ impl Default for BrowserSettings {
             theme: ThemeMode::System,
             transparency: Transparency::default(),
             window_background_style: WindowBackgroundStyle::default(),
+            background_noise: false,
             tab_layout: TabLayout::default(),
             workspace: WorkspaceSettings::default(),
             default_search_engine: "google".to_owned(),

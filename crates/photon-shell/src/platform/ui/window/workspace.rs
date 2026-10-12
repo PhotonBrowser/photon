@@ -12,10 +12,12 @@ use super::super::titlebar::window_drag_area;
 use super::super::workspace_layout::WorkspaceLayout;
 use super::super::{metrics, theme::palette};
 use super::BrowserWindow;
+use super::background_noise;
 
 impl Render for BrowserWindow {
     fn render(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) -> impl IntoElement {
         let palette = palette(window, cx);
+        let background_noise_enabled = super::super::settings::Settings::get(cx).background_noise;
         let animations = super::super::settings::Settings::get(cx).animations;
         let find_bar = self.find_bar_presence.sync(
             self.find_bar.as_ref().map(|(bar, _)| bar.clone()),
@@ -105,6 +107,7 @@ impl Render for BrowserWindow {
             .relative()
             .bg(palette.window_background())
             .text_color(gpui::rgb(palette.text_primary))
+            .children(background_noise_enabled.then(background_noise::overlay))
             .child(page)
             .children(top_margin)
             .child(chrome)

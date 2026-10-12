@@ -15,6 +15,7 @@ use super::super::super::theme::ThemeColors;
 use super::super::super::workspace_layout::WorkspaceLayout;
 use super::super::ClickHandler;
 use super::super::change;
+use super::super::controls::switch_row;
 use super::super::layout::{label, secondary_text};
 
 pub(super) fn settings(
@@ -335,6 +336,17 @@ pub(super) fn settings(
                     palette,
                 )),
         )
+        .child(switch_row(
+            "settings-background-noise",
+            "Film grain",
+            current.background_noise,
+            palette,
+            change(|settings| settings.background_noise = !settings.background_noise),
+        ))
+        .child(secondary_text(
+            "Add subtle, static grain to the window background.",
+            palette,
+        ))
         .child(
             v_stack()
                 .gap(px(metrics::INTERNAL_PAGE_GROUP_GAP))
