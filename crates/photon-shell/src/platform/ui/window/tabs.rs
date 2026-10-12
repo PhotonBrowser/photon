@@ -200,7 +200,10 @@ impl BrowserWindow {
             self.set_tab_drag_phase(super::TabDragPhase::OutsideTarget, cx);
             return;
         }
-        if !can_detach_tab_count(self.tabs.len()) {
+        if !can_detach_tab_count(
+            self.tabs.len(),
+            Settings::get(cx).close_window_with_last_tab,
+        ) {
             self.set_tab_drag_phase(super::TabDragPhase::OutsideTarget, cx);
             return;
         }
@@ -1207,7 +1210,10 @@ impl BrowserWindow {
             self.cancel_tab_drag(dragged.id, window, cx);
             return;
         };
-        if !can_detach_tab_count(self.tabs.len()) {
+        if !can_detach_tab_count(
+            self.tabs.len(),
+            Settings::get(cx).close_window_with_last_tab,
+        ) {
             self.set_tab_drag_outside_target(dragged.id, cx);
             return;
         }
@@ -1303,7 +1309,10 @@ impl BrowserWindow {
     }
 
     fn remove_tab_for_detach(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
-        if !can_detach_tab_count(self.tabs.len()) {
+        if !can_detach_tab_count(
+            self.tabs.len(),
+            Settings::get(cx).close_window_with_last_tab,
+        ) {
             return;
         }
         self.remove_tab_for_transfer(index, window, cx);
@@ -1938,8 +1947,8 @@ fn insert_id_at(order: &mut Vec<u64>, id: u64, index: usize) {
     order.insert(index.min(order.len()), id);
 }
 
-fn can_detach_tab_count(tab_count: usize) -> bool {
-    tab_count > 1
+fn can_detach_tab_count(tab_count: usize, close_window_with_last_tab: bool) -> bool {
+    tab_count > 1 || (tab_count == 1 && !close_window_with_last_tab)
 }
 
 fn plan_tab_transfer(
@@ -2025,9 +2034,12 @@ mod tab_drag_tests {
     }
 
     #[test]
-    fn a_window_with_one_tab_cannot_detach_it() {
-        assert!(!can_detach_tab_count(0));
-        assert!(!can_detach_tab_count(1));
-        assert!(can_detach_tab_count(2));
+    fn detaching_the_last_tab_follows_the_window_close_setting() {
+        assert!(!can_detach_tab_count(0, false));
+        assert!(!can_detach_tab_count(0, true));
+        assert!(can_detach_tab_count(1, false));
+        assert!(!can_detach_tab_count(1, true));
+        assert!(can_detach_tab_count(2, false));
+        assert!(can_detach_tab_count(2, true));
     }
 }
