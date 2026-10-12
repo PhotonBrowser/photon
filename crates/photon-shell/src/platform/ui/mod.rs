@@ -45,6 +45,10 @@ pub(super) type MouseUpHandler =
 pub(super) type KeyDownHandler =
     Box<dyn Fn(&gpui::KeyDownEvent, &mut gpui::Window, &mut gpui::App)>;
 
+pub(super) fn window_background_style(cx: &gpui::App) -> photon_core::WindowBackgroundStyle {
+    settings::Settings::get(cx).window_background_style
+}
+
 pub(in crate::platform) use webview::{
     CrashNotice, Favicon, FindResult, PageMenuItem, PhotonWebView, SelectDropdown, SelectItem,
     WebViewEvent, install_form_controls,

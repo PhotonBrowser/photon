@@ -1,12 +1,12 @@
 //! GPUI-CE window defaults. Edit this file to change native window behavior.
 
 use gpui::{
-    App, Bounds, MacosWindowBackground, TitlebarOptions, Window, WindowBounds, WindowOptions,
-    point, px, size,
+    App, Bounds, MacosWindowBackground, TitlebarOptions, Window, WindowBackgroundAppearance,
+    WindowBounds, WindowOptions, point, px, size,
 };
-use photon_core::AnimationSettings;
+use photon_core::{AnimationSettings, WindowBackgroundStyle};
 
-use crate::platform::ui::metrics;
+use crate::platform::ui::{metrics, window_background_style};
 
 #[cfg(target_os = "macos")]
 const TRAFFIC_LIGHTS_ENABLED_ON_HOVER: bool = true;
@@ -25,18 +25,39 @@ pub(super) fn configure_traffic_lights(window: &Window, animations: &AnimationSe
     let _ = (window, animations);
 }
 
-/// Select with PHOTON_WINDOW_BACKGROUND=opaque|blurred|liquid-glass.
-/// The system controls the strength of both native materials.
+/// PHOTON_WINDOW_BACKGROUND can override the saved preference for development.
 fn background_for(value: Option<&str>) -> MacosWindowBackground {
     match value {
         Some("opaque") => MacosWindowBackground::Opaque,
+        Some("blurred") => MacosWindowBackground::Blurred,
         Some("liquid-glass") => MacosWindowBackground::LiquidGlass,
-        _ => MacosWindowBackground::Blurred,
+        _ => MacosWindowBackground::LiquidGlass,
     }
 }
 
-fn background() -> MacosWindowBackground {
-    background_for(std::env::var("PHOTON_WINDOW_BACKGROUND").ok().as_deref())
+fn background_for_style(style: WindowBackgroundStyle) -> MacosWindowBackground {
+    match style {
+        WindowBackgroundStyle::LiquidGlass => MacosWindowBackground::LiquidGlass,
+        WindowBackgroundStyle::Blurred => MacosWindowBackground::Blurred,
+    }
+}
+
+fn configured_background(style: WindowBackgroundStyle) -> MacosWindowBackground {
+    std::env::var("PHOTON_WINDOW_BACKGROUND")
+        .ok()
+        .map(|value| background_for(Some(&value)))
+        .unwrap_or_else(|| background_for_style(style))
+}
+
+/// Applies the selected native material to an already open window.
+pub(super) fn apply_background_style(window: &Window, style: WindowBackgroundStyle) {
+    let appearance = match configured_background(style) {
+        MacosWindowBackground::Opaque => WindowBackgroundAppearance::Opaque,
+        MacosWindowBackground::Blurred => WindowBackgroundAppearance::Blurred,
+        MacosWindowBackground::LiquidGlass => WindowBackgroundAppearance::LiquidGlass,
+        _ => WindowBackgroundAppearance::Opaque,
+    };
+    window.set_background_appearance(appearance);
 }
 
 /// Builds a Photon browser window's initial size, titlebar, and native backing.
@@ -78,7 +99,7 @@ fn options_for_size(cx: &App, width: f32, height: f32) -> WindowOptions {
                     px(metrics::WINDOW_CONTROLS_ORIGIN.1),
                 )),
         ))
-        .macos_window_background(background())
+        .macos_window_background(configured_background(window_background_style(cx)))
         // The titlebar hosts interactive UI, so the shell moves the window itself
         // from empty titlebar space instead of letting AppKit drag from anywhere in it.
         .app_owns_titlebar_drag(true)
@@ -102,6 +123,6 @@ mod tests {
             background_for(Some("liquid-glass")),
             MacosWindowBackground::LiquidGlass
         );
-        assert_eq!(background_for(None), MacosWindowBackground::Blurred);
+        assert_eq!(background_for(None), MacosWindowBackground::LiquidGlass);
     }
 }

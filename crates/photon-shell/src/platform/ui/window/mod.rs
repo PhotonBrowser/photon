@@ -32,7 +32,7 @@ use gpui::{
     AnyElement, App, Context, Entity, FocusHandle, Render, Subscription, Task, WeakEntity, Window,
     WindowHandle, div, prelude::*,
 };
-use photon_core::BrowserCommand;
+use photon_core::{BrowserCommand, WindowBackgroundStyle};
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
@@ -132,6 +132,7 @@ struct BrowserWindow {
     /// Whether any part of the window is on screen. Engine renders the active
     /// tab only while it is, since GPUI-CE stops drawing an occluded window.
     window_visible: bool,
+    window_background_style: WindowBackgroundStyle,
     _appearance_subscription: Subscription,
     /// Redraws as the window comes to the front, so the menu bar follows it.
     _activation_subscription: Subscription,
@@ -178,7 +179,12 @@ impl BrowserWindow {
     }
 
     /// Redraws the chrome and every tab for changed settings, such as the theme.
-    fn settings_changed(&mut self, cx: &mut Context<Self>) {
+    fn settings_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let background_style = Settings::get(cx).window_background_style;
+        if background_style != self.window_background_style {
+            window_settings::apply_background_style(window, background_style);
+            self.window_background_style = background_style;
+        }
         for webview in self.tabs.iter().filter_map(|tab| tab.content.webview()) {
             webview.update(cx, |_, cx| cx.notify());
         }
@@ -285,7 +291,7 @@ fn open_browser_window(
             let settings_subscription =
                 cx.observe_global_in::<Settings>(window, |this: &mut BrowserWindow, window, cx| {
                     this.follow_space(window, cx);
-                    this.settings_changed(cx);
+                    this.settings_changed(window, cx);
                 });
             let browser = cx.entity().downgrade();
             let chrome = cx.new(|_| BrowserChrome {
@@ -366,6 +372,7 @@ fn open_browser_window(
                 _settings_subscription: settings_subscription,
                 _chrome_subscription: chrome_subscription,
                 _window_observer: window_observer,
+                window_background_style: Settings::get(cx).window_background_style,
                 _session_release: {
                     let key = cx.entity_id().as_u64();
                     cx.on_release(move |_, cx| BrowserWindow::forget_session(key, cx))

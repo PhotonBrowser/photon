@@ -31,7 +31,7 @@ pub use photon_omnibox::{
 pub use session::{Session, SessionTab, WindowSession};
 pub use settings::{
     AnimationSettings, BrowserSettings, PopupPolicy, TabLayout, ThemeMode, Transparency,
-    WindowColor,
+    WindowBackgroundStyle, WindowColor,
 };
 pub use sidebar::{
     SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH, SidebarResize,

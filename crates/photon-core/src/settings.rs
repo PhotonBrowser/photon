@@ -30,6 +30,17 @@ pub enum Transparency {
     Clear,
 }
 
+/// Native material used behind transparent window content.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum WindowBackgroundStyle {
+    /// Apple's adaptive material on supported macOS versions, with blur on older systems.
+    #[default]
+    LiquidGlass,
+    /// A standard native blurred backdrop.
+    Blurred,
+}
+
 /// The colour the window is tinted with, as in Arc and Zen.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -103,6 +114,7 @@ pub enum PopupPolicy {
 pub struct BrowserSettings {
     pub theme: ThemeMode,
     pub transparency: Transparency,
+    pub window_background_style: WindowBackgroundStyle,
     pub tab_layout: TabLayout,
     /// Saved workspace presets and the profile default used by spaces without
     /// their own preset assignment.
@@ -201,6 +213,7 @@ impl Default for BrowserSettings {
         Self {
             theme: ThemeMode::System,
             transparency: Transparency::default(),
+            window_background_style: WindowBackgroundStyle::default(),
             tab_layout: TabLayout::default(),
             workspace: WorkspaceSettings::default(),
             default_search_engine: "google".to_owned(),

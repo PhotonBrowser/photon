@@ -1,7 +1,7 @@
 //! Appearance settings for the profile and the active space.
 
 use gpui::{App, ElementId, FontWeight, div, prelude::*, px, rgba};
-use photon_core::Transparency;
+use photon_core::{Transparency, WindowBackgroundStyle};
 use std::rc::Rc;
 
 use super::super::super::button::{ButtonKind, ButtonSize, button};
@@ -47,6 +47,17 @@ pub(super) fn settings(
         label: label.into(),
         chosen: current.transparency == transparency,
         on_choose: change(move |settings| settings.transparency = transparency),
+    })
+    .collect();
+    let window_background_styles = [
+        (WindowBackgroundStyle::LiquidGlass, "Liquid Glass"),
+        (WindowBackgroundStyle::Blurred, "Blurred"),
+    ]
+    .into_iter()
+    .map(|(style, label)| Choice {
+        label: label.into(),
+        chosen: current.window_background_style == style,
+        on_choose: change(move |settings| settings.window_background_style = style),
     })
     .collect();
 
@@ -285,6 +296,24 @@ pub(super) fn settings(
                 .child(form_field("Window colour", colors, palette))
                 .child(secondary_text(
                     format!("The colour of {active_space_name}. Each space keeps its own colour."),
+                    palette,
+                )),
+        )
+        .child(
+            v_stack()
+                .gap(px(metrics::MENU_ITEM_GAP))
+                .child(form_field(
+                    "Window background",
+                    choices(
+                        "settings-window-background-style",
+                        "Window background",
+                        window_background_styles,
+                        palette,
+                    ),
+                    palette,
+                ))
+                .child(secondary_text(
+                    "Choose Liquid Glass or the native blurred window material.",
                     palette,
                 )),
         )
