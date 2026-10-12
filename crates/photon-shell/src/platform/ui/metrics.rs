@@ -131,7 +131,7 @@ pub(super) const SHORTCUTS_DIALOG_MAX_HEIGHT: f32 = 520.0;
 /// The address field in the toolbar.
 pub(super) const OMNIBOX_HEIGHT: f32 = 28.0;
 /// The larger address field in the sidebar.
-pub(super) const SIDEBAR_OMNIBOX_HEIGHT: f32 = 42.0;
+pub(super) const SIDEBAR_OMNIBOX_HEIGHT: f32 = 38.0;
 pub(super) const SIDEBAR_OMNIBOX_RADIUS: f32 = 12.0;
 pub(super) const SIDEBAR_OMNIBOX_FONT_SIZE: f32 = 15.0;
 pub(super) const OMNIBOX_BORDER_WIDTH: f32 = 1.0;
@@ -231,7 +231,7 @@ pub(super) const SIDEBAR_ITEM_RADIUS: f32 = 12.0;
 /// Space between tab rows, and between favourite tiles.
 pub(super) const SIDEBAR_ITEM_GAP: f32 = 6.0;
 pub(super) const SIDEBAR_FAVOURITE_GAP: f32 = 8.0;
-pub(super) const SIDEBAR_TAB_HEIGHT: f32 = 40.0;
+pub(super) const SIDEBAR_TAB_HEIGHT: f32 = 36.0;
 pub(super) const SIDEBAR_TAB_PADDING: f32 = 12.0;
 /// Space between a tab's icon and its title.
 pub(super) const SIDEBAR_TAB_ICON_GAP: f32 = 10.0;
