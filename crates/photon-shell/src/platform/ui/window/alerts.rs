@@ -5,6 +5,7 @@ use photon_core::BrowserCommand;
 use std::time::{Duration, Instant};
 
 use super::super::super::engine::ZoomStep;
+use super::super::settings::Settings;
 use super::super::status_chip::{CHIP_MOTION, ChipIcon, status_chip};
 use super::super::theme::ThemeColors;
 use super::super::{ClickHandler, CrashNotice};
@@ -188,11 +189,14 @@ impl BrowserWindow {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> Option<impl IntoElement + use<>> {
+        let animations = Settings::get(cx).animations;
         let notice = self.notice(cx);
         if let Some(deadline) = notice.as_ref().and_then(|notice| notice.expires_at) {
             self.expire_notice_at(deadline, cx);
         }
-        let (notice, transition) = self.notice_presence.sync(notice, CHIP_MOTION, cx)?;
+        let (notice, transition) =
+            self.notice_presence
+                .sync(notice, CHIP_MOTION, &animations, cx)?;
         let (action, on_dismiss) = match notice.action {
             Some(NoticeAction::Reload) => {
                 let reload: ClickHandler = Box::new(cx.listener(|this, _, window, cx| {
@@ -231,6 +235,7 @@ impl BrowserWindow {
             notice.message,
             action,
             on_dismiss,
+            animations,
         ))
     }
 

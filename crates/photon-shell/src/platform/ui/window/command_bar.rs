@@ -35,15 +35,24 @@ impl BrowserWindow {
 
     /// The open command bar, or one closing, drawn over the window.
     pub(super) fn command_bar_overlay(&mut self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let (bar, transition) =
-            self.command_bar_presence
-                .sync(self.command_bar.clone(), COMMAND_BAR_MOTION, cx)?;
+        let animations = super::super::settings::Settings::get(cx).animations;
+        let (bar, transition) = self.command_bar_presence.sync(
+            self.command_bar.clone(),
+            COMMAND_BAR_MOTION,
+            &animations,
+            cx,
+        )?;
         Some(
             div()
                 .absolute()
                 .inset_0()
                 .child(bar)
-                .animate("command-bar-motion", COMMAND_BAR_MOTION, transition)
+                .animate(
+                    "command-bar-motion",
+                    COMMAND_BAR_MOTION,
+                    transition,
+                    &super::super::settings::Settings::get(cx).animations,
+                )
                 .into_any_element(),
         )
     }

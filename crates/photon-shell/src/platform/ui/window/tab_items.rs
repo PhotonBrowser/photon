@@ -5,6 +5,7 @@ use gpui::{App, Context, KeyDownEvent, MouseDownEvent, MouseUpEvent};
 
 use super::super::history::BrowsingHistory;
 use super::super::pages::PageIcon;
+use super::super::settings::Settings;
 use super::super::tabs::{DraggedTab, TabDragStart, TabIcon, TabItem};
 use super::BrowserWindow;
 use super::content::TabContent;
@@ -41,6 +42,7 @@ impl BrowserWindow {
 
     pub(super) fn tab_items(&self, cx: &mut Context<Self>) -> Vec<TabItem> {
         let browser = cx.entity().downgrade();
+        let animations = Settings::get(cx).animations;
         self.tabs
             .iter()
             .enumerate()
@@ -81,7 +83,7 @@ impl BrowserWindow {
                                 favicon: view.favicon.clone(),
                                 muted: view.audio_muted,
                             }
-                        } else if view.shows_spinner() {
+                        } else if view.shows_spinner(&animations) {
                             TabIcon::Loading(self.spinner_step)
                         } else if let Some(favicon) = view.favicon.clone() {
                             TabIcon::Favicon(favicon)
@@ -101,7 +103,8 @@ impl BrowserWindow {
                 TabItem {
                     id: format!("browser-tab-{}", tab.id),
                     label,
-                    icon_appearing: self.icon_appearing(tab.id, &icon),
+                    icon_appearing: self.icon_appearing(tab.id, &icon, &animations),
+                    animations,
                     icon,
                     index,
                     pinned: tab.pin.is_some(),

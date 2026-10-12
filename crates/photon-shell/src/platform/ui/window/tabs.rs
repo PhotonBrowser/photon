@@ -26,9 +26,6 @@ pub(super) struct ClosedTab {
 /// How many closed tabs a window remembers.
 const CLOSED_TAB_LIMIT: usize = 25;
 
-/// Time between loading spinner steps.
-const SPINNER_STEP_INTERVAL: Duration = Duration::from_millis(80);
-
 impl BrowserWindow {
     pub(super) fn activate_tab(
         &mut self,
@@ -427,16 +424,24 @@ impl BrowserWindow {
 
     /// Steps the spinners while any is shown. With reduced motion they stay still.
     pub(super) fn animate_spinner(&mut self, cx: &mut Context<Self>) {
-        if self.spinner_running || cx.reduce_motion() || !self.spinner_shown(cx) {
+        let animations = Settings::get(cx).animations;
+        if self.spinner_running
+            || cx.reduce_motion()
+            || !animations.enabled
+            || !self.spinner_shown(cx)
+        {
             return;
         }
         self.spinner_running = true;
+        let interval = Duration::from_millis(u64::from(animations.spinner_step_interval_ms()));
         cx.spawn(async move |this, cx| {
             loop {
-                cx.background_executor().timer(SPINNER_STEP_INTERVAL).await;
+                cx.background_executor().timer(interval).await;
                 let keep_running = update_app(cx, |cx| {
                     this.update(cx, |this, cx| {
-                        let keep_running = !cx.reduce_motion() && this.spinner_shown(cx);
+                        let keep_running = !cx.reduce_motion()
+                            && Settings::get(cx).animations.enabled
+                            && this.spinner_shown(cx);
                         if keep_running {
                             this.spinner_step = (this.spinner_step + 1) % LOADING_SPINNER_STEPS;
                             if this.window_visible && this.tabs_on_screen(cx) {
@@ -488,14 +493,19 @@ impl BrowserWindow {
 
     /// Whether a tab's icon is still within its appear animation. A newly
     /// revealed icon starts it; the same icon shown again does not.
-    pub(super) fn icon_appearing(&self, tab: u64, icon: &TabIcon) -> bool {
+    pub(super) fn icon_appearing(
+        &self,
+        tab: u64,
+        icon: &TabIcon,
+        animations: &photon_core::AnimationSettings,
+    ) -> bool {
         let Some(revealed) = icon.revealed() else {
             return false;
         };
         let mut revealed_icons = self.revealed_icons.borrow_mut();
         match revealed_icons.get(&tab) {
             Some((icon, since)) if *icon == revealed => {
-                since.elapsed() < ICON_ENTRANCE.total_duration()
+                since.elapsed() < ICON_ENTRANCE.total_duration(animations)
             }
             _ => {
                 revealed_icons.insert(tab, (revealed, Instant::now()));

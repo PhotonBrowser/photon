@@ -49,9 +49,13 @@ impl SettingsPage {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        let ((), transition) =
-            self.reset_presence
-                .sync(self.confirming_reset.then_some(()), MODAL_MOTION, cx)?;
+        let animations = Settings::get(cx).animations;
+        let ((), transition) = self.reset_presence.sync(
+            self.confirming_reset.then_some(()),
+            MODAL_MOTION,
+            &animations,
+            cx,
+        )?;
         let panel = modal_panel(palette)
             .id("settings-reset-dialog")
             .role(Role::AlertDialog)
@@ -99,6 +103,6 @@ impl SettingsPage {
                         Box::new(cx.listener(|this, _, _, cx| this.reset(cx))),
                     )),
             );
-        Some(modal("settings-reset-modal", transition, palette, panel).into_any_element())
+        Some(modal("settings-reset-modal", transition, palette, panel, cx).into_any_element())
     }
 }

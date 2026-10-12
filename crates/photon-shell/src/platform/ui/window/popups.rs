@@ -46,11 +46,14 @@ impl BrowserWindow {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
+        let animations = super::super::settings::Settings::get(cx).animations;
         let origin = self
             .pending_popups
             .front()
             .map(|popup| popup.origin.clone());
-        let (origin, transition) = self.popup_presence.sync(origin, MODAL_MOTION, cx)?;
+        let (origin, transition) =
+            self.popup_presence
+                .sync(origin, MODAL_MOTION, &animations, cx)?;
         Some(popup_confirmation_dialog(
             origin,
             transition,
@@ -154,5 +157,5 @@ pub(super) fn popup_confirmation_dialog<V: 'static>(
                     })),
                 )),
         );
-    modal("popup-confirmation", transition, palette, panel).into_any_element()
+    modal("popup-confirmation", transition, palette, panel, cx).into_any_element()
 }

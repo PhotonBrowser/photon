@@ -16,9 +16,11 @@ use super::BrowserWindow;
 impl Render for BrowserWindow {
     fn render(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) -> impl IntoElement {
         let palette = palette(window, cx);
+        let animations = super::super::settings::Settings::get(cx).animations;
         let find_bar = self.find_bar_presence.sync(
             self.find_bar.as_ref().map(|(bar, _)| bar.clone()),
             FIND_BAR_MOTION,
+            &animations,
             cx,
         );
         let layout = WorkspaceLayout::current(cx);
@@ -60,11 +62,12 @@ impl Render for BrowserWindow {
                     .absolute()
                     .top(px(metrics::PAGE_INSET + metrics::CHIP_INSET))
                     .right(px(metrics::PAGE_INSET + metrics::CHIP_INSET))
-                    .child(
-                        div()
-                            .child(bar)
-                            .animate("find-bar-motion", FIND_BAR_MOTION, transition),
-                    )
+                    .child(div().child(bar).animate(
+                        "find-bar-motion",
+                        FIND_BAR_MOTION,
+                        transition,
+                        &animations,
+                    ))
             }))
             // Crash and restart chips sit in the page's bottom-right corner.
             .children(self.notice_chip(palette, cx).map(|chip| {

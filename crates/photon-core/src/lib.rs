@@ -29,7 +29,10 @@ pub use photon_omnibox::{
     SuggestionKind, Suggestions, UrlKind, resolve as resolve_omnibox_input,
 };
 pub use session::{Session, SessionTab, WindowSession};
-pub use settings::{BrowserSettings, PopupPolicy, TabLayout, ThemeMode, Transparency, WindowColor};
+pub use settings::{
+    AnimationSettings, BrowserSettings, PopupPolicy, TabLayout, ThemeMode, Transparency,
+    WindowColor,
+};
 pub use sidebar::{
     SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH, SidebarResize,
     SidebarSettings,

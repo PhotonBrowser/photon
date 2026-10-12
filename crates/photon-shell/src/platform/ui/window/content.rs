@@ -214,7 +214,7 @@ impl BrowserWindow {
                 WebViewEvent::ContextMenuRequested
                     if this.active_webview().as_ref() == Some(webview) =>
                 {
-                    this.open_page_menu(cx);
+                    this.open_page_menu(window, cx);
                 }
                 WebViewEvent::ContextMenuRequested => {}
                 WebViewEvent::OpenInNewTab { url, activate } => {

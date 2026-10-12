@@ -98,8 +98,12 @@ impl BrowserWindow {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
+        let animations = super::super::settings::Settings::get(cx).animations;
         let shown = self.peek.open.as_ref().map(|peek| peek.webview.clone());
-        let (webview, transition) = self.peek.presence.sync(shown, PEEK_MOTION, cx)?;
+        let (webview, transition) = self
+            .peek
+            .presence
+            .sync(shown, PEEK_MOTION, &animations, cx)?;
         let open = self.peek.open.is_some();
         // The buttons sit on a raised pill, to read over any page.
         let buttons = h_stack()
@@ -144,7 +148,7 @@ impl BrowserWindow {
             .gap(px(metrics::PEEK_CONTROL_GAP))
             .child(controls)
             .child(card)
-            .animate("peek-panel", PEEK_MOTION, transition);
+            .animate("peek-panel", PEEK_MOTION, transition, &animations);
         let mut overlay = div()
             .id("peek")
             .absolute()
@@ -172,7 +176,7 @@ impl BrowserWindow {
         }
         Some(
             overlay
-                .animate("peek-backdrop", Entrance::fade(), transition)
+                .animate("peek-backdrop", Entrance::fade(), transition, &animations)
                 .into_any_element(),
         )
     }

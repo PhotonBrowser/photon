@@ -171,9 +171,11 @@ impl SettingsPage {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
+        let animations = Settings::get(cx).animations;
         let ((), transition) = self.workspace_preset_presence.sync(
             self.workspace_preset_draft.as_ref().map(|_| ()),
             MODAL_MOTION,
+            &animations,
             cx,
         )?;
         let draft = self.workspace_preset_draft.as_ref()?;
@@ -265,7 +267,16 @@ impl SettingsPage {
                     Box::new(cx.listener(|this, _, _, cx| this.save_workspace_preset(cx))),
                 )),
         );
-        Some(modal("settings-create-preset-modal", transition, palette, panel).into_any_element())
+        Some(
+            modal(
+                "settings-create-preset-modal",
+                transition,
+                palette,
+                panel,
+                cx,
+            )
+            .into_any_element(),
+        )
     }
 
     pub(super) fn workspace_preset_delete_dialog(
@@ -273,9 +284,11 @@ impl SettingsPage {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
+        let animations = Settings::get(cx).animations;
         let ((), transition) = self.delete_preset_presence.sync(
             self.pending_delete_preset.as_ref().map(|_| ()),
             MODAL_MOTION,
+            &animations,
             cx,
         )?;
         let preset = self.pending_delete_preset.as_ref()?;
@@ -327,6 +340,15 @@ impl SettingsPage {
                         ),
                     )),
             );
-        Some(modal("settings-delete-preset-modal", transition, palette, panel).into_any_element())
+        Some(
+            modal(
+                "settings-delete-preset-modal",
+                transition,
+                palette,
+                panel,
+                cx,
+            )
+            .into_any_element(),
+        )
     }
 }

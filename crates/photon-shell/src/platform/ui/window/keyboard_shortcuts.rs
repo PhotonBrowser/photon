@@ -34,19 +34,21 @@ impl BrowserWindow {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
+        let animations = super::super::settings::Settings::get(cx).animations;
         let open = self
             .shortcuts_dialog
             .as_ref()
             .map(|(dialog, _)| dialog.clone());
-        let (dialog, transition) = self
-            .shortcuts_dialog_presence
-            .sync(open, MODAL_MOTION, cx)?;
+        let (dialog, transition) =
+            self.shortcuts_dialog_presence
+                .sync(open, MODAL_MOTION, &animations, cx)?;
         Some(
             modal(
                 "keyboard-shortcuts-modal",
                 transition,
                 palette,
                 div().child(dialog),
+                cx,
             )
             .into_any_element(),
         )

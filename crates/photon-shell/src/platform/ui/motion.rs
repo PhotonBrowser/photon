@@ -7,7 +7,7 @@
 //! [`AnimateIn::animate_in`]:
 //!
 //! ```ignore
-//! panel.animate_in("dialog-panel", Entrance::rise().delay(Speed::Quick))
+//! panel.animate_in("dialog-panel", Entrance::rise(), &settings.animations)
 //! ```
 //!
 //! The same entrance played backwards and a little faster is the element's
@@ -15,8 +15,8 @@
 //! it leaves, and play the exit with [`Animate::animate`]:
 //!
 //! ```ignore
-//! if let Some((menu, transition)) = self.menu_presence.sync(self.open_menu, Entrance::popover(), cx) {
-//!     surface.animate("menu", Entrance::popover(), transition)
+//! if let Some((menu, transition)) = self.menu_presence.sync(self.open_menu, Entrance::popover(), &settings.animations, cx) {
+//!     surface.animate("menu", Entrance::popover(), transition, &settings.animations)
 //! }
 //! ```
 //!
@@ -36,6 +36,7 @@ use gpui::{
     Animation, AnimationElement, AnimationExt, Context, ElementId, IntoElement, Motion,
     SpringConfig, Styled, Task, ease_in_out, ease_out_quint, linear, px,
 };
+use photon_core::AnimationSettings;
 use std::time::{Duration, Instant};
 
 /// How far an element moves as it enters, in pixels.
@@ -56,27 +57,27 @@ const FOCUS_BLUR: f32 = 6.0;
 /// Standard durations, so related motion moves at related speeds.
 #[derive(Clone, Copy, Debug)]
 pub(super) enum Speed {
-    /// Small feedback: chips, icons, hover reveals. 120 ms.
+    /// Small feedback: chips, icons, hover reveals. Defaults to 120 ms.
     Quick,
-    /// Most entrances: bars, menus, panels. 200 ms.
+    /// Most entrances: bars, menus, panels. Defaults to 200 ms.
     Standard,
-    /// Large or prominent surfaces. 320 ms.
+    /// Large or prominent surfaces. Defaults to 320 ms.
     Gentle,
 }
 
 impl Speed {
-    pub(super) const fn duration(self) -> Duration {
-        Duration::from_millis(match self {
-            Self::Quick => 120,
-            Self::Standard => 200,
-            Self::Gentle => 320,
+    fn duration(self, settings: &AnimationSettings) -> Duration {
+        let millis = match self {
+            Self::Quick => settings.quick_duration_ms,
+            Self::Standard => settings.standard_duration_ms,
+            Self::Gentle => settings.gentle_duration_ms,
+        }
+        .min(2_000);
+        Duration::from_millis(if settings.enabled {
+            u64::from(millis)
+        } else {
+            0
         })
-    }
-}
-
-impl From<Speed> for Duration {
-    fn from(speed: Speed) -> Self {
-        speed.duration()
     }
 }
 
@@ -126,7 +127,8 @@ pub(super) enum Edge {
 /// then apply it with [`AnimateIn::animate_in`].
 #[derive(Clone, Copy, Debug)]
 pub(super) struct Entrance {
-    duration: Duration,
+    speed: Speed,
+    duration_override: Option<Duration>,
     delay: Duration,
     curve: Curve,
     /// The opacity the element starts at.
@@ -143,7 +145,8 @@ impl Entrance {
     /// An entrance with no effects yet, at standard speed, easing out.
     pub(super) const fn new() -> Self {
         Self {
-            duration: Speed::Standard.duration(),
+            speed: Speed::Standard,
+            duration_override: None,
             delay: Duration::ZERO,
             curve: Curve::EaseOut,
             opacity_from: None,
@@ -261,12 +264,13 @@ impl Entrance {
     // Timing.
 
     pub(super) const fn speed(mut self, speed: Speed) -> Self {
-        self.duration = speed.duration();
+        self.speed = speed;
+        self.duration_override = None;
         self
     }
 
     pub(super) const fn duration(mut self, duration: Duration) -> Self {
-        self.duration = duration;
+        self.duration_override = Some(duration);
         self
     }
 
@@ -282,42 +286,65 @@ impl Entrance {
     }
 
     /// How long the entrance takes, including its delay.
-    pub(super) fn total_duration(&self) -> Duration {
-        self.delay + self.duration
+    fn resolved_duration(&self, settings: &AnimationSettings) -> Duration {
+        if !settings.enabled {
+            return Duration::ZERO;
+        }
+        self.duration_override
+            .unwrap_or_else(|| self.speed.duration(settings))
     }
 
     /// How long the exit takes: quicker than the entrance, with no delay.
-    pub(super) fn exit_duration(&self) -> Duration {
-        self.duration * 3 / 4
+    pub(super) fn exit_duration(&self, settings: &AnimationSettings) -> Duration {
+        self.resolved_duration(settings) * 3 / 4
     }
 
-    fn animation(&self) -> Animation {
-        Animation::new(self.curve.motion(self.duration).with_delay(self.delay))
+    /// How long the entrance takes, including its delay.
+    pub(super) fn total_duration(&self, settings: &AnimationSettings) -> Duration {
+        if settings.enabled {
+            self.delay + self.resolved_duration(settings)
+        } else {
+            Duration::ZERO
+        }
+    }
+
+    fn animation(&self, settings: &AnimationSettings) -> Animation {
+        let duration = self.resolved_duration(settings);
+        let delay = if settings.enabled {
+            self.delay
+        } else {
+            Duration::ZERO
+        };
+        Animation::new(self.curve.motion(duration).with_delay(delay))
     }
 
     /// The exit accelerates away rather than settling, whatever the entrance's curve.
-    fn exit_animation(&self) -> Animation {
-        Animation::new(Motion::new(self.exit_duration()).with_easing(ease_in_cubic))
+    fn exit_animation(&self, settings: &AnimationSettings) -> Animation {
+        Animation::new(Motion::new(self.exit_duration(settings)).with_easing(ease_in_cubic))
     }
 
     /// Styles `element` at `progress` through the entrance, from 0 to 1.
     /// Overshooting curves can pass 1.
-    fn apply<E: Styled>(&self, mut element: E, progress: f32) -> E {
+    fn apply<E: Styled>(&self, mut element: E, progress: f32, settings: &AnimationSettings) -> E {
+        let effect_scale = f32::from(settings.effect_strength_percent.min(300)) / 100.0;
         let remaining = 1.0 - progress;
         if let Some(from) = self.opacity_from {
             element = element.opacity((from + (1.0 - from) * progress).clamp(0.0, 1.0));
         }
         if let Some((x, y)) = self.offset_from {
-            element = element.left(px(x * remaining)).top(px(y * remaining));
+            element = element
+                .left(px(x * effect_scale * remaining))
+                .top(px(y * effect_scale * remaining));
         }
         if let Some(radius) = self.blur_from {
-            let radius = radius * remaining;
+            let radius = radius * effect_scale * remaining;
             if radius > 0.0 {
                 element = element.blur(px(radius));
             }
         }
         if let Some((size, fraction)) = self.grow {
-            element = element.size(px(size * (fraction + (1.0 - fraction) * progress)));
+            let start = (1.0 - (1.0 - fraction) * effect_scale).clamp(0.2, 1.0);
+            element = element.size(px(size * (start + (1.0 - start) * progress)));
         }
         element
     }
@@ -349,18 +376,34 @@ impl Transition {
 pub(super) trait AnimateIn: Styled + IntoElement + Sized + 'static {
     /// Plays `entrance` the first time the element is shown under `id`.
     /// A new `id` plays it again.
-    fn animate_in(self, id: impl Into<ElementId>, entrance: Entrance) -> AnimationElement<Self> {
-        self.with_animation(id, entrance.animation(), move |element, progress| {
-            entrance.apply(element, progress)
-        })
+    fn animate_in(
+        self,
+        id: impl Into<ElementId>,
+        entrance: Entrance,
+        settings: &AnimationSettings,
+    ) -> AnimationElement<Self> {
+        let settings = *settings;
+        self.with_animation(
+            id,
+            entrance.animation(&settings),
+            move |element, progress| entrance.apply(element, progress, &settings),
+        )
     }
 
     /// Plays `entrance` backwards, so the element leaves the way it came.
     /// Use an `id` distinct from the entrance's, so the exit starts afresh.
-    fn animate_out(self, id: impl Into<ElementId>, entrance: Entrance) -> AnimationElement<Self> {
-        self.with_animation(id, entrance.exit_animation(), move |element, progress| {
-            entrance.apply(element, 1.0 - progress)
-        })
+    fn animate_out(
+        self,
+        id: impl Into<ElementId>,
+        entrance: Entrance,
+        settings: &AnimationSettings,
+    ) -> AnimationElement<Self> {
+        let settings = *settings;
+        self.with_animation(
+            id,
+            entrance.exit_animation(&settings),
+            move |element, progress| entrance.apply(element, 1.0 - progress, &settings),
+        )
     }
 
     /// Animates in or out by `transition`, under an id for each.
@@ -369,11 +412,12 @@ pub(super) trait AnimateIn: Styled + IntoElement + Sized + 'static {
         id: impl Into<ElementId>,
         entrance: Entrance,
         transition: Transition,
+        settings: &AnimationSettings,
     ) -> AnimationElement<Self> {
         let id = ElementId::from((id.into(), transition.name()));
         match transition {
-            Transition::Enter => self.animate_in(id, entrance),
-            Transition::Exit => self.animate_out(id, entrance),
+            Transition::Enter => self.animate_in(id, entrance, settings),
+            Transition::Exit => self.animate_out(id, entrance, settings),
         }
     }
 }
@@ -408,6 +452,7 @@ impl<T: Clone + 'static> Presence<T> {
         &mut self,
         current: Option<T>,
         entrance: Entrance,
+        settings: &AnimationSettings,
         cx: &mut Context<V>,
     ) -> Option<(T, Transition)> {
         if let Some(current) = current {
@@ -416,9 +461,10 @@ impl<T: Clone + 'static> Presence<T> {
             self._expiry = None;
             return Some((current, Transition::Enter));
         }
-        let exit = entrance.exit_duration();
+        let exit = entrance.exit_duration(settings);
         if let Some(last) = self.shown.take()
             && !cx.reduce_motion()
+            && settings.enabled
         {
             self.leaving = Some((last, Instant::now()));
             self._expiry = Some(cx.spawn(async move |this, cx| {
@@ -461,7 +507,13 @@ impl Tween {
 
     /// Moves to `target` over `speed`, from wherever it is now, so turning
     /// back midway never jumps. Reduced motion moves at once.
-    pub(super) fn animate_to(&mut self, target: f32, speed: Speed, cx: &gpui::App) {
+    pub(super) fn animate_to(
+        &mut self,
+        target: f32,
+        speed: Speed,
+        settings: &AnimationSettings,
+        cx: &gpui::App,
+    ) {
         if self.to == target {
             return;
         }
@@ -471,7 +523,7 @@ impl Tween {
         self.duration = if cx.reduce_motion() {
             Duration::ZERO
         } else {
-            speed.duration()
+            speed.duration(settings)
         };
     }
 

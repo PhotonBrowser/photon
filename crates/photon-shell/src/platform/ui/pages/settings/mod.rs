@@ -231,12 +231,18 @@ impl Render for SettingsPage {
         // A section you pick fades in as it replaces the last; one shown
         // again, as when switching back to this tab, appears at once.
         let content = match self.section_picked_at {
-            Some(picked) if picked.elapsed() < SECTION_MOTION.total_duration() => content
-                .animate_in(
-                    (ElementId::from("settings-section"), section.id()),
-                    SECTION_MOTION,
-                )
-                .into_any_element(),
+            Some(picked)
+                if picked.elapsed()
+                    < SECTION_MOTION.total_duration(&Settings::get(cx).animations) =>
+            {
+                content
+                    .animate_in(
+                        (ElementId::from("settings-section"), section.id()),
+                        SECTION_MOTION,
+                        &Settings::get(cx).animations,
+                    )
+                    .into_any_element()
+            }
             _ => content.into_any_element(),
         };
         let reset_dialog = self.reset_dialog(palette, cx);

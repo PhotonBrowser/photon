@@ -283,14 +283,17 @@ impl BrowserWindow {
             collapsed,
             palette,
         );
-        match self
-            .spaces
-            .arriving_from(Entrance::slide_in(Edge::Left).total_duration())
-        {
+        match self.spaces.arriving_from(
+            Entrance::slide_in(Edge::Left).total_duration(&Settings::get(cx).animations),
+        ) {
             Some(edge) => div()
                 .w_full()
                 .child(tabs)
-                .animate_in(("space-tabs", space as usize), Entrance::slide_in(edge))
+                .animate_in(
+                    ("space-tabs", space as usize),
+                    Entrance::slide_in(edge),
+                    &Settings::get(cx).animations,
+                )
                 .into_any_element(),
             None => tabs.into_any_element(),
         }

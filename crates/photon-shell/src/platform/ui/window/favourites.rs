@@ -12,6 +12,7 @@ use super::super::settings::Settings;
 use super::super::sidebar::FavouriteTile;
 use super::super::{metrics, theme::ThemeColors};
 use super::BrowserWindow;
+use super::context_menu::show_window_context_menu;
 use super::menu::{MenuCommand, command_item};
 
 impl BrowserWindow {
@@ -59,10 +60,10 @@ impl BrowserWindow {
                         this.open_favourite(&url, active_space, window, cx);
                     })),
                     on_context_menu: Box::new(cx.listener(
-                        move |this, _: &MouseDownEvent, _, cx| {
+                        move |this, _: &MouseDownEvent, window, cx| {
                             cx.stop_propagation();
                             let items = this.favourite_menu_items(index, cx);
-                            cx.show_context_menu(items);
+                            show_window_context_menu(window, items, cx);
                         },
                     )),
                 }

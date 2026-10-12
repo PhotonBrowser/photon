@@ -307,18 +307,23 @@ impl BrowserWindow {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
+        let animations = Settings::get(cx).animations;
         let open = self
             .spaces
             .editor
             .as_ref()
             .map(|editing| editing.editor.clone());
-        let (editor, transition) = self.spaces.editor_presence.sync(open, MODAL_MOTION, cx)?;
+        let (editor, transition) =
+            self.spaces
+                .editor_presence
+                .sync(open, MODAL_MOTION, &animations, cx)?;
         Some(
             modal(
                 "space-editor-modal",
                 transition,
                 palette,
                 div().child(editor),
+                cx,
             )
             .into_any_element(),
         )

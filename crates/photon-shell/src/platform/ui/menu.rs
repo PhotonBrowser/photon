@@ -1,12 +1,13 @@
 //! Shared surface and items for browser menus.
 
-use gpui::{ElementId, Role, SharedString, div, prelude::*, px, rgb, rgba};
+use gpui::{App, ElementId, Role, SharedString, div, prelude::*, px, rgb, rgba};
 
 use super::controls::{switch, toggled};
 use super::icons::check_icon;
 use super::layout::{Elevated, Elevation, Raised};
 use super::layout::{h_stack, v_stack};
 use super::motion::{AnimateIn, Entrance, Transition};
+use super::settings::Settings;
 use super::{metrics, theme::ThemeColors};
 
 use super::ClickHandler;
@@ -26,6 +27,7 @@ pub(super) fn popover_surface(
     content: impl IntoElement,
     transition: Transition,
     palette: ThemeColors,
+    cx: &App,
 ) -> impl IntoElement {
     v_stack()
         .id("browser-menu")
@@ -44,7 +46,12 @@ pub(super) fn popover_surface(
         .text_color(rgb(palette.text_primary))
         .elevated(Elevation::High)
         .child(content)
-        .animate("browser-menu-motion", MENU_MOTION, transition)
+        .animate(
+            "browser-menu-motion",
+            MENU_MOTION,
+            transition,
+            &Settings::get(cx).animations,
+        )
 }
 
 pub(super) fn menu_separator(palette: ThemeColors) -> impl IntoElement {

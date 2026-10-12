@@ -37,9 +37,6 @@ pub(in crate::platform) use form_controls::{SelectDropdown, SelectItem, install_
 
 static MOUSE_MOVE_TRACE_COUNT: AtomicUsize = AtomicUsize::new(0);
 
-/// How long a load runs before its tab shows a spinner, so brief loads do
-/// not flash one over the page icon.
-const SPINNER_DELAY: Duration = Duration::from_millis(150);
 /// How often the page is laid out again while the window's layout
 /// animates, as when the sidebar slides; the drawn frame stretches between.
 const ANIMATING_RESIZE_INTERVAL: Duration = Duration::from_millis(100);
@@ -202,12 +199,13 @@ impl PhotonWebView {
     }
 
     /// Whether the tab should show a loading spinner instead of its icon.
-    pub(super) fn shows_spinner(&self) -> bool {
+    pub(super) fn shows_spinner(&self, animations: &photon_core::AnimationSettings) -> bool {
         // A failed load clears `loading` without a new state snapshot.
         self.state.loading
-            && self
-                .loading_since
-                .is_some_and(|since| since.elapsed() >= SPINNER_DELAY)
+            && self.loading_since.is_some_and(|since| {
+                since.elapsed()
+                    >= Duration::from_millis(u64::from(animations.loading_spinner_delay_ms()))
+            })
     }
 
     pub(super) fn prepare_shutdown(&mut self) {

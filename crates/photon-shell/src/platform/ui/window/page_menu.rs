@@ -1,11 +1,12 @@
 //! The page's right-click menu, built from the items the Engine offers and
 //! shown as a native menu.
 
-use gpui::{Context, MenuItem};
+use gpui::{Context, MenuItem, Window};
 use photon_shortcuts::ToggleZenMode;
 
 use super::super::PageMenuItem;
 use super::BrowserWindow;
+use super::context_menu::show_window_context_menu;
 
 /// Runs the item at `index` in the active page's context menu.
 #[derive(Clone, PartialEq, gpui::Action)]
@@ -16,7 +17,7 @@ pub(super) struct ActivatePageMenuItem {
 
 impl BrowserWindow {
     /// Opens the active page's context menu, which the page asked for.
-    pub(super) fn open_page_menu(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn open_page_menu(&mut self, window: &Window, cx: &mut Context<Self>) {
         let Some(webview) = self.active_webview() else {
             return;
         };
@@ -35,7 +36,7 @@ impl BrowserWindow {
                 MenuItem::action("Exit Zen Mode", ToggleZenMode),
             ]);
         }
-        cx.show_context_menu(items);
+        show_window_context_menu(window, items, cx);
     }
 
     pub(super) fn activate_page_menu_item(

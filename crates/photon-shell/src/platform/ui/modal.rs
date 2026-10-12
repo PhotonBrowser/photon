@@ -1,11 +1,12 @@
 //! A centered modal surface that dims and blocks what it covers.
 
-use gpui::{Div, ElementId, FontWeight, SharedString, div, prelude::*, px, rgb, rgba};
+use gpui::{App, Div, ElementId, FontWeight, SharedString, div, prelude::*, px, rgb, rgba};
 
 use super::controls::OwnsClicks;
 use super::layout::v_stack;
 use super::layout::{Elevated, Elevation, Raised};
 use super::motion::{AnimateIn, Entrance, Transition, distance};
+use super::settings::Settings;
 use super::{metrics, theme::ThemeColors};
 
 /// The modal's panel: a raised surface sized for short content. Callers give
@@ -48,6 +49,7 @@ pub(super) fn modal<E>(
     transition: Transition,
     palette: ThemeColors,
     panel: E,
+    cx: &App,
 ) -> impl IntoElement
 where
     E: Styled + IntoElement + 'static,
@@ -56,6 +58,7 @@ where
         ElementId::Name(format!("{id}-panel").into()),
         PANEL_MOTION,
         transition,
+        &Settings::get(cx).animations,
     );
     let mut modal = div()
         .id(id)
@@ -74,5 +77,6 @@ where
         ElementId::Name(format!("{id}-backdrop").into()),
         MODAL_MOTION,
         transition,
+        &Settings::get(cx).animations,
     )
 }

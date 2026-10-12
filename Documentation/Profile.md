@@ -29,11 +29,32 @@ holds the theme, transparency, named workspace presets, search engine, pop-up
 policy, the new tab page's layout, the sidebar width, the spaces (each with
 its name, preset assignment, window colour, pinned tabs and favourites) and
 the one shown, whether closing the last tab closes the window, and whether
-unused tabs close. Fields have serde defaults, so a profile saved by an older
-build still loads. Profile-wide favourites from older settings migrate into
-the active space. `reset_preferences` returns everything to its default but
-the shortcuts and spaces, whose favourites and pinned tabs stay while their
-colours and dismissed empty-favourites hints reset.
+unused tabs close. `animations` configures all shell entrances, exits and
+sidebar tweens: enable or disable motion, set quick, standard and gentle
+durations, scale slide, blur and icon growth effects, and tune native traffic
+light fade-in and fade-out durations, plus the loading spinner's delay and
+cadence. For example, add this object to `Settings.json` in the profile
+directory:
+
+```json
+"animations": {
+  "enabled": true,
+  "quick_duration_ms": 120,
+  "standard_duration_ms": 200,
+  "gentle_duration_ms": 320,
+  "effect_strength_percent": 100,
+  "traffic_light_fade_in_ms": 320,
+  "traffic_light_fade_out_ms": 320,
+  "loading_spinner_delay_ms": 150,
+  "spinner_step_interval_ms": 80
+}
+```
+
+Fields have serde defaults, so a profile saved by an older build still loads.
+Profile-wide favourites from older settings migrate into the active space.
+`reset_preferences` returns everything to its default but the shortcuts and
+spaces, whose favourites and pinned tabs stay while their colours and
+dismissed empty-favourites hints reset.
 
 In the shell, [`ui/settings.rs`](../crates/photon-shell/src/platform/ui/settings.rs)
 keeps one app-wide `Settings` global:

@@ -183,9 +183,9 @@ impl BrowserWindow {
                 },
                 4,
                 palette,
-                Box::new(cx.listener(|this, _, _, cx| {
+                Box::new(cx.listener(|this, _, window, cx| {
                     cx.stop_propagation();
-                    this.show_browser_menu(cx);
+                    this.show_browser_menu(window, cx);
                 })),
             )
             .into_any_element(),

@@ -60,6 +60,7 @@ impl RenderOnce for Dropdown {
             options,
             palette,
         } = self;
+        let animations = super::settings::Settings::get(cx).animations;
         let open_state =
             window.use_keyed_state(ElementId::from(id), cx, |_, _| OpenState::default());
         let focus = window
@@ -74,7 +75,8 @@ impl RenderOnce for Dropdown {
         // A closing menu stays drawn while it animates away, like any menu.
         let transition = if open {
             Some(Transition::Enter)
-        } else if closed_at.is_some_and(|at| at.elapsed() < MENU_MOTION.exit_duration()) {
+        } else if closed_at.is_some_and(|at| at.elapsed() < MENU_MOTION.exit_duration(&animations))
+        {
             window.request_animation_frame();
             Some(Transition::Exit)
         } else {
@@ -155,6 +157,7 @@ impl RenderOnce for Dropdown {
                         v_stack().children(rows),
                         transition,
                         palette,
+                        cx,
                     )),
             )
             .priority(1)

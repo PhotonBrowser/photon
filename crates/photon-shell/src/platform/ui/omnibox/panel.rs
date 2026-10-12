@@ -88,7 +88,11 @@ impl Omnibox {
                 .occlude()
                 .owns_clicks()
                 .child(self.field_content(palette, cx))
-                .child(rows.animate_in("omnibox-suggestions-appear", Entrance::fade())),
+                .child(rows.animate_in(
+                    "omnibox-suggestions-appear",
+                    Entrance::fade(),
+                    &super::super::settings::Settings::get(cx).animations,
+                )),
         )
         .priority(1)
     }

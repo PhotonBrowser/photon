@@ -193,6 +193,7 @@ impl RenderOnce for Switch {
                     Entrance::new()
                         .slide_from(if on { Edge::Left } else { Edge::Right }, travel)
                         .speed(Speed::Quick),
+                    &super::settings::Settings::get(cx).animations,
                 )
                 .into_any_element(),
         };
@@ -253,7 +254,11 @@ impl RenderOnce for CheckMark {
             .child(match changes {
                 0 => check.into_any_element(),
                 changes => check
-                    .animate_in((id, changes.to_string()), Entrance::fade())
+                    .animate_in(
+                        (id, changes.to_string()),
+                        Entrance::fade(),
+                        &super::settings::Settings::get(cx).animations,
+                    )
                     .into_any_element(),
             })
     }

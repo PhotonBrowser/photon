@@ -75,10 +75,11 @@ impl NewTabPage {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> Option<impl IntoElement> {
+        let animations = Settings::get(cx).animations;
         // A closed form stays drawn while it fades away.
         let (form, transition) =
             self.adding_presence
-                .sync(self.adding.clone(), MODAL_MOTION, cx)?;
+                .sync(self.adding.clone(), MODAL_MOTION, &animations, cx)?;
         let form = &form;
         let field = |id: &'static str, state: &Entity<EditableTextState>, placeholder| {
             text_field(
@@ -135,6 +136,7 @@ impl NewTabPage {
             transition,
             palette,
             panel.child(buttons),
+            cx,
         ))
     }
 }

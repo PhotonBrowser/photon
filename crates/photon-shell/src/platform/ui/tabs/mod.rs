@@ -112,7 +112,13 @@ pub(super) const ICON_ENTRANCE: Entrance = Entrance::pop(metrics::TAB_FAVICON_SI
 
 /// Sizes an icon image, growing it in from a smaller size while
 /// `appearing`, inside a fixed slot so the tab title does not move.
-fn sized_icon<E>(icon: E, id: ElementId, appearing: bool, size: f32) -> AnyElement
+fn sized_icon<E>(
+    icon: E,
+    id: ElementId,
+    appearing: bool,
+    size: f32,
+    animations: &photon_core::AnimationSettings,
+) -> AnyElement
 where
     E: Styled + IntoElement + 'static,
 {
@@ -125,7 +131,7 @@ where
         .items_center()
         .justify_center()
         .size(px(size))
-        .child(icon.animate_in(id, ICON_ENTRANCE))
+        .child(icon.animate_in(id, ICON_ENTRANCE, animations))
         .into_any_element()
 }
 
@@ -138,6 +144,7 @@ pub(super) struct TabItem {
     pub icon: TabIcon,
     /// Whether the icon is still growing in after it first appeared.
     pub icon_appearing: bool,
+    pub animations: photon_core::AnimationSettings,
     /// Whether the tab is pinned above today's tabs.
     pub pinned: bool,
     pub active: bool,
@@ -218,6 +225,7 @@ impl TabParts {
             .drag_over::<DraggedTab>(move |style, _, _, _| style.bg(rgba(palette.hover_surface)))
             .on_drop(tab.on_drop);
 
+        let animations = tab.animations;
         let icon_color = if tab.active {
             palette.text_primary
         } else {
@@ -235,6 +243,7 @@ impl TabParts {
                 icon_id,
                 tab.icon_appearing,
                 icon_size,
+                &animations,
             ),
             TabIcon::Audio { muted, .. } => audio_control_button(
                 format!("{tab_id}-audio"),
@@ -250,6 +259,7 @@ impl TabParts {
                 icon_id,
                 tab.icon_appearing,
                 icon_size,
+                &animations,
             ),
         };
         let close = close_tab_button(

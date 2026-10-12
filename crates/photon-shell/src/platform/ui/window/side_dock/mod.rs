@@ -53,7 +53,7 @@ pub(super) struct SidebarState {
     /// The width while its edge is dragged, until it is saved.
     dragged_width: Option<f32>,
     _save_width: Option<Task<()>>,
-    /// The window controls as last placed, so they move only on a change.
+    /// The target window control layout, so it changes only when needed.
     window_controls: Option<WindowControls>,
 }
 
@@ -115,6 +115,17 @@ impl SidebarState {
         self.shown.value()
     }
 
+    /// The live panel offset, shared by the sidebar and its native controls.
+    pub(super) fn panel_offset(&self, cx: &App) -> f32 {
+        let out = self.shown().max(self.revealed());
+        let width = if self.over_page() {
+            self.width(cx)
+        } else {
+            self.docked_width(cx)
+        };
+        (out - 1.0) * width
+    }
+
     /// How far it is expanded from icons to labels, from 0 to 1.
     fn expanded(&self) -> f32 {
         self.expanded.value()
@@ -161,7 +172,12 @@ impl SidebarState {
     /// Hidden, it leaves with the page.
     fn follow_docked(&mut self, cx: &App) {
         let docked = self.docked();
-        self.shown.animate_to(progress(docked), Speed::Gentle, cx);
+        self.shown.animate_to(
+            progress(docked),
+            Speed::Gentle,
+            &Settings::get(cx).animations,
+            cx,
+        );
         if !docked {
             self.revealed = false;
             self.reveal.jump_to(0.0);
@@ -185,7 +201,8 @@ impl SidebarState {
         }
         self.visible = true;
         self.zen = false;
-        self.tucked.animate_to(0.0, Speed::Gentle, cx);
+        self.tucked
+            .animate_to(0.0, Speed::Gentle, &Settings::get(cx).animations, cx);
         self.follow_docked(cx);
     }
 
@@ -194,7 +211,12 @@ impl SidebarState {
             return false;
         }
         self.zen = zen;
-        self.tucked.animate_to(progress(zen), Speed::Gentle, cx);
+        self.tucked.animate_to(
+            progress(zen),
+            Speed::Gentle,
+            &Settings::get(cx).animations,
+            cx,
+        );
         self.follow_docked(cx);
         true
     }
@@ -211,7 +233,8 @@ impl SidebarState {
         if self.over_page() {
             self.expanded.jump_to(target);
         } else {
-            self.expanded.animate_to(target, Speed::Standard, cx);
+            self.expanded
+                .animate_to(target, Speed::Standard, &Settings::get(cx).animations, cx);
         }
         true
     }
@@ -221,8 +244,12 @@ impl SidebarState {
             return false;
         }
         self.revealed = revealed;
-        self.reveal
-            .animate_to(progress(revealed), Speed::Standard, cx);
+        self.reveal.animate_to(
+            progress(revealed),
+            Speed::Standard,
+            &Settings::get(cx).animations,
+            cx,
+        );
         true
     }
 

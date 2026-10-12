@@ -120,7 +120,11 @@ impl NewTabPage {
                             this.remove(&url, cx);
                         })),
                     ))
-                    .animate_in(("new-tab-remove-shortcut", index), Entrance::fade()),
+                    .animate_in(
+                        ("new-tab-remove-shortcut", index),
+                        Entrance::fade(),
+                        &super::super::super::settings::Settings::get(cx).animations,
+                    ),
             );
         }
         tile.into_any_element()

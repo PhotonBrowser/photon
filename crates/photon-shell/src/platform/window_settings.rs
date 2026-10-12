@@ -4,6 +4,7 @@ use gpui::{
     App, Bounds, MacosWindowBackground, TitlebarOptions, Window, WindowBounds, WindowOptions,
     point, px, size,
 };
+use photon_core::AnimationSettings;
 
 use crate::platform::ui::metrics;
 
@@ -11,11 +12,17 @@ use crate::platform::ui::metrics;
 const TRAFFIC_LIGHTS_ENABLED_ON_HOVER: bool = true;
 
 /// Applies Photon-specific interaction styling to native window controls.
-pub(super) fn configure_traffic_lights(window: &Window) {
+pub(super) fn configure_traffic_lights(window: &Window, animations: &AnimationSettings) {
     #[cfg(target_os = "macos")]
-    window.set_traffic_light_hover_behavior(TRAFFIC_LIGHTS_ENABLED_ON_HOVER);
+    {
+        window.set_traffic_light_hover_behavior(TRAFFIC_LIGHTS_ENABLED_ON_HOVER);
+        window.set_traffic_light_fade_durations(
+            animations.traffic_light_fade_in_ms(),
+            animations.traffic_light_fade_out_ms(),
+        );
+    }
     #[cfg(not(target_os = "macos"))]
-    let _ = window;
+    let _ = (window, animations);
 }
 
 /// Select with PHOTON_WINDOW_BACKGROUND=opaque|blurred|liquid-glass.

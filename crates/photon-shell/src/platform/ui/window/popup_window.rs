@@ -46,9 +46,10 @@ pub(super) fn open_minimal_window(
     cx: &mut App,
 ) {
     let options = window_settings::popup_options(cx, request.width, request.height);
+    let animations = Settings::get(cx).animations;
     let webview = create_webview_from_session(cx, runtime.clone(), request.session);
     if let Err(error) = cx.open_window(options, move |window, cx| {
-        window_settings::configure_traffic_lights(window);
+        window_settings::configure_traffic_lights(window, &animations);
         window.set_window_title(photon_brand::NAME);
         follow_appearance(&webview, window, cx);
         webview.update(cx, |view, cx| {
@@ -90,10 +91,18 @@ pub(super) fn open_minimal_window(
                 dialog: DialogHost::default(),
                 _webview_subscription: webview_subscription,
                 // Follow theme and transparency changes made in any window.
-                _settings_subscription: cx.observe_global::<Settings>(|this, cx| {
-                    this.webview.update(cx, |_, cx| cx.notify());
-                    cx.notify();
-                }),
+                _settings_subscription: cx.observe_global_in::<Settings>(
+                    window,
+                    |this, window, cx| {
+                        let animations = Settings::get(cx).animations;
+                        window.set_traffic_light_fade_durations(
+                            animations.traffic_light_fade_in_ms(),
+                            animations.traffic_light_fade_out_ms(),
+                        );
+                        this.webview.update(cx, |_, cx| cx.notify());
+                        cx.notify();
+                    },
+                ),
             }
         })
     }) {
@@ -127,11 +136,14 @@ impl MinimalPopupWindow {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
+        let animations = Settings::get(cx).animations;
         let origin = self
             .pending_popups
             .first()
             .map(|popup| popup.origin.clone());
-        let (origin, transition) = self.popup_presence.sync(origin, MODAL_MOTION, cx)?;
+        let (origin, transition) =
+            self.popup_presence
+                .sync(origin, MODAL_MOTION, &animations, cx)?;
         Some(popup_confirmation_dialog(
             origin,
             transition,

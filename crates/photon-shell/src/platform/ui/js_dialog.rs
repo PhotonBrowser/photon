@@ -16,6 +16,7 @@ use super::controls::text_field;
 use super::layout::h_stack;
 use super::modal::{MODAL_MOTION, dialog_title, modal, modal_panel};
 use super::motion::{Presence, Transition};
+use super::settings::Settings;
 use super::{PhotonWebView, metrics, theme::palette};
 
 /// The JavaScript dialog a window shows for one of its pages, modal to the
@@ -68,8 +69,9 @@ impl DialogHost {
 
     /// The dialog over the window, while shown or animating away.
     pub(super) fn overlay<V: 'static>(&mut self, cx: &mut Context<V>) -> Option<AnyElement> {
+        let animations = Settings::get(cx).animations;
         self.presence
-            .sync(self.dialog.clone(), MODAL_MOTION, cx)
+            .sync(self.dialog.clone(), MODAL_MOTION, &animations, cx)
             .map(|(dialog, _)| dialog.into_any_element())
     }
 }
@@ -243,6 +245,7 @@ impl Render for JavaScriptDialog {
             self.transition,
             palette,
             panel.child(buttons),
+            cx,
         )
     }
 }

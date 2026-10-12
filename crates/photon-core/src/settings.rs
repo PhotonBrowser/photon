@@ -124,6 +124,76 @@ pub struct BrowserSettings {
     pub archive_tabs: bool,
     /// Whether the browser reopens its windows and tabs from last time.
     pub restore_session: bool,
+    /// Timing and effect strengths for shell animations.
+    pub animations: AnimationSettings,
+}
+
+/// Tunable motion values. Existing profile files use these defaults when the
+/// `animations` object or any of its fields is absent.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(default)]
+pub struct AnimationSettings {
+    /// Whether Photon animates UI changes. Reduced motion from the OS still
+    /// takes precedence when this is enabled.
+    pub enabled: bool,
+    pub quick_duration_ms: u16,
+    pub standard_duration_ms: u16,
+    pub gentle_duration_ms: u16,
+    /// Multiplier for slide distances and starting blur, in percent.
+    pub effect_strength_percent: u16,
+    /// Native traffic light hover and visibility fade durations.
+    pub traffic_light_fade_in_ms: u16,
+    pub traffic_light_fade_out_ms: u16,
+    /// Delay before a page-load spinner replaces its icon, and the cadence
+    /// for the spinner's steps.
+    pub loading_spinner_delay_ms: u16,
+    pub spinner_step_interval_ms: u16,
+}
+
+impl Default for AnimationSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            quick_duration_ms: 120,
+            standard_duration_ms: 200,
+            gentle_duration_ms: 320,
+            effect_strength_percent: 100,
+            traffic_light_fade_in_ms: 320,
+            traffic_light_fade_out_ms: 320,
+            loading_spinner_delay_ms: 150,
+            spinner_step_interval_ms: 80,
+        }
+    }
+}
+
+impl AnimationSettings {
+    /// The effective fade-in duration for native window controls.
+    pub fn traffic_light_fade_in_ms(self) -> u16 {
+        if self.enabled {
+            self.traffic_light_fade_in_ms.min(2_000)
+        } else {
+            0
+        }
+    }
+
+    /// The effective fade-out duration for native window controls.
+    pub fn traffic_light_fade_out_ms(self) -> u16 {
+        if self.enabled {
+            self.traffic_light_fade_out_ms.min(2_000)
+        } else {
+            0
+        }
+    }
+
+    /// The delay before a page-load spinner appears, capped at two seconds.
+    pub fn loading_spinner_delay_ms(self) -> u16 {
+        self.loading_spinner_delay_ms.min(2_000)
+    }
+
+    /// Spinner cadence, kept between one frame and one second.
+    pub fn spinner_step_interval_ms(self) -> u16 {
+        self.spinner_step_interval_ms.clamp(16, 1_000)
+    }
 }
 
 impl Default for BrowserSettings {
@@ -142,6 +212,7 @@ impl Default for BrowserSettings {
             spaces: Spaces::default(),
             archive_tabs: false,
             restore_session: true,
+            animations: AnimationSettings::default(),
         }
     }
 }

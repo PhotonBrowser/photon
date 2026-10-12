@@ -23,10 +23,11 @@ impl NewTabPage {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let animations = super::super::super::settings::Settings::get(cx).animations;
         let shown = self.customising.then_some(());
         let menu = self
             .customise_presence
-            .sync(shown, MENU_MOTION, cx)
+            .sync(shown, MENU_MOTION, &animations, cx)
             .map(|((), transition)| {
                 deferred(
                     div()
@@ -157,6 +158,7 @@ impl NewTabPage {
             content,
             transition,
             palette,
+            cx,
         )
     }
 }
