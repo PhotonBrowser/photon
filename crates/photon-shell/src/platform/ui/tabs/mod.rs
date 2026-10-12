@@ -374,11 +374,6 @@ fn audio_control_button(
         .hover(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
         .on_click(on_click)
-        .on_mouse_down_all(|event, phase, _, _, cx| {
-            if phase == DispatchPhase::Capture && event.button == MouseButton::Left {
-                cx.stop_propagation();
-            }
-        })
         .tooltip(tooltip)
         .child(audio_icon(icon_color, metrics::TAB_AUDIO_ICON_SIZE, muted))
         .into_any_element()
@@ -405,10 +400,5 @@ fn close_tab_button(
         .hover(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
         .on_click(on_click)
-        .on_mouse_down_all(|event, phase, _, _, cx| {
-            if phase == DispatchPhase::Capture && event.button == MouseButton::Left {
-                cx.stop_propagation();
-            }
-        })
         .child(close_icon(palette.text_secondary, metrics::TAB_ICON_SIZE))
 }
