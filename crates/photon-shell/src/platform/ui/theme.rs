@@ -42,11 +42,11 @@ impl SurfaceOpacity {
                 raised_blur: 20.0,
             },
             Transparency::Clear => Self {
-                // Keep the shell tint light so the native material can adapt
-                // its appearance to the backdrop beneath the window.
-                window: 0.36,
+                // Add enough tint to keep the window surface distinct while
+                // letting the native material adapt to the backdrop.
+                window: 0.46,
                 raised: 0.84,
-                raised_blur: 32.0,
+                raised_blur: 48.0,
             },
         }
     }
