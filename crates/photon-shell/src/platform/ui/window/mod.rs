@@ -52,7 +52,7 @@ use super::omnibox::{Omnibox, OmniboxEvent};
 use super::pages::find_page;
 use super::settings::Settings;
 use super::shortcuts_dialog::ShortcutsDialog;
-use super::tabs::{RevealedIcon, TabDragAxis, TabIcon};
+use super::tabs::{RevealedIcon, TabDragAxis};
 use super::theme::{ThemeColors, palette};
 use alerts::{EngineNotice, NoticeExpiry};
 use content::{BrowserTab, TabContent, create_webview};
@@ -161,7 +161,6 @@ struct TabDragLayout {
     grab_offset: Point<Pixels>,
     tab_bounds: Bounds<Pixels>,
     label: String,
-    icon: TabIcon,
     pinned: bool,
     phase: TabDragPhase,
     visual_offset: f32,

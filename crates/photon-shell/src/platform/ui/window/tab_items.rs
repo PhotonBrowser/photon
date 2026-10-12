@@ -104,7 +104,6 @@ impl BrowserWindow {
                 };
                 let stable_id = tab.id;
                 let tab_label = label.clone();
-                let drag_icon = icon.clone();
                 let insertion_before = self.incoming_tab_drag.as_ref().and_then(|incoming| {
                     (incoming.pinned == tab.pin.is_some() && incoming.before_id == Some(stable_id))
                         .then_some(incoming.size)
@@ -152,7 +151,6 @@ impl BrowserWindow {
                     on_pointer_down: {
                         let browser = browser.clone();
                         let label = tab_label.clone();
-                        let icon = drag_icon.clone();
                         let pinned = tab.pin.is_some();
                         Box::new(move |event, phase, hitbox, axis, window, cx| {
                             if phase != DispatchPhase::Bubble
@@ -176,7 +174,6 @@ impl BrowserWindow {
                                         grab_offset: event.position - hitbox.bounds.origin,
                                         tab_bounds: hitbox.bounds,
                                         label: label.clone(),
-                                        icon: icon.clone(),
                                         pinned,
                                         phase: super::TabDragPhase::PendingDrag,
                                         visual_offset: 0.0,

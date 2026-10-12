@@ -45,67 +45,17 @@ pub(super) struct DraggedTab {
     pub source: AnyWindowHandle,
     pub id: u64,
     pub label: SharedString,
-    pub icon: TabIcon,
     pub axis: TabDragAxis,
     pub size: f32,
-    pub preview_width: f32,
-    pub preview_height: f32,
     pub pinned: bool,
 }
 
-/// A tab-shaped view GPUI keeps directly under the pointer during a drag.
-pub(super) struct TabDragPreview {
-    pub label: SharedString,
-    pub icon: TabIcon,
-    pub width: f32,
-    pub height: f32,
-    pub pinned: bool,
-    pub palette: ThemeColors,
-}
+/// An invisible GPUI drag view. The source tab itself dims during a drag.
+pub(super) struct TabDragPreview;
 
 impl Render for TabDragPreview {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        let palette = self.palette;
-        let icon = drag_preview_icon(&self.icon, palette);
-        let preview = h_stack()
-            .items_center()
-            .h(px(self.height))
-            .w(px(self.width.min(metrics::TAB_MAX_WIDTH)))
-            .flex_shrink_0()
-            .gap(px(metrics::TAB_CLOSE_GAP))
-            .px(px(metrics::TAB_HORIZONTAL_PADDING))
-            .rounded(px(metrics::CONTROL_RADIUS))
-            .border_1()
-            .border_color(rgba(palette.menu_border))
-            .bg(rgba(palette.selected_surface))
-            .text_size(px(metrics::TAB_FONT_SIZE))
-            .text_color(rgb(palette.text_primary))
-            .opacity(metrics::TAB_DRAG_PREVIEW_OPACITY);
-        if self.pinned || self.width < metrics::TAB_MIN_WIDTH {
-            return preview.justify_center().child(icon).into_any_element();
-        }
-        preview
-            .child(icon)
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .truncate()
-                    .child(self.label.clone()),
-            )
-            .child(
-                div()
-                    .flex_shrink_0()
-                    .size(px(metrics::TAB_CLOSE_BUTTON_SIZE))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .child(close_icon(
-                        palette.text_secondary,
-                        metrics::CHIP_CLOSE_ICON_SIZE,
-                    )),
-            )
-            .into_any_element()
+        div().opacity(0.0)
     }
 }
 
@@ -116,7 +66,6 @@ pub(super) enum TabDragAxis {
 }
 
 /// What a tab shows before its title.
-#[derive(Clone)]
 pub(super) enum TabIcon {
     /// The page is loading; the value is the spinner's animation step.
     Loading(usize),
@@ -132,32 +81,6 @@ pub(super) enum TabIcon {
     Logo,
     /// A monochrome symbol, drawn in the tab's text color at the given size.
     Symbol(fn(u32, f32) -> AnyElement),
-}
-
-fn drag_preview_icon(icon: &TabIcon, palette: ThemeColors) -> AnyElement {
-    let size = metrics::TAB_FAVICON_SIZE;
-    match icon {
-        TabIcon::Loading(step) => div()
-            .size(px(size))
-            .flex()
-            .items_center()
-            .justify_center()
-            .child(loading_spinner(palette.text_secondary, size, *step))
-            .into_any_element(),
-        TabIcon::Favicon(favicon) => img(ImageSource::Render(favicon.image.clone()))
-            .object_fit(ObjectFit::Contain)
-            .size(px(size))
-            .into_any_element(),
-        TabIcon::Audio { muted, .. } => {
-            audio_icon(palette.text_secondary, size, *muted).into_any_element()
-        }
-        TabIcon::Page => globe_icon(palette.text_secondary, size).into_any_element(),
-        TabIcon::Logo => img(photon_logo())
-            .object_fit(ObjectFit::Contain)
-            .size(px(size))
-            .into_any_element(),
-        TabIcon::Symbol(symbol) => symbol(palette.text_secondary, size),
-    }
 }
 
 /// Identifies an icon a tab reveals with the appear animation.

@@ -93,31 +93,15 @@ impl BrowserWindow {
                 source: window.window_handle(),
                 id: tab.id,
                 label: layout.label.clone().into(),
-                icon: layout.icon.clone(),
                 axis: layout.axis,
                 size: match layout.axis {
                     TabDragAxis::Horizontal => f32::from(bounds.size.width),
                     TabDragAxis::Vertical => f32::from(bounds.size.height),
                 },
-                preview_width: f32::from(bounds.size.width),
-                preview_height: f32::from(bounds.size.height),
                 pinned: layout.pinned,
             };
             let offset = layout.grab_offset;
-            let palette = self.palette(window, cx);
-            let preview_label = dragged.label.clone();
-            let preview_icon = dragged.icon.clone();
-            let preview_width = dragged.preview_width;
-            let preview_height = dragged.preview_height;
-            let preview_pinned = dragged.pinned;
-            let preview = cx.new(move |_| TabDragPreview {
-                label: preview_label,
-                icon: preview_icon,
-                width: preview_width,
-                height: preview_height,
-                pinned: preview_pinned,
-                palette,
-            });
+            let preview = cx.new(|_| TabDragPreview);
             if let Some(layout) = self.tab_drag_layout.as_mut() {
                 layout.phase = super::TabDragPhase::Reordering;
                 layout.pointer_position = position;
@@ -1275,26 +1259,12 @@ impl BrowserWindow {
                 grab_offset,
                 tab_bounds: source_tab_bounds,
                 label: dragged.label.to_string(),
-                icon: dragged.icon.clone(),
                 pinned: dragged.pinned,
                 phase: super::TabDragPhase::DraggingDetachedWindow,
                 visual_offset: 0.0,
                 target_window: None,
             });
-            let palette = browser.palette(window, cx);
-            let preview_label = dragged.label.clone();
-            let preview_icon = dragged.icon.clone();
-            let preview_width = dragged.preview_width;
-            let preview_height = dragged.preview_height;
-            let preview_pinned = dragged.pinned;
-            let preview = cx.new(move |_| TabDragPreview {
-                label: preview_label,
-                icon: preview_icon,
-                width: preview_width,
-                height: preview_height,
-                pinned: preview_pinned,
-                palette,
-            });
+            let preview = cx.new(|_| TabDragPreview);
             window.start_window_move();
             preview
         });
@@ -1309,11 +1279,8 @@ impl BrowserWindow {
             source: new_window.into(),
             id: tab.id,
             label: dragged.label,
-            icon: dragged.icon,
             axis: dragged.axis,
             size: dragged.size,
-            preview_width: dragged.preview_width,
-            preview_height: dragged.preview_height,
             pinned: dragged.pinned,
         };
         let _ = cx.stop_drag(window);
