@@ -16,7 +16,7 @@ use super::super::super::sidebar::{
     FooterActions, SidebarSection, collapsed_tile, favourites_empty_state, favourites_grid, footer,
     navigation_bar, navigation_column, sidebar,
 };
-use super::super::super::tabs::{DraggedTab, TabDragMove, tab_list};
+use super::super::super::tabs::{TabDragMove, tab_list};
 use super::super::super::titlebar::window_drag_area;
 use super::super::super::tooltip::label_tooltip;
 use super::super::super::workspace_layout::{ComponentId, WorkspaceLayout};
@@ -265,10 +265,8 @@ impl BrowserWindow {
                 .into_any_element(),
             );
         }
-        let dragging_tab = cx
-            .active_drag()
-            .is_some_and(|drag| drag.value.downcast_ref::<DraggedTab>().is_some());
-        if !dragging_tab && (hint_dismissed || collapsed) {
+        let dragging_over_favourites = self.favourites_drag_hover.is_some();
+        if !should_show_empty_favourites_hint(hint_dismissed, collapsed, dragging_over_favourites) {
             return None;
         }
         let on_dismiss: ClickHandler = Box::new(cx.listener(move |_, _, _, cx| {
@@ -378,4 +376,25 @@ fn revealed_surface(palette: ThemeColors) -> Div {
         .border_color(rgba(palette.menu_border))
         .raised(palette)
         .elevated(Elevation::High)
+}
+
+fn should_show_empty_favourites_hint(
+    hint_dismissed: bool,
+    collapsed: bool,
+    dragging_over_favourites: bool,
+) -> bool {
+    !collapsed && (!hint_dismissed || dragging_over_favourites)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_show_empty_favourites_hint;
+
+    #[test]
+    fn dismissed_hint_only_returns_during_a_favourites_drag_hover() {
+        assert!(!should_show_empty_favourites_hint(true, false, false));
+        assert!(should_show_empty_favourites_hint(true, false, true));
+        assert!(should_show_empty_favourites_hint(false, false, false));
+        assert!(!should_show_empty_favourites_hint(false, true, false));
+    }
 }

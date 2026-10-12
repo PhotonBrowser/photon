@@ -137,25 +137,42 @@ impl BrowserWindow {
         if let Some(layout) = self.tab_drag_layout.as_mut() {
             layout.pointer_position = position;
         }
-        let in_favourites = self
-            .favourites_bounds
-            .is_some_and(|bounds| bounds.contains(&position));
+        let in_favourites = self.is_favourites_drop_position(position, cx);
         if in_favourites {
             self.clear_previous_target(cx);
-            if let Some(layout) = self.tab_drag_layout.as_mut() {
-                layout.phase = super::TabDragPhase::DraggingOverFavourites;
-            }
+            self.set_favourites_drag_hover(current_window, dragged.id, cx);
+            self.set_tab_drag_phase(super::TabDragPhase::DraggingOverFavourites, cx);
             return;
         }
+        self.clear_favourites_drag_hover(current_window, dragged.id, cx);
 
         let global_position = window.bounds().origin + position;
         if let Some((target, over_favourites, target_position)) =
             self.external_drop_target(global_position, current_window, cx)
         {
             if over_favourites {
-                self.clear_previous_target(cx);
+                let target_handle = target.into();
+                let already_targeting = self
+                    .tab_drag_layout
+                    .as_ref()
+                    .is_some_and(|layout| layout.target_window == Some(target_handle));
+                if !already_targeting {
+                    self.clear_previous_target(cx);
+                }
+                target
+                    .update(cx, |browser, _, cx| {
+                        browser.set_favourites_drag_hover(current_window, dragged.id, cx);
+                    })
+                    .ok();
+                let mut changed = false;
                 if let Some(layout) = self.tab_drag_layout.as_mut() {
+                    changed = layout.phase != super::TabDragPhase::DraggingOverFavourites
+                        || layout.target_window != Some(target_handle);
                     layout.phase = super::TabDragPhase::DraggingOverFavourites;
+                    layout.target_window = Some(target_handle);
+                }
+                if changed {
+                    cx.notify();
                 }
                 return;
             }
@@ -176,33 +193,25 @@ impl BrowserWindow {
         }
 
         let moving_toward_favourites = !was_over_favourites
-            && self.favourites_bounds.is_some_and(|bounds| {
+            && self.favourites_drop_bounds(cx).is_some_and(|bounds| {
                 bounds_distance(bounds, position) < bounds_distance(bounds, previous_position)
             });
         if moving_toward_favourites {
-            if let Some(layout) = self.tab_drag_layout.as_mut() {
-                layout.phase = super::TabDragPhase::OutsideTarget;
-            }
+            self.set_tab_drag_phase(super::TabDragPhase::OutsideTarget, cx);
             return;
         }
 
         let outside = bounds_distance(hitbox.bounds, position);
         if outside < super::super::metrics::TAB_DETACH_DISTANCE {
-            if let Some(layout) = self.tab_drag_layout.as_mut() {
-                layout.phase = super::TabDragPhase::OutsideTarget;
-            }
+            self.set_tab_drag_phase(super::TabDragPhase::OutsideTarget, cx);
             return;
         }
         if !can_detach_tab_count(self.tabs.len()) {
-            if let Some(layout) = self.tab_drag_layout.as_mut() {
-                layout.phase = super::TabDragPhase::OutsideTarget;
-            }
+            self.set_tab_drag_phase(super::TabDragPhase::OutsideTarget, cx);
             return;
         }
 
-        if let Some(layout) = self.tab_drag_layout.as_mut() {
-            layout.phase = super::TabDragPhase::Detaching;
-        }
+        self.set_tab_drag_phase(super::TabDragPhase::Detaching, cx);
         self.detach_tab(dragged, position, window, cx);
     }
 
@@ -417,13 +426,18 @@ impl BrowserWindow {
                 continue;
             };
             let local_position = global_position - window_bounds.origin;
-            let Ok((favourites, tab_container)) = target
-                .read(cx)
-                .map(|browser| (browser.favourites_bounds, browser.tab_container_bounds))
-            else {
+            let Ok((favourites, tab_container, reveal_bounds)) = target.read(cx).map(|browser| {
+                (
+                    browser.favourites_bounds,
+                    browser.tab_container_bounds,
+                    browser.favourites_drop_bounds(cx),
+                )
+            }) else {
                 continue;
             };
-            if favourites.is_some_and(|bounds| bounds.contains(&local_position)) {
+            if favourites.is_some_and(|bounds| bounds.contains(&local_position))
+                || reveal_bounds.is_some_and(|bounds| bounds.contains(&local_position))
+            {
                 return Some((target, true, local_position));
             }
             if strip_target.is_none()
@@ -433,6 +447,89 @@ impl BrowserWindow {
             }
         }
         strip_target
+    }
+
+    fn is_favourites_drop_position(&self, position: gpui::Point<gpui::Pixels>, cx: &App) -> bool {
+        self.favourites_drop_bounds(cx)
+            .is_some_and(|bounds| bounds.contains(&position))
+    }
+
+    fn favourites_drop_bounds(&self, cx: &App) -> Option<gpui::Bounds<gpui::Pixels>> {
+        self.favourites_bounds
+            .or_else(|| self.empty_favourites_reveal_bounds(cx))
+    }
+
+    /// When the empty-state hint was dismissed, keep a small, invisible
+    /// target just above the tab list. Entering it reveals the real target
+    /// without showing the hint for every tab drag.
+    fn empty_favourites_reveal_bounds(&self, cx: &App) -> Option<gpui::Bounds<gpui::Pixels>> {
+        if self.favourites_bounds.is_some() {
+            return None;
+        }
+        let layout = WorkspaceLayout::current(cx);
+        let has_favourites_panel = layout.sidebar_region().is_some_and(|region| {
+            layout.components(region).any(|component| {
+                component.id == super::super::workspace_layout::ComponentId::FavouritesPanel
+            })
+        });
+        if !has_favourites_panel
+            || self.tab_axis(cx) != TabDragAxis::Vertical
+            || self.sidebar.shows_icons()
+        {
+            return None;
+        }
+        let space = Settings::get(cx).spaces.active();
+        if !space.favourites.is_empty() || !space.favourites_hint_dismissed {
+            return None;
+        }
+        let tabs = self.tab_container_bounds?;
+        let height = gpui::px(
+            2.0 * super::super::metrics::SIDEBAR_SEPARATOR_MARGIN
+                + super::super::metrics::MENU_SEPARATOR_HEIGHT,
+        );
+        Some(gpui::Bounds::new(
+            gpui::point(tabs.origin.x, tabs.origin.y - height),
+            gpui::size(tabs.size.width, height),
+        ))
+    }
+
+    fn set_favourites_drag_hover(
+        &mut self,
+        source: gpui::AnyWindowHandle,
+        id: u64,
+        cx: &mut Context<Self>,
+    ) {
+        let target = Some((source, id));
+        if self.favourites_drag_hover != target {
+            self.favourites_drag_hover = target;
+            cx.notify();
+        }
+    }
+
+    fn clear_favourites_drag_hover(
+        &mut self,
+        source: gpui::AnyWindowHandle,
+        id: u64,
+        cx: &mut Context<Self>,
+    ) {
+        if self.favourites_drag_hover == Some((source, id)) {
+            self.favourites_drag_hover = None;
+            cx.notify();
+        }
+    }
+
+    fn set_tab_drag_phase(&mut self, phase: super::TabDragPhase, cx: &mut Context<Self>) {
+        let changed = self.tab_drag_layout.as_mut().is_some_and(|layout| {
+            if layout.phase == phase {
+                false
+            } else {
+                layout.phase = phase;
+                true
+            }
+        });
+        if changed {
+            cx.notify();
+        }
     }
 
     fn notify_other_tab_drop_targets(cx: &mut App, current_window: gpui::AnyWindowHandle) {
@@ -464,6 +561,7 @@ impl BrowserWindow {
         }
         if target
             .update(cx, |browser, _, cx| {
+                browser.clear_favourites_drag_hover(dragged.source, dragged.id, cx);
                 browser.set_incoming_tab_drag(dragged, position, cx);
             })
             .is_err()
@@ -483,11 +581,9 @@ impl BrowserWindow {
         current_window: gpui::AnyWindowHandle,
         cx: &mut Context<Self>,
     ) {
-        if self
-            .favourites_bounds
-            .is_some_and(|bounds| bounds.contains(&position))
-        {
+        if self.is_favourites_drop_position(position, cx) {
             self.clear_incoming_tab_drag(dragged.source, dragged.id, cx);
+            self.set_favourites_drag_hover(dragged.source, dragged.id, cx);
             self.set_source_drag_phase(
                 dragged.source,
                 dragged.id,
@@ -497,6 +593,7 @@ impl BrowserWindow {
             );
             return;
         }
+        self.clear_favourites_drag_hover(dragged.source, dragged.id, cx);
         if self
             .tab_container_bounds
             .is_some_and(|bounds| bounds.contains(&position))
@@ -560,7 +657,8 @@ impl BrowserWindow {
         };
         target
             .update(cx, |browser, _, cx| {
-                browser.clear_incoming_tab_drag(source, id, cx)
+                browser.clear_incoming_tab_drag(source, id, cx);
+                browser.clear_favourites_drag_hover(source, id, cx);
             })
             .ok();
     }
@@ -751,6 +849,7 @@ impl BrowserWindow {
             .cloned()
         {
             self.clear_incoming_tab_drag(dragged.source, dragged.id, cx);
+            self.clear_favourites_drag_hover(dragged.source, dragged.id, cx);
             if let Some(source) = dragged.source.downcast::<BrowserWindow>() {
                 source
                     .update(cx, |browser, _, cx| {
@@ -781,7 +880,7 @@ impl BrowserWindow {
                     .tab_container_bounds
                     .is_some_and(|bounds| bounds.contains(&release_position))
                 && !self
-                    .favourites_bounds
+                    .favourites_drop_bounds(cx)
                     .is_some_and(|bounds| bounds.contains(&release_position)))
             .then_some((drag.id, drag.axis))
         });
@@ -793,6 +892,7 @@ impl BrowserWindow {
         let Some(mut drag) = self.tab_drag_layout.take() else {
             return;
         };
+        self.clear_favourites_drag_hover(drag.source_window, drag.id, cx);
         if drag.phase == super::TabDragPhase::PendingDrag {
             return;
         }
@@ -1022,6 +1122,13 @@ impl BrowserWindow {
                 url: view.state.url.clone(),
             }
         };
+        if self
+            .favourites_drag_hover
+            .is_some_and(|(_, hovered_id)| hovered_id == id)
+        {
+            self.favourites_drag_hover = None;
+            cx.notify();
+        }
         self.clear_previous_target(cx);
         self.tab_drag_layout = None;
         self.add_favourite(index, shortcut, cx);
@@ -1202,6 +1309,7 @@ impl BrowserWindow {
             .is_some_and(|drag| drag.id == id)
         {
             self.clear_previous_target(cx);
+            self.clear_favourites_drag_hover(window.window_handle(), id, cx);
             let _ = cx.stop_active_drag(window);
             window.release_pointer();
             self.tab_drag_layout = None;
