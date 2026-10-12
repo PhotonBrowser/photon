@@ -92,7 +92,6 @@ impl BrowserWindow {
             let dragged = DraggedTab {
                 source: window.window_handle(),
                 id: tab.id,
-                label: layout.label.clone().into(),
                 axis: layout.axis,
                 size: match layout.axis {
                     TabDragAxis::Horizontal => f32::from(bounds.size.width),
@@ -1250,41 +1249,23 @@ impl BrowserWindow {
             browser.tabs[0].id = tab.id;
             browser.tabs[0].space = tab.space;
             browser.tabs[0].favourite = tab.favourite.clone();
-            browser.tab_drag_layout = Some(super::TabDragLayout {
-                id: tab.id,
-                source_window: window.window_handle(),
-                axis: dragged.axis,
-                pointer_start: position,
-                pointer_position: position,
-                grab_offset,
-                tab_bounds: source_tab_bounds,
-                label: dragged.label.to_string(),
-                pinned: dragged.pinned,
-                phase: super::TabDragPhase::DraggingDetachedWindow,
-                visual_offset: 0.0,
-                target_window: None,
-            });
-            let preview = cx.new(|_| TabDragPreview);
-            window.start_window_move();
-            preview
         });
-        let Ok(preview) = transfer else {
+        if transfer.is_err() {
             let _ = new_window.update(cx, |_, window, _| window.remove_window());
             self.set_tab_drag_outside_target(dragged.id, cx);
             return;
-        };
+        }
 
         cx.play_haptic_feedback(HapticFeedbackStyle::Alignment);
-        let new_payload = DraggedTab {
-            source: new_window.into(),
-            id: tab.id,
-            label: dragged.label,
-            axis: dragged.axis,
-            size: dragged.size,
-            pinned: dragged.pinned,
-        };
-        let _ = cx.stop_drag(window);
-        cx.start_drag(AnyDrag::new(new_payload, preview).offset(grab_offset));
+
+        // Detaching hands this physical gesture to the native window manager.
+        // Do not start a second GPUI drag over the moving window: some platforms
+        // consume the native move's release, leaving that drag active and
+        // preventing the newly detached tab from being dragged back afterward.
+        let _ = cx.stop_active_drag(window);
+        window.release_pointer();
+        self.clear_previous_target(cx);
+        self.clear_favourites_drag_hover(window.window_handle(), dragged.id, cx);
         self.tab_drag_layout = None;
         self.suppress_tab_click_until = Some(Instant::now() + Duration::from_millis(250));
         self.remove_tab_for_detach(index, window, cx);
@@ -1293,6 +1274,7 @@ impl BrowserWindow {
             if let Some(index) = browser.tab_index_by_id(tab.id) {
                 browser.activate_tab(index, true, window, cx);
             }
+            window.start_window_move();
         });
     }
 

@@ -10,7 +10,7 @@ mod strip;
 use gpui::{
     AnyElement, AnyWindowHandle, App, Bounds, Context, DispatchPhase, ElementId, FocusHandle,
     Hitbox, ImageSource, MouseButton, MouseDownEvent, MouseMoveEvent, ObjectFit, Render, Role,
-    SharedString, Stateful, Window, div, img, prelude::*, px, rgb, rgba,
+    Stateful, Window, div, img, prelude::*, px, rgb, rgba,
 };
 
 use super::Favicon;
@@ -44,7 +44,6 @@ pub(super) fn is_foreign_tab_drag(value: &dyn std::any::Any, window: &Window) ->
 pub(super) struct DraggedTab {
     pub source: AnyWindowHandle,
     pub id: u64,
-    pub label: SharedString,
     pub axis: TabDragAxis,
     pub size: f32,
     pub pinned: bool,
