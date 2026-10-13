@@ -16,7 +16,7 @@ mod tabs;
 mod workspace_presets;
 
 use super::super::controls::FocusRing;
-use super::super::controls::OwnsClicks;
+use super::super::controls::{OwnsClicks, Pressable};
 use super::super::icons::{
     appearance_icon, globe_icon, grid_icon, search_icon_sized, settings_icon, shield_icon,
     sidebar_icon,
@@ -288,6 +288,7 @@ impl SettingsPage {
                 .text_size(px(metrics::BUTTON_FONT_SIZE))
                 .text_color(rgb(color))
                 .owns_clicks()
+                .pressable()
                 .on_click(cx.listener(move |this, _, _, cx| this.show(section, cx)))
                 .child(section.icon(color))
                 .child(section.title());

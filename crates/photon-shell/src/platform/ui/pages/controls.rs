@@ -4,7 +4,7 @@
 use gpui::{ElementId, Role, SharedString, Stateful, prelude::*, px, rgb, rgba};
 
 use super::super::controls::FocusRing;
-use super::super::controls::OwnsClicks;
+use super::super::controls::{OwnsClicks, Pressable};
 use super::super::controls::{check_mark, switch, toggled};
 use super::super::layout::h_stack;
 use super::super::{ClickHandler, metrics, theme::ThemeColors};
@@ -75,6 +75,7 @@ fn row(
         .text_color(rgb(palette.text_primary))
         .hover(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
+        .pressable()
         .on_click(on_toggle)
         .child(label)
 }

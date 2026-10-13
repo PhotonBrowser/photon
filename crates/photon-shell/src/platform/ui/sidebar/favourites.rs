@@ -4,7 +4,7 @@ use gpui::{AnyElement, FontWeight, MouseButton, Role, div, prelude::*, px, rgb, 
 
 use super::super::button::icon_button;
 use super::super::controls::FocusRing;
-use super::super::controls::OwnsClicks;
+use super::super::controls::{OwnsClicks, Pressable};
 use super::super::icons::{close_icon, favourite_star_icon};
 use super::super::layout::{h_stack, v_stack};
 use super::super::tabs::{DraggedTab, TabDrop, TabPrepaint};
@@ -208,6 +208,7 @@ fn favourite_tile(
                 .active(|style| style.bg(rgba(palette.selected_surface)))
         })
         .owns_clicks()
+        .pressable()
         .on_mouse_down(MouseButton::Right, tile.on_context_menu)
         .on_click(tile.on_open)
         .child(tile.icon)

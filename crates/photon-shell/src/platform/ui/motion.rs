@@ -34,7 +34,8 @@
 use crate::platform::app_update::update_app;
 use gpui::{
     Animation, AnimationElement, AnimationExt, Context, ElementId, IntoElement, Motion,
-    SpringConfig, Styled, Task, ease_in_out, ease_out_quint, linear, px,
+    SpringConfig, StatefulInteractiveElement, Styled, Task, ease_in_out, ease_out_quint, linear,
+    px,
 };
 use photon_core::AnimationSettings;
 use std::time::{Duration, Instant};
@@ -50,6 +51,9 @@ pub(super) mod distance {
     /// Travel across part of a panel, for sidebars and sheets.
     pub(in super::super) const TRAVEL: f32 = 32.0;
 }
+
+const PRESS_SCALE: f32 = 0.97;
+const PRESS_SPRING: SpringConfig = SpringConfig::new(480.0, 44.0, 1.0);
 
 /// The blur radius an element sharpens from as it comes into focus, in pixels.
 const FOCUS_BLUR: f32 = 6.0;
@@ -141,6 +145,8 @@ pub(super) struct Entrance {
     blur_from: Option<f32>,
     /// The element's final size and the fraction of it the element starts at.
     grow: Option<(f32, f32)>,
+    /// The uniform scale the element starts at.
+    scale_from: Option<f32>,
 }
 
 impl Entrance {
@@ -155,6 +161,7 @@ impl Entrance {
             offset_from: None,
             blur_from: None,
             grow: None,
+            scale_from: None,
         }
     }
 
@@ -210,6 +217,12 @@ impl Entrance {
             .grow_from(size, 0.35)
             .curve(Curve::Overshoot)
             .speed(Speed::Standard)
+    }
+
+    /// Scales into place from a smaller size. For controls and compact surfaces.
+    pub(super) const fn scale_from(mut self, scale: f32) -> Self {
+        self.scale_from = Some(scale);
+        self
     }
 
     // Effects.
@@ -348,6 +361,11 @@ impl Entrance {
             let start = (1.0 - (1.0 - fraction) * effect_scale).clamp(0.2, 1.0);
             element = element.size(px(size * (start + (1.0 - start) * progress)));
         }
+        if let Some(from) = self.scale_from {
+            let start = (1.0 - (1.0 - from) * effect_scale).clamp(0.2, 1.0);
+            let scale = start + (1.0 - start) * progress;
+            element = element.scale(scale);
+        }
         element
     }
 }
@@ -425,6 +443,13 @@ pub(super) trait AnimateIn: Styled + IntoElement + Sized + 'static {
 }
 
 impl<E: Styled + IntoElement + 'static> AnimateIn for E {}
+
+/// Adds a small, eased scale response while a pointer or touch press is active.
+pub(super) fn pressable<E: StatefulInteractiveElement + Styled>(element: E) -> E {
+    element
+        .transitions(|transitions| transitions.scale(Motion::spring(PRESS_SPRING)))
+        .active(|style| style.scale(PRESS_SCALE))
+}
 
 /// Keeps a value on screen while it animates out after its owner drops it.
 ///

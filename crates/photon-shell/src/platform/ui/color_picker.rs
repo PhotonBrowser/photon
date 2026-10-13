@@ -7,7 +7,7 @@ use photon_core::WindowColor;
 use std::rc::Rc;
 
 use super::controls::FocusRing;
-use super::controls::OwnsClicks;
+use super::controls::{OwnsClicks, Pressable};
 use super::controls::{Swatch, swatches, switch, toggled};
 use super::layout::{ControlSurface, h_stack, v_stack};
 use super::{metrics, theme::ThemeColors, theme::window_color_swatch};
@@ -53,6 +53,7 @@ pub(super) fn color_picker(
             .text_color(rgb(palette.text_primary))
             .hover(|style| style.bg(rgba(palette.hover_surface)))
             .owns_clicks()
+            .pressable()
             .on_click(move |_, window, cx| on_change(color, !gradient, window, cx))
             .child("Gradient")
             .child(switch(id, gradient, palette))

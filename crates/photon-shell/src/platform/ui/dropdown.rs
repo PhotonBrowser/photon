@@ -9,7 +9,7 @@ use gpui::{
     rgba,
 };
 
-use super::controls::{Choice, FocusRing, OwnsClicks};
+use super::controls::{Choice, FocusRing, OwnsClicks, Pressable};
 use super::icons::chevron_down_icon;
 use super::layout::{ControlSurface, h_stack, v_stack};
 use super::menu::{MENU_MOTION, menu_option, popover_surface};
@@ -184,6 +184,7 @@ impl RenderOnce for Dropdown {
             .text_size(px(metrics::BUTTON_FONT_SIZE))
             .text_color(rgb(palette.text_primary))
             .owns_clicks()
+            .pressable()
             .on_click(move |_, window, cx| toggle(!open, window, cx))
             // Closed, Up and Down step through the options without opening
             // the menu, as a native pop-up button does.

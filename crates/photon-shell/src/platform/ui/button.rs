@@ -3,8 +3,7 @@
 use gpui::{Div, ElementId, Role, SharedString, Stateful, prelude::*, px, rgb, rgba};
 
 use super::ClickHandler;
-use super::controls::FocusRing;
-use super::controls::OwnsClicks;
+use super::controls::{FocusRing, OwnsClicks, Pressable};
 use super::icons::more_icon;
 use super::layout::{ControlSurface, h_stack};
 use super::{metrics, theme::ThemeColors};
@@ -93,7 +92,11 @@ pub(super) fn button(
     if !enabled {
         return button.opacity(metrics::DISABLED_OPACITY);
     }
-    let button = button.tab_index(0).owns_clicks().on_click(on_click);
+    let button = button
+        .tab_index(0)
+        .owns_clicks()
+        .pressable()
+        .on_click(on_click);
     match kind {
         ButtonKind::Primary => button.hover(|style| {
             style
@@ -117,7 +120,7 @@ pub(super) fn icon_button(
     icon: impl IntoElement,
     palette: ThemeColors,
     on_click: ClickHandler,
-) -> impl IntoElement {
+) -> Stateful<Div> {
     let button = h_stack()
         .id(id)
         .role(Role::Button)
@@ -142,6 +145,7 @@ pub(super) fn icon_button(
         .tab_index(0)
         .hover(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
+        .pressable()
         .on_click(on_click)
 }
 
@@ -174,6 +178,7 @@ pub(super) fn toolbar_button(
         .tab_index(tab_index)
         .hover(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
+        .pressable()
         .on_click(on_click)
 }
 
@@ -197,6 +202,7 @@ pub(super) fn menu_button(
         .rounded(px(metrics::CONTROL_RADIUS))
         .hover(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
+        .pressable()
         .on_click(on_click)
         .child(more_icon(
             palette.text_secondary,

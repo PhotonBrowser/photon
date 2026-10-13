@@ -12,6 +12,7 @@ use super::super::super::controls::OwnsClicks;
 use super::super::super::history::BrowsingHistory;
 use super::super::super::icons::{add_icon, close_icon, globe_icon};
 use super::super::super::layout::{h_stack, v_stack};
+use super::super::super::motion::pressable;
 use super::super::super::motion::{AnimateIn, Entrance};
 use super::super::super::settings::Settings;
 use super::super::super::{metrics, theme::ThemeColors};
@@ -83,7 +84,7 @@ impl NewTabPage {
         };
         let url = shortcut.url.clone();
         let removed = shortcut.url.clone();
-        let mut tile = tile(("new-tab-shortcut", index), name, icon, palette)
+        let mut tile = pressable(tile(("new-tab-shortcut", index), name, icon, palette))
             .aria_description("Press Delete to remove")
             .on_click(cx.listener(move |this, _, _, cx| this.context.open(url.clone(), cx)))
             // The remove button shows under the pointer; from the

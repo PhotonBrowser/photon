@@ -6,6 +6,7 @@ use super::controls::{switch, toggled};
 use super::icons::check_icon;
 use super::layout::{Elevated, Elevation, Raised};
 use super::layout::{h_stack, v_stack};
+use super::motion::pressable;
 use super::motion::{AnimateIn, Entrance, Transition};
 use super::settings::Settings;
 use super::{metrics, theme::ThemeColors};
@@ -139,8 +140,7 @@ fn menu_item(
     role: Role,
     palette: ThemeColors,
 ) -> gpui::Stateful<gpui::Div> {
-    menu_row(id, label.into(), role)
-        .tab_index(tab_index)
+    pressable(menu_row(id, label.into(), role).tab_index(tab_index))
         .focus_ring(palette)
         .rounded(px(metrics::MENU_ITEM_RADIUS))
         .hover(|style| style.bg(rgba(palette.hover_surface)))

@@ -6,7 +6,7 @@ use gpui::{MouseButton, Role, div, prelude::*, px, rgb, rgba};
 
 use super::super::button::{menu_button, toolbar_button};
 use super::super::controls::FocusRing;
-use super::super::controls::OwnsClicks;
+use super::super::controls::{OwnsClicks, Pressable};
 use super::super::icons::{add_icon, settings_icon};
 use super::super::layout::{h_stack, v_stack};
 use super::super::tooltip::label_tooltip;
@@ -124,6 +124,7 @@ fn space_dot(index: usize, space: SpaceDot, palette: ThemeColors) -> impl IntoEl
         .rounded_full()
         .hover(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
+        .pressable()
         .on_mouse_down(MouseButton::Right, space.on_context_menu)
         .on_click(space.on_select)
         .tooltip(tooltip)

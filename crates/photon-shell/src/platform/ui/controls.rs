@@ -4,15 +4,17 @@
 //! is in `dropdown`.
 
 use gpui::{
-    AccessibleAction, App, Bounds, Context, DispatchPhase, DragMoveEvent, ElementId, FontWeight,
-    KeyDownEvent, MouseButton, Pixels, Render, Role, SharedString, Toggled, Window, div,
-    prelude::*, px, rgb, rgb_to_hsla, rgba,
+    AccessibleAction, App, Bounds, Context, DispatchPhase, Div, DragMoveEvent, ElementId,
+    FontWeight, InteractiveElement, KeyDownEvent, MouseButton, Pixels, Render, Role, SharedString,
+    Stateful, StatefulInteractiveElement, Toggled, Window, div, prelude::*, px, rgb, rgb_to_hsla,
+    rgba,
 };
 use gpui_elements::editable_text::EditableTextElement;
 
 use super::icons::check_icon;
 use super::layout::v_stack;
 use super::layout::{ControlSurface, Elevated, Elevation, h_stack};
+use super::motion::pressable;
 use super::motion::{AnimateIn, Curve, Edge, Entrance, Speed};
 use super::{ClickHandler, metrics, theme::ThemeColors};
 use std::rc::Rc;
@@ -36,14 +38,37 @@ pub(super) struct Choice {
 /// Keeps clicks on a control to itself, so they never reach what is behind
 /// it: no window move from the titlebar, and no browser menu from empty
 /// sidebar space.
-pub(super) trait OwnsClicks: InteractiveElement + Sized {
+pub(super) trait OwnsClicks: Sized {
+    fn owns_clicks(self) -> Self {
+        self
+    }
+}
+
+impl OwnsClicks for Div {
     fn owns_clicks(self) -> Self {
         self.on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
     }
 }
 
-impl<E: InteractiveElement> OwnsClicks for E {}
+impl<E> OwnsClicks for Stateful<E>
+where
+    Stateful<E>: StatefulInteractiveElement + Styled,
+{
+    fn owns_clicks(self) -> Self {
+        self.on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
+    }
+}
+
+/// Adds the shared pressed scale to a control that responds to user input.
+pub(super) trait Pressable: StatefulInteractiveElement + Styled + Sized {
+    fn pressable(self) -> Self {
+        pressable(self)
+    }
+}
+
+impl<E: StatefulInteractiveElement + Styled> Pressable for E {}
 
 /// The ring a control shows while it has keyboard focus: an accent border,
 /// transparent at rest so showing it never moves the control's content.
@@ -91,6 +116,7 @@ pub(super) fn choices(
             .rounded(px(metrics::SEGMENT_RADIUS))
             .text_size(px(metrics::BUTTON_FONT_SIZE))
             .owns_clicks()
+            .pressable()
             .on_click(option.on_choose)
             .child(option.label);
         if option.chosen {
@@ -320,6 +346,7 @@ pub(super) fn swatches(
             // accent, so a focused swatch never looks chosen.
             .focus_visible(|style| style.border_color(rgb(palette.text_primary)))
             .owns_clicks()
+            .pressable()
             .on_click(option.on_choose)
             .child(
                 div()
