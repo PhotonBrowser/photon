@@ -5,7 +5,10 @@
 //! independent of clocks and storage. `photon-storage` saves a history and
 //! loads it back with [`History::from_parts`].
 
-use photon_omnibox::{PastSearch, SearchEngines, Suggestions, VisitedPage, suggest_with};
+use photon_omnibox::{
+    IndexedVisitedPage, PastSearch, SearchEngines, Suggestions, normalized_display_address,
+    normalized_match_text, suggest_with_indexed,
+};
 
 use super::browsing_data::ClearBrowsingData;
 
@@ -24,6 +27,12 @@ pub struct HistoryEntry {
     pub last_visit: u64,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct PageSearchCache {
+    normalized_display_text: Option<String>,
+    normalized_title: Option<String>,
+}
+
 /// A query searched for from the omnibox.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SearchEntry {
@@ -38,12 +47,18 @@ pub struct SearchEntry {
 pub struct History {
     pages: Vec<HistoryEntry>,
     searches: Vec<SearchEntry>,
+    page_search_cache: Vec<PageSearchCache>,
 }
 
 impl History {
     /// A history holding previously saved entries.
     pub fn from_parts(pages: Vec<HistoryEntry>, searches: Vec<SearchEntry>) -> Self {
-        Self { pages, searches }
+        let page_search_cache = pages.iter().map(cache_page_search_text).collect();
+        Self {
+            pages,
+            searches,
+            page_search_cache,
+        }
     }
 
     pub fn pages(&self) -> &[HistoryEntry] {
@@ -59,36 +74,44 @@ impl History {
         if !is_web_page(url) {
             return;
         }
-        match self.pages.iter_mut().find(|entry| entry.url == url) {
-            Some(entry) => {
-                entry.visit_count += 1;
-                entry.last_visit = now;
-                if !title.is_empty() {
-                    title.clone_into(&mut entry.title);
-                }
+        if let Some(index) = self.pages.iter().position(|entry| entry.url == url) {
+            let entry = &mut self.pages[index];
+            entry.visit_count += 1;
+            entry.last_visit = now;
+            if !title.is_empty() {
+                title.clone_into(&mut entry.title);
+                self.page_search_cache[index].normalized_title = normalized_match_text(title);
             }
-            None => {
-                self.pages.push(HistoryEntry {
-                    url: url.to_owned(),
-                    title: title.to_owned(),
-                    visit_count: 1,
-                    last_visit: now,
-                });
-                trim_oldest(&mut self.pages, MAX_PAGES, |entry| entry.last_visit);
-            }
+            return;
+        }
+
+        let entry = HistoryEntry {
+            url: url.to_owned(),
+            title: title.to_owned(),
+            visit_count: 1,
+            last_visit: now,
+        };
+        self.page_search_cache.push(cache_page_search_text(&entry));
+        self.pages.push(entry);
+        if self.pages.len() > MAX_PAGES {
+            trim_oldest(&mut self.pages, MAX_PAGES, |entry| entry.last_visit);
+            self.rebuild_page_search_cache();
         }
     }
 
     /// Updates the title of a page already in the history, returning
     /// whether it changed.
     pub fn set_title(&mut self, url: &str, title: &str) -> bool {
-        match self.pages.iter_mut().find(|entry| entry.url == url) {
-            Some(entry) if entry.title != title => {
-                title.clone_into(&mut entry.title);
-                true
-            }
-            _ => false,
+        let Some(index) = self.pages.iter().position(|entry| entry.url == url) else {
+            return false;
+        };
+        let entry = &mut self.pages[index];
+        if entry.title == title {
+            return false;
         }
+        title.clone_into(&mut entry.title);
+        self.page_search_cache[index].normalized_title = normalized_match_text(title);
+        true
     }
 
     /// Records a search for `query` at `now`.
@@ -115,7 +138,16 @@ impl History {
 
     /// Forgets the page at `url`.
     pub fn remove_page(&mut self, url: &str) {
-        self.pages.retain(|entry| entry.url != url);
+        let mut pages = Vec::with_capacity(self.pages.len());
+        let mut search_cache = Vec::with_capacity(self.page_search_cache.len());
+        for (page, cached) in self.pages.drain(..).zip(self.page_search_cache.drain(..)) {
+            if page.url != url {
+                pages.push(page);
+                search_cache.push(cached);
+            }
+        }
+        self.pages = pages;
+        self.page_search_cache = search_cache;
     }
 
     /// Forgets a past search.
@@ -127,7 +159,16 @@ impl History {
     /// after its start.
     pub fn clear(&mut self, request: &ClearBrowsingData) {
         if request.history {
-            self.pages.retain(|entry| entry.last_visit < request.since);
+            let mut pages = Vec::with_capacity(self.pages.len());
+            let mut search_cache = Vec::with_capacity(self.page_search_cache.len());
+            for (page, cached) in self.pages.drain(..).zip(self.page_search_cache.drain(..)) {
+                if page.last_visit < request.since {
+                    pages.push(page);
+                    search_cache.push(cached);
+                }
+            }
+            self.pages = pages;
+            self.page_search_cache = search_cache;
         }
         if request.searches {
             self.searches
@@ -154,26 +195,35 @@ impl History {
 
     /// What the omnibox offers for `input` using `engines` for search rows.
     pub fn omnibox_suggestions_with(&self, input: &str, engines: &SearchEngines) -> Suggestions {
-        let pages: Vec<VisitedPage> = self
+        let pages = self
             .pages
             .iter()
-            .map(|entry| VisitedPage {
+            .zip(&self.page_search_cache)
+            .map(|(entry, cached)| IndexedVisitedPage {
                 url: &entry.url,
                 title: &entry.title,
+                normalized_display_text: cached.normalized_display_text.as_deref(),
+                normalized_title: cached.normalized_title.as_deref(),
                 visit_count: entry.visit_count,
                 last_visit: entry.last_visit,
-            })
-            .collect();
-        let searches: Vec<PastSearch> = self
-            .searches
-            .iter()
-            .map(|entry| PastSearch {
-                query: &entry.query,
-                count: entry.count,
-                last_used: entry.last_used,
-            })
-            .collect();
-        suggest_with(input, engines, &pages, &searches)
+            });
+        let searches = self.searches.iter().map(|entry| PastSearch {
+            query: &entry.query,
+            count: entry.count,
+            last_used: entry.last_used,
+        });
+        suggest_with_indexed(input, engines, pages, searches)
+    }
+
+    fn rebuild_page_search_cache(&mut self) {
+        self.page_search_cache = self.pages.iter().map(cache_page_search_text).collect();
+    }
+}
+
+fn cache_page_search_text(page: &HistoryEntry) -> PageSearchCache {
+    PageSearchCache {
+        normalized_display_text: normalized_display_address(&page.url),
+        normalized_title: normalized_match_text(&page.title),
     }
 }
 
@@ -231,6 +281,56 @@ mod tests {
         );
         history.remove_page("https://discord.com/channels/me");
         assert_eq!(history.omnibox_suggestions("disc").completion, None);
+    }
+
+    #[test]
+    fn keeps_cached_suggestion_text_in_sync_with_history_changes() {
+        let mut history = History::default();
+        history.record_visit("https://first.example/", "First", 1);
+        history.record_visit("https://second.example/", "Second", 2);
+        assert!(history.set_title("https://first.example/", "Updated"));
+
+        let suggestions = history.omnibox_suggestions("updated");
+        assert!(
+            suggestions
+                .rows
+                .iter()
+                .any(|row| row.url == "https://first.example/")
+        );
+
+        history.remove_page("https://first.example/");
+        let suggestions = history.omnibox_suggestions("second");
+        assert!(
+            suggestions
+                .rows
+                .iter()
+                .any(|row| row.url == "https://second.example/")
+        );
+        assert!(
+            suggestions
+                .rows
+                .iter()
+                .all(|row| row.url != "https://first.example/")
+        );
+    }
+
+    #[test]
+    fn suggests_one_and_two_character_inputs_from_a_full_history() {
+        let pages = (0..MAX_PAGES)
+            .map(|index| HistoryEntry {
+                url: format!("https://site{index}.example/home"),
+                title: "Example page".to_owned(),
+                visit_count: 1,
+                last_visit: index as u64,
+            })
+            .collect();
+        let history = History::from_parts(pages, Vec::new());
+
+        for query in ["e", "ex"] {
+            let suggestions = history.omnibox_suggestions(query);
+            assert_eq!(suggestions.rows.len(), 8);
+            assert_eq!(suggestions.rows[1].url, "https://site9999.example/home");
+        }
     }
 
     #[test]

@@ -33,6 +33,19 @@ pub struct PastSearch<'a> {
 
 /// How many past searches the omnibox shows at most.
 const MAX_PAST_SEARCHES: usize = 3;
+/// Page candidates retained before non-page rows can be deduplicated.
+const MAX_PAGE_CANDIDATES: usize = MAX_ROWS + MAX_PAST_SEARCHES + 2;
+
+/// A history page and its cached searchable text.
+#[derive(Clone, Copy, Debug)]
+pub struct IndexedVisitedPage<'a> {
+    pub url: &'a str,
+    pub title: &'a str,
+    pub normalized_display_text: Option<&'a str>,
+    pub normalized_title: Option<&'a str>,
+    pub visit_count: u32,
+    pub last_visit: u64,
+}
 
 /// What choosing a suggestion does.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -104,28 +117,68 @@ pub fn suggest_with(
     pages: &[VisitedPage],
     searches: &[PastSearch],
 ) -> Suggestions {
+    if input.trim().is_empty() {
+        return Suggestions::default();
+    }
+    let fields: Vec<_> = pages
+        .iter()
+        .map(|page| {
+            let normalized_display_text = normalized_display_address(page.url);
+            let normalized_title = normalized_match_text(page.title);
+            (normalized_display_text, normalized_title)
+        })
+        .collect();
+    let indexed_pages = pages
+        .iter()
+        .zip(&fields)
+        .map(|(page, fields)| IndexedVisitedPage {
+            url: page.url,
+            title: page.title,
+            normalized_display_text: fields.0.as_deref(),
+            normalized_title: fields.1.as_deref(),
+            visit_count: page.visit_count,
+            last_visit: page.last_visit,
+        });
+    suggest_with_indexed(input, engines, indexed_pages, searches.iter().copied())
+}
+
+/// Suggestions using searchable text normalized when each history page changed.
+pub fn suggest_with_indexed<'a, 'b>(
+    input: &str,
+    engines: &SearchEngines,
+    pages: impl IntoIterator<Item = IndexedVisitedPage<'a>>,
+    searches: impl IntoIterator<Item = PastSearch<'b>>,
+) -> Suggestions {
     let text = input.trim();
     let terms: Vec<String> = text.split_whitespace().map(str::to_lowercase).collect();
     if terms.is_empty() {
         return Suggestions::default();
     }
 
-    let mut matches: Vec<(u32, &VisitedPage, Suggestion)> = pages
-        .iter()
-        .filter_map(|page| page_suggestion(page, &terms).map(|(score, row)| (score, page, row)))
-        .collect();
-    matches.sort_by(|(a_score, a, _), (b_score, b, _)| {
-        b_score.cmp(a_score).then(b.last_visit.cmp(&a.last_visit))
-    });
+    let mut ranked_pages = Vec::with_capacity(MAX_PAGE_CANDIDATES);
+    for page in pages {
+        let Some(score) = page_score(&page, &terms) else {
+            continue;
+        };
+        let candidate = RankedPage { page, score };
+        let insertion = ranked_pages
+            .iter()
+            .position(|current| ranks_before(&candidate, current))
+            .unwrap_or(ranked_pages.len());
+        if insertion < MAX_PAGE_CANDIDATES {
+            ranked_pages.insert(insertion, candidate);
+            ranked_pages.truncate(MAX_PAGE_CANDIDATES);
+        }
+    }
 
     // A leading page completes the text when its address continues it.
     let completing = !input.ends_with(char::is_whitespace)
         && terms.len() == 1
-        && matches
-            .first()
-            .is_some_and(|(_, _, row)| starts_with_ignoring_case(&row.text, text));
+        && ranked_pages.first().is_some_and(|candidate| {
+            starts_with_ignoring_case(display_address_slice(candidate.page.url), text)
+        });
     let completion = completing.then(|| {
-        let address = &matches[0].2.text;
+        let address = display_address_slice(ranked_pages[0].page.url);
         format!("{text}{}", &address[text.len()..])
     });
 
@@ -141,7 +194,9 @@ pub fn suggest_with(
         Err(_) => return Suggestions::default(),
     };
 
-    let mut pages = matches.into_iter().map(|(_, _, row)| row);
+    let mut pages = ranked_pages
+        .into_iter()
+        .map(|candidate| page_suggestion(candidate.page, &terms));
     let mut rows = Vec::with_capacity(MAX_ROWS);
     if completing {
         rows.extend(pages.next());
@@ -163,15 +218,22 @@ pub fn suggest_with(
     Suggestions { rows, completion }
 }
 
-/// A visited page's row and how well it matches, when every term matches.
-fn page_suggestion(page: &VisitedPage, terms: &[String]) -> Option<(u32, Suggestion)> {
-    let text = display_address(page.url);
+#[derive(Clone, Copy)]
+struct RankedPage<'a> {
+    page: IndexedVisitedPage<'a>,
+    score: u32,
+}
+
+fn ranks_before(a: &RankedPage<'_>, b: &RankedPage<'_>) -> bool {
+    a.score > b.score || (a.score == b.score && a.page.last_visit > b.page.last_visit)
+}
+
+/// A visited page's score, when every term matches its title or address.
+fn page_score(page: &IndexedVisitedPage<'_>, terms: &[String]) -> Option<u32> {
     let mut score = 0;
-    let mut text_matches = Vec::new();
-    let mut title_matches = Vec::new();
     for (index, term) in terms.iter().enumerate() {
-        let in_text = word_start_match(&text, term);
-        let in_title = word_start_match(page.title, term);
+        let in_text = word_start_match_normalized(page.normalized_display_text, term);
+        let in_title = word_start_match_normalized(page.normalized_title, term);
         if in_text.is_none() && in_title.is_none() {
             return None;
         }
@@ -186,37 +248,67 @@ fn page_suggestion(page: &VisitedPage, terms: &[String]) -> Option<(u32, Suggest
         });
         let title_score = if in_title.is_some() { 300 } else { 0 };
         score += text_score.max(title_score);
-        text_matches.extend(in_text);
-        title_matches.extend(in_title);
     }
     score += page.visit_count.min(20) * 10;
-    Some((
-        score,
-        Suggestion {
-            kind: SuggestionKind::Page {
-                title: page.title.to_owned(),
-                title_matches,
-            },
-            text,
-            text_matches,
-            url: page.url.to_owned(),
+    Some(score)
+}
+
+/// Builds rows only for the limited set of pages that can be shown.
+fn page_suggestion(page: IndexedVisitedPage<'_>, terms: &[String]) -> Suggestion {
+    let mut text_matches = Vec::new();
+    let mut title_matches = Vec::new();
+    for term in terms {
+        text_matches.extend(word_start_match_normalized(
+            page.normalized_display_text,
+            term,
+        ));
+        title_matches.extend(word_start_match_normalized(page.normalized_title, term));
+    }
+    Suggestion {
+        kind: SuggestionKind::Page {
+            title: page.title.to_owned(),
+            title_matches,
         },
-    ))
+        text: display_address_slice(page.url).to_owned(),
+        text_matches,
+        url: page.url.to_owned(),
+    }
 }
 
 /// Past searches that start with the text, other than the text itself, most
 /// used first.
-fn past_searches(text: &str, searches: &[PastSearch], engines: &SearchEngines) -> Vec<Suggestion> {
-    let mut matching: Vec<&PastSearch> = searches
-        .iter()
-        .filter(|search| {
-            starts_with_ignoring_case(search.query, text) && search.query.len() > text.len()
-        })
-        .collect();
-    matching.sort_by(|a, b| b.count.cmp(&a.count).then(b.last_used.cmp(&a.last_used)));
+fn past_searches<'a>(
+    text: &str,
+    searches: impl IntoIterator<Item = PastSearch<'a>>,
+    engines: &SearchEngines,
+) -> Vec<Suggestion> {
+    let mut matching: [Option<PastSearch<'a>>; MAX_PAST_SEARCHES] = [None; MAX_PAST_SEARCHES];
+    let mut matching_len = 0;
+    for search in searches.into_iter().filter(|search| {
+        starts_with_ignoring_case(search.query, text) && search.query.len() > text.len()
+    }) {
+        let insertion = matching
+            .iter()
+            .take(matching_len)
+            .position(|current| {
+                let current = current.expect("filled search slots contain a search");
+                search.count > current.count
+                    || (search.count == current.count && search.last_used > current.last_used)
+            })
+            .unwrap_or(matching_len);
+        if insertion < MAX_PAST_SEARCHES {
+            let shift_end = matching_len.min(MAX_PAST_SEARCHES - 1);
+            for index in (insertion..shift_end).rev() {
+                matching[index + 1] = matching[index];
+            }
+            matching[insertion] = Some(search);
+            matching_len = (matching_len + 1).min(MAX_PAST_SEARCHES);
+        }
+    }
     matching
         .into_iter()
-        .take(MAX_PAST_SEARCHES)
+        .take(matching_len)
+        .flatten()
         .map(|search| Suggestion {
             kind: SuggestionKind::PastSearch,
             text: search.query.to_owned(),
@@ -257,6 +349,14 @@ fn word_start_match(haystack: &str, term: &str) -> Option<Range<usize>> {
     if lower.len() != haystack.len() {
         return None;
     }
+    word_start_match_lower(&lower, term)
+}
+
+fn word_start_match_normalized(lower: Option<&str>, term: &str) -> Option<Range<usize>> {
+    word_start_match_lower(lower?, term)
+}
+
+fn word_start_match_lower(lower: &str, term: &str) -> Option<Range<usize>> {
     lower.match_indices(term).find_map(|(start, _)| {
         let at_word_start = lower[..start]
             .chars()
@@ -264,6 +364,17 @@ fn word_start_match(haystack: &str, term: &str) -> Option<Range<usize>> {
             .is_none_or(|before| !before.is_alphanumeric());
         at_word_start.then(|| start..start + term.len())
     })
+}
+
+/// Lowercase text once for indexed matching, retaining only range-safe values.
+pub fn normalized_match_text(text: &str) -> Option<String> {
+    let lower = text.to_lowercase();
+    (lower.len() == text.len()).then_some(lower)
+}
+
+/// Lowercase the displayed address once for indexed matching.
+pub fn normalized_display_address(url: &str) -> Option<String> {
+    normalized_match_text(display_address_slice(url))
 }
 
 fn starts_with_ignoring_case(text: &str, prefix: &str) -> bool {
@@ -275,9 +386,13 @@ fn starts_with_ignoring_case(text: &str, prefix: &str) -> bool {
 /// An address as people write it: without `https://`, `www.` or a lone
 /// trailing slash.
 pub fn display_address(url: &str) -> String {
+    display_address_slice(url).to_owned()
+}
+
+fn display_address_slice(url: &str) -> &str {
     let address = url.strip_prefix("https://").unwrap_or(url);
     let address = address.strip_prefix("www.").unwrap_or(address);
-    address.strip_suffix('/').unwrap_or(address).to_owned()
+    address.strip_suffix('/').unwrap_or(address)
 }
 
 /// Just the site an address is on: its host without `www.`, and its port if
@@ -431,6 +546,34 @@ mod tests {
         assert_eq!(suggestions.rows[1].text, "dog names");
         assert_eq!(suggestions.rows[1].text_matches, vec![0..2]);
         assert!(suggestions.rows[1].url.contains("dog"));
+    }
+
+    #[test]
+    fn keeps_the_best_page_matches_for_a_large_history() {
+        let urls: Vec<_> = (0..100)
+            .map(|index| format!("https://example.com/reference/{index}"))
+            .collect();
+        let pages: Vec<_> = urls
+            .iter()
+            .enumerate()
+            .map(|(index, url)| VisitedPage {
+                url,
+                title: "Reference",
+                visit_count: 1,
+                last_visit: index as u64,
+            })
+            .collect();
+        let suggestions = suggest("reference", &pages, &[]);
+        let page_visits: Vec<_> = suggestions
+            .rows
+            .iter()
+            .filter(|row| matches!(row.kind, SuggestionKind::Page { .. }))
+            .map(|row| row.url.as_str())
+            .collect();
+
+        assert_eq!(page_visits.len(), 7);
+        assert_eq!(page_visits[0], "https://example.com/reference/99");
+        assert_eq!(page_visits[6], "https://example.com/reference/93");
     }
 
     #[test]
