@@ -1,7 +1,14 @@
 use std::{env, path::PathBuf};
 
+const BACKGROUND_NOISE_SIZE: u32 = 1_024;
+
 fn main() {
     println!("cargo:rerun-if-env-changed=PHOTON_ENGINE_BUILD_DIR");
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=src/platform/ui/window/background_noise.rs");
+
+    let out = PathBuf::from(env::var_os("OUT_DIR").unwrap());
+    generate_background_noise(&out);
 
     // The checked-in Engine build and this native bridge currently provide the
     // macOS implementation. Linux will get its own native sources and Engine
@@ -17,7 +24,6 @@ fn main() {
     let engine_build = env::var_os("PHOTON_ENGINE_BUILD_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| root.join("build/engine-release"));
-    let out = PathBuf::from(env::var_os("OUT_DIR").unwrap());
     let generated = engine_build.join("Libraries");
     let fallback = out.join("include/LibPhotonEmbedder/Export.h");
     if !generated.join("LibPhotonEmbedder/Export.h").is_file() {
@@ -75,4 +81,24 @@ fn main() {
     for framework in ["AppKit", "Foundation", "Metal", "CoreFoundation"] {
         println!("cargo:rustc-link-lib=framework={framework}");
     }
+}
+
+fn generate_background_noise(out: &std::path::Path) {
+    let mut pixels =
+        Vec::with_capacity(BACKGROUND_NOISE_SIZE as usize * BACKGROUND_NOISE_SIZE as usize * 4);
+    for y in 0..BACKGROUND_NOISE_SIZE {
+        for x in 0..BACKGROUND_NOISE_SIZE {
+            let mut value = x
+                .wrapping_mul(0x9e37_79b9)
+                .wrapping_add(y.wrapping_mul(0x85eb_ca6b))
+                .wrapping_add(0xc2b2_ae35);
+            value ^= value >> 16;
+            value = value.wrapping_mul(0x7feb_352d);
+            value ^= value >> 15;
+            let grain = (value >> 24) as u8;
+            pixels.extend_from_slice(&[grain, grain, grain, u8::MAX]);
+        }
+    }
+    std::fs::write(out.join("background-noise.rgba"), pixels)
+        .expect("write precomputed background noise texture");
 }
