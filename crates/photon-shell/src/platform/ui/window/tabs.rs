@@ -14,7 +14,8 @@ use super::super::icons::LOADING_SPINNER_STEPS;
 use super::super::pages::{NEW_TAB, PageDefinition, find_page};
 use super::super::settings::Settings;
 use super::super::tabs::{
-    DraggedTab, ICON_ENTRANCE, TabDragAxis, TabDragPreview, TabDrop, TabIcon, TabPrepaint,
+    DraggedTab, ICON_ENTRANCE, TAB_ENTRY_MOTION, TabDragAxis, TabDragPreview, TabDrop, TabIcon,
+    TabPrepaint,
 };
 use super::super::workspace_layout::WorkspaceLayout;
 use super::BrowserWindow;
@@ -34,6 +35,12 @@ pub(super) struct ClosedTab {
 /// How many closed tabs a window remembers.
 const CLOSED_TAB_LIMIT: usize = 25;
 static NEXT_TAB_ID: AtomicU64 = AtomicU64::new(1);
+
+#[derive(Clone, Copy)]
+struct TabInsertionOptions {
+    activate: bool,
+    animate_appearance: bool,
+}
 
 impl BrowserWindow {
     pub(super) fn update_tab_drag(
@@ -1200,7 +1207,7 @@ impl BrowserWindow {
                     };
                     let plan =
                         plan_tab_transfer(&source_ids, &target_ids, dragged.id, desired_id, index)?;
-                    browser.insert_tab_at(
+                    browser.insert_tab_at_immediately(
                         plan.target_index,
                         source_tab.content.clone(),
                         source_tab.pin.clone(),
@@ -1388,7 +1395,14 @@ impl BrowserWindow {
             return;
         };
         let transfer = new_window.update(cx, |browser, window, cx| {
-            browser.insert_tab_at(0, tab.content.clone(), tab.pin.clone(), true, window, cx);
+            browser.insert_tab_at_immediately(
+                0,
+                tab.content.clone(),
+                tab.pin.clone(),
+                true,
+                window,
+                cx,
+            );
             browser.tabs[0].id = tab.id;
             browser.tabs[0].space = tab.space;
             browser.tabs[0].favourite = tab.favourite.clone();
@@ -1477,6 +1491,9 @@ impl BrowserWindow {
             });
         }
         self.revealed_icons
+            .borrow_mut()
+            .remove(&self.tabs[index].id);
+        self.tab_entry_animations
             .borrow_mut()
             .remove(&self.tabs[index].id);
         self.tab_position_animations.remove(&self.tabs[index].id);
@@ -1677,6 +1694,50 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.insert_webview_with_appearance(
+            index,
+            webview,
+            pin,
+            TabInsertionOptions {
+                activate,
+                animate_appearance: true,
+            },
+            window,
+            cx,
+        );
+    }
+
+    pub(super) fn insert_webview_immediately(
+        &mut self,
+        index: usize,
+        webview: gpui::Entity<super::super::PhotonWebView>,
+        pin: Option<Shortcut>,
+        activate: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.insert_webview_with_appearance(
+            index,
+            webview,
+            pin,
+            TabInsertionOptions {
+                activate,
+                animate_appearance: false,
+            },
+            window,
+            cx,
+        );
+    }
+
+    fn insert_webview_with_appearance(
+        &mut self,
+        index: usize,
+        webview: gpui::Entity<super::super::PhotonWebView>,
+        pin: Option<Shortcut>,
+        options: TabInsertionOptions,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let viewport = self
             .active_webview()
             .and_then(|webview| webview.read(cx).last_viewport);
@@ -1684,8 +1745,13 @@ impl BrowserWindow {
         webview.update(cx, |view, _| view.adopt_viewport(viewport));
         let content = TabContent::Web(webview);
         match pin {
-            Some(pin) => self.insert_tab_at(index, content, Some(pin), activate, window, cx),
-            None => self.insert_content(index, content, activate, window, cx),
+            Some(pin) => {
+                self.insert_tab_at_with_appearance(index, content, Some(pin), options, window, cx)
+            }
+            None => {
+                let index = index.clamp(self.pinned_count(), self.tabs.len());
+                self.insert_tab_at_with_appearance(index, content, None, options, window, cx);
+            }
         }
     }
 
@@ -1724,9 +1790,58 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.insert_tab_at_with_appearance(
+            index,
+            content,
+            pin,
+            TabInsertionOptions {
+                activate,
+                animate_appearance: true,
+            },
+            window,
+            cx,
+        );
+    }
+
+    pub(super) fn insert_tab_at_immediately(
+        &mut self,
+        index: usize,
+        content: TabContent,
+        pin: Option<Shortcut>,
+        activate: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.insert_tab_at_with_appearance(
+            index,
+            content,
+            pin,
+            TabInsertionOptions {
+                activate,
+                animate_appearance: false,
+            },
+            window,
+            cx,
+        );
+    }
+
+    fn insert_tab_at_with_appearance(
+        &mut self,
+        index: usize,
+        content: TabContent,
+        pin: Option<Shortcut>,
+        options: TabInsertionOptions,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let index = index.min(self.tabs.len());
         let subscription = self.subscribe_to_content(&content, window, cx);
         let id = Self::allocate_tab_id();
+        if options.animate_appearance {
+            self.tab_entry_animations
+                .borrow_mut()
+                .insert(id, Instant::now());
+        }
         let space = self.current_space(cx);
         self.tabs
             .insert(index, BrowserTab::new(id, content.clone(), pin, space));
@@ -1740,7 +1855,7 @@ impl BrowserWindow {
             // Keep `active_tab` naming the same page until the switch below.
             self.active_tab = self.active_tab.map(|active_tab| active_tab + 1);
         }
-        let activate = activate || (self.active_tab.is_none() && self.tabs.len() == 1);
+        let activate = options.activate || (self.active_tab.is_none() && self.tabs.len() == 1);
         if activate {
             self.empty_page = None;
             self._empty_page_subscription = None;
@@ -1811,6 +1926,7 @@ impl BrowserWindow {
             }
         }
         self.revealed_icons.borrow_mut().remove(&removed.id);
+        self.tab_entry_animations.borrow_mut().remove(&removed.id);
         self.tab_position_animations.remove(&removed.id);
         self.tab_geometry.remove(&removed.id);
 
@@ -2014,6 +2130,24 @@ impl BrowserWindow {
             _ => {
                 revealed_icons.insert(tab, (revealed, Instant::now()));
                 true
+            }
+        }
+    }
+
+    /// Whether a newly inserted tab is within its one-time entry animation.
+    pub(super) fn tab_entry_appearing(
+        &self,
+        tab: u64,
+        animations: &photon_core::AnimationSettings,
+    ) -> bool {
+        let mut entries = self.tab_entry_animations.borrow_mut();
+        match entries.get(&tab) {
+            Some(started) if started.elapsed() < TAB_ENTRY_MOTION.total_duration(animations) => {
+                true
+            }
+            _ => {
+                entries.remove(&tab);
+                false
             }
         }
     }

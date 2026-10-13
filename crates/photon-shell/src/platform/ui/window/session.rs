@@ -207,7 +207,7 @@ impl BrowserWindow {
             match find_page(&tab.url) {
                 Some(page) => {
                     let content = self.new_page(page, cx);
-                    self.insert_tab_at(index, content, None, false, window, cx);
+                    self.insert_tab_at_immediately(index, content, None, false, window, cx);
                 }
                 None => {
                     let Some(webview) = create_webview(cx, self.runtime.clone(), &tab.url) else {
@@ -219,7 +219,7 @@ impl BrowserWindow {
                             url: tab.url.clone(),
                         });
                     });
-                    self.insert_webview(index, webview, None, false, window, cx);
+                    self.insert_webview_immediately(index, webview, None, false, window, cx);
                 }
             }
             self.tabs[index].space = tab.space;

@@ -9,7 +9,7 @@ use super::super::layout::h_stack;
 use super::super::{ClickHandler, metrics, theme::ThemeColors};
 use super::{
     DraggedTab, TabDragAxis, TabDragMove, TabDrop, TabItem, TabParts, TabPrepaint,
-    insertion_marker, is_foreign_tab_drag,
+    animate_tab_entry, insertion_marker, is_foreign_tab_drag,
 };
 
 /// The tabs side by side, then a button that opens a new tab.
@@ -122,6 +122,8 @@ pub(in super::super) fn tab_strip_content(
 /// tab is just its icon, at a fixed width.
 fn strip_tab(parts: TabParts, palette: ThemeColors) -> impl IntoElement {
     if parts.pinned {
+        let entry_animation = parts.entry_animation;
+        let position_offset = parts.position_offset;
         let tab = parts
             .tab
             .flex_shrink_0()
@@ -134,8 +136,15 @@ fn strip_tab(parts: TabParts, palette: ThemeColors) -> impl IntoElement {
         } else {
             tab.hover(|style| style.bg(rgba(palette.hover_surface)))
         };
-        return tab.child(parts.icon);
+        return animate_tab_entry(
+            tab.child(parts.icon),
+            entry_animation,
+            TabDragAxis::Horizontal,
+            position_offset,
+        );
     }
+    let entry_animation = parts.entry_animation;
+    let position_offset = parts.position_offset;
     let tab = parts
         .tab
         .flex_auto()
@@ -151,9 +160,14 @@ fn strip_tab(parts: TabParts, palette: ThemeColors) -> impl IntoElement {
     } else {
         tab.hover(|style| style.bg(rgba(palette.hover_surface)))
     };
-    tab.child(parts.icon)
-        .child(div().flex_1().min_w_0().truncate().child(parts.label))
-        .child(parts.close)
+    animate_tab_entry(
+        tab.child(parts.icon)
+            .child(div().flex_1().min_w_0().truncate().child(parts.label))
+            .child(parts.close),
+        entry_animation,
+        TabDragAxis::Horizontal,
+        position_offset,
+    )
 }
 
 fn new_tab_button(

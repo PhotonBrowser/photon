@@ -18,7 +18,7 @@ use super::controls::FocusRing;
 use super::controls::{OwnsClicks, Pressable};
 use super::icons::{audio_icon, close_icon, globe_icon, loading_spinner, photon_logo};
 use super::layout::h_stack;
-use super::motion::{AnimateIn, Entrance};
+use super::motion::{AnimateIn, Entrance, Speed};
 use super::{
     ClickHandler, KeyDownHandler, MouseDownHandler, MouseUpHandler, metrics, theme::ThemeColors,
 };
@@ -110,6 +110,34 @@ impl TabIcon {
 /// How a tab icon appears.
 pub(super) const ICON_ENTRANCE: Entrance = Entrance::pop(metrics::TAB_FAVICON_SIZE);
 
+/// A new tab settles into its slot as it fades and scales into view.
+pub(super) const TAB_ENTRY_MOTION: Entrance = Entrance::new()
+    .fade_from(0.0)
+    .scale_from(0.94)
+    .slide_down(metrics::TAB_ENTRY_DROP)
+    .speed(Speed::Standard);
+
+pub(super) fn animate_tab_entry<E>(
+    element: E,
+    animation: Option<(ElementId, photon_core::AnimationSettings)>,
+    axis: TabDragAxis,
+    position_offset: f32,
+) -> AnyElement
+where
+    E: Styled + IntoElement + 'static,
+{
+    let Some((id, settings)) = animation else {
+        return element.into_any_element();
+    };
+    let base_offset = match axis {
+        TabDragAxis::Horizontal => (position_offset, 0.0),
+        TabDragAxis::Vertical => (0.0, position_offset),
+    };
+    element
+        .animate_in_with_offset(id, TAB_ENTRY_MOTION, &settings, base_offset)
+        .into_any_element()
+}
+
 /// Sizes an icon image, growing it in from a smaller size while
 /// `appearing`, inside a fixed slot so the tab title does not move.
 fn sized_icon<E>(
@@ -137,6 +165,8 @@ where
 
 pub(super) struct TabItem {
     pub id: String,
+    /// Whether this tab is still within its first appearance animation.
+    pub entry_appearing: bool,
     /// The tab's place among the window's tabs, which a list may not show
     /// all of.
     pub index: usize,
@@ -178,6 +208,8 @@ struct TabParts {
     pinned: bool,
     suppress_tooltips: bool,
     group: String,
+    entry_animation: Option<(ElementId, photon_core::AnimationSettings)>,
+    position_offset: f32,
 }
 
 impl TabParts {
@@ -198,6 +230,10 @@ impl TabParts {
         let tab_id = tab.id.clone();
         let audio_control = matches!(&tab.icon, TabIcon::Audio { .. });
         let position_offset = tab.position_offset;
+        let animations = tab.animations;
+        let entry_animation = tab
+            .entry_appearing
+            .then(|| (format!("{tab_id}-entry").into(), animations));
         let dragged = tab.dragging;
         let suppress_tooltips = tab.suppress_tooltips;
         let focus_handle = tab.focus_handle.tab_index(focus_index).tab_stop(tab.active);
@@ -248,7 +284,6 @@ impl TabParts {
                 1.0
             });
 
-        let animations = tab.animations;
         let icon_color = if tab.active {
             palette.text_primary
         } else {
@@ -302,6 +337,8 @@ impl TabParts {
             pinned: tab.pinned,
             suppress_tooltips,
             group: tab_id,
+            entry_animation,
+            position_offset,
         }
     }
 

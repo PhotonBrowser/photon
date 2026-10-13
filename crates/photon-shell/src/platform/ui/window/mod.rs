@@ -143,6 +143,8 @@ struct BrowserWindow {
     /// The icon each tab last revealed and when, so an icon animates in once
     /// rather than whenever the tab redraws it after a spinner.
     revealed_icons: RefCell<HashMap<u64, (RevealedIcon, Instant)>>,
+    /// The start time for each newly inserted tab's one-time entry motion.
+    tab_entry_animations: RefCell<HashMap<u64, Instant>>,
     /// Whether any part of the window is on screen. Engine renders the active
     /// tab only while it is, since GPUI-CE stops drawing an occluded window.
     window_visible: bool,
@@ -509,6 +511,7 @@ fn open_browser_window_at(
                 notice_expiry: None,
                 zoom_shown_at: None,
                 revealed_icons: RefCell::default(),
+                tab_entry_animations: RefCell::default(),
                 window_visible: true,
                 _appearance_subscription: appearance_subscription,
                 _activation_subscription: activation_subscription,

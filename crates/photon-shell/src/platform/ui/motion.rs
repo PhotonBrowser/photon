@@ -340,7 +340,18 @@ impl Entrance {
 
     /// Styles `element` at `progress` through the entrance, from 0 to 1.
     /// Overshooting curves can pass 1.
-    fn apply<E: Styled>(&self, mut element: E, progress: f32, settings: &AnimationSettings) -> E {
+    fn apply<E: Styled>(&self, element: E, progress: f32, settings: &AnimationSettings) -> E {
+        self.apply_with_offset(element, progress, settings, (0.0, 0.0))
+    }
+
+    /// Styles `element` while preserving its existing relative position.
+    fn apply_with_offset<E: Styled>(
+        &self,
+        mut element: E,
+        progress: f32,
+        settings: &AnimationSettings,
+        base_offset: (f32, f32),
+    ) -> E {
         let effect_scale = f32::from(settings.effect_strength_percent.min(300)) / 100.0;
         let remaining = 1.0 - progress;
         if let Some(from) = self.opacity_from {
@@ -348,8 +359,8 @@ impl Entrance {
         }
         if let Some((x, y)) = self.offset_from {
             element = element
-                .left(px(x * effect_scale * remaining))
-                .top(px(y * effect_scale * remaining));
+                .left(px(base_offset.0 + x * effect_scale * remaining))
+                .top(px(base_offset.1 + y * effect_scale * remaining));
         }
         if let Some(radius) = self.blur_from {
             let radius = radius * effect_scale * remaining;
@@ -407,6 +418,25 @@ pub(super) trait AnimateIn: Styled + IntoElement + Sized + 'static {
             id,
             entrance.animation(&settings),
             move |element, progress| entrance.apply(element, progress, &settings),
+        )
+    }
+
+    /// Plays an entrance while preserving an element's existing relative
+    /// offset, such as the temporary displacement used during tab reordering.
+    fn animate_in_with_offset(
+        self,
+        id: impl Into<ElementId>,
+        entrance: Entrance,
+        settings: &AnimationSettings,
+        base_offset: (f32, f32),
+    ) -> AnimationElement<Self> {
+        let settings = *settings;
+        self.with_animation(
+            id,
+            entrance.animation(&settings),
+            move |element, progress| {
+                entrance.apply_with_offset(element, progress, &settings, base_offset)
+            },
         )
     }
 

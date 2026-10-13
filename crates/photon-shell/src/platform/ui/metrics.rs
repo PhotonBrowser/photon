@@ -30,6 +30,7 @@ pub(super) const TAB_DRAG_SCROLL_SPEED: f32 = 720.0;
 pub(super) const TAB_DRAG_SOURCE_OPACITY: f32 = 0.28;
 pub(super) const TAB_REORDER_DURATION_MS: u64 = 150;
 pub(super) const TAB_DROP_SETTLE_DURATION_MS: u64 = 120;
+pub(super) const TAB_ENTRY_DROP: f32 = 5.0;
 pub(super) const TAB_MAX_WIDTH: f32 = 220.0;
 pub(super) const TAB_HORIZONTAL_PADDING: f32 = 10.0;
 pub(super) const TAB_CLOSE_BUTTON_SIZE: f32 = 22.0;

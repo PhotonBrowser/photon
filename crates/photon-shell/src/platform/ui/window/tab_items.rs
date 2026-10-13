@@ -104,6 +104,16 @@ impl BrowserWindow {
                     }
                 };
                 let stable_id = tab.id;
+                let dragging = self.tab_drag_layout.as_ref().is_some_and(|drag| {
+                    drag.id == stable_id && !matches!(drag.phase, super::TabDragPhase::PendingDrag)
+                });
+                let entry_appearing = if dragging {
+                    self.tab_entry_animations.borrow_mut().remove(&stable_id);
+                    false
+                } else {
+                    self.tab_entry_appearing(stable_id, &animations)
+                };
+                let icon_appearing = self.icon_appearing(stable_id, &icon, &animations);
                 let insertion_before = self.incoming_tab_drag.as_ref().and_then(|incoming| {
                     (incoming.pinned == tab.pin.is_some() && incoming.before_id == Some(stable_id))
                         .then_some(incoming.size)
@@ -114,8 +124,9 @@ impl BrowserWindow {
                 });
                 TabItem {
                     id: format!("browser-tab-{stable_id}"),
+                    entry_appearing,
                     label,
-                    icon_appearing: self.icon_appearing(tab.id, &icon, &animations),
+                    icon_appearing: icon_appearing && !entry_appearing,
                     animations,
                     icon,
                     index,
