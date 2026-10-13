@@ -84,6 +84,7 @@ pub(super) fn sidebar(
                         .min_h_0()
                         .overflow_y_scroll()
                         .elastic_scroll(elastic_scroll)
+                        .elastic_scroll_only_if_scrollable(true)
                         .px(px(padding))
                         .child(tabs),
                 );
