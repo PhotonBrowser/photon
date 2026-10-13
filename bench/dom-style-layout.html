@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Photon DOM, style, and layout benchmark</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font: 16px/1.5 system-ui, sans-serif;
+      --page: #18212b;
+      --surface: #243442;
+      --surface-raised: #31485b;
+      --ink: #f2f6fa;
+      --muted: #b8c6d2;
+      --accent: #6ec5ff;
+      --line: #7890a3;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --page: #f2f5f8;
+        --surface: #ffffff;
+        --surface-raised: #e5edf3;
+        --ink: #18212b;
+        --muted: #526575;
+        --accent: #176cab;
+        --line: #9aabba;
+      }
+    }
+
+    * { box-sizing: border-box; }
+    body { max-width: 1120px; margin: 0 auto; padding: 32px 24px 48px; color: var(--ink); background: var(--page); }
+    h1, h2, p { margin-top: 0; }
+    h1 { font-size: 2rem; line-height: 1.15; }
+    h2 { font-size: 1.15rem; }
+    p, small, .muted { color: var(--muted); }
+    code { color: var(--accent); }
+    .panel { margin: 20px 0; padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+    .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+    button { min-height: 42px; padding: 8px 16px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: var(--surface-raised); font: inherit; cursor: pointer; }
+    button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+    button:disabled { cursor: wait; opacity: .65; }
+    #status { min-height: 1.5em; margin: 14px 0 0; color: var(--accent); }
+    .method { margin-bottom: 0; font-size: .92rem; }
+
+    #grid {
+      display: grid;
+      max-height: 480px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      overflow: auto;
+      padding: 2px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--page);
+    }
+
+    #grid[data-mode="expanded"] { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .card { min-width: 0; min-height: 76px; padding: 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-raised); }
+    .card__heading { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; }
+    .card__title { overflow: hidden; font-size: .92rem; text-overflow: ellipsis; white-space: nowrap; }
+    .card__badge { flex: 0 0 auto; color: var(--muted); font-size: .75rem; }
+    .card__detail { display: none; margin: 8px 0 0; font-size: .82rem; }
+    .card.is-selected .card__detail { display: block; }
+    #grid[data-mode="expanded"] .card:nth-child(3n + 1) { padding: 16px; }
+    #grid[data-mode="expanded"] .card:nth-child(4n + 2) .card__badge { color: var(--accent); }
+
+    .results { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+    .results th, .results td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; }
+    .results th { color: var(--muted); font-size: .85rem; font-weight: 600; }
+    .results td:not(:first-child), .results th:not(:first-child) { text-align: right; }
+    .results tr:last-child td { border-bottom: 0; }
+
+    @media (max-width: 760px) {
+      body { padding: 24px 16px 40px; }
+      #grid, #grid[data-mode="expanded"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .panel { padding: 16px; }
+    }
+
+    @media (max-width: 480px) {
+      #grid, #grid[data-mode="expanded"] { grid-template-columns: minmax(0, 1fr); }
+      .results th, .results td { padding: 8px 5px; font-size: .85rem; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Photon DOM, style, and layout benchmark</h1>
+  <p>Repeatedly update a large document, recalculate styles through descendant selectors, and force layout by reading every card’s geometry.</p>
+
+  <section class="panel" aria-labelledby="run-title">
+    <h2 id="run-title">Run the benchmark</h2>
+    <div class="controls">
+      <button id="run" type="button">Run 100, 500, and 1,000 cards</button>
+    </div>
+    <p id="status" role="status" aria-live="polite">Ready. The page will run each size once.</p>
+    <p class="method">Each size runs 4 warm-up batches and 24 measured batches. Each batch toggles a grid attribute and every card’s selected class, then reads geometry for all cards. Setup time is excluded. The timing includes DOM updates, style and layout work, and the geometry scan; it does not include paint time.</p>
+  </section>
+
+  <section class="panel" aria-labelledby="results-title">
+    <h2 id="results-title">Results</h2>
+    <table class="results">
+      <thead>
+        <tr><th scope="col">Cards</th><th scope="col">Batch p50</th><th scope="col">Batch p95</th><th scope="col">Frame gap p95</th></tr>
+      </thead>
+      <tbody id="results-body">
+        <tr><td colspan="4" class="muted">Run the benchmark to collect timings.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel" aria-labelledby="sample-title">
+    <h2 id="sample-title">Workload preview</h2>
+    <p class="muted">The benchmark rebuilds this grid at each size. Selected cards reveal detail text; expanded mode changes the grid and selected descendant styles.</p>
+    <div id="grid" data-mode="compact" aria-label="Benchmark card grid"></div>
+  </section>
+
+  <script>
+    const sizes = [100, 500, 1000];
+    const warmupBatches = 4;
+    const measuredBatches = 24;
+    const runButton = document.querySelector("#run");
+    const status = document.querySelector("#status");
+    const resultsBody = document.querySelector("#results-body");
+    const grid = document.querySelector("#grid");
+    let layoutChecksum = 0;
+
+    function buildGrid(count) {
+      const fragment = document.createDocumentFragment();
+      for (let index = 0; index < count; index += 1) {
+        const card = document.createElement("article");
+        card.className = "card";
+
+        const heading = document.createElement("div");
+        heading.className = "card__heading";
+
+        const title = document.createElement("strong");
+        title.className = "card__title";
+        title.textContent = "Record " + String(index + 1).padStart(4, "0");
+
+        const badge = document.createElement("span");
+        badge.className = "card__badge";
+        badge.textContent = index % 4 === 0 ? "Needs review" : "Up to date";
+
+        const detail = document.createElement("p");
+        detail.className = "card__detail";
+        detail.textContent = "Updated recently · Owner " + String((index % 37) + 1).padStart(2, "0");
+
+        heading.append(title, badge);
+        card.append(heading, detail);
+        fragment.append(card);
+      }
+      grid.replaceChildren(fragment);
+      grid.dataset.mode = "compact";
+      return Array.from(grid.children);
+    }
+
+    function nextFrame() {
+      return new Promise(resolve => requestAnimationFrame(resolve));
+    }
+
+    function percentile(values, fraction) {
+      const sorted = values.slice().sort((left, right) => left - right);
+      const index = Math.max(0, Math.ceil(sorted.length * fraction) - 1);
+      return sorted[index] || 0;
+    }
+
+    function formatMilliseconds(value) {
+      return value.toFixed(2) + " ms";
+    }
+
+    function runBatch(cards) {
+      grid.dataset.mode = grid.dataset.mode === "compact" ? "expanded" : "compact";
+      for (const card of cards)
+        card.classList.toggle("is-selected");
+
+      let checksum = grid.getBoundingClientRect().height;
+      for (const card of cards)
+        checksum += card.offsetTop + card.offsetHeight;
+      const sampledStyle = getComputedStyle(cards[cards.length - 1]);
+      checksum += sampledStyle.fontSize.length;
+      layoutChecksum += checksum;
+    }
+
+    async function runSize(count) {
+      status.textContent = "Building " + count + " cards…";
+      const cards = buildGrid(count);
+      await nextFrame();
+      await nextFrame();
+
+      const timings = [];
+      const frameGaps = [];
+      let previousFrameTime = null;
+      const totalBatches = warmupBatches + measuredBatches;
+
+      for (let index = 0; index < totalBatches; index += 1) {
+        const frameTime = await nextFrame();
+        if (index > warmupBatches && previousFrameTime !== null)
+          frameGaps.push(frameTime - previousFrameTime);
+
+        const startedAt = performance.now();
+        runBatch(cards);
+        const elapsed = performance.now() - startedAt;
+        if (index >= warmupBatches)
+          timings.push(elapsed);
+        previousFrameTime = frameTime;
+      }
+
+      return {
+        count,
+        median: percentile(timings, 0.5),
+        p95: percentile(timings, 0.95),
+        frameP95: percentile(frameGaps, 0.95),
+      };
+    }
+
+    function addResult(result) {
+      const row = document.createElement("tr");
+      const values = [
+        String(result.count),
+        formatMilliseconds(result.median),
+        formatMilliseconds(result.p95),
+        formatMilliseconds(result.frameP95),
+      ];
+      for (const value of values) {
+        const cell = document.createElement("td");
+        cell.textContent = value;
+        row.append(cell);
+      }
+      resultsBody.append(row);
+    }
+
+    runButton.addEventListener("click", async () => {
+      runButton.disabled = true;
+      resultsBody.replaceChildren();
+      layoutChecksum = 0;
+      try {
+        for (const count of sizes) {
+          status.textContent = "Measuring " + count + " cards…";
+          const result = await runSize(count);
+          addResult(result);
+        }
+        status.textContent = "Complete. Geometry checksum: " + Math.round(layoutChecksum) + ". Repeat the run to compare results; keep the window size and system load similar.";
+      } catch (error) {
+        status.textContent = "Benchmark stopped: " + String(error);
+      } finally {
+        runButton.disabled = false;
+      }
+    });
+
+    buildGrid(100);
+  </script>
+</body>
+</html>
