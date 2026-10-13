@@ -160,6 +160,10 @@ pub(super) fn close_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("x"), color, size)
 }
 
+pub(super) fn minimize_window_icon(color: u32, size: f32) -> impl IntoElement {
+    icon(lucide!("minus"), color, size)
+}
+
 /// A filled star, for the empty favourites hint.
 pub(super) fn favourite_star_icon(color: u32, size: f32) -> impl IntoElement {
     svg()
@@ -211,6 +215,20 @@ pub(super) fn open_in_tab_icon(color: u32, size: f32) -> impl IntoElement {
 /// A window, for opening a new one.
 pub(super) fn window_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("app-window"), color, size)
+}
+
+/// A single window outline, for maximizing.
+pub(super) fn maximize_window_icon(color: u32, size: f32) -> impl IntoElement {
+    svg()
+        .data(br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>"##)
+        .size(px(size))
+        .flex_shrink_0()
+        .text_color(rgb(color))
+}
+
+/// Overlapping windows, for restoring a maximized window.
+pub(super) fn restore_window_icon(color: u32, size: f32) -> impl IntoElement {
+    icon(lucide!("copy"), color, size)
 }
 
 /// A speaker, crossed out when `muted`.

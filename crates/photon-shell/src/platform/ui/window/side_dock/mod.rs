@@ -3,8 +3,8 @@
 //! window's outer edge. Zen mode hides it with the rest of the chrome. Each
 //! moves smoothly, and the page follows.
 //!
-//! - `commands`: showing, hiding, collapsing and Zen mode, and the native
-//!   window controls that follow them.
+//! - `commands`: showing, hiding, collapsing and Zen mode, and the macOS
+//!   window controls that follow the sidebar.
 //! - `edges`: resizing by dragging its edge, and revealing it from the
 //!   window's edge.
 //! - `view`: drawing it.
@@ -21,7 +21,7 @@ use super::super::motion::{Speed, Tween, mix};
 use super::super::settings::Settings;
 use super::super::workspace_layout::WorkspaceLayout;
 
-/// How the native window controls sit, which follows the sidebar.
+/// Where the macOS native window controls sit, which follows the sidebar.
 #[derive(Clone, Copy, PartialEq)]
 struct WindowControls {
     visible: bool,

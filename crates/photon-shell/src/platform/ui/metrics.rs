@@ -45,6 +45,11 @@ pub(super) const TOOLBAR_HORIZONTAL_INSET: f32 = 12.0;
 pub(super) const TOOLBAR_CONTROL_GAP: f32 = 8.0;
 pub(super) const TOOLBAR_BUTTON_SIZE: f32 = 28.0;
 pub(super) const TOOLBAR_ICON_SIZE: f32 = 14.0;
+pub(super) const WINDOW_CONTROL_GAP: f32 = 2.0;
+pub(super) const WINDOW_CONTROL_EDGE_INSET: f32 = 8.0;
+#[cfg_attr(target_os = "macos", allow(dead_code))]
+pub(super) const WINDOW_CONTROL_GROUP_WIDTH: f32 =
+    TOOLBAR_BUTTON_SIZE * 3.0 + WINDOW_CONTROL_GAP * 2.0;
 
 pub(super) const MENU_WIDTH: f32 = 220.0;
 

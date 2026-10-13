@@ -195,6 +195,7 @@ impl Render for MinimalPopupWindow {
                     .truncate()
                     .child(url),
                 window,
+                palette,
             ))
             .child(
                 div()

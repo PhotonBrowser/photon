@@ -30,6 +30,7 @@ mod toolbar;
 mod tooltip;
 mod webview;
 mod window;
+mod window_controls;
 mod workspace_layout;
 mod workspace_preset_fields;
 

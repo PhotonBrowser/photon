@@ -83,7 +83,8 @@ impl BrowserWindow {
         }
     }
 
-    /// Moves the native window controls to follow the sidebar.
+    /// Moves the macOS native window controls to follow the sidebar. Linux
+    /// keeps its custom controls at the titlebar's trailing edge.
     pub(in super::super) fn place_window_controls(&mut self, window: &Window, cx: &App) {
         let animations = Settings::get(cx).animations;
         let region = WorkspaceLayout::current(cx).sidebar_region();

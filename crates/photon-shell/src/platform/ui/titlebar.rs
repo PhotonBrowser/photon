@@ -6,25 +6,36 @@ use gpui::{Div, InteractiveElement, MouseButton, Window, prelude::*, px};
 use super::layout::h_stack;
 use crate::platform::window_settings;
 
-use super::metrics;
+use super::{metrics, theme::ThemeColors, window_controls};
 
-/// A centered titlebar strip, with room for native controls while windowed.
-pub(super) fn titlebar(content: impl IntoElement, window: &Window) -> Div {
-    let controls_inset = if window.is_fullscreen() || window.is_simple_fullscreen() {
+/// A centered titlebar strip, with room for window controls while windowed.
+pub(super) fn titlebar(content: impl IntoElement, window: &Window, palette: ThemeColors) -> Div {
+    let fullscreen = window.is_fullscreen() || window.is_simple_fullscreen();
+    let leading_inset = if fullscreen {
         0.0
     } else {
         window_settings::native_controls_inset()
     };
-    window_drag_area(
-        h_stack()
-            .w_full()
-            .h(px(metrics::TITLEBAR_HEIGHT))
-            .flex_shrink_0()
-            .items_center()
-            .justify_center()
-            .px(px(controls_inset)),
-    )
-    .child(content)
+    let trailing_inset = if fullscreen {
+        0.0
+    } else {
+        window_settings::native_controls_trailing_inset()
+    };
+    let show_custom_controls = !fullscreen && window_settings::uses_custom_window_controls();
+    let area = h_stack()
+        .relative()
+        .w_full()
+        .h(px(metrics::TITLEBAR_HEIGHT))
+        .flex_shrink_0()
+        .items_center()
+        .justify_center()
+        .pl(px(leading_inset))
+        .pr(px(trailing_inset))
+        .child(content)
+        .when(show_custom_controls, |area| {
+            area.child(window_controls::controls(window, palette))
+        });
+    window_drag_area(area)
 }
 
 /// Makes empty space in `area` move the window, and a double-click zoom it.

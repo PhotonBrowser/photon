@@ -33,6 +33,14 @@ pub(in crate::platform) fn native_controls_column_inset() -> f32 {
     WINDOW_CONTROLS_COLUMN_INSET
 }
 
+pub(in crate::platform) fn native_controls_trailing_inset() -> f32 {
+    WINDOW_CONTROLS_INSET
+}
+
+pub(in crate::platform) fn uses_custom_window_controls() -> bool {
+    false
+}
+
 /// Applies Photon-specific interaction styling to macOS window controls.
 pub(in crate::platform) fn configure_native_controls(
     window: &Window,

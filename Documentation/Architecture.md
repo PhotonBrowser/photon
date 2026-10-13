@@ -31,8 +31,10 @@ implemented yet” notice until a Linux Engine surface is connected. The Linux
 application shell and Engine session are not wired up yet, so the target still
 exits with an implementation notice.
 
-Linux window settings leave windows opaque and reserve no space for macOS
-traffic lights. The Linux renderer stub is
+Linux window settings request client-side decorations and keep windows opaque.
+The shared titlebar reserves a right-side slot for GPUI minimize,
+maximize/restore, and close buttons; macOS continues to use its native traffic
+lights. The Linux renderer stub is
 [`platform/linux/renderer.rs`](../crates/photon-shell/src/platform/linux/renderer.rs);
 the active macOS renderer is
 [`platform/macos/renderer.rs`](../crates/photon-shell/src/platform/macos/renderer.rs).
@@ -116,7 +118,7 @@ crates/photon-shell/src/
     │   └── ffi.rs                  # macOS native embedder declarations
     └── linux/                      # Linux backend landing point
         ├── renderer.rs             # Blank page with bottom-right implementation notice
-        └── window_settings.rs      # Opaque window, no vibrancy or macOS controls
+        └── window_settings.rs      # Client decorations, opaque window, GPUI controls
 
 native/embedder/
 ├── PhotonEmbedderBridge.cpp       # Shared LibPhotonEmbedder C++ bridge

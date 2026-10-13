@@ -9,7 +9,7 @@ use super::super::icons::{back_icon, close_icon, forward_icon, reload_icon};
 use super::super::layout::{h_stack, v_stack};
 use super::super::settings::Settings;
 use super::super::tabs::{TabDragMove, tab_strip};
-use super::super::titlebar::{titlebar, window_drag_area};
+use super::super::titlebar::titlebar;
 use super::super::toolbar::toolbar_row;
 use super::super::workspace_layout::{ComponentId, WorkspaceLayout};
 use super::super::{ClickHandler, metrics};
@@ -27,7 +27,7 @@ impl BrowserWindow {
                 || layout
                     .components(DockRegion::Top)
                     .any(|component| component.id != ComponentId::TabStrip))
-            .then(|| self.blank_titlebar(cx));
+            .then(|| self.blank_titlebar(window, cx));
             if let Some(top) = self.dock_bar(DockRegion::Top, top_titlebar, window, cx) {
                 root = root.child(
                     top.absolute()
@@ -88,21 +88,23 @@ impl BrowserWindow {
 
     /// Empty titlebar space that moves the window, above the sidebar when
     /// the tabs are there, or across the window.
-    fn blank_titlebar(&self, cx: &mut Context<Self>) -> Div {
+    fn blank_titlebar(&self, window: &Window, cx: &mut Context<Self>) -> Div {
         let layout = WorkspaceLayout::current(cx);
         let area = div().h(px(metrics::TITLEBAR_HEIGHT)).flex_shrink_0();
-        let Some(region) = layout
+        let content = if let Some(region) = layout
             .sidebar_region()
             .filter(|_| layout.has_vertical_tabs())
-        else {
-            return self.with_browser_menu(window_drag_area(area.w_full()), cx);
+        {
+            let width = self.sidebar.docked_width(cx);
+            h_stack()
+                .w_full()
+                .h(px(metrics::TITLEBAR_HEIGHT))
+                .when(region == DockRegion::Trailing, |bar| bar.justify_end())
+                .child(self.with_browser_menu(area.w(px(width)), cx))
+        } else {
+            self.with_browser_menu(area.w_full(), cx)
         };
-        let width = self.sidebar.docked_width(cx);
-        h_stack()
-            .w_full()
-            .h(px(metrics::TITLEBAR_HEIGHT))
-            .when(region == DockRegion::Trailing, |bar| bar.justify_end())
-            .child(self.with_browser_menu(window_drag_area(area.w(px(width))), cx))
+        titlebar(content, window, self.palette(window, cx))
     }
 
     pub(super) fn render_component(
@@ -134,7 +136,7 @@ impl BrowserWindow {
                 crate::platform::supports_elastic_scroll() && Settings::get(cx).elastic_scroll,
             );
             return if region == DockRegion::Top {
-                self.with_browser_menu(titlebar(strip, window), cx)
+                self.with_browser_menu(titlebar(strip, window, palette), cx)
                     .into_any_element()
             } else {
                 strip.into_any_element()

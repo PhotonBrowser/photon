@@ -1,7 +1,7 @@
-//! Linux GPUI window adapter. Native Linux controls and window materials are
-//! not wired up yet, so windows stay opaque and retain the desktop titlebar.
+//! Linux GPUI window adapter. Client-side decorations host shared GPUI window
+//! controls; windows stay opaque until a compositor-compatible material exists.
 
-use gpui::{App, Bounds, Window, WindowBounds, WindowOptions, px, size};
+use gpui::{App, Bounds, Window, WindowBounds, WindowDecorations, WindowOptions, px, size};
 use photon_core::{AnimationSettings, WindowBackgroundStyle};
 
 use crate::platform::metrics;
@@ -12,6 +12,14 @@ pub(crate) fn native_controls_inset() -> f32 {
 
 pub(crate) fn native_controls_column_inset() -> f32 {
     0.0
+}
+
+pub(crate) fn native_controls_trailing_inset() -> f32 {
+    metrics::WINDOW_CONTROL_GROUP_WIDTH + metrics::WINDOW_CONTROL_EDGE_INSET * 2.0
+}
+
+pub(crate) fn uses_custom_window_controls() -> bool {
+    true
 }
 
 pub(crate) fn configure_native_controls(_: &Window, _: &AnimationSettings) {}
@@ -69,5 +77,7 @@ pub(crate) fn popup_options(cx: &App, width: Option<i32>, height: Option<i32>) -
 
 fn options_for_size(cx: &App, width: f32, height: f32) -> WindowOptions {
     let bounds = Bounds::centered(None, size(px(width), px(height)), cx);
-    WindowOptions::new().window_bounds(Some(WindowBounds::Windowed(bounds)))
+    WindowOptions::new()
+        .window_bounds(Some(WindowBounds::Windowed(bounds)))
+        .window_decorations(Some(WindowDecorations::Client))
 }

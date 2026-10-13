@@ -3,9 +3,9 @@
 //!
 //! Linux window integration, system services, Engine bindings, and page
 //! presentation belong here. The browser chrome and WebView component are
-//! shared from `platform/ui`; implement this adapter to provide Linux window
-//! controls and a page renderer. The placeholder renderer stays blank and
-//! shows a notice until that renderer exists.
+//! shared from `platform/ui`; this adapter supplies client-side window
+//! decorations and a placeholder page renderer, which stays blank and shows a
+//! notice until a Linux Engine surface is connected.
 
 pub(crate) mod app_menus;
 pub(crate) mod default_browser;

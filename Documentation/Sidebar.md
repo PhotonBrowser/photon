@@ -72,8 +72,9 @@ beside the page, each following a `Tween` from
 [`motion.rs`](../crates/photon-shell/src/platform/ui/motion.rs).
 [`window/side_dock/`](../crates/photon-shell/src/platform/ui/window/side_dock/)
 keeps where the sidebar is, handles its edges, draws it, and places the
-native window controls through GPUI-CE's `set_traffic_light_axis` and
-`set_traffic_lights_visible`.
+macOS native window controls through GPUI-CE's `set_traffic_light_axis` and
+`set_traffic_lights_visible`. Linux keeps its custom controls in the shared
+titlebar's reserved trailing space.
 
 ## Width
 
