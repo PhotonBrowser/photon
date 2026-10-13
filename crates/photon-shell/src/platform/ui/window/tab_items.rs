@@ -6,7 +6,7 @@ use gpui::{App, Context, DispatchPhase, KeyDownEvent, MouseButton, MouseDownEven
 use super::super::history::BrowsingHistory;
 use super::super::pages::PageIcon;
 use super::super::settings::Settings;
-use super::super::tabs::{TabDragAxis, TabIcon, TabItem, TabMotion};
+use super::super::tabs::{TabIcon, TabItem, TabMotion};
 use super::BrowserWindow;
 use super::content::TabContent;
 use std::time::Instant;
@@ -144,31 +144,13 @@ impl BrowserWindow {
                         .get(&stable_id)
                         .copied()
                         .unwrap_or_default();
-                    let has_following_tab = match axis {
-                        TabDragAxis::Horizontal => index + 1 < self.tabs.len(),
-                        TabDragAxis::Vertical => self
-                            .listed_tabs(cx)
-                            .into_iter()
-                            .skip_while(|&listed| listed != index)
-                            .skip(1)
-                            .any(|listed| self.tabs[listed].pin.is_some() == tab.pin.is_some()),
-                    };
-                    let trailing_gap = if has_following_tab {
-                        match axis {
-                            TabDragAxis::Horizontal => super::super::metrics::TAB_STRIP_GAP,
-                            TabDragAxis::Vertical => {
-                                super::super::metrics::SidebarSpacing::new(
-                                    self.sidebar.shows_icons(),
-                                )
-                                .item_gap
-                            }
-                        }
-                    } else {
-                        0.0
-                    };
+                    let trailing_gap = self
+                        .closing_tab_gaps
+                        .get(&stable_id)
+                        .copied()
+                        .unwrap_or_default();
                     Some(TabMotion {
                         id: format!("browser-tab-{stable_id}-motion").into(),
-                        layout_id: format!("browser-tab-{stable_id}-layout").into(),
                         from: 1.0,
                         target: 0.0,
                         closing: true,
@@ -180,7 +162,6 @@ impl BrowserWindow {
                 } else if entry_appearing {
                     Some(TabMotion {
                         id: format!("browser-tab-{stable_id}-motion").into(),
-                        layout_id: format!("browser-tab-{stable_id}-layout").into(),
                         from: 0.0,
                         target: 1.0,
                         closing: false,

@@ -152,8 +152,10 @@ struct BrowserWindow {
     closing_tabs: HashSet<u64>,
     /// Which closing tabs were active when their exit began.
     closing_tab_active: HashSet<u64>,
-    /// Their original layout extents, kept fixed as their bounds shrink.
+    /// Their original layout extents, used to size their absolute exit visuals.
     closing_tab_extents: HashMap<u64, f32>,
+    /// The gap removed with each closing tab's zero-size layout slot.
+    closing_tab_gaps: HashMap<u64, f32>,
     /// Finalizes each close after its spring has settled.
     tab_close_tasks: HashMap<u64, Task<()>>,
     /// Whether any part of the window is on screen. Engine renders the active
@@ -527,6 +529,7 @@ fn open_browser_window_at(
                 closing_tabs: HashSet::new(),
                 closing_tab_active: HashSet::new(),
                 closing_tab_extents: HashMap::new(),
+                closing_tab_gaps: HashMap::new(),
                 tab_close_tasks: HashMap::new(),
                 window_visible: true,
                 _appearance_subscription: appearance_subscription,

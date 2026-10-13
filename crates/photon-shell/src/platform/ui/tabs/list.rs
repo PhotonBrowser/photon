@@ -33,6 +33,7 @@ pub(in super::super) fn tab_list(
 ) -> impl IntoElement {
     let spacing = metrics::SidebarSpacing::new(collapsed);
     let suppress_tooltips = tabs.iter().any(|tab| tab.suppress_tooltips);
+    let has_live_pinned = tabs.iter().any(|tab| tab.pinned && !tab.closing);
     let layout_tab: fn(TabParts, ThemeColors) -> AnyElement =
         if collapsed { tab_tile } else { tab_row };
     let tab_count = tabs.len();
@@ -63,17 +64,20 @@ pub(in super::super) fn tab_list(
         }
         focus_index += stops;
     }
-    let section = |id: &'static str, label: &'static str, rows: Vec<_>| {
+    let section = |id: &'static str, label: &'static str, rows: Vec<_>, close_empty_slot: bool| {
         v_stack()
             .id(id)
             .role(Role::TabList)
             .aria_label(label)
             .w_full()
             .gap(px(spacing.item_gap))
+            .when(close_empty_slot, |section| {
+                section.mb(px(-spacing.item_gap))
+            })
             .children(rows)
     };
     let on_drop_into_today = std::rc::Rc::clone(&on_drop_into_today);
-    let divider = (!pinned.is_empty()).then(|| {
+    let divider = has_live_pinned.then(|| {
         let on_drop = std::rc::Rc::clone(&on_drop_into_today);
         div()
             .id("browser-tab-divider")
@@ -100,7 +104,12 @@ pub(in super::super) fn tab_list(
         .gap(px(spacing.item_gap))
         .tab_group()
         .when(!pinned.is_empty(), |list| {
-            list.child(section("browser-pinned-tabs", "Pinned tabs", pinned))
+            list.child(section(
+                "browser-pinned-tabs",
+                "Pinned tabs",
+                pinned,
+                !has_live_pinned,
+            ))
         })
         .children(divider)
         .child(
@@ -112,7 +121,7 @@ pub(in super::super) fn tab_list(
                     on_drop_into_today(dragged, window, cx)
                 }),
         )
-        .child(section("browser-tab-list", "Browser tabs", today))
+        .child(section("browser-tab-list", "Browser tabs", today, false))
         .on_mouse_move_all(move |event, phase, hitbox, window, cx| {
             on_drag_move(event, phase, hitbox, window, cx);
         })

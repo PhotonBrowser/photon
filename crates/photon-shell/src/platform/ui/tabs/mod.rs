@@ -120,7 +120,6 @@ pub(super) const TAB_CLOSE_DURATION: Duration = Duration::from_millis(260);
 #[derive(Clone)]
 pub(super) struct TabMotion {
     pub id: ElementId,
-    pub layout_id: ElementId,
     pub from: f32,
     pub target: f32,
     pub closing: bool,
@@ -144,8 +143,20 @@ where
     };
     let element = if motion.closing {
         match axis {
-            TabDragAxis::Horizontal => element.flex_none().min_w_0().w_full(),
-            TabDragAxis::Vertical => element.flex_none().min_h_0().h_full(),
+            TabDragAxis::Horizontal => element
+                .absolute()
+                .flex_none()
+                .min_w_0()
+                .w(px(motion.extent))
+                .top(px(0.0))
+                .h(px(metrics::TAB_HEIGHT)),
+            TabDragAxis::Vertical => element
+                .absolute()
+                .flex_none()
+                .min_h_0()
+                .left(px(0.0))
+                .w_full()
+                .h(px(motion.extent)),
         }
     } else {
         element
@@ -179,38 +190,24 @@ where
         return element.into_any_element();
     }
 
-    let layout_spring = SpringAnimation::new(TAB_MOTION_SPRING)
-        .with_epsilon(TAB_MOTION_EPSILON)
-        .to(0.0)
-        .from(1.0);
     match axis {
         TabDragAxis::Horizontal => h_stack()
+            .relative()
             .flex_none()
             .min_w_0()
-            .overflow_hidden()
+            .w(px(0.0))
+            .h(px(metrics::TAB_HEIGHT))
+            .mr(px(-motion.trailing_gap))
             .child(element)
-            .with_spring(motion.layout_id, layout_spring, move |layout, value| {
-                let progress = value.clamp(0.0, 1.0);
-                layout
-                    .flex_none()
-                    .min_w_0()
-                    .w(px(motion.extent * progress))
-                    .mr(px(-motion.trailing_gap * (1.0 - progress)))
-            })
             .into_any_element(),
         TabDragAxis::Vertical => v_stack()
+            .relative()
             .flex_none()
             .min_h_0()
-            .overflow_hidden()
+            .w_full()
+            .h(px(0.0))
+            .mb(px(-motion.trailing_gap))
             .child(element)
-            .with_spring(motion.layout_id, layout_spring, move |layout, value| {
-                let progress = value.clamp(0.0, 1.0);
-                layout
-                    .flex_none()
-                    .min_h_0()
-                    .h(px(motion.extent * progress))
-                    .mb(px(-motion.trailing_gap * (1.0 - progress)))
-            })
             .into_any_element(),
     }
 }

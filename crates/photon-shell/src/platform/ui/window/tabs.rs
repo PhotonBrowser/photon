@@ -1901,6 +1901,107 @@ impl BrowserWindow {
         }
     }
 
+    fn animate_tab_close_layout(&mut self, closing_id: u64, axis: TabDragAxis, cx: &App) {
+        let Some(closing_index) = self.tab_index_by_id(closing_id) else {
+            return;
+        };
+        let pinned = self.tabs[closing_index].pin.is_some();
+        let listed: Vec<usize> = match axis {
+            TabDragAxis::Horizontal => (0..self.tabs.len()).collect(),
+            TabDragAxis::Vertical => self.listed_tabs(cx),
+        };
+        let gap = match axis {
+            TabDragAxis::Horizontal => super::super::metrics::TAB_STRIP_GAP,
+            TabDragAxis::Vertical => {
+                super::super::metrics::SidebarSpacing::new(self.sidebar.shows_icons()).item_gap
+            }
+        };
+
+        let animate_group = |this: &mut Self, ids: &[usize], shift: f32| {
+            let start = ids
+                .iter()
+                .filter_map(|&index| {
+                    let id = this.tabs[index].id;
+                    this.tab_geometry
+                        .get(&id)
+                        .copied()
+                        .map(|bounds| axis_origin(bounds, axis) - this.tab_offset(id, axis))
+                })
+                .fold(f32::INFINITY, f32::min);
+            if !start.is_finite() {
+                return;
+            }
+
+            let mut cursor = start - shift;
+            for &index in ids {
+                let id = this.tabs[index].id;
+                if this.closing_tabs.contains(&id) {
+                    continue;
+                }
+                let Some(bounds) = this.tab_geometry.get(&id).copied() else {
+                    continue;
+                };
+                let from = axis_origin(bounds, axis) - cursor;
+                match animation_retarget_offset(true, from) {
+                    Some(from) => {
+                        this.tab_position_animations.insert(
+                            id,
+                            super::TabPositionAnimation::new(
+                                axis,
+                                from,
+                                super::super::metrics::TAB_REORDER_DURATION_MS,
+                            ),
+                        );
+                    }
+                    None => {
+                        this.tab_position_animations.remove(&id);
+                    }
+                }
+                cursor += axis_size(bounds, axis) + gap;
+            }
+        };
+
+        if axis == TabDragAxis::Horizontal {
+            animate_group(self, &listed, 0.0);
+            return;
+        }
+
+        let pinned_ids: Vec<usize> = listed
+            .iter()
+            .copied()
+            .filter(|&index| self.tabs[index].pin.is_some())
+            .collect();
+        let today_ids: Vec<usize> = listed
+            .iter()
+            .copied()
+            .filter(|&index| self.tabs[index].pin.is_none())
+            .collect();
+        animate_group(self, &pinned_ids, 0.0);
+
+        let today_shift = if pinned {
+            let has_live_pinned = pinned_ids
+                .iter()
+                .any(|&index| !self.closing_tabs.contains(&self.tabs[index].id));
+            let extent = self
+                .closing_tab_extents
+                .get(&closing_id)
+                .copied()
+                .unwrap_or_default();
+            if has_live_pinned {
+                extent + gap
+            } else {
+                let spacing =
+                    super::super::metrics::SidebarSpacing::new(self.sidebar.shows_icons());
+                let divider_extent =
+                    2.0 * spacing.separator_margin + super::super::metrics::MENU_SEPARATOR_HEIGHT;
+                extent + divider_extent + 2.0 * spacing.item_gap
+            }
+        } else {
+            0.0
+        };
+        animate_group(self, &today_ids, today_shift);
+    }
+
     pub(super) fn close_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
         if index >= self.tabs.len() || self.closing_tabs.contains(&self.tabs[index].id) {
             return;
@@ -1923,6 +2024,29 @@ impl BrowserWindow {
             self.finish_close_tab(index, window, cx);
             return;
         }
+
+        let has_other_tab = match axis {
+            TabDragAxis::Horizontal => self
+                .tabs
+                .iter()
+                .filter(|tab| tab.id != id)
+                .any(|tab| !self.closing_tabs.contains(&tab.id)),
+            TabDragAxis::Vertical => self.listed_tabs(cx).into_iter().any(|other| {
+                other != index
+                    && self.tabs[other].pin.is_some() == self.tabs[index].pin.is_some()
+                    && !self.closing_tabs.contains(&self.tabs[other].id)
+            }),
+        };
+        let gap = if has_other_tab {
+            match axis {
+                TabDragAxis::Horizontal => super::super::metrics::TAB_STRIP_GAP,
+                TabDragAxis::Vertical => {
+                    super::super::metrics::SidebarSpacing::new(self.sidebar.shows_icons()).item_gap
+                }
+            }
+        } else {
+            0.0
+        };
 
         let cancel_drag = self
             .tab_drag_layout
@@ -1947,6 +2071,8 @@ impl BrowserWindow {
         }
         self.closing_tab_extents
             .insert(id, extent.unwrap_or_default());
+        self.closing_tab_gaps.insert(id, gap);
+        self.animate_tab_close_layout(id, axis, cx);
         if was_active {
             if let Some(next) = self.tab_to_activate_after_closing(index, cx) {
                 self.activate_tab(next, true, window, cx);
@@ -2013,6 +2139,7 @@ impl BrowserWindow {
         self.closing_tabs.remove(&removed.id);
         self.closing_tab_active.remove(&removed.id);
         self.closing_tab_extents.remove(&removed.id);
+        self.closing_tab_gaps.remove(&removed.id);
         self.tab_close_tasks.remove(&removed.id);
 
         if closes_window {
@@ -2614,12 +2741,3 @@ mod tab_drag_tests {
         );
     }
 }
-            if target
-                .update(cx, |browser, _| browser.closing_tabs.contains(&target_id))
-                .unwrap_or(true)
-            {
-                return;
-            }
-        if self.closing_tabs.contains(&tab_id) {
-            return;
-        }
