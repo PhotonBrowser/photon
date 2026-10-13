@@ -2073,11 +2073,7 @@ fn detached_window_origin(
     window_width: f32,
     window_height: f32,
 ) -> gpui::Point<gpui::Pixels> {
-    cursor_position
-        - gpui::point(
-            gpui::px(window_width / 2.0),
-            gpui::px(window_height / 2.0),
-        )
+    cursor_position - gpui::point(gpui::px(window_width / 2.0), gpui::px(window_height / 2.0))
 }
 
 fn external_drop_target_kind(
@@ -2188,9 +2184,9 @@ mod tab_drag_tests {
     use super::TabDragAxis;
     use super::{
         ExternalDropTargetKind, animation_retarget_offset, can_detach_tab_count,
-        external_drop_target_kind, insert_id_at, is_over_or_moving_toward_bounds,
-        midpoint_insertion_index, plan_tab_transfer, should_close_empty_source_window,
-        stable_slot_midpoint,
+        detached_window_origin, external_drop_target_kind, insert_id_at,
+        is_over_or_moving_toward_bounds, midpoint_insertion_index, plan_tab_transfer,
+        should_close_empty_source_window, stable_slot_midpoint,
     };
 
     #[test]
