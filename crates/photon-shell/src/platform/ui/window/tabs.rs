@@ -1529,6 +1529,7 @@ impl BrowserWindow {
         } else if was_active && let Some(next) = self.active_tab {
             self.activate_tab(next, true, window, cx);
         }
+        self.wake_tab_sleep_scheduler();
         cx.notify();
     }
 
@@ -1595,6 +1596,8 @@ impl BrowserWindow {
             }
         });
         self.sync_dialog(window, cx);
+        self.sync_activity_monitors(Settings::get(cx).tab_sleep_mode, cx);
+        self.wake_tab_sleep_scheduler();
         cx.notify();
     }
 
@@ -1872,6 +1875,8 @@ impl BrowserWindow {
                     view.session.set_focus(false);
                 });
             }
+            self.sync_activity_monitors(Settings::get(cx).tab_sleep_mode, cx);
+            self.wake_tab_sleep_scheduler();
             cx.notify();
         }
     }
@@ -2063,6 +2068,7 @@ impl BrowserWindow {
         }
         let was_active = self.active_tab == Some(index);
         self.closing_tabs.insert(id);
+        self.wake_tab_sleep_scheduler();
         if was_active {
             self.closing_tab_active.insert(id);
         }
@@ -2138,6 +2144,7 @@ impl BrowserWindow {
         self.closing_tab_extents.remove(&removed.id);
         self.closing_tab_gaps.remove(&removed.id);
         self.tab_close_tasks.remove(&removed.id);
+        self.wake_tab_sleep_scheduler();
 
         if closes_window {
             self.record_session_state(WindowSession::default(), cx);

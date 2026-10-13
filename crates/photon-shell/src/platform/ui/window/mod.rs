@@ -35,7 +35,7 @@ use gpui::{
     AnyElement, AnyWindowHandle, App, Bounds, Context, Entity, FocusHandle, Pixels, Point, Render,
     ScrollHandle, Subscription, Task, WeakEntity, Window, WindowHandle, div, prelude::*,
 };
-use photon_core::{BrowserCommand, WindowBackgroundStyle};
+use photon_core::{BrowserCommand, TabSleepMode, WindowBackgroundStyle};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::rc::Rc;
@@ -86,8 +86,11 @@ struct BrowserWindow {
     tab_focus_handles: Vec<FocusHandle>,
     /// Closes today's tabs left unused, when the setting asks.
     _archive_task: Task<()>,
-    /// Checks sleeping policy without tying page scheduling to UI frames.
+    /// Wakes the deadline scheduler when settings or tabs change.
+    tab_sleep_waker: sleeping::TabSleepWaker,
+    /// Sleeps inactive pages at their deadlines without periodic polling.
     _tab_sleep_task: Task<()>,
+    tab_sleep_mode: TabSleepMode,
     active_tab: Option<usize>,
     /// The active tab drag, its measured geometry, and the temporary motion.
     tab_drag_layout: Option<TabDragLayout>,
@@ -309,6 +312,13 @@ impl BrowserWindow {
 
     /// Redraws the chrome and every tab for changed settings, such as the theme.
     fn settings_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let tab_sleep_mode = Settings::get(cx).tab_sleep_mode;
+        if tab_sleep_mode != self.tab_sleep_mode {
+            self.tab_sleep_mode = tab_sleep_mode;
+            self.sleep_idle_tabs(window, cx);
+        } else {
+            self.sync_activity_monitors(tab_sleep_mode, cx);
+        }
         let background_style = Settings::get(cx).window_background_style;
         if background_style != self.window_background_style {
             window_settings::apply_background_style(window, background_style);
@@ -318,6 +328,7 @@ impl BrowserWindow {
             webview.update(cx, |_, cx| cx.notify());
         }
         self.omnibox.update(cx, |_, cx| cx.notify());
+        self.wake_tab_sleep_scheduler();
         cx.notify();
     }
 
@@ -479,6 +490,8 @@ fn open_browser_window_at(
                 .detach();
             });
             let registry_window_id = window.window_handle().window_id().as_u64();
+            let (tab_sleep_waker, tab_sleep_task) =
+                BrowserWindow::sleep_inactive_tabs_regularly(window, cx);
             let mut browser = BrowserWindow {
                 tabs: Vec::new(),
                 tab_subscriptions: Vec::new(),
@@ -490,7 +503,9 @@ fn open_browser_window_at(
                 spaces: SpacesState::new(Settings::get(cx).spaces.active().id),
                 tab_focus_handles: Vec::new(),
                 _archive_task: BrowserWindow::archive_unused_tabs_regularly(window, cx),
-                _tab_sleep_task: BrowserWindow::sleep_inactive_tabs_regularly(window, cx),
+                tab_sleep_waker,
+                _tab_sleep_task: tab_sleep_task,
+                tab_sleep_mode: Settings::get(cx).tab_sleep_mode,
                 active_tab: None,
                 tab_drag_layout: None,
                 tab_geometry: HashMap::new(),

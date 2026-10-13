@@ -234,12 +234,15 @@ impl BrowserWindow {
             window,
             |this, webview, event: &WebViewEvent, window, cx| match event {
                 WebViewEvent::StateChanged => {
+                    this.wake_tab_sleep_scheduler();
                     webview.update(cx, |view, cx| view.record_history(cx));
                     this.chrome.update(cx, |_, cx| cx.notify());
                     this.animate_spinner(cx);
                     this.sync_dialog(window, cx);
                     cx.notify();
                 }
+                #[cfg(target_os = "macos")]
+                WebViewEvent::SleepEligibilityChanged => this.wake_tab_sleep_scheduler(),
                 WebViewEvent::ContextMenuRequested
                     if this.active_webview().as_ref() == Some(webview) =>
                 {

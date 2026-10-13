@@ -51,6 +51,8 @@ impl BrowserWindow {
                     cx.notify();
                 }
                 WebViewEvent::ContextMenuRequested | WebViewEvent::NewWebViewRequested(_) => {}
+                #[cfg(target_os = "macos")]
+                WebViewEvent::SleepEligibilityChanged => {}
             },
         );
         webview.update(cx, |view, _| view.session.set_visible(true));

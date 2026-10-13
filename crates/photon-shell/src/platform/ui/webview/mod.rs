@@ -96,6 +96,9 @@ pub(in crate::platform) struct PhotonWebView {
 /// the cached chrome is not rebuilt for every page frame.
 pub(in crate::platform) enum WebViewEvent {
     StateChanged,
+    /// Engine activity changed, which may change a page's sleep eligibility.
+    #[cfg(target_os = "macos")]
+    SleepEligibilityChanged,
     NewWebViewRequested(u64),
     /// The page asked for its context menu, now in `context_menu`.
     ContextMenuRequested,
@@ -138,6 +141,12 @@ impl PhotonWebView {
     /// Re-renders the view and tells the chrome its page state changed.
     pub(in crate::platform) fn state_changed(&self, cx: &mut Context<Self>) {
         cx.emit(WebViewEvent::StateChanged);
+        cx.notify();
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(in crate::platform) fn activity_changed(&self, cx: &mut Context<Self>) {
+        cx.emit(WebViewEvent::SleepEligibilityChanged);
         cx.notify();
     }
 

@@ -227,7 +227,7 @@ impl CallbackState {
                     let activity = view.current_activity_status();
                     if view.activity_monitor_enabled() && view.activity_status != activity {
                         view.activity_status = activity;
-                        cx.notify();
+                        view.activity_changed(cx);
                     }
                 });
             }
