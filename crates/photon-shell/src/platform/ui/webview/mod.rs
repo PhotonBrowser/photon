@@ -140,8 +140,8 @@ impl PhotonWebView {
         if let Some(navigation_id) = navigation_id {
             self.session
                 .record_navigation_surface_installed(navigation_id);
+            self.navigation_surface_pending_render = Some(navigation_id);
         }
-        self.navigation_surface_pending_render = navigation_id;
         cx.notify();
     }
 
