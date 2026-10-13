@@ -156,6 +156,11 @@ pub(super) fn reload_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("rotate-cw"), color, size)
 }
 
+/// A bed, for a sleeping tab.
+pub(super) fn sleeping_icon(color: u32, size: f32) -> impl IntoElement {
+    icon(lucide!("bed"), color, size)
+}
+
 pub(super) fn close_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("x"), color, size)
 }

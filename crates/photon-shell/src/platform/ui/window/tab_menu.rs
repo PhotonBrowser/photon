@@ -48,10 +48,22 @@ impl BrowserWindow {
                 let page = page.definition;
                 self.insert_page(index + 1, page, window, cx);
             }
+            TabContent::Sleeping(sleeping) => {
+                let address = sleeping.webview.read(cx).state.url.clone();
+                self.insert_tab(index + 1, Some(&address), window, cx);
+            }
         }
     }
 
-    pub(super) fn reload_tab(&mut self, index: usize, cx: &mut Context<Self>) {
+    pub(super) fn reload_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if self
+            .tabs
+            .get(index)
+            .is_some_and(|tab| matches!(&tab.content, TabContent::Sleeping(_)))
+        {
+            self.activate_tab(index, true, window, cx);
+            return;
+        }
         match self.tabs.get(index).and_then(|tab| tab.content.webview()) {
             Some(tab) => tab.update(cx, |view, cx| {
                 if let Err(error) = view.execute(BrowserCommand::Reload, cx) {

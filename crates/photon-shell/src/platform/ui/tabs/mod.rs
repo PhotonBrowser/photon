@@ -17,7 +17,9 @@ use gpui::{
 use super::Favicon;
 use super::controls::FocusRing;
 use super::controls::{OwnsClicks, Pressable};
-use super::icons::{audio_icon, close_icon, globe_icon, loading_spinner, photon_logo};
+use super::icons::{
+    audio_icon, close_icon, globe_icon, loading_spinner, photon_logo, sleeping_icon,
+};
 use super::layout::{h_stack, v_stack};
 use super::motion::{AnimateIn, Entrance};
 use super::{
@@ -77,6 +79,8 @@ pub(super) enum TabIcon {
     },
     /// A page without an icon of its own.
     Page,
+    /// A page with its live Engine view retained while rendering is suppressed.
+    Sleeping,
     /// The Photon logo, for Photon's own pages that use it.
     Logo,
     /// A monochrome symbol, drawn in the tab's text color at the given size.
@@ -102,9 +106,11 @@ impl TabIcon {
                 favicon: Some(favicon),
                 ..
             } => Some(RevealedIcon::Favicon(favicon.key)),
-            Self::Loading(_) | Self::Page | Self::Symbol(_) | Self::Audio { favicon: None, .. } => {
-                None
-            }
+            Self::Loading(_)
+            | Self::Page
+            | Self::Sleeping
+            | Self::Symbol(_)
+            | Self::Audio { favicon: None, .. } => None,
         }
     }
 }
@@ -251,6 +257,7 @@ pub(super) struct TabItem {
     /// Whether the icon is still growing in after it first appeared.
     pub icon_appearing: bool,
     pub animations: photon_core::AnimationSettings,
+    pub sleeping: bool,
     /// Whether the tab is pinned above today's tabs.
     pub pinned: bool,
     pub active: bool,
@@ -302,6 +309,11 @@ impl TabParts {
         axis: TabDragAxis,
     ) -> Self {
         let close_label = format!("Close {}", tab.label);
+        let tab_label = if tab.sleeping {
+            format!("{} (sleeping)", tab.label)
+        } else {
+            tab.label.clone()
+        };
         let close_id = format!("{}-close", tab.id);
         let tab_id = tab.id.clone();
         let audio_control = matches!(&tab.icon, TabIcon::Audio { .. });
@@ -309,6 +321,7 @@ impl TabParts {
         let animations = tab.animations;
         let motion = tab.motion.clone();
         let dragged = tab.dragging;
+        let sleeping = tab.sleeping;
         let suppress_tooltips = tab.suppress_tooltips;
         let focus_handle = tab
             .focus_handle
@@ -318,14 +331,16 @@ impl TabParts {
             .id(tab.id.clone())
             .group(tab.id.clone())
             .role(Role::Tab)
-            .aria_label(tab.label.clone())
+            .aria_label(tab_label)
             .aria_selected(tab.active && !tab.closing)
             .aria_position_in_set(position + 1)
             .aria_size_of_set(tab_count)
             .when(!tab.closing, |element| element.track_focus(&focus_handle))
             .focus_ring(palette)
             .items_center()
-            .text_color(rgb(if tab.active {
+            .text_color(rgb(if sleeping {
+                palette.text_secondary
+            } else if tab.active {
                 palette.text_primary
             } else {
                 palette.text_secondary
@@ -357,6 +372,8 @@ impl TabParts {
             })
             .opacity(if dragged {
                 metrics::TAB_DRAG_SOURCE_OPACITY
+            } else if sleeping {
+                metrics::SLEEPING_TAB_OPACITY
             } else {
                 1.0
             });
@@ -372,6 +389,7 @@ impl TabParts {
                 loading_spinner(icon_color, icon_size, step).into_any_element()
             }
             TabIcon::Page => globe_icon(icon_color, icon_size).into_any_element(),
+            TabIcon::Sleeping => sleeping_icon(icon_color, icon_size).into_any_element(),
             TabIcon::Symbol(symbol) => symbol(icon_color, icon_size),
             TabIcon::Favicon(favicon) => sized_icon(
                 img(ImageSource::Render(favicon.image)).object_fit(ObjectFit::Contain),

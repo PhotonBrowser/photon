@@ -13,7 +13,7 @@
   file access over core types, with no GPUI or Engine dependency, so settings
   and internal pages can use it directly.
   `photon-performance` owns performance diagnostics, accumulation, formatting,
-  and its GPUI overlay.
+  and its GPUI overlay. `photon-tab-sleep` owns the pure tab-sleep policy.
 - `photon-ffi` is the Rust exported C ABI. Confine raw pointers and C string
   conversion to this crate.
 - `photon-shell` owns window-bound GPUI views, the Engine adapter, platform

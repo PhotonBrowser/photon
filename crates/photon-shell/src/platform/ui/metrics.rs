@@ -28,6 +28,7 @@ pub(super) const TAB_DRAG_THRESHOLD: f32 = 4.0;
 pub(super) const TAB_DRAG_SCROLL_EDGE: f32 = 28.0;
 pub(super) const TAB_DRAG_SCROLL_SPEED: f32 = 720.0;
 pub(super) const TAB_DRAG_SOURCE_OPACITY: f32 = 0.28;
+pub(super) const SLEEPING_TAB_OPACITY: f32 = 0.7;
 pub(super) const TAB_REORDER_DURATION_MS: u64 = 150;
 pub(super) const TAB_DROP_SETTLE_DURATION_MS: u64 = 120;
 pub(super) const TAB_ENTRY_OFFSET: f32 = 5.0;

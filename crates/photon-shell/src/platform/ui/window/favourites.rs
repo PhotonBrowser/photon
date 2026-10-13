@@ -14,6 +14,7 @@ use super::super::{metrics, theme::ThemeColors};
 use super::BrowserWindow;
 use super::context_menu::show_window_context_menu;
 use super::menu::{MenuCommand, command_item};
+use super::pinned::pin_for;
 
 impl BrowserWindow {
     /// The space's favourites as tiles, with smaller icons when the sidebar
@@ -97,14 +98,11 @@ impl BrowserWindow {
     /// The tab menu's item adding a web page's site to the favourites, or
     /// removing it.
     pub(super) fn favourite_item(&self, index: usize, cx: &Context<Self>) -> Option<MenuItem> {
-        let view = self.tabs.get(index)?.content.webview()?.read(cx);
-        if !view.has_page() {
+        let tab = self.tabs.get(index)?;
+        if matches!(&tab.content, super::content::TabContent::Page(_)) {
             return None;
         }
-        let shortcut = Shortcut {
-            title: view.state.title.clone(),
-            url: view.state.url.clone(),
-        };
+        let shortcut = pin_for(tab, cx)?;
         let space = self.tabs[index].space;
         let saved = Settings::get(cx).spaces.get(space)?;
         if saved.favourite_for(&shortcut.url).is_some() {

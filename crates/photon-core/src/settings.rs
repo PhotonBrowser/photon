@@ -6,6 +6,7 @@ use super::new_tab::NewTabSettings;
 use super::sidebar::SidebarSettings;
 use super::spaces::Spaces;
 use super::workspace::WorkspaceSettings;
+use photon_tab_sleep::TabSleepMode;
 
 /// Maximum selectable strength for the window background's static noise.
 pub const BACKGROUND_NOISE_INTENSITY_MAX: u8 = 20;
@@ -145,6 +146,8 @@ pub struct BrowserSettings {
     pub spaces: Spaces,
     /// Whether unpinned tabs left unused for twelve hours are closed.
     pub archive_tabs: bool,
+    /// How quickly quiet inactive pages are marked as sleeping.
+    pub tab_sleep_mode: TabSleepMode,
     /// Whether the browser reopens its windows and tabs from last time.
     pub restore_session: bool,
     /// Whether page scrolling can stretch past the viewport edge on macOS.
@@ -238,6 +241,7 @@ impl Default for BrowserSettings {
             close_window_with_last_tab: true,
             spaces: Spaces::default(),
             archive_tabs: false,
+            tab_sleep_mode: TabSleepMode::default(),
             restore_session: true,
             elastic_scroll: false,
             animations: AnimationSettings::default(),

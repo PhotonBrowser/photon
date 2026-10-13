@@ -64,6 +64,8 @@ pub(in crate::platform) struct PhotonWebView {
     /// Whether the page is playing audio and whether its tab is muted.
     pub(in crate::platform) audio_playing: bool,
     pub(in crate::platform) audio_muted: bool,
+    /// Recent Engine CPU or network activity while tab sleeping is enabled.
+    pub(in crate::platform) activity_status: Option<bool>,
     /// When the current load started.
     loading_since: Option<Instant>,
     /// The page's JavaScript dialog, which the window shows over the page.
@@ -285,6 +287,7 @@ impl PhotonWebView {
             favicon: None,
             audio_playing: false,
             audio_muted: false,
+            activity_status: None,
             loading_since: None,
             dialogs: PageDialogs::default(),
             window: None,
@@ -349,6 +352,25 @@ impl PhotonWebView {
     pub(super) fn set_performance_overlay_enabled(&mut self, enabled: bool) {
         self.performance_overlay_enabled = enabled;
         self.session.set_diagnostics_enabled(enabled);
+    }
+
+    pub(super) fn set_activity_monitor_enabled(&mut self, enabled: bool) {
+        if self.session.is_activity_monitor_enabled() != enabled {
+            self.activity_status = None;
+            self.session.set_activity_monitor_enabled(enabled);
+        }
+    }
+
+    pub(in crate::platform) fn activity_monitor_enabled(&self) -> bool {
+        self.session.is_activity_monitor_enabled()
+    }
+
+    pub(in crate::platform) fn current_activity_status(&self) -> Option<bool> {
+        self.session.activity_status()
+    }
+
+    pub(in crate::platform) fn current_activity_idle_for(&self) -> Option<std::time::Duration> {
+        self.session.activity_idle_for()
     }
 
     /// Runs a page command, closing the page's dialog first when the command

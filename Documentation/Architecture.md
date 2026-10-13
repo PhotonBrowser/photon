@@ -11,6 +11,7 @@ photon-app
 photon-ffi ── photon-core ── photon-omnibox
                     ↑
 photon-shell ── photon-storage
+photon-core ── photon-tab-sleep
 ```
 
 The desktop app uses the framework-independent Rust browser model directly.
@@ -44,8 +45,9 @@ Objective-C++ helpers under [`native/embedder/macos/`](../native/embedder/macos/
 The shell build script only builds and links the current Engine bridge on macOS.
 
 Linux will reuse the browser rules and services in `photon-core`,
-`photon-omnibox`, `photon-storage`, `photon-brand`, `photon-shortcuts`, and
-`photon-performance`, plus the same GPUI views under `platform/ui`. To complete
+`photon-omnibox`, `photon-storage`, `photon-brand`, `photon-shortcuts`,
+`photon-performance`, and `photon-tab-sleep`, plus the same GPUI views under
+`platform/ui`. To complete
 the Linux shell, implement its Engine session, system services, window adapter,
 and page renderer under `platform/linux`; the shared WebView view should continue
 to own page input and browser UI while each adapter provides its native
@@ -81,6 +83,11 @@ presentation surface.
   chart history, current-process sampling, value formatting, chart drawing, and
   the GPUI diagnostics overlay. It has no Engine IPC, native embedder, or
   window-lifecycle dependencies.
+- `crates/photon-tab-sleep` owns the framework-independent tab sleep modes and
+  adaptive idle-time policy. The shell hides rendering for quiet inactive
+  Engine views while retaining their live sessions, so selection restores the
+  exact page state without reloading. Audio and recent Engine CPU or network
+  activity keep a tab out of the sleeping state.
 - `crates/photon-shortcuts` owns browser-level GPUI actions, their default
   key bindings, and the named, grouped catalog the shortcuts dialog lists.
   Views show an action's keys with `ui/kbd.rs`, which reads the keymap, so
@@ -135,14 +142,15 @@ window and page renderer adapters.
 | Package | Owns | Depends on |
 | --- | --- | --- |
 | `photon-app` | Runnable Photon entry point | `photon-shell` |
-| `photon-shell` | Window-bound GPUI views, Engine session adapter, native presentation lifecycle, browser input | GPUI-CE, `photon-core`, `photon-performance`, `photon-shortcuts`, `photon-storage`, `photon-brand`, `photon-presentation-ipc`, native embedder bridge |
+| `photon-shell` | Window-bound GPUI views, Engine session adapter, native presentation lifecycle, browser input | GPUI-CE, `photon-core`, `photon-performance`, `photon-shortcuts`, `photon-storage`, `photon-tab-sleep`, `photon-brand`, `photon-presentation-ipc`, native embedder bridge |
 | `photon-performance` | Performance snapshots, monitor state, timing accumulation, formatting, GPUI overlay | GPUI-CE |
-| `photon-core` | Browser state, commands, shared address normalization, history rules, settings, clearing requests, command bar results | `photon-omnibox`, `photon-brand`, serde |
+| `photon-core` | Browser state, commands, shared address normalization, history rules, settings, clearing requests, command bar results | `photon-omnibox`, `photon-tab-sleep`, `photon-brand`, serde |
 | `photon-omnibox` | Search engine list, address/query resolution, suggestion and word matching | `photon-brand`, URL parsing library |
 | `photon-storage` | Profile folder, history and settings files, saved page icons, data usage | `photon-core`, `photon-brand`, serde |
 | `photon-brand` | Browser name, engine name, internal page scheme, profile folder name, logo | none |
 | `photon-ffi` | `photon_browser_*` C ABI and static library | `photon-core` |
 | `photon-shortcuts` | Browser actions and default key bindings | GPUI-CE |
+| `photon-tab-sleep` | Tab sleep modes and adaptive idle timeout policy | serde |
 | `photon-cli` | `./photon` developer and runtime commands | CLI and command-line support libraries |
 | `photon-presentation-ipc` | XPC protocol, client channel, descriptor transport, service entry point | macOS frameworks |
 | `photon-presentation-broker` | macOS XPC service executable | `photon-presentation-ipc` |

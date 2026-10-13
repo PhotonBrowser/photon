@@ -1266,18 +1266,11 @@ impl BrowserWindow {
         let Some(index) = self.tab_index_by_id(id) else {
             return;
         };
-        let Some(view) = self.tabs[index].content.webview() else {
+        if matches!(&self.tabs[index].content, TabContent::Page(_)) {
             return;
-        };
-        let shortcut = {
-            let view = view.read(cx);
-            if !view.has_page() {
-                return;
-            }
-            Shortcut {
-                title: view.state.title.clone(),
-                url: view.state.url.clone(),
-            }
+        }
+        let Some(shortcut) = super::pinned::pin_for(&self.tabs[index], cx) else {
+            return;
         };
         if self
             .favourites_drag_hover
@@ -1549,6 +1542,9 @@ impl BrowserWindow {
         if index >= self.tabs.len() || self.closing_tabs.contains(&self.tabs[index].id) {
             return;
         }
+        if !self.wake_tab(index, cx) {
+            return;
+        }
         if self.active_tab != Some(index) {
             // The find bar searches one page; switching tabs ends its search.
             self.close_find_bar(false, window, cx);
@@ -1584,6 +1580,7 @@ impl BrowserWindow {
         if let Some(webview) = webview.as_ref() {
             let window_visible = self.window_visible;
             webview.update(cx, |view, cx| {
+                view.set_activity_monitor_enabled(false);
                 view.session.set_visible(window_visible);
                 if focus_contents {
                     window.focus(&view.focus_handle, cx);
@@ -2246,19 +2243,22 @@ impl BrowserWindow {
 
     /// Keeps a closed web page so it can be reopened.
     fn remember_closed(&mut self, index: usize, content: &TabContent, cx: &Context<Self>) {
-        let Some(webview) = content.webview() else {
-            return;
-        };
-        let view = webview.read(cx);
-        if view.has_page() {
-            if self.closed_tabs.len() == CLOSED_TAB_LIMIT {
-                self.closed_tabs.remove(0);
+        let url = match content {
+            TabContent::Sleeping(sleeping) => {
+                let view = sleeping.webview.read(cx);
+                view.has_page().then(|| view.state.url.clone())
             }
-            self.closed_tabs.push(ClosedTab {
-                index,
-                url: view.state.url.clone(),
-            });
+            TabContent::Web(webview) => {
+                let view = webview.read(cx);
+                view.has_page().then(|| view.state.url.clone())
+            }
+            TabContent::Page(_) => None,
+        };
+        let Some(url) = url else { return };
+        if self.closed_tabs.len() == CLOSED_TAB_LIMIT {
+            self.closed_tabs.remove(0);
         }
+        self.closed_tabs.push(ClosedTab { index, url });
     }
 
     /// Whether a loading tab or a notice shows a spinner.

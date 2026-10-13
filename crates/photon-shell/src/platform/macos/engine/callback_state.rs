@@ -11,6 +11,7 @@ use std::{
         Arc, Mutex, Weak,
         atomic::{AtomicPtr, Ordering},
     },
+    time::Duration,
 };
 
 use super::super::ffi::embedder;
@@ -33,6 +34,7 @@ pub(super) struct CallbackState {
     pub(super) engine_view: AtomicPtr<c_void>,
     pub(super) ui_wake: Mutex<Option<UiWake>>,
     pub(super) performance: PerformanceMonitor,
+    pub(super) reported_activity: Mutex<Option<bool>>,
     pub(super) page_details: Mutex<PageDetails>,
 }
 
@@ -149,6 +151,27 @@ impl CallbackState {
                 .has_frames_per_second
                 .then_some(stats.frames_per_second),
         });
+        if self.performance.is_activity_monitor_enabled() {
+            let activity = self.performance.activity_status(Duration::from_secs(2));
+            let changed = {
+                let mut reported = self.reported_activity.lock().unwrap();
+                if *reported == activity {
+                    false
+                } else {
+                    *reported = activity;
+                    true
+                }
+            };
+            if changed {
+                self.update_webview(|view, cx| {
+                    let activity = view.current_activity_status();
+                    if view.activity_monitor_enabled() && view.activity_status != activity {
+                        view.activity_status = activity;
+                        cx.notify();
+                    }
+                });
+            }
+        }
         if self.performance.is_enabled() {
             self.publish_diagnostics();
         }
@@ -172,6 +195,13 @@ impl CallbackState {
         }
     }
 
+    pub(super) fn set_activity_monitor_enabled(&self, enabled: bool) {
+        if self.performance.set_activity_monitor_enabled(enabled) {
+            *self.reported_activity.lock().unwrap() = None;
+        }
+        self.sync_engine_monitor();
+    }
+
     pub(super) fn performance_task(&self) -> PerformanceTask {
         let details = self.page_details.lock().unwrap().clone();
         PerformanceTask {
@@ -189,7 +219,7 @@ impl CallbackState {
             unsafe {
                 embedder::photon_view_set_performance_monitor_enabled(
                     view,
-                    self.performance.is_enabled(),
+                    self.performance.should_monitor_engine(),
                 );
             }
         }

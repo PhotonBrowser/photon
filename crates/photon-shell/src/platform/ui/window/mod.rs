@@ -21,6 +21,7 @@ mod popups;
 mod registry;
 mod session;
 mod side_dock;
+mod sleeping;
 mod spaces;
 mod tab_items;
 mod tab_menu;
@@ -70,7 +71,7 @@ pub use app::run;
 struct BrowserWindow {
     tabs: Vec<BrowserTab>,
     /// One per tab, in `tabs` order: follows its web view or page.
-    tab_subscriptions: Vec<Subscription>,
+    tab_subscriptions: Vec<Option<Subscription>>,
     /// The New Tab page shown while the window has no tabs.
     empty_page: Option<TabContent>,
     _empty_page_subscription: Option<Subscription>,
@@ -85,6 +86,8 @@ struct BrowserWindow {
     tab_focus_handles: Vec<FocusHandle>,
     /// Closes today's tabs left unused, when the setting asks.
     _archive_task: Task<()>,
+    /// Checks sleeping policy without tying page scheduling to UI frames.
+    _tab_sleep_task: Task<()>,
     active_tab: Option<usize>,
     /// The active tab drag, its measured geometry, and the temporary motion.
     tab_drag_layout: Option<TabDragLayout>,
@@ -487,6 +490,7 @@ fn open_browser_window_at(
                 spaces: SpacesState::new(Settings::get(cx).spaces.active().id),
                 tab_focus_handles: Vec::new(),
                 _archive_task: BrowserWindow::archive_unused_tabs_regularly(window, cx),
+                _tab_sleep_task: BrowserWindow::sleep_inactive_tabs_regularly(window, cx),
                 active_tab: None,
                 tab_drag_layout: None,
                 tab_geometry: HashMap::new(),

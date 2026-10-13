@@ -13,6 +13,7 @@ members = [
     "crates/photon-omnibox",
     "crates/photon-shortcuts",
     "crates/photon-storage",
+    "crates/photon-tab-sleep",
 ]
 exclude = ["Engine/Libraries/LibJS/Flap", "vendor/gpui-ce"]
 

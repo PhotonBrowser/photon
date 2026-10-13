@@ -4200,6 +4200,7 @@ version = "0.1.0"
 dependencies = [
  "photon-brand",
  "photon-omnibox",
+ "photon-tab-sleep",
  "serde",
 ]
 
@@ -4271,6 +4272,7 @@ dependencies = [
  "photon-presentation-ipc",
  "photon-shortcuts",
  "photon-storage",
+ "photon-tab-sleep",
  "raw-window-handle",
 ]
 
@@ -4289,6 +4291,13 @@ dependencies = [
  "photon-core",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "photon-tab-sleep"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

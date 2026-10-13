@@ -19,6 +19,12 @@ use super::BrowserWindow;
 pub(super) enum TabContent {
     Page(InternalPage),
     Web(Entity<PhotonWebView>),
+    Sleeping(SleepingTab),
+}
+
+#[derive(Clone)]
+pub(super) struct SleepingTab {
+    pub(super) webview: Entity<PhotonWebView>,
 }
 
 impl TabContent {
@@ -26,6 +32,7 @@ impl TabContent {
         match self {
             Self::Page(_) => None,
             Self::Web(webview) => Some(webview.clone()),
+            Self::Sleeping(sleeping) => Some(sleeping.webview.clone()),
         }
     }
 
@@ -33,6 +40,7 @@ impl TabContent {
         match self {
             Self::Page(page) => page.view(palette),
             Self::Web(webview) => webview.clone().into_any_element(),
+            Self::Sleeping(sleeping) => sleeping.webview.clone().into_any_element(),
         }
     }
 
@@ -40,7 +48,7 @@ impl TabContent {
     pub(super) fn page_address(&self) -> Option<String> {
         match self {
             Self::Page(page) => page.address(),
-            Self::Web(_) => None,
+            Self::Web(_) | Self::Sleeping(_) => None,
         }
     }
 }
@@ -101,7 +109,7 @@ impl BrowserWindow {
 
     pub(super) fn show_empty_new_tab_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let content = self.new_page(NEW_TAB, cx);
-        self._empty_page_subscription = Some(self.subscribe_to_content(&content, window, cx));
+        self._empty_page_subscription = self.subscribe_to_content(&content, window, cx);
         self.empty_page = Some(content);
         cx.notify();
     }
@@ -173,11 +181,32 @@ impl BrowserWindow {
         content: &TabContent,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> Subscription {
+    ) -> Option<Subscription> {
         match content {
-            TabContent::Web(webview) => Self::subscribe_to_webview(webview, window, cx),
-            TabContent::Page(page) => Self::subscribe_to_page(page, window, cx),
+            TabContent::Web(webview) => Some(Self::subscribe_to_webview(webview, window, cx)),
+            TabContent::Page(page) => Some(Self::subscribe_to_page(page, window, cx)),
+            TabContent::Sleeping(sleeping) => {
+                Some(Self::subscribe_to_webview(&sleeping.webview, window, cx))
+            }
         }
+    }
+
+    /// Makes a hidden page visible again without replacing its live Engine
+    /// session, preserving its DOM, script state, form values, and scroll.
+    pub(super) fn wake_tab(&mut self, index: usize, cx: &mut Context<Self>) -> bool {
+        let Some(tab) = self.tabs.get(index) else {
+            return false;
+        };
+        let TabContent::Sleeping(sleeping) = &tab.content else {
+            return true;
+        };
+        let webview = sleeping.webview.clone();
+        webview.update(cx, |view, _| view.set_activity_monitor_enabled(false));
+        self.tabs[index].content = TabContent::Web(webview);
+        self.revealed_icons
+            .borrow_mut()
+            .remove(&self.tabs[index].id);
+        true
     }
 
     fn subscribe_to_page(

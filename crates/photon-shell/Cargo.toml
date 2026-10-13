@@ -15,6 +15,7 @@ photon-omnibox = { path = "../photon-omnibox" }
 photon-performance = { path = "../photon-performance" }
 photon-shortcuts = { path = "../photon-shortcuts" }
 photon-storage = { path = "../photon-storage" }
+photon-tab-sleep = { path = "../photon-tab-sleep" }
 anyhow = "1"
 futures = "0.3"
 image = { version = "0.25", default-features = false }

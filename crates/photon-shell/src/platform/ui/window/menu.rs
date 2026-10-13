@@ -43,7 +43,7 @@ impl BrowserWindow {
         cx: &mut Context<Self>,
     ) {
         match item.command.clone() {
-            MenuCommand::ReloadTab(tab) => self.reload_tab(tab, cx),
+            MenuCommand::ReloadTab(tab) => self.reload_tab(tab, window, cx),
             MenuCommand::DuplicateTab(tab) => self.duplicate_tab(tab, window, cx),
             MenuCommand::TogglePin(tab) => self.toggle_pin(tab, cx),
             MenuCommand::AddFavourite { tab, shortcut } => self.add_favourite(tab, shortcut, cx),

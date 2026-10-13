@@ -155,6 +155,17 @@ pub(super) fn tab_summary(tab: &BrowserTab, cx: &App) -> TabSummary {
             title: page.definition.title.to_owned(),
             url: tab.content.page_address().unwrap_or_default(),
         },
+        TabContent::Sleeping(sleeping) => {
+            let state = &sleeping.webview.read(cx).state;
+            TabSummary {
+                title: if state.title.trim().is_empty() {
+                    state.url.clone()
+                } else {
+                    state.title.clone()
+                },
+                url: state.url.clone(),
+            }
+        }
         TabContent::Web(webview) => {
             let view = webview.read(cx);
             // Until the page loads, it is what the tab was pinned or opened as.

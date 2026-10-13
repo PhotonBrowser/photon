@@ -1,9 +1,11 @@
-//! The tabs section: what closing the last tab does, and closing tabs left
-//! unused.
+//! The tabs section: inactive page sleeping, closing the last tab, and
+//! closing tabs left unused.
 
 use gpui::{App, SharedString, prelude::*, px};
+use photon_core::TabSleepMode;
 use photon_shortcuts::ReopenClosedTab;
 
+use super::super::super::controls::{Choice, choices};
 use super::super::super::kbd::action_keys;
 use super::super::super::layout::v_stack;
 use super::super::super::settings::Settings;
@@ -16,6 +18,7 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
     let current = Settings::get(cx);
     let close_window = current.close_window_with_last_tab;
     let archive = current.archive_tabs;
+    let sleep_mode = current.tab_sleep_mode;
     let setting = |row, note: SharedString| {
         v_stack()
             .gap(px(metrics::MENU_ITEM_GAP))
@@ -24,6 +27,31 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
     };
     v_stack()
         .gap(px(metrics::INTERNAL_PAGE_SECTION_GAP))
+        .child(setting(
+            choices(
+                "settings-tab-sleep",
+                "Inactive tabs",
+                [
+                    (TabSleepMode::Off, "Off"),
+                    (TabSleepMode::Balanced, "Balanced"),
+                    (TabSleepMode::Maximum, "Maximum"),
+                ]
+                .into_iter()
+                .map(|(mode, label)| Choice {
+                    label: label.into(),
+                    chosen: sleep_mode == mode,
+                    on_choose: change(move |settings| settings.tab_sleep_mode = mode),
+                })
+                .collect(),
+                palette,
+            )
+            .into_any_element(),
+            match sleep_mode {
+                TabSleepMode::Off => "Keep automatic tab sleeping disabled.".into(),
+                TabSleepMode::Balanced => "After 1–5 minutes idle, hide rendering for quiet pages and preserve their live state. Pages using audio or recent CPU or network activity stay awake.".into(),
+                TabSleepMode::Maximum => "After 5 seconds idle, hide rendering for quiet pages and preserve their live state. Pages using audio or recent CPU or network activity stay awake.".into(),
+            },
+        ))
         .child(setting(
             switch_row(
                 "settings-close-window-with-last-tab",

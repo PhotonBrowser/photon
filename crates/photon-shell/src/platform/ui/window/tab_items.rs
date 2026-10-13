@@ -62,9 +62,19 @@ impl BrowserWindow {
                         };
                         (page.definition.title.to_owned(), icon)
                     }
+                    TabContent::Sleeping(sleeping) => {
+                        let state = &sleeping.webview.read(cx).state;
+                        (
+                            if state.title.trim().is_empty() {
+                                state.url.clone()
+                            } else {
+                                state.title.clone()
+                            },
+                            TabIcon::Sleeping,
+                        )
+                    }
                     // A tab that has not loaded yet, as when it opens in the
-                    // background at launch, shows what it was pinned or
-                    // opened as.
+                    // background at launch, shows what it was pinned or opened as.
                     TabContent::Web(webview)
                         if !webview.read(cx).has_page()
                             && let Some(saved) = tab
@@ -134,6 +144,8 @@ impl BrowserWindow {
                 };
                 let opacity = if dragging {
                     super::super::metrics::TAB_DRAG_SOURCE_OPACITY
+                } else if matches!(&tab.content, TabContent::Sleeping(_)) {
+                    super::super::metrics::SLEEPING_TAB_OPACITY
                 } else {
                     1.0
                 };
@@ -190,6 +202,7 @@ impl BrowserWindow {
                     icon_appearing: icon_appearing && !entry_appearing,
                     animations,
                     icon,
+                    sleeping: matches!(&tab.content, TabContent::Sleeping(_)),
                     index,
                     pinned: tab.pin.is_some(),
                     active: if closing {

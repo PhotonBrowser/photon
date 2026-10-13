@@ -28,6 +28,7 @@ pub use photon_omnibox::{
     OmniboxError, OmniboxTarget, SearchEngine, SearchEngineError, SearchEngines, Suggestion,
     SuggestionKind, Suggestions, UrlKind, resolve as resolve_omnibox_input,
 };
+pub use photon_tab_sleep::TabSleepMode;
 pub use session::{Session, SessionTab, WindowSession};
 pub use settings::{
     AnimationSettings, BACKGROUND_NOISE_INTENSITY_MAX, BrowserSettings, PopupPolicy, TabLayout,
