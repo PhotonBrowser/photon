@@ -16,6 +16,7 @@ use std::{
         Arc, Condvar, Mutex,
         atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering},
     },
+    time::Instant,
 };
 
 use super::ffi::embedder;
@@ -295,8 +296,7 @@ impl PresentationRuntime {
         descriptor: BackingDescriptor,
         port: mach_port_t,
     ) -> anyhow::Result<()> {
-        self.channel
-            .register_backing(&self.channel_id, descriptor, port)?;
+        let setup_started = Instant::now();
         let BackingDescriptor {
             id: backing,
             generation,
@@ -304,20 +304,16 @@ impl PresentationRuntime {
             height,
             pixel_format,
         } = descriptor;
-        let (imported_port, got_width, got_height, got_format) =
-            self.channel
-                .import_backing(&self.channel_id, backing, generation)?;
-        let _port_guard = MachPortGuard(imported_port);
-        anyhow::ensure!(
-            got_width == width && got_height == height && got_format == pixel_format,
-            "broker backing descriptor changed"
-        );
+        let import_started = Instant::now();
         anyhow::ensure!(
             pixel_format == core_video::pixel_buffer::kCVPixelFormatType_32BGRA,
             "unsupported IOSurface pixel format {pixel_format:#x}"
         );
+        // The callback keeps the original Mach send right alive through this
+        // lookup. IOSurfaceLookupFromMachPort retains the surface without
+        // consuming the port, so the broker can receive its own right below.
         #[allow(deprecated)]
-        let raw_surface = unsafe { io_surface::IOSurfaceLookupFromMachPort(imported_port) };
+        let raw_surface = unsafe { io_surface::IOSurfaceLookupFromMachPort(port) };
         anyhow::ensure!(!raw_surface.is_null(), "IOSurfaceLookupFromMachPort failed");
         #[allow(deprecated)]
         let iosurface = IOSurface { obj: raw_surface };
@@ -334,9 +330,11 @@ impl PresentationRuntime {
         let image = CVPixelBuffer::from_io_surface(&iosurface, None).map_err(|status| {
             anyhow::anyhow!("CVPixelBufferCreateWithIOSurface failed: {status}")
         })?;
-        trace(format_args!(
-            "backing={backing} gen={generation} surface={iosurface_id} cache=imported-once texture={width}x{height}"
-        ));
+        let import_duration = import_started.elapsed();
+        let register_started = Instant::now();
+        self.channel
+            .register_backing(&self.channel_id, descriptor, port)?;
+        let register_duration = register_started.elapsed();
         let mut backings = self.backings.lock().unwrap();
         // Engine replaced its pool, so older generations never return. Frames
         // already presented hold their own pixel buffer, and a late frame from
@@ -367,6 +365,12 @@ impl PresentationRuntime {
                 iosurface_id,
             },
         );
+        trace(format_args!(
+            "backing={backing} gen={generation} surface={iosurface_id} texture={width}x{height} setup surface_import={:.3}ms broker_register={:.3}ms total={:.3}ms",
+            import_duration.as_secs_f64() * 1000.0,
+            register_duration.as_secs_f64() * 1000.0,
+            setup_started.elapsed().as_secs_f64() * 1000.0,
+        ));
         Ok(())
     }
 

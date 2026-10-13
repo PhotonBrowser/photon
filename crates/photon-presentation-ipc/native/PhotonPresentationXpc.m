@@ -198,27 +198,6 @@ static void PhotonStartSurfaceService(NSString* name)
                 } else {
                     xpc_dictionary_set_bool(reply, "accepted", false);
                 }
-            } else if (strcmp(operation, "copy") == 0) {
-                mach_port_t port = MACH_PORT_NULL;
-                uint64_t width = 0, height = 0, pixel_format = 0;
-                @synchronized(PhotonSurfacePorts) {
-                    NSDictionary* entry = PhotonSurfacePorts[key];
-                    if (entry) {
-                        port = [entry[@"port"] unsignedIntValue];
-                        width = [entry[@"width"] unsignedLongLongValue];
-                        height = [entry[@"height"] unsignedLongLongValue];
-                        pixel_format = [entry[@"pixel_format"] unsignedLongLongValue];
-                    }
-                }
-                if (port != MACH_PORT_NULL) {
-                    xpc_dictionary_set_mach_send(reply, "port", port);
-                    xpc_dictionary_set_uint64(reply, "width", width);
-                    xpc_dictionary_set_uint64(reply, "height", height);
-                    xpc_dictionary_set_uint64(reply, "pixel_format", pixel_format);
-                    xpc_dictionary_set_bool(reply, "accepted", true);
-                } else {
-                    xpc_dictionary_set_bool(reply, "accepted", false);
-                }
             } else if (strcmp(operation, "unregister") == 0) {
                 mach_port_t port = MACH_PORT_NULL;
                 BOOL canRetire = YES;
@@ -532,34 +511,6 @@ bool photon_presentation_xpc_register_backing(void* opaque_connection, char cons
     xpc_object_t response = xpc_connection_send_message_with_reply_sync(pair->surface_connection, request);
     bool accepted = response && xpc_get_type(response) == XPC_TYPE_DICTIONARY && xpc_dictionary_get_bool(response, "accepted");
     return accepted;
-}
-
-bool photon_presentation_xpc_copy_backing(void* opaque_connection, char const* channel_name, uint64_t backing_id, uint64_t generation, mach_port_t* mach_port, uint32_t* width, uint32_t* height, uint32_t* pixel_format)
-{
-    if (!opaque_connection || !mach_port || !width || !height || !pixel_format)
-        return false;
-    NSString* channel = PhotonString(channel_name);
-    if (!channel)
-        return false;
-    PhotonPresentationConnection* pair = opaque_connection;
-    xpc_object_t request = xpc_dictionary_create(NULL, NULL, 0);
-    xpc_dictionary_set_string(request, "op", "copy");
-    xpc_dictionary_set_string(request, "channel", channel.UTF8String);
-    xpc_dictionary_set_uint64(request, "backing", backing_id);
-    xpc_dictionary_set_uint64(request, "generation", generation);
-    xpc_object_t response = xpc_connection_send_message_with_reply_sync(pair->surface_connection, request);
-    if (!response || xpc_get_type(response) != XPC_TYPE_DICTIONARY || !xpc_dictionary_get_bool(response, "accepted")) {
-        return false;
-    }
-    mach_port_t received_port = xpc_dictionary_copy_mach_send(response, "port");
-    if (received_port == MACH_PORT_NULL) {
-        return false;
-    }
-    *mach_port = received_port;
-    *width = (uint32_t)xpc_dictionary_get_uint64(response, "width");
-    *height = (uint32_t)xpc_dictionary_get_uint64(response, "height");
-    *pixel_format = (uint32_t)xpc_dictionary_get_uint64(response, "pixel_format");
-    return true;
 }
 
 bool photon_presentation_xpc_unregister_backing(void* opaque_connection, char const* channel_name, uint64_t backing_id, uint64_t generation)

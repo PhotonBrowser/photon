@@ -3,7 +3,7 @@
 
 use anyhow::{Context, Result, ensure};
 use foreign_types::ForeignType;
-use mach2::port::{MACH_PORT_NULL, mach_port_t};
+use mach2::port::mach_port_t;
 use metal::{DeviceRef, SharedEvent};
 use objc::{msg_send, sel, sel_impl};
 use std::{
@@ -29,16 +29,6 @@ unsafe extern "C" {
         height: u32,
         pixel_format: u32,
         port: mach_port_t,
-    ) -> bool;
-    fn photon_presentation_xpc_copy_backing(
-        connection: *mut c_void,
-        channel: *const c_char,
-        backing: u64,
-        generation: u64,
-        port: *mut mach_port_t,
-        width: *mut u32,
-        height: *mut u32,
-        pixel_format: *mut u32,
     ) -> bool;
     fn photon_presentation_xpc_unregister_backing(
         connection: *mut c_void,
@@ -152,32 +142,6 @@ impl Channel {
             "could not send IOSurface unregistration"
         );
         Ok(())
-    }
-
-    pub fn import_backing(
-        &self,
-        channel: &str,
-        backing: u64,
-        generation: u64,
-    ) -> Result<(mach_port_t, u32, u32, u32)> {
-        let channel = CString::new(channel).context("channel ID contains NUL")?;
-        let (mut port, mut width, mut height, mut format) = (MACH_PORT_NULL, 0, 0, 0);
-        ensure!(
-            unsafe {
-                photon_presentation_xpc_copy_backing(
-                    self.0.as_ptr(),
-                    channel.as_ptr(),
-                    backing,
-                    generation,
-                    &mut port,
-                    &mut width,
-                    &mut height,
-                    &mut format,
-                )
-            },
-            "broker has no IOSurface for backing {backing}/{generation}"
-        );
-        Ok((port, width, height, format))
     }
 }
 
