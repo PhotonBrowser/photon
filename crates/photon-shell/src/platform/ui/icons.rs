@@ -5,9 +5,16 @@
 //! download it from the same version into that folder and load it with
 //! `lucide!`.
 
-use gpui::{Image, ImageFormat, Transformation, prelude::*, px, radians, rgb, svg};
+use gpui::{
+    Image, ImageFormat, Transformation, hsla, hsla_to_rgba, prelude::*, px, radians, rgb,
+    rgb_to_hsla, rgba, svg,
+};
+use std::collections::HashMap;
 use std::f32::consts::TAU;
-use std::sync::{Arc, LazyLock};
+use std::sync::{Arc, LazyLock, Mutex};
+
+type LogoTint = (u32, u32);
+type LogoCache = Mutex<HashMap<LogoTint, Arc<Image>>>;
 
 /// A vendored Lucide icon's SVG, by its Lucide name.
 macro_rules! lucide {
@@ -21,15 +28,60 @@ macro_rules! lucide {
     };
 }
 
-/// The browser's logo, in its own colors.
-pub(super) fn photon_logo() -> Arc<Image> {
+/// The browser's logo. The original grey tones are tinted with the active
+/// window colour, including both ends of a window gradient.
+pub(super) fn photon_logo(theme_tint: Option<(u32, u32)>) -> Arc<Image> {
     static LOGO: LazyLock<Arc<Image>> = LazyLock::new(|| {
         Arc::new(Image::from_bytes(
             ImageFormat::Svg,
             photon_brand::LOGO_SVG.to_vec(),
         ))
     });
-    LOGO.clone()
+    let Some((start, end)) = theme_tint else {
+        return LOGO.clone();
+    };
+
+    static THEMED_LOGOS: LazyLock<LogoCache> = LazyLock::new(|| Mutex::new(HashMap::new()));
+    let mut logos = THEMED_LOGOS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    logos
+        .entry((start, end))
+        .or_insert_with(|| {
+            let base = tinted_gradient("photon-logo-base", 0xacacac, start, end);
+            let highlight = tinted_gradient("photon-logo-highlight", 0xd5d5d5, start, end);
+            let shade = tinted_gradient("photon-logo-shade", 0x696969, start, end);
+            let svg = String::from_utf8_lossy(photon_brand::LOGO_SVG)
+                .replace("</defs>", &format!("{base}{highlight}{shade}</defs>"))
+                .replace("#ACACAC", "url(#photon-logo-base)")
+                .replace("#D5D5D5", "url(#photon-logo-highlight)")
+                .replace("#696969", "url(#photon-logo-shade)");
+            Arc::new(Image::from_bytes(ImageFormat::Svg, svg.into_bytes()))
+        })
+        .clone()
+}
+
+fn tinted_gradient(name: &str, grey: u32, start: u32, end: u32) -> String {
+    let grey_lightness = rgb_to_hsla(rgb(grey)).color.lightness;
+    let tint = |color| {
+        let hue_and_saturation = rgb_to_hsla(rgba(color)).color;
+        let hue = hue_and_saturation.hue.into_positive_degrees() / 360.0;
+        let color = hsla_to_rgba(hsla(
+            hue,
+            hue_and_saturation.saturation,
+            grey_lightness,
+            1.0,
+        ));
+        let channel = |value: f32| (value * 255.0).round() as u32;
+        (channel(color.color.red) << 16)
+            | (channel(color.color.green) << 8)
+            | channel(color.color.blue)
+    };
+    format!(
+        "<linearGradient id=\"{name}\" x1=\"0%\" y1=\"0%\" x2=\"100%\" y2=\"100%\"><stop offset=\"0%\" stop-color=\"#{:06X}\"/><stop offset=\"100%\" stop-color=\"#{:06X}\"/></linearGradient>",
+        tint(start),
+        tint(end),
+    )
 }
 
 /// An icon from `data`, `size` square, tinted `color`.

@@ -132,14 +132,22 @@ mod window_color {
 /// colour the settings choose.
 pub(super) fn palette(window: &Window, cx: &App) -> ThemeColors {
     let settings = Settings::get(cx);
-    ThemeColors::for_appearance(
-        Settings::appearance(window.appearance(), cx),
+    let appearance = Settings::appearance(window.appearance(), cx);
+    let mut palette = ThemeColors::for_appearance(
+        appearance,
         WindowStyle {
             transparency: settings.transparency,
             color: settings.spaces.active().color,
             gradient: settings.spaces.active().gradient,
         },
-    )
+    );
+    let has_window_tint = [palette.window_tint, palette.window_tint_end]
+        .into_iter()
+        .any(|color| rgb_to_hsla(rgba(color)).color.saturation > f32::EPSILON);
+    if has_window_tint {
+        palette.logo_tint = Some((palette.window_tint, palette.window_tint_end));
+    }
+    palette
 }
 
 /// What decides a palette besides the appearance.
@@ -202,6 +210,9 @@ pub(super) struct ThemeColors {
     pub selected_surface: u32,
     /// What is chosen or on: a chosen option, a switch that is on, a checked box.
     pub chosen: u32,
+    /// The window tint endpoints used to tint Photon marks. The default grey
+    /// theme keeps the original monochrome logo.
+    pub logo_tint: Option<(u32, u32)>,
     /// The accent used while a chosen action is under the pointer.
     pub chosen_hover: u32,
     /// A quiet accent outline for contextual drop targets.
@@ -319,6 +330,7 @@ impl ThemeColors {
             surface_hover: to_rgba_token(colors.text.opacity(opacity::SURFACE_HOVER)),
             selected_surface: to_rgba_token(colors.text.opacity(opacity::SELECTED)),
             chosen: to_rgb_token(link),
+            logo_tint: None,
             chosen_hover: to_rgb_token(mix_colors(
                 link,
                 accent_adjustment,

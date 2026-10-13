@@ -99,7 +99,7 @@ impl Render for NewTabPage {
             .gap(px(metrics::INTERNAL_PAGE_SECTION_GAP));
         if layout.show_logo {
             content = content.child(
-                img(photon_logo())
+                img(photon_logo(palette.logo_tint))
                     .size(px(metrics::NEW_TAB_LOGO_SIZE))
                     .object_fit(ObjectFit::Contain),
             );

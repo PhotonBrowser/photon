@@ -279,7 +279,7 @@ impl TabParts {
                 palette,
             ),
             TabIcon::Logo => sized_icon(
-                img(photon_logo()).object_fit(ObjectFit::Contain),
+                img(photon_logo(palette.logo_tint)).object_fit(ObjectFit::Contain),
                 icon_id,
                 tab.icon_appearing,
                 icon_size,
