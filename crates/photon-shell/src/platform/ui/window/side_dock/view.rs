@@ -305,11 +305,7 @@ impl BrowserWindow {
     ) -> AnyElement {
         let space = self.current_space(cx);
         let listed = self.listed_tabs(cx);
-        let items = self
-            .tab_items(cx)
-            .into_iter()
-            .filter(|item| listed.contains(&item.index))
-            .collect();
+        let items = self.tab_items_for_indices(listed, cx);
         let browser = cx.entity().downgrade();
         let on_drag_move: TabDragMove =
             std::rc::Rc::new(move |event, phase, hitbox, window, cx| {

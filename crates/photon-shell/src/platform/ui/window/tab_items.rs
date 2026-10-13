@@ -46,14 +46,22 @@ impl BrowserWindow {
     }
 
     pub(super) fn tab_items(&self, cx: &mut Context<Self>) -> Vec<TabItem> {
+        self.tab_items_for_indices(0..self.tabs.len(), cx)
+    }
+
+    pub(super) fn tab_items_for_indices(
+        &self,
+        indices: impl IntoIterator<Item = usize>,
+        cx: &mut Context<Self>,
+    ) -> Vec<TabItem> {
         let browser = cx.entity().downgrade();
         let animations = Settings::get(cx).animations;
         let axis = self.tab_axis(cx);
         let suppress_tooltips = self.tab_drag_active();
-        self.tabs
-            .iter()
-            .enumerate()
-            .map(|(index, tab)| {
+        indices
+            .into_iter()
+            .map(|index| {
+                let tab = &self.tabs[index];
                 let (current_label, current_icon) = match &tab.content {
                     TabContent::Page(page) => {
                         let icon = match page.definition.icon {
@@ -203,7 +211,6 @@ impl BrowserWindow {
                     animations,
                     icon,
                     sleeping: matches!(&tab.content, TabContent::Sleeping(_)),
-                    index,
                     pinned: tab.pin.is_some(),
                     active: if closing {
                         self.closing_tab_active.contains(&stable_id)

@@ -249,9 +249,6 @@ pub(super) struct TabItem {
     pub motion: Option<TabMotion>,
     /// The tab is leaving and should no longer respond to input.
     pub closing: bool,
-    /// The tab's place among the window's tabs, which a list may not show
-    /// all of.
-    pub index: usize,
     pub label: String,
     pub icon: TabIcon,
     /// Whether the icon is still growing in after it first appeared.
