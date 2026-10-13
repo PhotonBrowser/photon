@@ -1,6 +1,6 @@
 //! The horizontal tab strip in the titlebar.
 
-use gpui::{Role, div, prelude::*, px, rgb, rgba};
+use gpui::{Role, ScrollHandle, div, prelude::*, px, rgb, rgba};
 
 use super::super::controls::FocusRing;
 use super::super::controls::OwnsClicks;
@@ -19,9 +19,19 @@ pub(in super::super) fn tab_strip(
     on_drag_move: TabDragMove,
     on_drop: TabDrop,
     on_bounds: TabPrepaint,
+    scroll_handle: ScrollHandle,
     palette: ThemeColors,
 ) -> impl IntoElement {
-    tab_strip_content(tabs, on_new_tab, on_drag_move, on_drop, on_bounds, palette).w_full()
+    tab_strip_content(
+        tabs,
+        on_new_tab,
+        on_drag_move,
+        on_drop,
+        on_bounds,
+        scroll_handle,
+        palette,
+    )
+    .w_full()
 }
 
 /// The intrinsic-width tab controls, without the full-width titlebar row.
@@ -33,6 +43,7 @@ pub(in super::super) fn tab_strip_content(
     on_drag_move: TabDragMove,
     on_drop: TabDrop,
     on_bounds: TabPrepaint,
+    scroll_handle: ScrollHandle,
     palette: ThemeColors,
 ) -> gpui::Div {
     let tab_count = tabs.len();
@@ -45,7 +56,8 @@ pub(in super::super) fn tab_strip_content(
         .gap(px(metrics::TAB_STRIP_GAP))
         .flex_initial()
         .min_w_0()
-        .overflow_x_scroll();
+        .overflow_x_scroll()
+        .track_scroll(&scroll_handle);
     for (index, tab) in tabs.into_iter().enumerate() {
         let stops = TabParts::focus_stops(&tab.icon);
         let before = tab.insertion_before;

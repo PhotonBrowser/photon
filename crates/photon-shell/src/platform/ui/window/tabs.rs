@@ -63,8 +63,10 @@ impl BrowserWindow {
         let Some(layout) = self.tab_drag_layout.as_ref() else {
             return;
         };
+        let layout_id = layout.id;
         if layout.axis != self.tab_axis(cx) {
             self.clear_previous_target(cx);
+            self.clear_favourites_drag_hover(current_window, layout_id, cx);
             let _ = cx.stop_active_drag(window);
             window.release_pointer();
             self.tab_drag_layout = None;
@@ -140,38 +142,54 @@ impl BrowserWindow {
         }
         self.clear_favourites_drag_hover(current_window, dragged.id, cx);
 
-        let global_position = window.bounds().origin + position;
-        if let Some((target, over_favourites, target_position)) =
-            self.external_drop_target(global_position, current_window, cx)
-        {
-            if over_favourites {
-                let target_handle = target.into();
-                let already_targeting = self
-                    .tab_drag_layout
-                    .as_ref()
-                    .is_some_and(|layout| layout.target_window == Some(target_handle));
-                if !already_targeting {
+        let window_origin = window.bounds().origin;
+        let global_position = window_origin + position;
+        let previous_global_position = window_origin + previous_position;
+        if let Some((target, kind, target_position)) = self.external_drop_target(
+            global_position,
+            previous_global_position,
+            current_window,
+            cx,
+        ) {
+            match kind {
+                ExternalDropTargetKind::Favourites => {
+                    let target_handle = target.into();
+                    let already_targeting = self
+                        .tab_drag_layout
+                        .as_ref()
+                        .is_some_and(|layout| layout.target_window == Some(target_handle));
+                    if !already_targeting {
+                        self.clear_previous_target(cx);
+                    }
+                    target
+                        .update(cx, |browser, _, cx| {
+                            browser.set_favourites_drag_hover(current_window, dragged.id, cx);
+                        })
+                        .ok();
+                    let changed = if let Some(layout) = self.tab_drag_layout.as_mut() {
+                        let changed = layout.phase != super::TabDragPhase::DraggingOverFavourites
+                            || layout.target_window != Some(target_handle);
+                        layout.phase = super::TabDragPhase::DraggingOverFavourites;
+                        layout.target_window = Some(target_handle);
+                        changed
+                    } else {
+                        false
+                    };
+                    if changed {
+                        cx.notify();
+                    }
+                    return;
+                }
+                ExternalDropTargetKind::TabStrip => {
+                    self.set_cross_window_target(target, &dragged, target_position, cx);
+                    return;
+                }
+                ExternalDropTargetKind::WindowBody => {
                     self.clear_previous_target(cx);
+                    self.set_tab_drag_phase(super::TabDragPhase::OutsideTarget, cx);
+                    return;
                 }
-                target
-                    .update(cx, |browser, _, cx| {
-                        browser.set_favourites_drag_hover(current_window, dragged.id, cx);
-                    })
-                    .ok();
-                let mut changed = false;
-                if let Some(layout) = self.tab_drag_layout.as_mut() {
-                    changed = layout.phase != super::TabDragPhase::DraggingOverFavourites
-                        || layout.target_window != Some(target_handle);
-                    layout.phase = super::TabDragPhase::DraggingOverFavourites;
-                    layout.target_window = Some(target_handle);
-                }
-                if changed {
-                    cx.notify();
-                }
-                return;
             }
-            self.set_cross_window_target(target, &dragged, target_position, cx);
-            return;
         }
         self.clear_previous_target(cx);
 
@@ -327,6 +345,7 @@ impl BrowserWindow {
                     self.tab_position_animations.insert(
                         id,
                         super::TabPositionAnimation::new(
+                            axis,
                             from,
                             super::super::metrics::TAB_REORDER_DURATION_MS,
                         ),
@@ -384,11 +403,7 @@ impl BrowserWindow {
         if let Some(drag) = self.tab_drag_layout.as_ref().filter(|drag| drag.id == id) {
             return drag.visual_offset;
         }
-        let _ = axis;
-        self.tab_position_animations
-            .get(&id)
-            .map(|animation| animation.value())
-            .unwrap_or(0.0)
+        super::tab_position_animation_offset(self.tab_position_animations.get(&id).copied(), axis)
     }
 
     /// The tab's layout slot with its temporary drag animation removed. Using
@@ -404,14 +419,16 @@ impl BrowserWindow {
     fn external_drop_target(
         &self,
         global_position: gpui::Point<gpui::Pixels>,
+        previous_global_position: gpui::Point<gpui::Pixels>,
         current_window: gpui::AnyWindowHandle,
         cx: &mut Context<Self>,
     ) -> Option<(
         gpui::WindowHandle<BrowserWindow>,
-        bool,
+        ExternalDropTargetKind,
         gpui::Point<gpui::Pixels>,
     )> {
         let mut strip_target = None;
+        let mut window_target = None;
         for handle in cx.windows() {
             if handle.window_id() == current_window.window_id() {
                 continue;
@@ -435,15 +452,28 @@ impl BrowserWindow {
             if favourites.is_some_and(|bounds| bounds.contains(&local_position))
                 || reveal_bounds.is_some_and(|bounds| bounds.contains(&local_position))
             {
-                return Some((target, true, local_position));
+                return Some((target, ExternalDropTargetKind::Favourites, local_position));
             }
             if strip_target.is_none()
                 && tab_container.is_some_and(|bounds| bounds.contains(&local_position))
             {
-                strip_target = Some((target, false, local_position));
+                strip_target = Some((
+                    target.clone(),
+                    ExternalDropTargetKind::TabStrip,
+                    local_position,
+                ));
+            }
+            if window_target.is_none()
+                && is_over_or_moving_toward_bounds(
+                    window_bounds,
+                    global_position,
+                    previous_global_position,
+                )
+            {
+                window_target = Some((target, ExternalDropTargetKind::WindowBody, local_position));
             }
         }
-        strip_target
+        strip_target.or(window_target)
     }
 
     fn is_favourites_drop_position(&self, position: gpui::Point<gpui::Pixels>, cx: &App) -> bool {
@@ -676,12 +706,16 @@ impl BrowserWindow {
                 && incoming.after_id == after_id
         });
         if unchanged {
+            if let Some(incoming) = self.incoming_tab_drag.as_mut() {
+                incoming.pointer_position = position;
+            }
             return;
         }
         let incoming = super::IncomingTabDrag {
             source: dragged.source,
             id: dragged.id,
             axis,
+            pointer_position: position,
             before_id,
             after_id,
             size: incoming_marker_size(axis, dragged.size, dragged.pinned),
@@ -825,10 +859,13 @@ impl BrowserWindow {
                 self.tab_position_animations.insert(
                     id,
                     super::TabPositionAnimation::new(
+                        axis,
                         from,
                         super::super::metrics::TAB_REORDER_DURATION_MS,
                     ),
                 );
+            } else {
+                self.tab_position_animations.remove(&id);
             }
         }
     }
@@ -899,6 +936,7 @@ impl BrowserWindow {
             self.tab_position_animations.insert(
                 drag.id,
                 super::TabPositionAnimation::new(
+                    drag.axis,
                     current_offset,
                     super::super::metrics::TAB_DROP_SETTLE_DURATION_MS,
                 ),
@@ -938,11 +976,86 @@ impl BrowserWindow {
 
     pub(super) fn tab_container_bounds_handler(&self, cx: &Context<Self>) -> TabPrepaint {
         let browser = cx.entity().downgrade();
-        Box::new(move |bounds, _, cx| {
+        Box::new(move |bounds, window, cx| {
             browser
-                .update(cx, |this, _| this.tab_container_bounds = Some(bounds))
+                .update(cx, |this, cx| {
+                    this.tab_container_bounds = Some(bounds);
+                    this.auto_scroll_tab_strip(window, cx);
+                })
                 .ok();
         })
+    }
+
+    fn auto_scroll_tab_strip(&mut self, window: &mut Window, cx: &Context<Self>) {
+        if self.tab_axis(cx) != TabDragAxis::Horizontal {
+            self.tab_auto_scroll_at = None;
+            return;
+        }
+        let pointer = self
+            .tab_drag_layout
+            .as_ref()
+            .filter(|drag| {
+                drag.source_window == window.window_handle()
+                    && !matches!(
+                        drag.phase,
+                        super::TabDragPhase::PendingDrag
+                            | super::TabDragPhase::Completing
+                            | super::TabDragPhase::Cancelled
+                    )
+            })
+            .map(|drag| drag.pointer_position)
+            .or_else(|| {
+                self.incoming_tab_drag
+                    .as_ref()
+                    .filter(|incoming| incoming.axis == TabDragAxis::Horizontal)
+                    .map(|incoming| incoming.pointer_position)
+            });
+        let Some((bounds, pointer)) = self.tab_container_bounds.zip(pointer) else {
+            self.tab_auto_scroll_at = None;
+            return;
+        };
+
+        let left = f32::from(bounds.left());
+        let right = f32::from(bounds.right());
+        let x = f32::from(pointer.x);
+        if !(left..=right).contains(&x) {
+            self.tab_auto_scroll_at = None;
+            return;
+        }
+
+        let edge = super::super::metrics::TAB_DRAG_SCROLL_EDGE;
+        let left_distance = x - left;
+        let right_distance = right - x;
+        let (direction, proximity) = if left_distance < edge && left_distance <= right_distance {
+            (1.0, (1.0 - left_distance / edge).clamp(0.0, 1.0))
+        } else if right_distance < edge {
+            (-1.0, (1.0 - right_distance / edge).clamp(0.0, 1.0))
+        } else {
+            self.tab_auto_scroll_at = None;
+            return;
+        };
+
+        let now = Instant::now();
+        let elapsed = self
+            .tab_auto_scroll_at
+            .replace(now)
+            .map_or(1.0 / 60.0, |last| {
+                now.duration_since(last).as_secs_f32().min(1.0 / 30.0)
+            });
+        let offset = self.tab_strip_scroll.offset();
+        let max_offset = f32::from(self.tab_strip_scroll.max_offset().x);
+        let current = f32::from(offset.x);
+        let next = (current
+            + direction * super::super::metrics::TAB_DRAG_SCROLL_SPEED * proximity * elapsed)
+            .clamp(-max_offset, 0.0);
+        if (next - current).abs() <= 0.01 {
+            self.tab_auto_scroll_at = None;
+            return;
+        }
+
+        self.tab_strip_scroll
+            .set_offset(gpui::point(gpui::px(next), offset.y));
+        window.request_animation_frame();
     }
 
     pub(super) fn tab_target_drop_handler(&self, target_id: u64, cx: &Context<Self>) -> TabDrop {
@@ -1131,7 +1244,7 @@ impl BrowserWindow {
         self.add_favourite(index, shortcut, cx);
     }
 
-    fn tab_axis(&self, cx: &App) -> TabDragAxis {
+    pub(super) fn tab_axis(&self, cx: &App) -> TabDragAxis {
         if WorkspaceLayout::current(cx).saved().tab_layout() == photon_core::TabLayout::Vertical {
             TabDragAxis::Vertical
         } else {
@@ -1342,6 +1455,7 @@ impl BrowserWindow {
             .borrow_mut()
             .remove(&self.tabs[index].id);
         self.tab_position_animations.remove(&self.tabs[index].id);
+        self.tab_geometry.remove(&self.tabs[index].id);
         self.tabs.remove(index);
         drop(self.tab_subscriptions.remove(index));
         self.tab_focus_handles.remove(index);
@@ -1656,6 +1770,7 @@ impl BrowserWindow {
                 drag.phase = super::TabDragPhase::Cancelled;
             }
             self.clear_previous_target(cx);
+            self.clear_favourites_drag_hover(window.window_handle(), removed.id, cx);
             let _ = cx.stop_active_drag(window);
             window.release_pointer();
             self.tab_drag_layout = None;
@@ -1673,6 +1788,8 @@ impl BrowserWindow {
             }
         }
         self.revealed_icons.borrow_mut().remove(&removed.id);
+        self.tab_position_animations.remove(&removed.id);
+        self.tab_geometry.remove(&removed.id);
 
         if self.tabs.len() == 1 && Settings::get(cx).close_window_with_last_tab {
             // Closed with its last tab, the window has nothing to reopen.
@@ -1832,11 +1949,14 @@ impl BrowserWindow {
     /// Up and down arrows move between tabs from a focused tab.
     pub(super) fn tab_key_down(
         &mut self,
-        index: usize,
+        tab_id: u64,
         event: &KeyDownEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let Some(index) = self.tab_index_by_id(tab_id) else {
+            return;
+        };
         if event.keystroke.modifiers.modified() {
             return;
         }
@@ -1909,6 +2029,15 @@ fn bounds_distance(bounds: gpui::Bounds<gpui::Pixels>, point: gpui::Point<gpui::
     dx.hypot(dy)
 }
 
+fn is_over_or_moving_toward_bounds(
+    bounds: gpui::Bounds<gpui::Pixels>,
+    position: gpui::Point<gpui::Pixels>,
+    previous_position: gpui::Point<gpui::Pixels>,
+) -> bool {
+    bounds.contains(&position)
+        || bounds_distance(bounds, position) < bounds_distance(bounds, previous_position)
+}
+
 fn incoming_marker_size(axis: TabDragAxis, size: f32, pinned: bool) -> f32 {
     match axis {
         TabDragAxis::Horizontal if pinned => size.max(super::super::metrics::PINNED_TAB_WIDTH),
@@ -1922,6 +2051,13 @@ struct TabTransferPlan {
     source_index: usize,
     target_index: usize,
     target_id: u64,
+}
+
+#[derive(Clone, Copy)]
+enum ExternalDropTargetKind {
+    Favourites,
+    TabStrip,
+    WindowBody,
 }
 
 fn midpoint_insertion_index(
@@ -1986,9 +2122,12 @@ fn plan_tab_transfer(
 
 #[cfg(test)]
 mod tab_drag_tests {
+    use super::super::{TabPositionAnimation, tab_position_animation_offset};
+    use super::TabDragAxis;
     use super::{
-        animation_retarget_offset, can_detach_tab_count, insert_id_at, midpoint_insertion_index,
-        plan_tab_transfer, should_close_empty_source_window, stable_slot_midpoint,
+        animation_retarget_offset, can_detach_tab_count, insert_id_at,
+        is_over_or_moving_toward_bounds, midpoint_insertion_index, plan_tab_transfer,
+        should_close_empty_source_window, stable_slot_midpoint,
     };
 
     #[test]
@@ -2027,6 +2166,16 @@ mod tab_drag_tests {
     }
 
     #[test]
+    fn old_orientation_offsets_do_not_leak_into_the_new_layout() {
+        let animation = TabPositionAnimation::new(TabDragAxis::Horizontal, 24.0, 1_000);
+        assert!(tab_position_animation_offset(Some(animation), TabDragAxis::Horizontal) > 0.0);
+        assert_eq!(
+            tab_position_animation_offset(Some(animation), TabDragAxis::Vertical),
+            0.0
+        );
+    }
+
+    #[test]
     fn transfer_plan_preserves_identity_and_rejects_duplicates() {
         let plan = plan_tab_transfer(&[1, 2, 3], &[7, 8], 2, 2, 1).unwrap();
         assert_eq!(plan.source_index, 1);
@@ -2060,5 +2209,28 @@ mod tab_drag_tests {
         assert!(should_close_empty_source_window(true, true));
         assert!(should_close_empty_source_window(false, true));
         assert!(!should_close_empty_source_window(false, false));
+    }
+
+    #[test]
+    fn another_window_in_the_drag_path_delays_detachment() {
+        let bounds = gpui::Bounds::new(
+            gpui::point(gpui::px(100.0), gpui::px(100.0)),
+            gpui::size(gpui::px(200.0), gpui::px(200.0)),
+        );
+        assert!(is_over_or_moving_toward_bounds(
+            bounds,
+            gpui::point(gpui::px(120.0), gpui::px(120.0)),
+            gpui::point(gpui::px(0.0), gpui::px(0.0)),
+        ));
+        assert!(is_over_or_moving_toward_bounds(
+            bounds,
+            gpui::point(gpui::px(80.0), gpui::px(150.0)),
+            gpui::point(gpui::px(40.0), gpui::px(150.0)),
+        ));
+        assert!(!is_over_or_moving_toward_bounds(
+            bounds,
+            gpui::point(gpui::px(40.0), gpui::px(150.0)),
+            gpui::point(gpui::px(80.0), gpui::px(150.0)),
+        ));
     }
 }

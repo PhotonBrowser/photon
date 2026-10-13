@@ -43,6 +43,9 @@ pub(super) const TAB_CLOSE_GAP: f32 = 6.0;
 pub(super) const TAB_DETACH_DISTANCE: f32 = 40.0;
 /// Pointer travel before a press becomes a tab drag.
 pub(super) const TAB_DRAG_THRESHOLD: f32 = 4.0;
+/// Edge zone and maximum speed for scrolling a tab strip during a drag.
+pub(super) const TAB_DRAG_SCROLL_EDGE: f32 = 28.0;
+pub(super) const TAB_DRAG_SCROLL_SPEED: f32 = 720.0;
 pub(super) const TAB_DRAG_SOURCE_OPACITY: f32 = 0.28;
 pub(super) const TAB_REORDER_DURATION_MS: u64 = 150;
 pub(super) const TAB_DROP_SETTLE_DURATION_MS: u64 = 120;

@@ -128,6 +128,7 @@ impl BrowserWindow {
                 on_drag_move,
                 self.tab_drop_handler(cx),
                 self.tab_container_bounds_handler(cx),
+                self.tab_strip_scroll.clone(),
                 palette,
             );
             return if region == DockRegion::Top {

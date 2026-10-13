@@ -44,6 +44,7 @@ impl BrowserWindow {
     pub(super) fn tab_items(&self, cx: &mut Context<Self>) -> Vec<TabItem> {
         let browser = cx.entity().downgrade();
         let animations = Settings::get(cx).animations;
+        let axis = self.tab_axis(cx);
         let suppress_tooltips = self.tab_drag_active();
         self.tabs
             .iter()
@@ -128,21 +129,26 @@ impl BrowserWindow {
                                 return;
                             }
                         }
-                        this.activate_tab(index, true, window, cx);
+                        if let Some(index) = this.tab_index_by_id(stable_id) {
+                            this.activate_tab(index, true, window, cx);
+                        }
                     })),
                     on_key_down: Box::new(cx.listener(
                         move |this, event: &KeyDownEvent, window, cx| {
-                            this.tab_key_down(index, event, window, cx);
+                            this.tab_key_down(stable_id, event, window, cx);
                         },
                     )),
                     on_close: Box::new(cx.listener(move |this, _, window, cx| {
                         cx.stop_propagation();
-                        this.close_tab(index, window, cx);
+                        if let Some(index) = this.tab_index_by_id(stable_id) {
+                            this.close_tab(index, window, cx);
+                        }
                     })),
                     on_toggle_audio: Box::new(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
-                        if let Some(webview) =
-                            this.tabs.get(index).and_then(|tab| tab.content.webview())
+                        if let Some(webview) = this
+                            .tab_index_by_id(stable_id)
+                            .and_then(|index| this.tabs[index].content.webview())
                         {
                             webview.update(cx, |view, cx| view.toggle_audio_mute(cx));
                         }
@@ -186,9 +192,18 @@ impl BrowserWindow {
                             let running = browser
                                 .update(cx, |this, _| {
                                     this.tab_geometry.insert(stable_id, bounds);
-                                    this.tab_position_animations
-                                        .get(&stable_id)
-                                        .is_some_and(|animation| animation.is_running())
+                                    match this.tab_position_animations.get(&stable_id).copied() {
+                                        Some(animation)
+                                            if animation.axis == axis && animation.is_running() =>
+                                        {
+                                            true
+                                        }
+                                        Some(_) => {
+                                            this.tab_position_animations.remove(&stable_id);
+                                            false
+                                        }
+                                        None => false,
+                                    }
                                 })
                                 .unwrap_or(false);
                             if running {
@@ -202,12 +217,12 @@ impl BrowserWindow {
                         .as_ref()
                         .filter(|drag| drag.id == stable_id)
                         .map(|drag| drag.visual_offset)
-                        .or_else(|| {
-                            self.tab_position_animations
-                                .get(&stable_id)
-                                .map(|animation| animation.value())
-                        })
-                        .unwrap_or(0.0),
+                        .unwrap_or_else(|| {
+                            super::tab_position_animation_offset(
+                                self.tab_position_animations.get(&stable_id).copied(),
+                                axis,
+                            )
+                        }),
                     dragging: self.tab_drag_layout.as_ref().is_some_and(|drag| {
                         drag.id == stable_id
                             && !matches!(drag.phase, super::TabDragPhase::PendingDrag)
@@ -218,13 +233,17 @@ impl BrowserWindow {
                     on_middle_click: Box::new(cx.listener(
                         move |this, _: &MouseUpEvent, window, cx| {
                             cx.stop_propagation();
-                            this.close_tab(index, window, cx);
+                            if let Some(index) = this.tab_index_by_id(stable_id) {
+                                this.close_tab(index, window, cx);
+                            }
                         },
                     )),
                     on_context_menu: Box::new(cx.listener(
                         move |this, _: &MouseDownEvent, window, cx| {
                             cx.stop_propagation();
-                            this.show_tab_menu(index, window, cx);
+                            if let Some(index) = this.tab_index_by_id(stable_id) {
+                                this.show_tab_menu(index, window, cx);
+                            }
                         },
                     )),
                 }

@@ -31,7 +31,7 @@ mod zoom;
 
 use gpui::{
     AnyElement, AnyWindowHandle, App, Bounds, Context, Entity, FocusHandle, Pixels, Point, Render,
-    Subscription, Task, WeakEntity, Window, WindowHandle, div, prelude::*,
+    ScrollHandle, Subscription, Task, WeakEntity, Window, WindowHandle, div, prelude::*,
 };
 use photon_core::{BrowserCommand, WindowBackgroundStyle};
 use std::cell::RefCell;
@@ -87,6 +87,8 @@ struct BrowserWindow {
     tab_drag_layout: Option<TabDragLayout>,
     tab_geometry: HashMap<u64, Bounds<Pixels>>,
     tab_container_bounds: Option<Bounds<Pixels>>,
+    tab_strip_scroll: ScrollHandle,
+    tab_auto_scroll_at: Option<Instant>,
     favourites_bounds: Option<Bounds<Pixels>>,
     favourites_drag_hover: Option<(AnyWindowHandle, u64)>,
     incoming_tab_drag: Option<IncomingTabDrag>,
@@ -171,6 +173,7 @@ struct IncomingTabDrag {
     source: AnyWindowHandle,
     id: u64,
     axis: TabDragAxis,
+    pointer_position: Point<Pixels>,
     before_id: Option<u64>,
     after_id: Option<u64>,
     size: f32,
@@ -191,14 +194,16 @@ enum TabDragPhase {
 
 #[derive(Clone, Copy, Debug)]
 struct TabPositionAnimation {
+    axis: TabDragAxis,
     from: f32,
     started: Instant,
     duration: std::time::Duration,
 }
 
 impl TabPositionAnimation {
-    fn new(from: f32, duration_ms: u64) -> Self {
+    fn new(axis: TabDragAxis, from: f32, duration_ms: u64) -> Self {
         Self {
+            axis,
             from,
             started: Instant::now(),
             duration: std::time::Duration::from_millis(duration_ms),
@@ -218,6 +223,15 @@ impl TabPositionAnimation {
     fn is_running(self) -> bool {
         self.started.elapsed() < self.duration
     }
+}
+
+fn tab_position_animation_offset(
+    animation: Option<TabPositionAnimation>,
+    axis: TabDragAxis,
+) -> f32 {
+    animation
+        .filter(|animation| animation.axis == axis)
+        .map_or(0.0, TabPositionAnimation::value)
 }
 
 /// The tab strip and toolbar, or the sidebar. A cached view re-renders only when it is
@@ -433,6 +447,8 @@ fn open_browser_window_at(
                 tab_drag_layout: None,
                 tab_geometry: HashMap::new(),
                 tab_container_bounds: None,
+                tab_strip_scroll: ScrollHandle::new(),
+                tab_auto_scroll_at: None,
                 favourites_bounds: None,
                 favourites_drag_hover: None,
                 incoming_tab_drag: None,
