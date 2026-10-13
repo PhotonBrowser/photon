@@ -362,6 +362,7 @@ fn audio_control_button(
         .text_color(rgb(icon_color))
         .hover(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
+        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .on_click(on_click)
         .when(show_tooltip, |button| button.tooltip(tooltip))
         .child(audio_icon(icon_color, metrics::TAB_AUDIO_ICON_SIZE, muted))
@@ -388,6 +389,7 @@ fn close_tab_button(
         .rounded(px(metrics::CONTROL_RADIUS))
         .hover(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
+        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .on_click(on_click)
         .child(close_icon(palette.text_secondary, metrics::TAB_ICON_SIZE))
 }
