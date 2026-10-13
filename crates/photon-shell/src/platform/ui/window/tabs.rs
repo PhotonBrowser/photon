@@ -95,7 +95,6 @@ impl BrowserWindow {
             let dragged = DraggedTab {
                 source: window.window_handle(),
                 id: tab.id,
-                axis: layout.axis,
                 size: match layout.axis {
                     TabDragAxis::Horizontal => f32::from(bounds.size.width),
                     TabDragAxis::Vertical => f32::from(bounds.size.height),
@@ -1366,40 +1365,15 @@ impl BrowserWindow {
             return;
         }
         let tab = self.tabs[index].clone();
-        let source_bounds = window.bounds();
-        let source_content_bounds = window.inner_window_bounds().get_bounds();
-        let source_tab_bounds = self
-            .tab_geometry
-            .get(&dragged.id)
-            .copied()
-            .unwrap_or_default();
-        let grab_offset = self
-            .tab_drag_layout
-            .as_ref()
-            .map(|layout| layout.grab_offset)
-            .unwrap_or_default();
-        let fallback_tab_origin = match dragged.axis {
-            TabDragAxis::Horizontal => gpui::point(
-                gpui::px(
-                    crate::platform::window_settings::native_controls_inset()
-                        + super::super::metrics::TAB_STRIP_INSET,
-                ),
-                gpui::px(super::super::metrics::TAB_STRIP_INSET),
-            ),
-            TabDragAxis::Vertical => source_tab_bounds.origin,
-        };
-        let new_tab_origin = detached_tab_origin(
-            dragged.axis,
-            tab.pin.is_some(),
-            self.tab_container_bounds.map(|bounds| bounds.origin),
-            fallback_tab_origin,
+        let cursor_position = window.inner_window_bounds().get_bounds().origin + position;
+        let move_anchor = gpui::point(
+            gpui::px(super::super::metrics::INITIAL_WINDOW_WIDTH / 2.0),
+            gpui::px(super::super::metrics::INITIAL_WINDOW_HEIGHT / 2.0),
         );
         let new_window_origin = detached_window_origin(
-            source_content_bounds.origin,
-            position,
-            new_tab_origin,
-            grab_offset,
-            source_content_bounds.origin - source_bounds.origin,
+            cursor_position,
+            super::super::metrics::INITIAL_WINDOW_WIDTH,
+            super::super::metrics::INITIAL_WINDOW_HEIGHT,
         );
         let source_display_id = window.display(cx).map(|display| display.id());
         let Ok(new_window) = super::open_browser_window_at(
@@ -1443,10 +1417,8 @@ impl BrowserWindow {
             if let Some(index) = browser.tab_index_by_id(tab.id) {
                 browser.activate_tab(index, true, window, cx);
             }
-            // Anchor the native move at the point the user grabbed in the new
-            // tab. The new window's queried mouse position can include an OS
-            // placement adjustment, which would keep that offset under the cursor.
-            window.start_window_move_at(new_tab_origin + grab_offset);
+            // Keep the center of the new window under the cursor while it moves.
+            window.start_window_move_at(move_anchor);
         });
     }
 
@@ -2089,46 +2061,23 @@ fn is_over_or_moving_toward_bounds(
         || bounds_distance(bounds, position) < bounds_distance(bounds, previous_position)
 }
 
-fn detached_window_origin(
-    source_content_origin: gpui::Point<gpui::Pixels>,
-    pointer_position: gpui::Point<gpui::Pixels>,
-    tab_origin: gpui::Point<gpui::Pixels>,
-    grab_offset: gpui::Point<gpui::Pixels>,
-    destination_content_offset: gpui::Point<gpui::Pixels>,
-) -> gpui::Point<gpui::Pixels> {
-    source_content_origin + pointer_position - tab_origin - grab_offset - destination_content_offset
-}
-
-fn detached_tab_origin(
-    axis: TabDragAxis,
-    pinned: bool,
-    tab_container_origin: Option<gpui::Point<gpui::Pixels>>,
-    fallback: gpui::Point<gpui::Pixels>,
-) -> gpui::Point<gpui::Pixels> {
-    let Some(origin) = tab_container_origin else {
-        return fallback;
-    };
-    match axis {
-        TabDragAxis::Horizontal => origin,
-        TabDragAxis::Vertical if pinned => origin,
-        TabDragAxis::Vertical => {
-            origin
-                + gpui::point(
-                    gpui::px(0.0),
-                    gpui::px(
-                        super::super::metrics::SIDEBAR_TAB_HEIGHT
-                            + super::super::metrics::SIDEBAR_ITEM_GAP,
-                    ),
-                )
-        }
-    }
-}
-
 fn content_local_position(
     global_position: gpui::Point<gpui::Pixels>,
     content_origin: gpui::Point<gpui::Pixels>,
 ) -> gpui::Point<gpui::Pixels> {
     global_position - content_origin
+}
+
+fn detached_window_origin(
+    cursor_position: gpui::Point<gpui::Pixels>,
+    window_width: f32,
+    window_height: f32,
+) -> gpui::Point<gpui::Pixels> {
+    cursor_position
+        - gpui::point(
+            gpui::px(window_width / 2.0),
+            gpui::px(window_height / 2.0),
+        )
 }
 
 fn external_drop_target_kind(
@@ -2239,9 +2188,9 @@ mod tab_drag_tests {
     use super::TabDragAxis;
     use super::{
         ExternalDropTargetKind, animation_retarget_offset, can_detach_tab_count,
-        detached_tab_origin, detached_window_origin, external_drop_target_kind, insert_id_at,
-        is_over_or_moving_toward_bounds, midpoint_insertion_index, plan_tab_transfer,
-        should_close_empty_source_window, stable_slot_midpoint,
+        external_drop_target_kind, insert_id_at, is_over_or_moving_toward_bounds,
+        midpoint_insertion_index, plan_tab_transfer, should_close_empty_source_window,
+        stable_slot_midpoint,
     };
 
     #[test]
@@ -2349,68 +2298,6 @@ mod tab_drag_tests {
     }
 
     #[test]
-    fn detached_window_keeps_the_tab_grab_point_under_the_cursor() {
-        let source_origin = gpui::point(gpui::px(360.0), gpui::px(90.0));
-        let pointer = gpui::point(gpui::px(440.0), gpui::px(255.0));
-        let tab_origin = gpui::point(gpui::px(28.0), gpui::px(204.0));
-        let grab = gpui::point(gpui::px(74.0), gpui::px(18.0));
-
-        let destination_content_offset = gpui::point(gpui::px(0.0), gpui::px(28.0));
-        let detached_origin = detached_window_origin(
-            source_origin,
-            pointer,
-            tab_origin,
-            grab,
-            destination_content_offset,
-        );
-        assert_eq!(
-            detached_origin + destination_content_offset + tab_origin + grab,
-            source_origin + pointer
-        );
-    }
-
-    #[test]
-    fn detached_tab_uses_the_destination_slot_as_its_native_grab_anchor() {
-        let strip_origin = gpui::point(gpui::px(84.0), gpui::px(4.0));
-        assert_eq!(
-            detached_tab_origin(
-                TabDragAxis::Horizontal,
-                false,
-                Some(strip_origin),
-                gpui::point(gpui::px(0.0), gpui::px(0.0))
-            ),
-            strip_origin,
-        );
-
-        let sidebar_origin = gpui::point(gpui::px(24.0), gpui::px(100.0));
-        assert_eq!(
-            detached_tab_origin(
-                TabDragAxis::Vertical,
-                true,
-                Some(sidebar_origin),
-                gpui::point(gpui::px(0.0), gpui::px(0.0))
-            ),
-            sidebar_origin,
-        );
-        assert_eq!(
-            detached_tab_origin(
-                TabDragAxis::Vertical,
-                false,
-                Some(sidebar_origin),
-                gpui::point(gpui::px(0.0), gpui::px(0.0))
-            ),
-            sidebar_origin
-                + gpui::point(
-                    gpui::px(0.0),
-                    gpui::px(
-                        super::super::super::metrics::SIDEBAR_TAB_HEIGHT
-                            + super::super::super::metrics::SIDEBAR_ITEM_GAP,
-                    ),
-                ),
-        );
-    }
-
-    #[test]
     fn converts_live_global_pointer_to_target_content_coordinates() {
         let global = gpui::point(gpui::px(540.0), gpui::px(390.0));
         let content_origin = gpui::point(gpui::px(500.0), gpui::px(300.0));
@@ -2418,6 +2305,19 @@ mod tab_drag_tests {
         assert_eq!(
             super::content_local_position(global, content_origin),
             gpui::point(gpui::px(40.0), gpui::px(90.0))
+        );
+    }
+
+    #[test]
+    fn detached_window_centers_on_the_drag_pointer() {
+        let cursor = gpui::point(gpui::px(540.0), gpui::px(390.0));
+        let width = 640.0;
+        let height = 480.0;
+        let origin = detached_window_origin(cursor, width, height);
+
+        assert_eq!(
+            origin + gpui::point(gpui::px(width / 2.0), gpui::px(height / 2.0)),
+            cursor,
         );
     }
 

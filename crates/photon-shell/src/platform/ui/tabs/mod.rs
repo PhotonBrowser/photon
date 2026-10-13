@@ -44,7 +44,6 @@ pub(super) fn is_foreign_tab_drag(value: &dyn std::any::Any, window: &Window) ->
 pub(super) struct DraggedTab {
     pub source: AnyWindowHandle,
     pub id: u64,
-    pub axis: TabDragAxis,
     pub size: f32,
     pub pinned: bool,
 }
