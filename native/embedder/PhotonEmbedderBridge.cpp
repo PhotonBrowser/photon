@@ -69,6 +69,7 @@ Photon::ViewCallbacks make_view_callbacks(
                 frame->pixels.data(), frame->pixels.size(),
                 frame->engine_paint_interval_microseconds,
                 frame->bitmap_acquisition_microseconds,
+                frame->buffer_allocation_microseconds,
                 frame->copy_time_microseconds,
                 frame->paint_to_callback_microseconds);
     };

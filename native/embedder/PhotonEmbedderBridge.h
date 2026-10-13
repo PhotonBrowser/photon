@@ -7,7 +7,7 @@ extern "C" {
 
 using PhotonFrameCallback = void (*)(void*, int, int, size_t, double,
     std::uint8_t const*, size_t, uint64_t,
-    uint64_t, uint64_t, uint64_t);
+    uint64_t, uint64_t, uint64_t, uint64_t);
 using PhotonStateCallback = void (*)(void*, char const*, char const*, bool,
     bool, bool);
 using PhotonErrorCallback = void (*)(void*, char const*);

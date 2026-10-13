@@ -69,27 +69,28 @@ pub(super) mod embedder {
     pub(crate) type SelectDropdownCallback =
         unsafe extern "C" fn(*mut c_void, f64, f64, f64, *const SelectItem, usize);
 
+    pub(crate) type FrameCallback = unsafe extern "C" fn(
+        *mut c_void,
+        i32,
+        i32,
+        usize,
+        f64,
+        *const u8,
+        usize,
+        u64,
+        u64,
+        u64,
+        u64,
+        u64,
+    );
+
     #[repr(C)]
     pub(crate) struct ViewCallbacks {
         pub callback_data: *mut c_void,
         pub state_callback: Option<
             unsafe extern "C" fn(*mut c_void, *const c_char, *const c_char, bool, bool, bool),
         >,
-        pub frame_callback: Option<
-            unsafe extern "C" fn(
-                *mut c_void,
-                i32,
-                i32,
-                usize,
-                f64,
-                *const u8,
-                usize,
-                u64,
-                u64,
-                u64,
-                u64,
-            ),
-        >,
+        pub frame_callback: Option<FrameCallback>,
         pub cursor_callback: Option<unsafe extern "C" fn(*mut c_void, i32)>,
         pub error_callback: Option<unsafe extern "C" fn(*mut c_void, *const c_char)>,
         pub crash_callback: Option<unsafe extern "C" fn(*mut c_void, *const c_char)>,

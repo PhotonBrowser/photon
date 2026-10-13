@@ -1,6 +1,6 @@
 //! GPUI presentation for performance diagnostics.
 
-use crate::PerformanceDiagnostics;
+use crate::{PerformanceDiagnostics, PresentationMode};
 use gpui::{Div, div, prelude::*, px, rgb, rgba};
 
 const OVERLAY_INSET: f32 = 12.0;
@@ -81,6 +81,25 @@ pub fn performance_overlay(
             optional_number(diagnostics.longest_frame_gap_ms, " ms"),
             palette,
         ))
+        .child(row(
+            "Presentation mode",
+            diagnostics
+                .presentation_mode
+                .map(presentation_mode_name)
+                .unwrap_or("—")
+                .to_owned(),
+            palette,
+        ))
+        .child(row(
+            "CPU buffer allocation",
+            optional_microseconds(diagnostics.cpu_fallback_buffer_allocation_microseconds),
+            palette,
+        ))
+        .child(row(
+            "CPU bitmap copy",
+            optional_microseconds(diagnostics.cpu_fallback_copy_microseconds),
+            palette,
+        ))
         .child(row("Main-thread task", "not attributed".into(), palette))
         .child(
             div()
@@ -119,6 +138,17 @@ fn v_stack() -> Div {
 
 fn optional_number(value: Option<f64>, suffix: &str) -> String {
     value.map_or_else(|| "—".into(), |value| format!("{value:.1}{suffix}"))
+}
+
+fn optional_microseconds(value: Option<u64>) -> String {
+    value.map_or_else(|| "—".into(), |value| format!("{value} μs"))
+}
+
+fn presentation_mode_name(mode: PresentationMode) -> &'static str {
+    match mode {
+        PresentationMode::NativeMetal => "Metal",
+        PresentationMode::CpuFallback => "CPU fallback",
+    }
 }
 
 pub fn format_bytes(bytes: u64) -> String {

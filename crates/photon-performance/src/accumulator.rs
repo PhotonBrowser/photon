@@ -28,6 +28,13 @@ pub struct EnginePerformanceStats {
     pub upload_bytes_per_second: u64,
 }
 
+/// The path used to deliver the most recently presented page frame.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PresentationMode {
+    NativeMetal,
+    CpuFallback,
+}
+
 /// A point-in-time snapshot shown by the diagnostics overlay.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct PerformanceDiagnostics {
@@ -40,6 +47,9 @@ pub struct PerformanceDiagnostics {
     pub input_to_frame_latency_ms: Option<f64>,
     pub last_frame_interval_ms: Option<f64>,
     pub longest_frame_gap_ms: Option<f64>,
+    pub presentation_mode: Option<PresentationMode>,
+    pub cpu_fallback_buffer_allocation_microseconds: Option<u64>,
+    pub cpu_fallback_copy_microseconds: Option<u64>,
 }
 
 /// Collects Engine statistics and lightweight shell timing measurements.
@@ -208,6 +218,29 @@ impl PerformanceMonitor {
     pub fn record_frame(&self) {
         if self.is_enabled() {
             self.accumulator.lock().unwrap().record_frame();
+        }
+    }
+
+    pub fn record_frame_with_presentation(
+        &self,
+        mode: PresentationMode,
+        buffer_allocation_microseconds: Option<u64>,
+        copy_microseconds: Option<u64>,
+    ) {
+        if !self.is_enabled() {
+            return;
+        }
+
+        let mut accumulator = self.accumulator.lock().unwrap();
+        accumulator.record_frame();
+        accumulator.snapshot.presentation_mode = Some(mode);
+        if let Some(microseconds) = buffer_allocation_microseconds {
+            accumulator
+                .snapshot
+                .cpu_fallback_buffer_allocation_microseconds = Some(microseconds);
+        }
+        if let Some(microseconds) = copy_microseconds {
+            accumulator.snapshot.cpu_fallback_copy_microseconds = Some(microseconds);
         }
     }
 

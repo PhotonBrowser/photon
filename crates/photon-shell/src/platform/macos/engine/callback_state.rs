@@ -4,7 +4,9 @@
 use crate::platform::app_update::update_app;
 use gpui::Context;
 use photon_core::{BrowserState, DialogRequest, EngineEvent};
-use photon_performance::{EnginePerformanceStats, PerformanceMonitor, PerformanceTask};
+use photon_performance::{
+    EnginePerformanceStats, PerformanceMonitor, PerformanceTask, PresentationMode,
+};
 use std::{
     ffi::c_void,
     sync::{
@@ -177,6 +179,23 @@ impl CallbackState {
     /// overlay shows, so frames skip this while it is hidden.
     pub(super) fn record_frame(&self) {
         self.performance.record_frame();
+    }
+
+    pub(super) fn record_cpu_fallback_frame(
+        &self,
+        buffer_allocation_microseconds: u64,
+        copy_microseconds: u64,
+    ) {
+        self.performance.record_frame_with_presentation(
+            PresentationMode::CpuFallback,
+            Some(buffer_allocation_microseconds),
+            Some(copy_microseconds),
+        );
+    }
+
+    pub(super) fn record_native_frame(&self) {
+        self.performance
+            .record_frame_with_presentation(PresentationMode::NativeMetal, None, None);
     }
 
     pub(super) fn set_engine_diagnostics(&self, stats: &embedder::PerformanceStats) {

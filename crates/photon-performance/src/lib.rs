@@ -7,7 +7,7 @@ mod process;
 
 pub use accumulator::{
     EnginePerformanceStats, PerformanceDiagnostics, PerformanceHistory, PerformanceMonitor,
-    PerformanceSample, PerformanceTask,
+    PerformanceSample, PerformanceTask, PresentationMode,
 };
 pub use chart::{ChartPoint, performance_chart};
 pub use overlay::{PerformancePalette, format_bytes, format_rate, performance_overlay};

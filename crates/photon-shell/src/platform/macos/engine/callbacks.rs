@@ -69,12 +69,13 @@ pub(super) unsafe extern "C" fn on_engine_frame(
     _: usize,
     _: u64,
     _: u64,
-    _: u64,
+    buffer_allocation_microseconds: u64,
+    copy_microseconds: u64,
     _: u64,
 ) {
     if !context.is_null() {
         let callbacks = unsafe { &*(context.cast::<CallbackState>()) };
-        callbacks.record_frame();
+        callbacks.record_cpu_fallback_frame(buffer_allocation_microseconds, copy_microseconds);
         callbacks.request_redraw();
     }
 }
@@ -464,7 +465,7 @@ pub(super) unsafe extern "C" fn on_engine_native_frame(
         return;
     }
     let callbacks = unsafe { &*(context.cast::<CallbackState>()) };
-    callbacks.record_frame();
+    callbacks.record_native_frame();
     callbacks
         .presentation
         .receive_frame(backing, generation, frame, signal, width, height);
