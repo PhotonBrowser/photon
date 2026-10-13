@@ -1,10 +1,11 @@
 //! The new tab page's customise button and the menu it opens above itself.
 
-use gpui::{Context, KeyDownEvent, Role, deferred, div, prelude::*, px, rgb, rgba};
+use gpui::{Context, KeyDownEvent, Role, deferred, div, prelude::*, px, rgba};
 
-use super::super::super::controls::{FocusRing, OwnsClicks, choices};
+use super::super::super::button::icon_button;
+use super::super::super::controls::choices;
 use super::super::super::icons::edit_icon;
-use super::super::super::layout::{h_stack, v_stack};
+use super::super::super::layout::v_stack;
 use super::super::super::menu::{
     MENU_MOTION, menu_action, menu_block, menu_heading, menu_separator, menu_switch,
     popover_surface,
@@ -33,7 +34,7 @@ impl NewTabPage {
                     div()
                         .absolute()
                         .right_0()
-                        .bottom(px(metrics::SMALL_BUTTON_HEIGHT + metrics::MENU_ITEM_GAP))
+                        .bottom(px(metrics::ICON_BUTTON_SIZE + metrics::MENU_ITEM_GAP))
                         .occlude()
                         // A click elsewhere or Escape closes it, as any menu.
                         .when(self.customising, |menu| {
@@ -56,43 +57,25 @@ impl NewTabPage {
                 )
                 .priority(1)
             });
-        h_stack()
-            .id("new-tab-customise")
-            .relative()
-            .role(Role::Button)
-            .aria_label("Customise new tab page")
-            .aria_expanded(self.customising)
-            .track_focus(&self.customise_focus)
-            .tab_index(0)
-            .focus_ring(palette)
-            .items_center()
-            .gap(px(metrics::MENU_ITEM_GAP))
-            .h(px(metrics::SMALL_BUTTON_HEIGHT))
-            .px(px(metrics::SMALL_BUTTON_HORIZONTAL_PADDING))
-            .rounded_full()
-            .text_size(px(metrics::SMALL_BUTTON_FONT_SIZE))
-            .text_color(rgb(palette.text_secondary))
-            .bg(rgba(if self.customising {
-                palette.selected_surface
-            } else {
-                palette.surface
-            }))
-            .when(!self.customising, |button| {
-                button.hover(|style| style.bg(rgba(palette.surface_hover)))
-            })
-            .owns_clicks()
-            // The state when drawn: a click outside the open panel closes it
-            // on mouse down, and this click must not open it again.
-            .on_click(cx.listener({
+        let button = icon_button(
+            "new-tab-customise",
+            "Customise new tab page",
+            true,
+            metrics::ICON_BUTTON_SIZE,
+            edit_icon(palette.text_secondary, metrics::ICON_BUTTON_ICON_SIZE),
+            palette,
+            Box::new(cx.listener({
                 let customising = self.customising;
                 move |this, _, _, cx| this.set_customising(!customising, cx)
-            }))
-            .child(edit_icon(
-                palette.text_secondary,
-                metrics::ICON_BUTTON_ICON_SIZE,
-            ))
-            .child("Customise")
-            .children(menu)
+            })),
+        )
+        .aria_expanded(self.customising)
+        .track_focus(&self.customise_focus)
+        .when(self.customising, |button| {
+            button.bg(rgba(palette.selected_surface))
+        });
+
+        div().relative().child(button).children(menu)
     }
 
     /// The layout options as a menu, in the same style as the browser menu.

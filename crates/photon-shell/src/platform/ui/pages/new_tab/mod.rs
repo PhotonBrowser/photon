@@ -90,7 +90,9 @@ impl NewTabPage {
 impl Render for NewTabPage {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = palette(window, cx);
-        let layout = Settings::get(cx).new_tab.clone();
+        let settings = Settings::get(cx);
+        let layout = settings.new_tab.clone();
+        let elastic_scroll = crate::platform::supports_elastic_scroll() && settings.elastic_scroll;
         let shortcuts =
             layout.shortcuts(&BrowsingHistory::most_visited(layout.history_needed(), cx));
 
@@ -112,11 +114,18 @@ impl Render for NewTabPage {
             .id("new-tab-page")
             .relative()
             .size_full()
-            .flex()
-            .items_center()
-            .justify_center()
-            .p(px(metrics::INTERNAL_PAGE_INSET))
-            .child(content)
+            .child(
+                div()
+                    .id("new-tab-page-scroll")
+                    .size_full()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .overflow_y_scroll()
+                    .elastic_scroll(elastic_scroll)
+                    .p(px(metrics::INTERNAL_PAGE_INSET))
+                    .child(content),
+            )
             .child(
                 div()
                     .absolute()
