@@ -14,7 +14,8 @@ use super::super::icons::LOADING_SPINNER_STEPS;
 use super::super::pages::{NEW_TAB, PageDefinition, find_page};
 use super::super::settings::Settings;
 use super::super::tabs::{
-    DraggedTab, ICON_ENTRANCE, TabDragAxis, TabDragPreview, TabDrop, TabIcon, TabPrepaint,
+    DraggedTab, ICON_ENTRANCE, TAB_ENTRY_MOTION, TabDragAxis, TabDragPreview, TabDrop, TabExit,
+    TabIcon, TabPrepaint,
 };
 use super::super::workspace_layout::WorkspaceLayout;
 use super::BrowserWindow;
@@ -1492,6 +1493,7 @@ impl BrowserWindow {
         self.revealed_icons
             .borrow_mut()
             .remove(&self.tabs[index].id);
+        self.tab_visuals.borrow_mut().remove(&self.tabs[index].id);
         self.tab_entry_animations
             .borrow_mut()
             .remove(&self.tabs[index].id);
@@ -1896,6 +1898,33 @@ impl BrowserWindow {
         }
 
         let removed = self.tabs[index].clone();
+        let animations = Settings::get(cx).animations;
+        let closes_window = self.tabs.len() == 1 && Settings::get(cx).close_window_with_last_tab;
+        let visual = self.tab_visuals.borrow_mut().remove(&removed.id);
+        let exit = if closes_window || !animations.enabled || cx.reduce_motion() {
+            None
+        } else {
+            self.tab_geometry.get(&removed.id).copied().zip(visual).map(
+                |(bounds, (label, icon))| TabExit {
+                    id: removed.id,
+                    label,
+                    icon,
+                    active: self.active_tab == Some(index),
+                    pinned: removed.pin.is_some(),
+                    axis: self.tab_axis(cx),
+                    collapsed: self.sidebar.shows_icons(),
+                    bounds,
+                    started: Instant::now(),
+                    duration: TAB_ENTRY_MOTION.exit_duration(&animations),
+                    finished_frame: false,
+                    favicon_image_to_drop: None,
+                },
+            )
+        };
+        let has_exit = exit.is_some();
+        if let Some(exit) = exit {
+            self.tab_exits.borrow_mut().push(exit);
+        }
         let cancel_drag = self
             .tab_drag_layout
             .as_ref()
@@ -1919,15 +1948,28 @@ impl BrowserWindow {
                 view.favicon.take()
             });
             if let Some(favicon) = favicon {
-                cx.drop_image(favicon.image, Some(window));
+                let mut exits = self.tab_exits.borrow_mut();
+                let deferred_drop = has_exit
+                    && exits
+                        .iter_mut()
+                        .find(|exit| exit.id == removed.id && exit.shows_favicon())
+                        .is_some_and(|exit| {
+                            exit.favicon_image_to_drop = Some(favicon.image.clone());
+                            true
+                        });
+                drop(exits);
+                if !deferred_drop {
+                    cx.drop_image(favicon.image, Some(window));
+                }
             }
         }
         self.revealed_icons.borrow_mut().remove(&removed.id);
+        self.tab_visuals.borrow_mut().remove(&removed.id);
         self.tab_entry_animations.borrow_mut().remove(&removed.id);
         self.tab_position_animations.remove(&removed.id);
         self.tab_geometry.remove(&removed.id);
 
-        if self.tabs.len() == 1 && Settings::get(cx).close_window_with_last_tab {
+        if closes_window {
             // Closed with its last tab, the window has nothing to reopen.
             self.record_session_state(WindowSession::default(), cx);
             window.remove_window();

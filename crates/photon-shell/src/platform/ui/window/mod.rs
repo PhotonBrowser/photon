@@ -53,7 +53,7 @@ use super::omnibox::{Omnibox, OmniboxEvent};
 use super::pages::find_page;
 use super::settings::Settings;
 use super::shortcuts_dialog::ShortcutsDialog;
-use super::tabs::{RevealedIcon, TabDragAxis};
+use super::tabs::{RevealedIcon, TabDragAxis, TabExit, TabIcon, tab_exit_element};
 use super::theme::{ThemeColors, palette};
 use super::workspace_layout::WorkspaceLayout;
 use alerts::{EngineNotice, NoticeExpiry};
@@ -146,6 +146,10 @@ struct BrowserWindow {
     /// Tabs that should keep their entry wrapper mounted so GPUI owns the full
     /// animation lifecycle and its final frame.
     tab_entry_animations: RefCell<HashSet<u64>>,
+    /// The latest rendered appearance of each tab, used by its exit motion.
+    tab_visuals: RefCell<HashMap<u64, (String, TabIcon)>>,
+    /// Closed tab visuals, retained until their fade and slide finish.
+    tab_exits: RefCell<Vec<TabExit>>,
     /// Whether any part of the window is on screen. Engine renders the active
     /// tab only while it is, since GPUI-CE stops drawing an occluded window.
     window_visible: bool,
@@ -362,9 +366,11 @@ impl BrowserWindow {
     /// Everything that floats over the window, drawn by `BrowserOverlays`.
     fn render_overlays(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
         let palette = self.palette(window, cx);
+        let tab_exits = self.tab_exit_elements(palette, window, cx);
         let dialog = self.dialog.overlay(cx);
         div()
             .size_full()
+            .children(tab_exits)
             .children(self.peek_overlay(palette, cx))
             .children(self.command_bar_overlay(cx))
             .children(self.space_editor_overlay(palette, cx))
@@ -373,6 +379,44 @@ impl BrowserWindow {
             .children(dialog)
             .children(self.popup_confirmation(palette, cx))
             .into_any_element()
+    }
+
+    /// Draws closed tabs over their last positions until their exit motion ends.
+    fn tab_exit_elements(
+        &mut self,
+        palette: ThemeColors,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Vec<AnyElement> {
+        let mut images_to_drop = Vec::new();
+        let elements = {
+            let mut exits = self.tab_exits.borrow_mut();
+            let mut elements = Vec::with_capacity(exits.len());
+            exits.retain_mut(|exit| {
+                if exit.finished_frame {
+                    if let Some(image) = exit.favicon_image_to_drop.take() {
+                        images_to_drop.push(image);
+                    }
+                    return false;
+                }
+
+                let progress = if exit.duration.is_zero() {
+                    1.0
+                } else {
+                    exit.started.elapsed().as_secs_f32() / exit.duration.as_secs_f32()
+                };
+                let finished = progress >= 1.0;
+                exit.finished_frame = finished;
+                elements.push(tab_exit_element(exit, palette, progress, true));
+                true
+            });
+            elements
+        };
+
+        for image in images_to_drop {
+            cx.drop_image(image, Some(window));
+        }
+        elements
     }
 }
 
@@ -513,6 +557,8 @@ fn open_browser_window_at(
                 zoom_shown_at: None,
                 revealed_icons: RefCell::default(),
                 tab_entry_animations: RefCell::default(),
+                tab_visuals: RefCell::default(),
+                tab_exits: RefCell::default(),
                 window_visible: true,
                 _appearance_subscription: appearance_subscription,
                 _activation_subscription: activation_subscription,

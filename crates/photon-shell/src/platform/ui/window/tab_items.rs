@@ -104,6 +104,9 @@ impl BrowserWindow {
                     }
                 };
                 let stable_id = tab.id;
+                self.tab_visuals
+                    .borrow_mut()
+                    .insert(stable_id, (label.clone(), icon.clone()));
                 let dragging = self.tab_drag_layout.as_ref().is_some_and(|drag| {
                     drag.id == stable_id && !matches!(drag.phase, super::TabDragPhase::PendingDrag)
                 });

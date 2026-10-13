@@ -23,7 +23,11 @@ use super::{
     ClickHandler, KeyDownHandler, MouseDownHandler, MouseUpHandler, metrics, theme::ThemeColors,
 };
 pub(super) use list::tab_list;
-use std::rc::Rc;
+use std::{
+    rc::Rc,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 pub(super) use strip::tab_strip;
 
 pub(super) type TabPointerDown =
@@ -64,6 +68,7 @@ pub(super) enum TabDragAxis {
 }
 
 /// What a tab shows before its title.
+#[derive(Clone)]
 pub(super) enum TabIcon {
     /// The page is loading; the value is the spinner's animation step.
     Loading(usize),
@@ -110,11 +115,8 @@ impl TabIcon {
 /// How a tab icon appears.
 pub(super) const ICON_ENTRANCE: Entrance = Entrance::pop(metrics::TAB_FAVICON_SIZE);
 
-/// A new tab settles into its slot as it fades and scales into view.
-pub(super) const TAB_ENTRY_MOTION: Entrance = Entrance::new()
-    .fade_from(0.0)
-    .scale_from(0.94)
-    .speed(Speed::Standard);
+/// A new tab settles into its slot as it fades and slides into view.
+pub(super) const TAB_ENTRY_MOTION: Entrance = Entrance::new().fade_from(0.0).speed(Speed::Standard);
 
 pub(super) fn animate_tab_entry<E>(
     element: E,
@@ -141,6 +143,169 @@ where
     element
         .animate_in_with_offset(id, entrance, &settings, base_offset)
         .into_any_element()
+}
+
+/// A tab's last visible appearance, retained briefly after it closes.
+pub(super) struct TabExit {
+    pub id: u64,
+    pub label: String,
+    pub icon: TabIcon,
+    pub active: bool,
+    pub pinned: bool,
+    pub axis: TabDragAxis,
+    pub collapsed: bool,
+    pub bounds: Bounds<gpui::Pixels>,
+    pub started: Instant,
+    pub duration: Duration,
+    /// Keep one fully faded frame mounted before removing this visual.
+    pub finished_frame: bool,
+    /// The tab view's favicon image must outlive its exit visual.
+    pub favicon_image_to_drop: Option<Arc<gpui::RenderImage>>,
+}
+
+impl TabExit {
+    pub fn shows_favicon(&self) -> bool {
+        matches!(
+            &self.icon,
+            TabIcon::Favicon(_)
+                | TabIcon::Audio {
+                    favicon: Some(_),
+                    ..
+                }
+        )
+    }
+}
+
+/// Draws a just-closed tab over its last bounds while it fades and slides away.
+pub(super) fn tab_exit_element(
+    exit: &TabExit,
+    palette: ThemeColors,
+    progress: f32,
+    request_next_frame: bool,
+) -> AnyElement {
+    let eased = progress.clamp(0.0, 1.0).powi(3);
+    let opacity = 1.0 - eased;
+    let offset = -metrics::TAB_ENTRY_OFFSET * eased;
+    let color = if exit.active {
+        palette.text_primary
+    } else {
+        palette.text_secondary
+    };
+    let icon_size = if exit.axis == TabDragAxis::Vertical {
+        metrics::SidebarSpacing::new(exit.collapsed).icon_size
+    } else {
+        metrics::TAB_FAVICON_SIZE
+    };
+    let icon = tab_exit_icon(&exit.icon, color, icon_size, palette);
+    let close = h_stack()
+        .flex_shrink_0()
+        .items_center()
+        .justify_center()
+        .size(px(metrics::TAB_CLOSE_BUTTON_SIZE))
+        .child(close_icon(palette.text_secondary, metrics::TAB_ICON_SIZE));
+    let content = match (exit.axis, exit.collapsed, exit.pinned) {
+        (TabDragAxis::Horizontal, _, true) => div()
+            .size_full()
+            .items_center()
+            .justify_center()
+            .child(icon),
+        (TabDragAxis::Vertical, true, _) => div()
+            .size_full()
+            .items_center()
+            .justify_center()
+            .child(icon),
+        (TabDragAxis::Horizontal, _, false) => h_stack()
+            .size_full()
+            .items_center()
+            .gap(px(metrics::TAB_CLOSE_GAP))
+            .px(px(metrics::TAB_HORIZONTAL_PADDING))
+            .text_size(px(metrics::TAB_FONT_SIZE))
+            .child(icon)
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .child(exit.label.clone()),
+            )
+            .child(close),
+        (TabDragAxis::Vertical, false, _) => h_stack()
+            .size_full()
+            .items_center()
+            .gap(px(metrics::SIDEBAR_TAB_ICON_GAP))
+            .pl(px(metrics::SIDEBAR_TAB_PADDING))
+            .pr(px(metrics::SIDEBAR_PADDING))
+            .text_size(px(metrics::SIDEBAR_FONT_SIZE))
+            .child(icon)
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .child(exit.label.clone()),
+            )
+            .child(close),
+    };
+    let origin = exit.bounds.origin;
+    let element = div()
+        .id(format!("browser-tab-exit-{}", exit.id))
+        .absolute()
+        .left(px(f32::from(origin.x)
+            + if exit.axis == TabDragAxis::Horizontal {
+                offset
+            } else {
+                0.0
+            }))
+        .top(px(f32::from(origin.y)
+            + if exit.axis == TabDragAxis::Vertical {
+                offset
+            } else {
+                0.0
+            }))
+        .w(exit.bounds.size.width)
+        .h(exit.bounds.size.height)
+        .rounded(px(if exit.axis == TabDragAxis::Horizontal {
+            metrics::CONTROL_RADIUS
+        } else {
+            metrics::SIDEBAR_ITEM_RADIUS
+        }))
+        .text_color(rgb(color))
+        .when(exit.active, |element| {
+            element.bg(rgba(palette.selected_surface))
+        })
+        .opacity(opacity)
+        .child(content)
+        .on_prepaint(move |_, window, _| {
+            if request_next_frame {
+                window.request_animation_frame();
+            }
+        });
+    element.into_any_element()
+}
+
+fn tab_exit_icon(icon: &TabIcon, color: u32, size: f32, palette: ThemeColors) -> AnyElement {
+    match icon {
+        TabIcon::Loading(step) => loading_spinner(color, size, *step).into_any_element(),
+        TabIcon::Favicon(favicon) => img(ImageSource::Render(favicon.image.clone()))
+            .object_fit(ObjectFit::Contain)
+            .size(px(size))
+            .flex_shrink_0()
+            .into_any_element(),
+        TabIcon::Audio { muted, .. } => div()
+            .size(px(metrics::TAB_AUDIO_BUTTON_SIZE))
+            .flex_shrink_0()
+            .items_center()
+            .justify_center()
+            .child(audio_icon(color, metrics::TAB_AUDIO_ICON_SIZE, *muted))
+            .into_any_element(),
+        TabIcon::Page => globe_icon(color, size).into_any_element(),
+        TabIcon::Symbol(symbol) => symbol(color, size),
+        TabIcon::Logo => img(photon_logo(palette.logo_tint))
+            .object_fit(ObjectFit::Contain)
+            .size(px(size))
+            .flex_shrink_0()
+            .into_any_element(),
+    }
 }
 
 /// Sizes an icon image, growing it in from a smaller size while
