@@ -1401,11 +1401,13 @@ impl BrowserWindow {
             grab_offset,
             source_content_bounds.origin - source_bounds.origin,
         );
+        let source_display_id = window.display(cx).map(|display| display.id());
         let Ok(new_window) = super::open_browser_window_at(
             self.runtime.clone(),
             None,
             false,
             Some(new_window_origin),
+            source_display_id,
             cx,
         ) else {
             self.set_tab_drag_outside_target(dragged.id, cx);

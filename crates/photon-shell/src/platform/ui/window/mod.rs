@@ -381,7 +381,14 @@ fn open_browser_window(
     restore_pinned_tabs: bool,
     cx: &mut App,
 ) -> anyhow::Result<WindowHandle<BrowserWindow>> {
-    open_browser_window_at(runtime, startup_address, restore_pinned_tabs, None, cx)
+    open_browser_window_at(
+        runtime,
+        startup_address,
+        restore_pinned_tabs,
+        None,
+        None,
+        cx,
+    )
 }
 
 fn open_browser_window_at(
@@ -389,6 +396,7 @@ fn open_browser_window_at(
     startup_address: Option<String>,
     restore_pinned_tabs: bool,
     origin: Option<Point<Pixels>>,
+    display_id: Option<gpui::DisplayId>,
     cx: &mut App,
 ) -> anyhow::Result<WindowHandle<BrowserWindow>> {
     // A page's address opens that page; any other address a web page.
@@ -400,7 +408,7 @@ fn open_browser_window_at(
     let animations = Settings::get(cx).animations;
     let options = origin.map_or_else(
         || window_settings::options(cx),
-        |origin| window_settings::options_at(cx, origin),
+        |origin| window_settings::options_at(cx, origin).display_id(display_id),
     );
     let handle = cx.open_window(options, move |window, cx| {
         window_settings::configure_native_controls(window, &animations);
