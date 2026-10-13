@@ -119,7 +119,8 @@ impl EngineSession {
             leases: leases.clone(),
             engine_view: AtomicPtr::new(std::ptr::null_mut()),
             ui_wake: Mutex::new(None),
-            performance: PerformanceMonitor::default(),
+            redraw_pending: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            performance: Arc::new(PerformanceMonitor::default()),
             reported_activity: Mutex::default(),
             page_details: Mutex::default(),
         });

@@ -564,4 +564,8 @@ impl PresentationRuntime {
             retired_until_submitted,
         })
     }
+
+    pub(in crate::platform) fn has_pending_frame(&self) -> bool {
+        self.latest.lock().unwrap().is_some()
+    }
 }

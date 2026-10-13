@@ -9,7 +9,7 @@ use std::{
     ffi::c_void,
     sync::{
         Arc, Mutex, Weak,
-        atomic::{AtomicPtr, Ordering},
+        atomic::{AtomicBool, AtomicPtr, Ordering},
     },
     time::Duration,
 };
@@ -33,7 +33,9 @@ pub(super) struct CallbackState {
     pub(super) leases: Arc<Mutex<LeaseLedger>>,
     pub(super) engine_view: AtomicPtr<c_void>,
     pub(super) ui_wake: Mutex<Option<UiWake>>,
-    pub(super) performance: PerformanceMonitor,
+    /// At most one app task is scheduled or draining the latest page frame.
+    pub(super) redraw_pending: Arc<AtomicBool>,
+    pub(super) performance: Arc<PerformanceMonitor>,
     pub(super) reported_activity: Mutex<Option<bool>>,
     pub(super) page_details: Mutex<PageDetails>,
 }
@@ -49,16 +51,55 @@ impl CallbackState {
     }
 
     pub(super) fn request_redraw(&self) {
-        let diagnostics = self.performance.snapshot_if_enabled();
-        self.update_webview(move |view, cx| {
-            view.present_latest(cx);
-            if let Some(diagnostics) = diagnostics
-                && view.diagnostics != diagnostics
-            {
-                view.diagnostics = diagnostics;
-                cx.notify();
-            }
-        });
+        let Some(wake) = self.ui_wake.lock().unwrap().clone() else {
+            return;
+        };
+        if self.redraw_pending.swap(true, Ordering::AcqRel) {
+            return;
+        }
+
+        let redraw_pending = self.redraw_pending.clone();
+        let presentation = self.presentation.clone();
+        let performance = self.performance.clone();
+        wake.app
+            .spawn(async move |cx| {
+                let Some(webview) = wake.webview.upgrade() else {
+                    redraw_pending.store(false, Ordering::Release);
+                    return;
+                };
+
+                loop {
+                    let updated = update_app(cx, |cx| {
+                        webview.update(cx, |view, cx| {
+                            view.present_latest(cx);
+                            if let Some(diagnostics) = performance.snapshot_if_enabled()
+                                && view.diagnostics != diagnostics
+                            {
+                                view.diagnostics = diagnostics;
+                                cx.notify();
+                            }
+                        })
+                    })
+                    .await;
+                    if updated.is_none() {
+                        redraw_pending.store(false, Ordering::Release);
+                        return;
+                    }
+
+                    // Clear before checking the surface queue. A callback that
+                    // arrives after this point either schedules the next task
+                    // itself or leaves a frame for this task to drain.
+                    redraw_pending.store(false, Ordering::Release);
+                    if !presentation.has_pending_frame()
+                        || redraw_pending
+                            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                            .is_err()
+                    {
+                        return;
+                    }
+                }
+            })
+            .detach();
     }
 
     pub(super) fn set_page_state(&self, state: BrowserState) {
