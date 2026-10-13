@@ -14,8 +14,7 @@ use super::super::icons::LOADING_SPINNER_STEPS;
 use super::super::pages::{NEW_TAB, PageDefinition, find_page};
 use super::super::settings::Settings;
 use super::super::tabs::{
-    DraggedTab, ICON_ENTRANCE, TAB_ENTRY_MOTION, TabDragAxis, TabDragPreview, TabDrop, TabIcon,
-    TabPrepaint,
+    DraggedTab, ICON_ENTRANCE, TabDragAxis, TabDragPreview, TabDrop, TabIcon, TabPrepaint,
 };
 use super::super::workspace_layout::WorkspaceLayout;
 use super::BrowserWindow;
@@ -1838,9 +1837,7 @@ impl BrowserWindow {
         let subscription = self.subscribe_to_content(&content, window, cx);
         let id = Self::allocate_tab_id();
         if options.animate_appearance {
-            self.tab_entry_animations
-                .borrow_mut()
-                .insert(id, Instant::now());
+            self.tab_entry_animations.borrow_mut().insert(id);
         }
         let space = self.current_space(cx);
         self.tabs
@@ -2141,15 +2138,11 @@ impl BrowserWindow {
         animations: &photon_core::AnimationSettings,
     ) -> bool {
         let mut entries = self.tab_entry_animations.borrow_mut();
-        match entries.get(&tab) {
-            Some(started) if started.elapsed() < TAB_ENTRY_MOTION.total_duration(animations) => {
-                true
-            }
-            _ => {
-                entries.remove(&tab);
-                false
-            }
+        if !animations.enabled {
+            entries.remove(&tab);
+            return false;
         }
+        entries.contains(&tab)
     }
 }
 

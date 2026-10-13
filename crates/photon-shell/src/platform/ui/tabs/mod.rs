@@ -18,7 +18,7 @@ use super::controls::FocusRing;
 use super::controls::{OwnsClicks, Pressable};
 use super::icons::{audio_icon, close_icon, globe_icon, loading_spinner, photon_logo};
 use super::layout::h_stack;
-use super::motion::{AnimateIn, Entrance, Speed};
+use super::motion::{AnimateIn, Edge, Entrance, Speed};
 use super::{
     ClickHandler, KeyDownHandler, MouseDownHandler, MouseUpHandler, metrics, theme::ThemeColors,
 };
@@ -114,7 +114,6 @@ pub(super) const ICON_ENTRANCE: Entrance = Entrance::pop(metrics::TAB_FAVICON_SI
 pub(super) const TAB_ENTRY_MOTION: Entrance = Entrance::new()
     .fade_from(0.0)
     .scale_from(0.94)
-    .slide_down(metrics::TAB_ENTRY_DROP)
     .speed(Speed::Standard);
 
 pub(super) fn animate_tab_entry<E>(
@@ -129,12 +128,18 @@ where
     let Some((id, settings)) = animation else {
         return element.into_any_element();
     };
+    let entrance = match axis {
+        TabDragAxis::Horizontal => {
+            TAB_ENTRY_MOTION.slide_from(Edge::Left, metrics::TAB_ENTRY_OFFSET)
+        }
+        TabDragAxis::Vertical => TAB_ENTRY_MOTION.slide_down(metrics::TAB_ENTRY_OFFSET),
+    };
     let base_offset = match axis {
         TabDragAxis::Horizontal => (position_offset, 0.0),
         TabDragAxis::Vertical => (0.0, position_offset),
     };
     element
-        .animate_in_with_offset(id, TAB_ENTRY_MOTION, &settings, base_offset)
+        .animate_in_with_offset(id, entrance, &settings, base_offset)
         .into_any_element()
 }
 

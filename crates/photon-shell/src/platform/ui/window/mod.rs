@@ -36,7 +36,7 @@ use gpui::{
 };
 use photon_core::{BrowserCommand, WindowBackgroundStyle};
 use std::cell::RefCell;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::rc::Rc;
 use std::time::Instant;
 
@@ -143,8 +143,9 @@ struct BrowserWindow {
     /// The icon each tab last revealed and when, so an icon animates in once
     /// rather than whenever the tab redraws it after a spinner.
     revealed_icons: RefCell<HashMap<u64, (RevealedIcon, Instant)>>,
-    /// The start time for each newly inserted tab's one-time entry motion.
-    tab_entry_animations: RefCell<HashMap<u64, Instant>>,
+    /// Tabs that should keep their entry wrapper mounted so GPUI owns the full
+    /// animation lifecycle and its final frame.
+    tab_entry_animations: RefCell<HashSet<u64>>,
     /// Whether any part of the window is on screen. Engine renders the active
     /// tab only while it is, since GPUI-CE stops drawing an occluded window.
     window_visible: bool,
