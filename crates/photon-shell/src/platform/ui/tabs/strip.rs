@@ -3,7 +3,7 @@
 use gpui::{Role, ScrollHandle, div, prelude::*, px, rgb, rgba};
 
 use super::super::controls::FocusRing;
-use super::super::controls::OwnsClicks;
+use super::super::controls::{OwnsClicks, Pressable};
 use super::super::icons::add_icon;
 use super::super::layout::h_stack;
 use super::super::{ClickHandler, metrics, theme::ThemeColors};
@@ -175,6 +175,7 @@ fn new_tab_button(
         .text_color(rgb(palette.text_secondary))
         .hover(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
+        .pressable()
         .on_click(on_click)
         .child(add_icon(palette.text_secondary, metrics::TAB_ICON_SIZE))
 }

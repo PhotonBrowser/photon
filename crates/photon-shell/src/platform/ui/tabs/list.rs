@@ -4,7 +4,7 @@
 use gpui::{AnyElement, Role, div, prelude::*, px, rgb, rgba};
 
 use super::super::controls::FocusRing;
-use super::super::controls::OwnsClicks;
+use super::super::controls::{OwnsClicks, Pressable};
 use super::super::icons::add_icon;
 use super::super::layout::{h_stack, v_stack};
 use super::super::sidebar::collapsed_tile;
@@ -198,6 +198,7 @@ fn new_tab_row(
         .text_color(rgb(palette.text_secondary))
         .hover(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
+        .pressable()
         .on_click(on_click)
         .child(add_icon(
             palette.text_secondary,

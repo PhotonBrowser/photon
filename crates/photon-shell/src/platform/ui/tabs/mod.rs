@@ -15,7 +15,7 @@ use gpui::{
 
 use super::Favicon;
 use super::controls::FocusRing;
-use super::controls::OwnsClicks;
+use super::controls::{OwnsClicks, Pressable};
 use super::icons::{audio_icon, close_icon, globe_icon, loading_spinner, photon_logo};
 use super::layout::h_stack;
 use super::motion::{AnimateIn, Entrance};
@@ -219,6 +219,7 @@ impl TabParts {
                 palette.text_secondary
             }))
             .owns_clicks()
+            .pressable()
             .on_click(tab.on_select)
             .on_key_down(tab.on_key_down)
             .on_mouse_up(MouseButton::Middle, tab.on_middle_click)
@@ -366,6 +367,7 @@ fn audio_control_button(
         .text_color(rgb(icon_color))
         .hover(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
+        .pressable()
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .on_click(on_click)
         .when(show_tooltip, |button| button.tooltip(tooltip))
@@ -393,6 +395,7 @@ fn close_tab_button(
         .rounded(px(metrics::CONTROL_RADIUS))
         .hover(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
+        .pressable()
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .on_click(on_click)
         .child(close_icon(palette.text_secondary, metrics::TAB_ICON_SIZE))
