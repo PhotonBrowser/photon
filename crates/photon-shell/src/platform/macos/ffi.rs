@@ -90,6 +90,8 @@ pub(super) mod embedder {
         pub state_callback: Option<
             unsafe extern "C" fn(*mut c_void, *const c_char, *const c_char, bool, bool, bool),
         >,
+        pub navigation_timing_callback:
+            Option<unsafe extern "C" fn(*mut c_void, i32, *const c_char)>,
         pub frame_callback: Option<FrameCallback>,
         pub cursor_callback: Option<unsafe extern "C" fn(*mut c_void, i32)>,
         pub error_callback: Option<unsafe extern "C" fn(*mut c_void, *const c_char)>,

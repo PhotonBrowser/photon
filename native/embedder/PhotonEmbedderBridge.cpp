@@ -35,6 +35,7 @@ Photon::ViewCallbacks make_view_callbacks(
 {
     auto callback_data = callbacks.callback_data;
     auto state_callback = callbacks.state_callback;
+    auto navigation_timing_callback = callbacks.navigation_timing_callback;
     auto frame_callback = callbacks.frame_callback;
     auto cursor_callback = callbacks.cursor_callback;
     auto error_callback = callbacks.error_callback;
@@ -62,6 +63,11 @@ Photon::ViewCallbacks make_view_callbacks(
             state_callback(callback_data, state.url.c_str(), state.title.c_str(),
                 state.loading, state.can_go_back, state.can_go_forward);
     };
+    if (navigation_timing_callback) {
+        result.navigation_timing = [=](Photon::NavigationTimingEvent event, std::string const& url) {
+            navigation_timing_callback(callback_data, static_cast<int>(event), url.c_str());
+        };
+    }
     result.frame_ready = [=](std::shared_ptr<Photon::PresentedFrame const> frame) {
         if (frame_callback && frame)
             frame_callback(callback_data, frame->width, frame->height,

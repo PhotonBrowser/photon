@@ -19,6 +19,7 @@ use std::{
 use super::super::ffi::embedder;
 use super::super::presentation::{LeaseLedger, PresentationRuntime};
 use super::UiWake;
+use super::navigation_timing::NavigationTimingProfiler;
 use crate::platform::trace;
 use crate::platform::ui::{Favicon, FindResult, PhotonWebView};
 
@@ -40,6 +41,7 @@ pub(super) struct CallbackState {
     pub(super) performance: Arc<PerformanceMonitor>,
     pub(super) reported_activity: Mutex<Option<bool>>,
     pub(super) page_details: Mutex<PageDetails>,
+    pub(super) navigation_timing: Option<Arc<NavigationTimingProfiler>>,
 }
 
 pub(super) struct RuntimeCallbacks {
@@ -111,6 +113,24 @@ impl CallbackState {
             loading: state.loading,
         };
         self.update_webview(move |view, cx| view.set_state(state, cx));
+    }
+
+    pub(super) fn record_navigation_timing(&self, event: i32, url: &str) {
+        if let Some(profiler) = &self.navigation_timing {
+            profiler.record_event(event, url);
+        }
+    }
+
+    pub(super) fn record_navigation_surface_installed(&self, navigation_id: u64) {
+        if let Some(profiler) = &self.navigation_timing {
+            profiler.record_surface_installed(navigation_id);
+        }
+    }
+
+    pub(super) fn record_navigation_surface_rendered(&self, navigation_id: u64) {
+        if let Some(profiler) = &self.navigation_timing {
+            profiler.record_surface_rendered(navigation_id);
+        }
     }
 
     pub(super) fn set_page_error(&self, message: String) {

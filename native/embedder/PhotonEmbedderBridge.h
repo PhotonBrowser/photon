@@ -10,6 +10,7 @@ using PhotonFrameCallback = void (*)(void*, int, int, size_t, double,
     uint64_t, uint64_t, uint64_t, uint64_t);
 using PhotonStateCallback = void (*)(void*, char const*, char const*, bool,
     bool, bool);
+using PhotonNavigationTimingCallback = void (*)(void*, int, char const*);
 using PhotonErrorCallback = void (*)(void*, char const*);
 using PhotonCrashCallback = void (*)(void*, char const*);
 using PhotonCursorCallback = void (*)(void*, int);
@@ -112,6 +113,7 @@ using PhotonNativeFrameCallback = void (*)(void*, uint64_t, uint64_t, uint64_t,
 struct PhotonViewCallbacks {
     void* callback_data;
     PhotonStateCallback state_callback;
+    PhotonNavigationTimingCallback navigation_timing_callback;
     PhotonFrameCallback frame_callback;
     PhotonCursorCallback cursor_callback;
     PhotonErrorCallback error_callback;

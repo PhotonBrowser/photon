@@ -43,6 +43,7 @@ const ANIMATING_RESIZE_INTERVAL: Duration = Duration::from_millis(100);
 
 pub(in crate::platform) struct PhotonWebView {
     pub(super) external: Option<PresentedSurface>,
+    navigation_surface_pending_render: Option<u64>,
     pub(in crate::platform) state: BrowserState,
     pub(in crate::platform) diagnostics: PerformanceDiagnostics,
     pub(in crate::platform) performance_overlay_enabled: bool,
@@ -131,10 +132,16 @@ impl PhotonWebView {
         let Some(presented) = self.session.take_presented_surface() else {
             return;
         };
+        let navigation_id = presented.navigation_id;
         self.external = Some(crate::platform::renderer::replace_surface(
             self.external.take(),
             presented,
         ));
+        if let Some(navigation_id) = navigation_id {
+            self.session
+                .record_navigation_surface_installed(navigation_id);
+        }
+        self.navigation_surface_pending_render = navigation_id;
         cx.notify();
     }
 
@@ -283,6 +290,7 @@ impl PhotonWebView {
     pub(super) fn from_session(cx: &mut Context<Self>, session: EngineSession) -> Self {
         Self {
             external: None,
+            navigation_surface_pending_render: None,
             state: BrowserState::default(),
             diagnostics: PerformanceDiagnostics::default(),
             performance_overlay_enabled: false,
@@ -566,6 +574,10 @@ impl Render for PhotonWebView {
                 },
             );
             webview = webview.child(page_surface);
+            if let Some(navigation_id) = self.navigation_surface_pending_render.take() {
+                self.session
+                    .record_navigation_surface_rendered(navigation_id);
+            }
         }
         if let Some(indicator) = self.history_swipe_indicator(palette) {
             webview = webview.child(indicator);

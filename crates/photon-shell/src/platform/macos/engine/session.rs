@@ -18,6 +18,7 @@ use super::super::presentation::{
     GpuActivity, LeaseLedger, PresentationRuntime, PresentedSurface, RetiredSurface,
 };
 use super::callbacks::*;
+use super::navigation_timing::{NavigationTimingProfiler, navigation_profile_enabled};
 use super::{EngineRuntime, UiWake, ZoomStep};
 use crate::platform::trace;
 
@@ -93,6 +94,8 @@ impl EngineSession {
         let channel_id = presentation_channel_id();
         let leases = Arc::new(Mutex::new(LeaseLedger::default()));
         let gpu_activity = Arc::new(GpuActivity::default());
+        let navigation_timing =
+            navigation_profile_enabled().then(|| Arc::new(NavigationTimingProfiler::default()));
         // Engine threads reach both through raw callback contexts and touch
         // only their mutex- and atomic-guarded state; the main-thread-only
         // fields (pixel buffers, the UI wake) are used on the main thread.
@@ -105,6 +108,7 @@ impl EngineSession {
             channel_id,
             leases.clone(),
             gpu_activity.clone(),
+            navigation_timing.clone(),
         )?);
         presentation
             .release_scheduler
@@ -123,6 +127,7 @@ impl EngineSession {
             performance: Arc::new(PerformanceMonitor::default()),
             reported_activity: Mutex::default(),
             page_details: Mutex::default(),
+            navigation_timing: navigation_timing.clone(),
         });
         runtime
             .callbacks
@@ -132,6 +137,9 @@ impl EngineSession {
             .push(Arc::downgrade(&callbacks));
         let native_callbacks = embedder::ViewCallbacks {
             callback_data: Arc::as_ptr(&callbacks).cast_mut().cast(),
+            navigation_timing_callback: navigation_timing
+                .is_some()
+                .then_some(on_engine_navigation_timing),
             state_callback: Some(on_engine_state),
             frame_callback: Some(on_engine_frame),
             cursor_callback: Some(on_engine_cursor),
@@ -292,6 +300,16 @@ impl EngineSession {
 
     pub(in crate::platform) fn restart_unresponsive_page(&mut self) {
         unsafe { embedder::photon_view_restart_unresponsive_page(self.view) }
+    }
+
+    pub(in crate::platform) fn record_navigation_surface_installed(&self, navigation_id: u64) {
+        self.callbacks
+            .record_navigation_surface_installed(navigation_id);
+    }
+
+    pub(in crate::platform) fn record_navigation_surface_rendered(&self, navigation_id: u64) {
+        self.callbacks
+            .record_navigation_surface_rendered(navigation_id);
     }
 
     /// Runs an item of the context menu the page last asked for.

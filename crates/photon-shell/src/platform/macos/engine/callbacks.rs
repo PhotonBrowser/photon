@@ -59,6 +59,20 @@ pub(super) unsafe extern "C" fn on_engine_state(
         });
     }
 }
+
+pub(super) unsafe extern "C" fn on_engine_navigation_timing(
+    context: *mut c_void,
+    event: i32,
+    url: *const c_char,
+) {
+    if context.is_null() {
+        return;
+    }
+    let Some(url) = (unsafe { engine_string(url) }) else {
+        return;
+    };
+    unsafe { &*(context.cast::<CallbackState>()) }.record_navigation_timing(event, &url);
+}
 pub(super) unsafe extern "C" fn on_engine_frame(
     context: *mut c_void,
     _: i32,

@@ -3,6 +3,7 @@
 
 mod callback_state;
 mod callbacks;
+pub(super) mod navigation_timing;
 mod session;
 
 use anyhow::Context as _;

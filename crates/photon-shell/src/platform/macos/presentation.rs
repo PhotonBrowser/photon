@@ -19,6 +19,7 @@ use std::{
     time::Instant,
 };
 
+use super::engine::navigation_timing::NavigationTimingProfiler;
 use super::ffi::embedder;
 use crate::platform::trace;
 use photon_presentation_ipc::{BackingDescriptor, Channel};
@@ -198,6 +199,7 @@ pub(in crate::platform) struct RetiredSurface {
 pub(in crate::platform) struct PresentedSurface {
     pub(in crate::platform) surface: ExternalMetalSurface,
     pub(in crate::platform) key: FrameKey,
+    pub(in crate::platform) navigation_id: Option<u64>,
     sampling: Arc<Sampling>,
     /// Frames this one replaced; they are superseded when it is first submitted.
     pub(in crate::platform) retired_until_submitted: Arc<Mutex<Vec<RetiredSurface>>>,
@@ -234,15 +236,17 @@ pub(in crate::platform) struct PresentationRuntime {
     pub(super) leases: Arc<Mutex<LeaseLedger>>,
     pub(super) gpu_activity: Arc<GpuActivity>,
     pub(super) release_scheduler: Arc<AtomicPtr<c_void>>,
+    navigation_timing: Option<Arc<NavigationTimingProfiler>>,
     accepting_frames: AtomicBool,
 }
 
 impl PresentationRuntime {
-    pub(in crate::platform) fn new(
+    pub(super) fn new(
         service: &str,
         channel_id: String,
         leases: Arc<Mutex<LeaseLedger>>,
         gpu_activity: Arc<GpuActivity>,
+        navigation_timing: Option<Arc<NavigationTimingProfiler>>,
     ) -> anyhow::Result<Self> {
         Ok(Self {
             channel: Channel::connect(service)?,
@@ -254,6 +258,7 @@ impl PresentationRuntime {
             leases,
             gpu_activity,
             release_scheduler: Arc::new(AtomicPtr::new(std::ptr::null_mut())),
+            navigation_timing,
             accepting_frames: AtomicBool::new(true),
         })
     }
@@ -470,6 +475,10 @@ impl PresentationRuntime {
         let leases = self.leases.clone();
         let gpu_activity = self.gpu_activity.clone();
         let presented_leases = self.leases.clone();
+        let navigation_id = self
+            .navigation_timing
+            .as_ref()
+            .and_then(|profiler| profiler.navigation_id_for_first_surface());
         let key = ready.key;
         let image = backing.image.clone();
         let sampling = Arc::new(Sampling::default());
@@ -479,6 +488,7 @@ impl PresentationRuntime {
         let completed_sampling = sampling.clone();
         let release_scheduler = self.release_scheduler.clone();
         let submitted_release_scheduler = self.release_scheduler.clone();
+        let navigation_timing = self.navigation_timing.clone();
         let surface = ExternalMetalSurface::new(
             ExternalSurfaceDescriptor {
                 identity: ExternalTextureIdentity {
@@ -539,6 +549,11 @@ impl PresentationRuntime {
             },
             move || {
                 gpu_activity.completed();
+                if let (Some(profiler), Some(navigation_id)) =
+                    (navigation_timing.as_ref(), navigation_id)
+                {
+                    profiler.record_surface_gpu_complete(navigation_id);
+                }
                 trace(format_args!(
                     "frame={} gen={} command-buffer=completed",
                     key.frame, key.generation
@@ -564,6 +579,7 @@ impl PresentationRuntime {
         Some(PresentedSurface {
             surface,
             key,
+            navigation_id,
             sampling,
             retired_until_submitted,
         })
