@@ -5,6 +5,7 @@ use gpui::{AnyElement, div, prelude::*, px};
 
 use super::super::layout::{h_stack, v_stack};
 use super::super::metrics;
+use crate::platform::window_settings;
 
 pub(in super::super) fn navigation_bar(
     width: f32,
@@ -16,7 +17,7 @@ pub(in super::super) fn navigation_bar(
     let controls_inset = if fullscreen {
         0.0
     } else {
-        metrics::WINDOW_CONTROLS_INSET
+        window_settings::native_controls_inset()
     };
     let mut contents = h_stack()
         .w(px(width))
@@ -49,7 +50,7 @@ pub(in super::super) fn navigation_column(
     toggle: Option<AnyElement>,
 ) -> gpui::Div {
     let controls_inset = if leading && !fullscreen {
-        metrics::WINDOW_CONTROLS_COLUMN_INSET
+        window_settings::native_controls_column_inset()
     } else {
         metrics::SIDEBAR_PADDING
     };

@@ -1,6 +1,15 @@
 use std::{env, path::PathBuf};
 
 fn main() {
+    println!("cargo:rerun-if-env-changed=PHOTON_ENGINE_BUILD_DIR");
+
+    // The checked-in Engine build and this native bridge currently provide the
+    // macOS implementation. Linux will get its own native sources and Engine
+    // link inputs under native/embedder/linux/ when that adapter is built.
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("macos") {
+        return;
+    }
+
     let root = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap())
         .join("../..")
         .canonicalize()
@@ -20,6 +29,7 @@ fn main() {
         .std("c++20")
         .file(root.join("native/embedder/PhotonEmbedderBridge.cpp"))
         .include(root.join("native/embedder"))
+        .include(root.join("native/embedder/macos"))
         .include(root.join("Engine/Libraries/LibPhotonEmbedder/include"))
         .include(root.join("Engine/Libraries"))
         .include(if generated.join("LibPhotonEmbedder/Export.h").is_file() {
@@ -31,11 +41,11 @@ fn main() {
     for source in [
         "native/embedder/PhotonEmbedderBridge.cpp",
         "native/embedder/PhotonEmbedderBridge.h",
-        "native/embedder/DefaultBrowser.mm",
-        "native/embedder/ReducedMotionObserver.mm",
-        "native/embedder/SystemClipboard.h",
-        "native/embedder/SystemClipboard.mm",
-        "native/embedder/WindowObserver.mm",
+        "native/embedder/macos/DefaultBrowser.mm",
+        "native/embedder/macos/ReducedMotionObserver.mm",
+        "native/embedder/macos/SystemClipboard.h",
+        "native/embedder/macos/SystemClipboard.mm",
+        "native/embedder/macos/WindowObserver.mm",
     ] {
         println!("cargo:rerun-if-changed={}", root.join(source).display());
     }
@@ -50,21 +60,19 @@ fn main() {
         );
     }
     println!("cargo:rustc-link-lib=dylib=lagom-photonembedder");
-    if cfg!(target_os = "macos") {
-        cc::Build::new()
-            .cpp(true)
-            .file(root.join("native/embedder/DefaultBrowser.mm"))
-            .file(root.join("native/embedder/ReducedMotionObserver.mm"))
-            .file(root.join("native/embedder/SystemClipboard.mm"))
-            .file(root.join("native/embedder/WindowObserver.mm"))
-            .std("c++20")
-            .flag("-fobjc-arc")
-            .flag("-fblocks")
-            .include(root.join("native/embedder"))
-            .compile("photon_native_macos");
-        for framework in ["AppKit", "Foundation", "Metal", "CoreFoundation"] {
-            println!("cargo:rustc-link-lib=framework={framework}");
-        }
+    cc::Build::new()
+        .cpp(true)
+        .file(root.join("native/embedder/macos/DefaultBrowser.mm"))
+        .file(root.join("native/embedder/macos/ReducedMotionObserver.mm"))
+        .file(root.join("native/embedder/macos/SystemClipboard.mm"))
+        .file(root.join("native/embedder/macos/WindowObserver.mm"))
+        .std("c++20")
+        .flag("-fobjc-arc")
+        .flag("-fblocks")
+        .include(root.join("native/embedder"))
+        .include(root.join("native/embedder/macos"))
+        .compile("photon_native_macos");
+    for framework in ["AppKit", "Foundation", "Metal", "CoreFoundation"] {
+        println!("cargo:rustc-link-lib=framework={framework}");
     }
-    println!("cargo:rerun-if-env-changed=PHOTON_ENGINE_BUILD_DIR");
 }

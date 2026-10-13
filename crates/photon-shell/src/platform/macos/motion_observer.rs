@@ -2,12 +2,14 @@
 
 use std::ffi::c_void;
 
+use gpui::{App, Global};
+
 use super::ffi::embedder;
 
 type OnChange = Box<dyn Fn(bool)>;
 
 /// Reports the system reduced-motion preference until dropped.
-pub(super) struct ReducedMotionObserver {
+pub(in crate::platform) struct ReducedMotionObserver {
     observer: *mut c_void,
     _on_change: Box<OnChange>,
 }
@@ -16,7 +18,7 @@ impl ReducedMotionObserver {
     /// `on_change(reduce_motion)` runs on the main thread, once immediately
     /// with the current preference. It must not update GPUI entities
     /// synchronously.
-    pub(super) fn new(on_change: impl Fn(bool) + 'static) -> Option<Self> {
+    pub(in crate::platform) fn new(on_change: impl Fn(bool) + 'static) -> Option<Self> {
         let mut on_change: Box<OnChange> = Box::new(Box::new(on_change));
         let observer = unsafe {
             embedder::photon_reduced_motion_observer_create(
@@ -41,3 +43,24 @@ unsafe extern "C" fn on_reduced_motion_changed(context: *mut c_void, reduce_moti
     let on_change = unsafe { &*context.cast::<OnChange>() };
     on_change(reduce_motion);
 }
+
+/// Keeps GPUI's reduce-motion flag in step with the macOS system preference.
+pub(crate) fn follow(cx: &mut App) {
+    let app = cx.to_async();
+    let observer = ReducedMotionObserver::new(move |reduce_motion| {
+        app.spawn(async move |cx| {
+            crate::platform::app_update::update_app(cx, |cx| cx.set_reduce_motion(reduce_motion))
+                .await;
+        })
+        .detach();
+    });
+    cx.set_global(ReducedMotion {
+        _observer: observer,
+    });
+}
+
+struct ReducedMotion {
+    _observer: Option<ReducedMotionObserver>,
+}
+
+impl Global for ReducedMotion {}

@@ -6,6 +6,7 @@ use gpui::{App, Context, Window};
 use super::super::super::settings::Settings;
 use super::super::super::workspace_layout::{OmniboxPlacement, WorkspaceLayout};
 use super::super::BrowserWindow;
+use crate::platform::window_settings;
 
 impl BrowserWindow {
     /// Shows or hides the sidebar, and leaves Zen mode for it. A revealed
@@ -85,44 +86,22 @@ impl BrowserWindow {
     /// Moves the native window controls to follow the sidebar.
     pub(in super::super) fn place_window_controls(&mut self, window: &Window, cx: &App) {
         let animations = Settings::get(cx).animations;
-        window.set_traffic_light_fade_durations(
-            animations.traffic_light_fade_in_ms(),
-            animations.traffic_light_fade_out_ms(),
-        );
         let region = WorkspaceLayout::current(cx).sidebar_region();
         let controls = self.sidebar.window_controls(region);
-        #[cfg(target_os = "macos")]
-        {
-            let offset = if region == Some(photon_core::DockRegion::Leading) {
-                self.sidebar.panel_offset(cx)
-            } else {
-                0.0
-            };
-            window.set_traffic_light_offset(gpui::point(gpui::px(offset), gpui::px(0.0)));
-        }
-        if self.sidebar.window_controls == Some(controls) {
-            return;
-        }
+        let offset = if region == Some(photon_core::DockRegion::Leading) {
+            self.sidebar.panel_offset(cx)
+        } else {
+            0.0
+        };
+        let layout_changed = self.sidebar.window_controls != Some(controls);
         self.sidebar.window_controls = Some(controls);
-        #[cfg(target_os = "macos")]
-        {
-            if controls.visible {
-                use super::super::super::metrics;
-                let (axis, (x, y)) = if controls.column {
-                    (gpui::Axis::Vertical, metrics::WINDOW_CONTROLS_COLUMN_ORIGIN)
-                } else {
-                    (gpui::Axis::Horizontal, metrics::WINDOW_CONTROLS_ORIGIN)
-                };
-                window.set_traffic_light_axis(axis);
-                window.set_traffic_light_position(gpui::point(gpui::px(x), gpui::px(y)));
-                window.set_traffic_lights_visible(true);
-            } else {
-                // Keep their current layout while the shared panel offset carries
-                // them out with the sidebar and they fade away.
-                window.set_traffic_lights_visible(false);
-            }
-        }
-        #[cfg(not(target_os = "macos"))]
-        let _ = window;
+        window_settings::update_native_controls(
+            window,
+            &animations,
+            controls.visible,
+            controls.column,
+            offset,
+            layout_changed,
+        );
     }
 }

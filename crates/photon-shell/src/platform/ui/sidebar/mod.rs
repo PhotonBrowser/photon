@@ -45,6 +45,7 @@ pub(super) fn sidebar(
     sections: Vec<SidebarSection>,
     collapsed: bool,
     palette: ThemeColors,
+    elastic_scroll: bool,
 ) -> impl IntoElement {
     let metrics::SidebarSpacing {
         padding,
@@ -82,6 +83,7 @@ pub(super) fn sidebar(
                         .flex_1()
                         .min_h_0()
                         .overflow_y_scroll()
+                        .elastic_scroll(elastic_scroll)
                         .px(px(padding))
                         .child(tabs),
                 );

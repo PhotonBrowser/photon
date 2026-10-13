@@ -3,7 +3,6 @@
 mod actions;
 mod alerts;
 mod app;
-mod app_menus;
 mod background_noise;
 mod chrome;
 mod command_bar;
@@ -19,6 +18,7 @@ mod peek;
 mod pinned;
 mod popup_window;
 mod popups;
+mod registry;
 mod session;
 mod side_dock;
 mod spaces;
@@ -29,6 +29,7 @@ mod title;
 mod workspace;
 mod zoom;
 
+use crate::platform::MenuBarState;
 use gpui::{
     AnyElement, AnyWindowHandle, App, Bounds, Context, Entity, FocusHandle, Pixels, Point, Render,
     ScrollHandle, Subscription, Task, WeakEntity, Window, WindowHandle, div, prelude::*,
@@ -54,10 +55,12 @@ use super::settings::Settings;
 use super::shortcuts_dialog::ShortcutsDialog;
 use super::tabs::{RevealedIcon, TabDragAxis};
 use super::theme::{ThemeColors, palette};
+use super::workspace_layout::WorkspaceLayout;
 use alerts::{EngineNotice, NoticeExpiry};
 use content::{BrowserTab, TabContent, create_webview};
 use peek::PeekState;
 use popups::PendingPopup;
+use registry::BrowserWindowRegistry;
 use side_dock::SidebarState;
 use spaces::SpacesState;
 use tabs::ClosedTab;
@@ -150,8 +153,25 @@ struct BrowserWindow {
     _settings_subscription: Subscription,
     _chrome_subscription: Subscription,
     _window_observer: Option<WindowObserver>,
-    /// Forgets the window's tabs in the saved session as it closes.
-    _session_release: Subscription,
+    /// Removes this window from the app registry and saved session on release.
+    _window_release: Subscription,
+}
+
+impl BrowserWindow {
+    pub(super) fn update_menu_bar(&self, window: &Window, cx: &mut App) {
+        if !window.is_window_active() {
+            return;
+        }
+        let state = MenuBarState {
+            has_sidebar: WorkspaceLayout::current(cx).has_sidebar(),
+            sidebar_icons: self.sidebar.docked() && self.sidebar.collapsed(),
+            zen: self.sidebar.zen(),
+            loading: self
+                .active_webview()
+                .is_some_and(|webview| webview.read(cx).state.loading),
+        };
+        crate::platform::app_menus::update_menu_bar(state, cx);
+    }
 }
 
 struct TabDragLayout {
@@ -383,7 +403,7 @@ fn open_browser_window_at(
         |origin| window_settings::options_at(cx, origin),
     );
     let handle = cx.open_window(options, move |window, cx| {
-        window_settings::configure_traffic_lights(window, &animations);
+        window_settings::configure_native_controls(window, &animations);
         window.set_window_title(photon_brand::NAME);
         let omnibox = cx.new(|cx| Omnibox::new(window, cx));
         cx.new(move |cx: &mut Context<BrowserWindow>| {
@@ -432,6 +452,7 @@ fn open_browser_window_at(
                 })
                 .detach();
             });
+            let registry_window_id = window.window_handle().window_id().as_u64();
             let mut browser = BrowserWindow {
                 tabs: Vec::new(),
                 tab_subscriptions: Vec::new(),
@@ -487,9 +508,12 @@ fn open_browser_window_at(
                 _chrome_subscription: chrome_subscription,
                 _window_observer: window_observer,
                 window_background_style: Settings::get(cx).window_background_style,
-                _session_release: {
+                _window_release: {
                     let key = cx.entity_id().as_u64();
-                    cx.on_release(move |_, cx| BrowserWindow::forget_session(key, cx))
+                    cx.on_release(move |_, cx| {
+                        BrowserWindow::forget_session(key, cx);
+                        BrowserWindowRegistry::unregister_window(registry_window_id, cx);
+                    })
                 },
             };
             match (initial_webview, startup_page) {
@@ -512,5 +536,11 @@ fn open_browser_window_at(
             browser
         })
     })?;
+    let handle = gpui::AnyWindowHandle::from(handle);
+    cx.global_mut::<BrowserWindowRegistry>()
+        .register(handle.window_id().as_u64());
+    let handle = handle
+        .downcast::<BrowserWindow>()
+        .expect("browser window registry received a different window type");
     Ok(handle)
 }

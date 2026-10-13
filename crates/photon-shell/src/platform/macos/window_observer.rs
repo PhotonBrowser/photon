@@ -10,7 +10,7 @@ type OnChange = Box<dyn Fn(bool, bool)>;
 
 /// Reports whether the window is visible and when its display or the
 /// display's parameters may have changed, until dropped.
-pub(super) struct WindowObserver {
+pub(in crate::platform) struct WindowObserver {
     observer: *mut c_void,
     _on_change: Box<OnChange>,
 }
@@ -19,7 +19,10 @@ impl WindowObserver {
     /// `on_change(visible, display_changed)` runs on the main thread, once
     /// immediately with the current visibility. It must not update GPUI
     /// entities synchronously.
-    pub(super) fn new(window: &Window, on_change: impl Fn(bool, bool) + 'static) -> Option<Self> {
+    pub(in crate::platform) fn new(
+        window: &Window,
+        on_change: impl Fn(bool, bool) + 'static,
+    ) -> Option<Self> {
         let RawWindowHandle::AppKit(handle) = HasWindowHandle::window_handle(window).ok()?.as_raw()
         else {
             return None;

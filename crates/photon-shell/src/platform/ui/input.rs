@@ -216,7 +216,7 @@ impl WebViewInput {
             ));
         }
 
-        // Normalize AppKit/GPUI's sign to the Engine's wheel-delta convention,
+        // Normalize GPUI's scroll direction to the Engine's wheel-delta convention,
         // matching the pixel-delta conversion in the existing Qt shell.
         let delta = if history_swipe_captured {
             (0.0, 0.0)
@@ -427,7 +427,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn appkit_may_begin_and_began_share_one_gesture_id() {
+    fn may_begin_and_began_share_one_gesture_id() {
         let mut input = WebViewInput::default();
         let event = ScrollWheelEvent {
             touch_phase: TouchPhase::Started,

@@ -147,6 +147,8 @@ pub struct BrowserSettings {
     pub archive_tabs: bool,
     /// Whether the browser reopens its windows and tabs from last time.
     pub restore_session: bool,
+    /// Whether page scrolling can stretch past the viewport edge on macOS.
+    pub elastic_scroll: bool,
     /// Timing and effect strengths for shell animations.
     pub animations: AnimationSettings,
 }
@@ -237,6 +239,7 @@ impl Default for BrowserSettings {
             spaces: Spaces::default(),
             archive_tabs: false,
             restore_session: true,
+            elastic_scroll: false,
             animations: AnimationSettings::default(),
         }
     }

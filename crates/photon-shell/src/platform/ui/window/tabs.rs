@@ -21,6 +21,7 @@ use super::BrowserWindow;
 use super::content::{
     BrowserTab, TabContent, create_webview, create_webview_from_session, follow_appearance,
 };
+use super::registry::BrowserWindowRegistry;
 use crate::platform::app_update::update_app;
 use crate::platform::engine::RequestedWebView;
 
@@ -133,26 +134,20 @@ impl BrowserWindow {
         if let Some(layout) = self.tab_drag_layout.as_mut() {
             layout.pointer_position = position;
         }
-        let in_favourites = self.is_favourites_drop_position(position, cx);
-        if in_favourites {
-            self.clear_previous_target(cx);
-            self.set_favourites_drag_hover(current_window, dragged.id, cx);
-            self.set_tab_drag_phase(super::TabDragPhase::DraggingOverFavourites, cx);
-            return;
-        }
-        self.clear_favourites_drag_hover(current_window, dragged.id, cx);
-
-        let window_origin = window.bounds().origin;
-        let global_position = window_origin + position;
-        let previous_global_position = window_origin + previous_position;
+        let source_bounds = window.bounds();
+        let source_content_origin = window.inner_window_bounds().get_bounds().origin;
+        let global_position = source_content_origin + position;
+        let previous_global_position = source_content_origin + previous_position;
         if let Some((target, kind, target_position)) = self.external_drop_target(
             global_position,
             previous_global_position,
             current_window,
+            source_bounds,
             cx,
         ) {
             match kind {
                 ExternalDropTargetKind::Favourites => {
+                    self.clear_favourites_drag_hover(current_window, dragged.id, cx);
                     let target_handle = target.into();
                     let already_targeting = self
                         .tab_drag_layout
@@ -181,10 +176,12 @@ impl BrowserWindow {
                     return;
                 }
                 ExternalDropTargetKind::TabStrip => {
+                    self.clear_favourites_drag_hover(current_window, dragged.id, cx);
                     self.set_cross_window_target(target, &dragged, target_position, cx);
                     return;
                 }
                 ExternalDropTargetKind::WindowBody => {
+                    self.clear_favourites_drag_hover(current_window, dragged.id, cx);
                     self.clear_previous_target(cx);
                     self.set_tab_drag_phase(super::TabDragPhase::OutsideTarget, cx);
                     return;
@@ -192,6 +189,13 @@ impl BrowserWindow {
             }
         }
         self.clear_previous_target(cx);
+        let in_favourites = self.is_favourites_drop_position(position, cx);
+        if in_favourites {
+            self.set_favourites_drag_hover(current_window, dragged.id, cx);
+            self.set_tab_drag_phase(super::TabDragPhase::DraggingOverFavourites, cx);
+            return;
+        }
+        self.clear_favourites_drag_hover(current_window, dragged.id, cx);
 
         let in_tab_container = self
             .tab_container_bounds
@@ -421,16 +425,22 @@ impl BrowserWindow {
         global_position: gpui::Point<gpui::Pixels>,
         previous_global_position: gpui::Point<gpui::Pixels>,
         current_window: gpui::AnyWindowHandle,
+        source_bounds: gpui::Bounds<gpui::Pixels>,
         cx: &mut Context<Self>,
     ) -> Option<(
         gpui::WindowHandle<BrowserWindow>,
         ExternalDropTargetKind,
         gpui::Point<gpui::Pixels>,
     )> {
-        let mut strip_target = None;
-        let mut window_target = None;
-        for handle in cx.windows() {
+        let mut nearest_window_target = None;
+        let mut nearest_window_distance = f32::INFINITY;
+        for handle in BrowserWindowRegistry::ordered_handles(cx) {
             if handle.window_id() == current_window.window_id() {
+                // The source window blocks windows beneath it in the native
+                // stack. The caller will resolve its local targets afterward.
+                if source_bounds.contains(&global_position) {
+                    return None;
+                }
                 continue;
             }
             let Some(target) = handle.downcast::<BrowserWindow>() else {
@@ -438,7 +448,7 @@ impl BrowserWindow {
             };
             let Ok((
                 window_bounds,
-                local_position,
+                content_origin,
                 viewport_size,
                 favourites,
                 tab_container,
@@ -446,7 +456,7 @@ impl BrowserWindow {
             )) = target.update(cx, |browser, window, cx| {
                 (
                     window.bounds(),
-                    window.mouse_position(),
+                    window.inner_window_bounds().get_bounds().origin,
                     window.viewport_size(),
                     browser.favourites_bounds,
                     browser.tab_container_bounds,
@@ -456,19 +466,28 @@ impl BrowserWindow {
             else {
                 continue;
             };
-            // GPUI events are in content coordinates while window bounds describe the
-            // native frame. Prefer the destination window's own pointer conversion so
-            // transparent titlebars and platform frame insets do not skew hit-testing.
-            let derived_local_position = global_position - window_bounds.origin;
+            // The destination's cached mouse position is stale while the source
+            // owns pointer capture. Translate the live source pointer into the
+            // destination's content coordinates instead.
+            let local_position = content_local_position(global_position, content_origin);
             let viewport_bounds =
                 gpui::Bounds::new(gpui::point(gpui::px(0.0), gpui::px(0.0)), viewport_size);
-            let local_position = if window_bounds.contains(&global_position)
-                && viewport_bounds.contains(&local_position)
-            {
-                local_position
-            } else {
-                derived_local_position
-            };
+            let pointer_over_window = window_bounds.contains(&global_position);
+            if !pointer_over_window {
+                let distance = bounds_distance(window_bounds, global_position);
+                if distance < nearest_window_distance
+                    && is_over_or_moving_toward_bounds(
+                        window_bounds,
+                        global_position,
+                        previous_global_position,
+                    )
+                {
+                    nearest_window_distance = distance;
+                    nearest_window_target =
+                        Some((target, ExternalDropTargetKind::WindowBody, local_position));
+                }
+                continue;
+            }
             match external_drop_target_kind(
                 local_position,
                 favourites,
@@ -479,33 +498,17 @@ impl BrowserWindow {
                 Some(ExternalDropTargetKind::Favourites) => {
                     return Some((target, ExternalDropTargetKind::Favourites, local_position));
                 }
-                Some(ExternalDropTargetKind::TabStrip) if strip_target.is_none() => {
-                    strip_target = Some((
-                        target.clone(),
-                        ExternalDropTargetKind::TabStrip,
-                        local_position,
-                    ));
+                Some(kind) => {
+                    // The first window containing the pointer is the topmost
+                    // app window reported by GPUI. Don't target a hidden strip.
+                    return Some((target, kind, local_position));
                 }
-                Some(ExternalDropTargetKind::WindowBody) if window_target.is_none() => {
-                    window_target = Some((
-                        target.clone(),
-                        ExternalDropTargetKind::WindowBody,
-                        local_position,
-                    ));
+                None => {
+                    return Some((target, ExternalDropTargetKind::WindowBody, local_position));
                 }
-                _ => {}
-            }
-            if window_target.is_none()
-                && is_over_or_moving_toward_bounds(
-                    window_bounds,
-                    global_position,
-                    previous_global_position,
-                )
-            {
-                window_target = Some((target, ExternalDropTargetKind::WindowBody, local_position));
             }
         }
-        strip_target.or(window_target)
+        nearest_window_target
     }
 
     fn is_favourites_drop_position(&self, position: gpui::Point<gpui::Pixels>, cx: &App) -> bool {
@@ -1364,6 +1367,7 @@ impl BrowserWindow {
         }
         let tab = self.tabs[index].clone();
         let source_bounds = window.bounds();
+        let source_content_bounds = window.inner_window_bounds().get_bounds();
         let source_tab_bounds = self
             .tab_geometry
             .get(&dragged.id)
@@ -1377,15 +1381,20 @@ impl BrowserWindow {
         let new_tab_origin = match dragged.axis {
             TabDragAxis::Horizontal => gpui::point(
                 gpui::px(
-                    super::super::metrics::WINDOW_CONTROLS_INSET
+                    crate::platform::window_settings::native_controls_inset()
                         + super::super::metrics::TAB_STRIP_INSET,
                 ),
                 gpui::px(super::super::metrics::TAB_STRIP_INSET),
             ),
             TabDragAxis::Vertical => source_tab_bounds.origin,
         };
-        let new_window_origin =
-            detached_window_origin(source_bounds.origin, position, new_tab_origin, grab_offset);
+        let new_window_origin = detached_window_origin(
+            source_content_bounds.origin,
+            position,
+            new_tab_origin,
+            grab_offset,
+            source_content_bounds.origin - source_bounds.origin,
+        );
         let Ok(new_window) = super::open_browser_window_at(
             self.runtime.clone(),
             None,
@@ -1426,7 +1435,9 @@ impl BrowserWindow {
             if let Some(index) = browser.tab_index_by_id(tab.id) {
                 browser.activate_tab(index, true, window, cx);
             }
-            window.start_window_move_at(new_tab_origin + grab_offset);
+            // The new window's cursor position includes native frame and
+            // content insets, so the window manager can continue this gesture.
+            window.start_window_move_at(window.mouse_position());
         });
     }
 
@@ -1514,10 +1525,8 @@ impl BrowserWindow {
             } else {
                 self.show_empty_new_tab_page(window, cx);
             }
-        } else if was_active {
-            if let Some(next) = self.active_tab {
-                self.activate_tab(next, true, window, cx);
-            }
+        } else if was_active && let Some(next) = self.active_tab {
+            self.activate_tab(next, true, window, cx);
         }
         cx.notify();
     }
@@ -2072,12 +2081,20 @@ fn is_over_or_moving_toward_bounds(
 }
 
 fn detached_window_origin(
-    source_origin: gpui::Point<gpui::Pixels>,
+    source_content_origin: gpui::Point<gpui::Pixels>,
     pointer_position: gpui::Point<gpui::Pixels>,
     tab_origin: gpui::Point<gpui::Pixels>,
     grab_offset: gpui::Point<gpui::Pixels>,
+    destination_content_offset: gpui::Point<gpui::Pixels>,
 ) -> gpui::Point<gpui::Pixels> {
-    source_origin + pointer_position - tab_origin - grab_offset
+    source_content_origin + pointer_position - tab_origin - grab_offset - destination_content_offset
+}
+
+fn content_local_position(
+    global_position: gpui::Point<gpui::Pixels>,
+    content_origin: gpui::Point<gpui::Pixels>,
+) -> gpui::Point<gpui::Pixels> {
+    global_position - content_origin
 }
 
 fn external_drop_target_kind(
@@ -2304,8 +2321,29 @@ mod tab_drag_tests {
         let tab_origin = gpui::point(gpui::px(28.0), gpui::px(204.0));
         let grab = gpui::point(gpui::px(74.0), gpui::px(18.0));
 
-        let detached_origin = detached_window_origin(source_origin, pointer, tab_origin, grab);
-        assert_eq!(detached_origin + tab_origin + grab, source_origin + pointer);
+        let destination_content_offset = gpui::point(gpui::px(0.0), gpui::px(28.0));
+        let detached_origin = detached_window_origin(
+            source_origin,
+            pointer,
+            tab_origin,
+            grab,
+            destination_content_offset,
+        );
+        assert_eq!(
+            detached_origin + destination_content_offset + tab_origin + grab,
+            source_origin + pointer
+        );
+    }
+
+    #[test]
+    fn converts_live_global_pointer_to_target_content_coordinates() {
+        let global = gpui::point(gpui::px(540.0), gpui::px(390.0));
+        let content_origin = gpui::point(gpui::px(500.0), gpui::px(300.0));
+
+        assert_eq!(
+            super::content_local_position(global, content_origin),
+            gpui::point(gpui::px(40.0), gpui::px(90.0))
+        );
     }
 
     #[test]

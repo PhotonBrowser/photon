@@ -4,7 +4,6 @@
 use gpui::{App, prelude::*, px, rgb};
 use std::time::Duration;
 
-use super::super::super::super::default_browser::DefaultBrowser;
 use super::super::super::button::{ButtonKind, ButtonSize, button};
 use super::super::super::layout::v_stack;
 use super::super::super::settings::Settings;
@@ -13,8 +12,9 @@ use super::super::change;
 use super::super::controls::{control_row, switch_row};
 use super::super::layout::{group, secondary_text};
 use crate::platform::app_update::update_app;
+use crate::platform::{DefaultBrowserStatus, default_browser};
 
-/// How long the page keeps checking for the person's answer to macOS.
+/// How long the page checks for the system's response.
 const DEFAULT_BROWSER_CHECKS: u32 = 40;
 const DEFAULT_BROWSER_CHECK_INTERVAL: Duration = Duration::from_millis(250);
 
@@ -23,6 +23,24 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
         .gap(px(metrics::INTERNAL_PAGE_SECTION_GAP))
         .child(default_browser(palette))
         .child(restore_session(palette, cx))
+        .child(elastic_scroll(palette, cx))
+}
+
+fn elastic_scroll(palette: ThemeColors, cx: &App) -> impl IntoElement {
+    let enabled = Settings::get(cx).elastic_scroll;
+    v_stack()
+        .gap(px(metrics::MENU_ITEM_GAP))
+        .child(group(palette).child(switch_row(
+            "settings-elastic-scroll",
+            "Elastic scrolling",
+            enabled,
+            palette,
+            change(move |settings| settings.elastic_scroll = !enabled),
+        )))
+        .child(secondary_text(
+            "Let pages stretch briefly when you scroll past an edge.",
+            palette,
+        ))
 }
 
 fn restore_session(palette: ThemeColors, cx: &App) -> impl IntoElement {
@@ -47,12 +65,12 @@ fn restore_session(palette: ThemeColors, cx: &App) -> impl IntoElement {
 
 fn default_browser(palette: ThemeColors) -> impl IntoElement {
     let name = photon_brand::NAME;
-    let (control, note) = match DefaultBrowser::current() {
-        DefaultBrowser::Default => (
+    let (control, note) = match default_browser::status() {
+        DefaultBrowserStatus::Default => (
             div_text("In use", palette).into_any_element(),
             format!("Links you open in other apps open in {name}."),
         ),
-        DefaultBrowser::NotDefault => (
+        DefaultBrowserStatus::NotDefault => (
             button(
                 "settings-make-default-browser",
                 "Make default",
@@ -63,11 +81,13 @@ fn default_browser(palette: ThemeColors) -> impl IntoElement {
                 Box::new(|_, _, cx| make_default_browser(cx)),
             )
             .into_any_element(),
-            format!("Make {name} open links from other apps. macOS asks you to confirm."),
+            format!(
+                "Make {name} open links from other apps. The operating system will ask you to confirm."
+            ),
         ),
-        DefaultBrowser::Unavailable => (
+        DefaultBrowserStatus::Unavailable => (
             div_text("Unavailable", palette).into_any_element(),
-            format!("{name} can become the default browser once it is opened as an app."),
+            "This build can't change the system's default browser setting.".to_string(),
         ),
     };
     v_stack()
@@ -82,15 +102,15 @@ fn div_text(text: &'static str, palette: ThemeColors) -> impl IntoElement {
         .child(text)
 }
 
-/// Asks macOS, then redraws while the person answers its prompt.
+/// Requests a system-level change, then redraws while the system responds.
 fn make_default_browser(cx: &mut App) {
-    DefaultBrowser::request();
+    default_browser::request();
     cx.spawn(async move |cx| {
         for _ in 0..DEFAULT_BROWSER_CHECKS {
             cx.background_executor()
                 .timer(DEFAULT_BROWSER_CHECK_INTERVAL)
                 .await;
-            let answered = DefaultBrowser::current() == DefaultBrowser::Default;
+            let answered = default_browser::status() == DefaultBrowserStatus::Default;
             update_app(cx, |cx| cx.refresh_windows()).await;
             if answered {
                 break;

@@ -1,0 +1,72 @@
+//! Linux GPUI window adapter. Native Linux controls and window materials are
+//! not wired up yet, so windows stay opaque and retain the desktop titlebar.
+
+use gpui::{App, Bounds, Window, WindowBounds, WindowOptions, px, size};
+use photon_core::{AnimationSettings, WindowBackgroundStyle};
+
+use crate::platform::metrics;
+
+pub(crate) fn native_controls_inset() -> f32 {
+    0.0
+}
+
+pub(crate) fn native_controls_column_inset() -> f32 {
+    0.0
+}
+
+pub(crate) fn configure_native_controls(_: &Window, _: &AnimationSettings) {}
+
+pub(crate) fn update_native_controls(
+    _: &Window,
+    _: &AnimationSettings,
+    _: bool,
+    _: bool,
+    _: f32,
+    _: bool,
+) {
+}
+
+/// Linux stays opaque until a compositor-compatible material is available.
+pub(crate) fn apply_background_style(_: &Window, _: WindowBackgroundStyle) {}
+
+pub(crate) fn options(cx: &App) -> WindowOptions {
+    options_for_size(
+        cx,
+        metrics::INITIAL_WINDOW_WIDTH,
+        metrics::INITIAL_WINDOW_HEIGHT,
+    )
+}
+
+pub(crate) fn options_at(cx: &App, origin: gpui::Point<gpui::Pixels>) -> WindowOptions {
+    let bounds = Bounds {
+        origin,
+        size: size(
+            px(metrics::INITIAL_WINDOW_WIDTH),
+            px(metrics::INITIAL_WINDOW_HEIGHT),
+        ),
+    };
+    options(cx).window_bounds(Some(WindowBounds::Windowed(bounds)))
+}
+
+pub(crate) fn popup_options(cx: &App, width: Option<i32>, height: Option<i32>) -> WindowOptions {
+    let width = width
+        .map(|width| width as f32)
+        .unwrap_or(metrics::POPUP_WINDOW_WIDTH)
+        .clamp(
+            metrics::POPUP_MIN_WINDOW_WIDTH,
+            metrics::POPUP_MAX_WINDOW_WIDTH,
+        );
+    let height = height
+        .map(|height| height as f32)
+        .unwrap_or(metrics::POPUP_WINDOW_HEIGHT)
+        .clamp(
+            metrics::POPUP_MIN_WINDOW_HEIGHT,
+            metrics::POPUP_MAX_WINDOW_HEIGHT,
+        );
+    options_for_size(cx, width, height)
+}
+
+fn options_for_size(cx: &App, width: f32, height: f32) -> WindowOptions {
+    let bounds = Bounds::centered(None, size(px(width), px(height)), cx);
+    WindowOptions::new().window_bounds(Some(WindowBounds::Windowed(bounds)))
+}

@@ -55,6 +55,7 @@ impl SurfaceOpacity {
 mod opacity {
     pub(super) const TEXT_SECONDARY: f32 = 0.72;
     pub(super) const PERFORMANCE_SURFACE: f32 = 0.95;
+    pub(super) const SHORTCUT_ICON_SURFACE: f32 = 0.62;
     pub(super) const MODAL_BACKDROP: f32 = 0.28;
     pub(super) const PEEK_BACKDROP: f32 = 0.16;
     pub(super) const MENU_BORDER: f32 = 0.12;
@@ -71,8 +72,8 @@ mod opacity {
 /// The direction a window gradient runs, in degrees: from the top left.
 const WINDOW_GRADIENT_ANGLE: f32 = 135.0;
 
-/// GPUI-CE's palettes have no error role, so the shell uses the macOS system
-/// red for each appearance.
+/// GPUI-CE's palettes have no error role, so the shell defines one semantic
+/// error color for each appearance.
 mod error {
     use gpui::{Rgba, rgb};
 
@@ -182,6 +183,8 @@ pub(super) struct ThemeColors {
     /// [`Raised`](super::layout::Raised).
     pub raised_blur: f32,
     pub menu_surface: u32,
+    /// The shortcut icon well, lightly tinted so its page backdrop shows through.
+    pub shortcut_icon_surface: u32,
     pub menu_border: u32,
     /// The quiet outline around inputs and secondary controls.
     pub control_border: u32,
@@ -232,10 +235,7 @@ impl ThemeColors {
             static CACHE: RefCell<HashMap<(bool, WindowStyle), ThemeColors>> =
                 RefCell::new(HashMap::new());
         }
-        let dark = matches!(
-            appearance,
-            WindowAppearance::Dark | WindowAppearance::VibrantDark
-        );
+        let dark = crate::platform::is_dark_appearance(appearance);
         CACHE.with_borrow_mut(|cache| {
             *cache.entry((dark, style)).or_insert_with(|| {
                 let opacity = SurfaceOpacity::for_transparency(style.transparency);
@@ -304,6 +304,9 @@ impl ThemeColors {
             // Raised surfaces let the window's frosted background show through,
             // but stay opaque enough to read over a busy page.
             menu_surface: to_rgba_token(colors.container.opacity(surfaces.raised)),
+            shortcut_icon_surface: to_rgba_token(
+                colors.container.opacity(opacity::SHORTCUT_ICON_SURFACE),
+            ),
             raised_blur: surfaces.raised_blur,
             // A light hairline that separates raised surfaces from what is under
             // them without a dark outline.

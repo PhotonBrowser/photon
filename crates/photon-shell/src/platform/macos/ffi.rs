@@ -207,6 +207,7 @@ pub(super) mod embedder {
             runtime: *mut c_void,
             reduce_motion: bool,
         );
+        pub fn photon_runtime_set_elastic_scroll_enabled(runtime: *mut c_void, enabled: bool);
         pub fn photon_runtime_set_service_callback(
             runtime: *mut c_void,
             callback_data: *mut c_void,

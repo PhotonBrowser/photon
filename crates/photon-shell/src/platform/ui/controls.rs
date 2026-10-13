@@ -134,6 +134,8 @@ pub(super) fn intensity_slider(
     }
 }
 
+type IntensityChange = Rc<dyn Fn(u8, &mut App)>;
+
 #[derive(IntoElement)]
 pub(super) struct IntensitySlider {
     id: &'static str,
@@ -142,7 +144,7 @@ pub(super) struct IntensitySlider {
     max_value: u8,
     value_step: u8,
     palette: ThemeColors,
-    on_change: Rc<dyn Fn(u8, &mut App)>,
+    on_change: IntensityChange,
 }
 
 impl RenderOnce for IntensitySlider {

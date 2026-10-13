@@ -4,6 +4,8 @@
 use gpui::{Div, InteractiveElement, MouseButton, Window, prelude::*, px};
 
 use super::layout::h_stack;
+use crate::platform::window_settings;
+
 use super::metrics;
 
 /// A centered titlebar strip, with room for native controls while windowed.
@@ -11,7 +13,7 @@ pub(super) fn titlebar(content: impl IntoElement, window: &Window) -> Div {
     let controls_inset = if window.is_fullscreen() || window.is_simple_fullscreen() {
         0.0
     } else {
-        metrics::WINDOW_CONTROLS_INSET
+        window_settings::native_controls_inset()
     };
     window_drag_area(
         h_stack()

@@ -49,7 +49,7 @@ pub(super) fn open_minimal_window(
     let animations = Settings::get(cx).animations;
     let webview = create_webview_from_session(cx, runtime.clone(), request.session);
     if let Err(error) = cx.open_window(options, move |window, cx| {
-        window_settings::configure_traffic_lights(window, &animations);
+        window_settings::configure_native_controls(window, &animations);
         window.set_window_title(photon_brand::NAME);
         follow_appearance(&webview, window, cx);
         webview.update(cx, |view, cx| {
@@ -95,10 +95,7 @@ pub(super) fn open_minimal_window(
                     window,
                     |this, window, cx| {
                         let animations = Settings::get(cx).animations;
-                        window.set_traffic_light_fade_durations(
-                            animations.traffic_light_fade_in_ms(),
-                            animations.traffic_light_fade_out_ms(),
-                        );
+                        window_settings::configure_native_controls(window, &animations);
                         this.webview.update(cx, |_, cx| cx.notify());
                         cx.notify();
                     },

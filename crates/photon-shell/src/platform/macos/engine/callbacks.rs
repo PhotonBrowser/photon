@@ -1,6 +1,6 @@
 //! The Engine's C callbacks, which update the state in `callback_state`.
 
-use super::super::app_update::update_app;
+use crate::platform::app_update::update_app;
 use mach2::port::mach_port_t;
 use photon_core::{BrowserState, DialogKind, DialogRequest, EngineService};
 use std::{
@@ -8,11 +8,12 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
+use super::super::ffi::embedder;
 use super::super::presentation::MachPortGuard;
-use super::super::ui::{Favicon, FindResult, PageMenuItem, SelectDropdown, SelectItem};
-use super::super::{ffi::embedder, trace};
 pub(super) use super::callback_state::{CallbackState, RuntimeCallbacks, deliver_pending_releases};
 use super::{EngineSession, RequestedWebView};
+use crate::platform::trace;
+use crate::platform::ui::{Favicon, FindResult, PageMenuItem, SelectDropdown, SelectItem};
 use photon_core::PopupPolicy;
 
 static NEXT_WINDOW_HANDLE: AtomicU64 = AtomicU64::new(1);

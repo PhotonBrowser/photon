@@ -160,7 +160,7 @@ fn tile(
                 .items_center()
                 .justify_center()
                 .rounded_full()
-                .bg(rgba(palette.menu_surface))
+                .bg(rgba(palette.shortcut_icon_surface))
                 .child(icon),
         )
         .child(

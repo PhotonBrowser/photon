@@ -12,6 +12,7 @@ use super::icons::close_icon;
 use super::kbd::action_kbd;
 use super::layout::{h_stack, v_stack};
 use super::modal::{dialog_title, modal_panel};
+use super::settings::Settings;
 use super::{metrics, theme::ThemeColors, theme::palette};
 
 pub(super) enum ShortcutsDialogEvent {
@@ -76,6 +77,10 @@ impl Render for ShortcutsDialog {
                     .id("keyboard-shortcuts-list")
                     .max_h(px(metrics::SHORTCUTS_DIALOG_MAX_HEIGHT))
                     .overflow_y_scroll()
+                    .elastic_scroll(
+                        crate::platform::supports_elastic_scroll()
+                            && Settings::get(cx).elastic_scroll,
+                    )
                     .gap(px(metrics::INTERNAL_PAGE_GROUP_GAP))
                     .children(groups),
             )

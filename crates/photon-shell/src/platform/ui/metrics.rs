@@ -12,25 +12,6 @@ pub(in crate::platform) const POPUP_MIN_WINDOW_WIDTH: f32 = 360.0;
 pub(in crate::platform) const POPUP_MAX_WINDOW_WIDTH: f32 = 1280.0;
 pub(in crate::platform) const POPUP_MIN_WINDOW_HEIGHT: f32 = 320.0;
 pub(in crate::platform) const POPUP_MAX_WINDOW_HEIGHT: f32 = 1000.0;
-const WINDOW_CONTROLS_HEIGHT: f32 = 14.0;
-/// AppKit's space between two native window control buttons.
-const WINDOW_CONTROLS_GAP: f32 = 6.0;
-/// Vertically centered origin of the native window control buttons.
-pub(in crate::platform) const WINDOW_CONTROLS_ORIGIN: (f32, f32) =
-    (12.0, (TITLEBAR_HEIGHT - WINDOW_CONTROLS_HEIGHT) / 2.0);
-/// Space reserved at each side of the windowed titlebar for native controls.
-pub(super) const WINDOW_CONTROLS_INSET: f32 = 80.0;
-/// The native window controls stacked at the top of the collapsed sidebar,
-/// centred in it.
-pub(super) const WINDOW_CONTROLS_COLUMN_ORIGIN: (f32, f32) = (
-    (SIDEBAR_COLLAPSED_WIDTH - WINDOW_CONTROLS_HEIGHT) / 2.0,
-    WINDOW_CONTROLS_ORIGIN.1,
-);
-/// Space reserved at the top of the collapsed sidebar for the stacked
-/// controls, with the same margin below them as above.
-pub(super) const WINDOW_CONTROLS_COLUMN_INSET: f32 = WINDOW_CONTROLS_COLUMN_ORIGIN.1 * 2.0
-    + WINDOW_CONTROLS_HEIGHT * 3.0
-    + WINDOW_CONTROLS_GAP * 2.0;
 
 pub(super) const TAB_HEIGHT: f32 = 28.0;
 pub(super) const TAB_MIN_WIDTH: f32 = 72.0;
@@ -95,7 +76,7 @@ pub(super) const FIND_FONT_SIZE: f32 = 13.0;
 pub(super) const FIND_RESULT_FONT_SIZE: f32 = 12.0;
 
 /// Distance from the page's corner to a status chip.
-pub(super) const CHIP_INSET: f32 = 10.0;
+pub(in crate::platform) const CHIP_INSET: f32 = 10.0;
 pub(super) const CHIP_HEIGHT: f32 = 26.0;
 /// A status chip's outer radius: its action radius plus the vertical inset.
 pub(super) const CHIP_RADIUS: f32 = SMALL_BUTTON_RADIUS + (CHIP_HEIGHT - SMALL_BUTTON_HEIGHT) / 2.0;
@@ -165,7 +146,7 @@ pub(super) const PAGE_INSET: f32 = 8.0;
 pub(super) const PAGE_CHROME_GAP: f32 = 4.0;
 pub(super) const POPUP_URL_FONT_SIZE: f32 = 12.0;
 /// The corners of the frame a page sits in, web page or the browser's own.
-pub(super) const PAGE_RADIUS: f32 = 12.0;
+pub(in crate::platform) const PAGE_RADIUS: f32 = 12.0;
 /// Horizontal travel required before a history swipe commits.
 pub(super) const HISTORY_SWIPE_COMMIT_FRACTION: f32 = 0.33;
 /// Minimum progress needed for a fast flick to commit a history swipe.

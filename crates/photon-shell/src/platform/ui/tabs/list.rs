@@ -17,6 +17,10 @@ use super::{
 
 /// The tabs, one row each: pinned tabs above a divider, then a row that
 /// opens a new tab and today's tabs. Collapsed, each row is only its icon.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "passes the distinct drag, focus, and layout callbacks for this list"
+)]
 pub(in super::super) fn tab_list(
     tabs: Vec<TabItem>,
     on_new_tab: ClickHandler,

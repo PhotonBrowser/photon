@@ -1,6 +1,6 @@
-//! Addresses macOS hands the browser, as when a link is opened from another
-//! app: each opens in a new tab of the frontmost browser window, or of a new
-//! window when there is none.
+//! Addresses the operating system hands the browser, as when a link is opened
+//! from another app: each opens in a new tab of the frontmost browser window,
+//! or of a new window when there is none.
 
 use futures::StreamExt;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};

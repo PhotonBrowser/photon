@@ -253,13 +253,11 @@ impl Render for SettingsPage {
             .size_full()
             .items_start()
             .child(self.sidebar(palette, cx))
-            .child(
-                div()
-                    .flex_1()
-                    .h_full()
-                    .min_w_0()
-                    .child(scrolling_column("settings-content", content)),
-            )
+            .child(div().flex_1().h_full().min_w_0().child(scrolling_column(
+                "settings-content",
+                content,
+                crate::platform::supports_elastic_scroll() && Settings::get(cx).elastic_scroll,
+            )))
             .children(reset_dialog)
             .children(workspace_preset_dialog)
             .children(workspace_preset_delete_dialog)

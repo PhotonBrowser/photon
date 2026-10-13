@@ -1,7 +1,7 @@
 //! What a tab's Engine callbacks share: the page state they update on the
 //! UI thread, the presentation they feed, and the frames they release.
 
-use super::super::app_update::update_app;
+use crate::platform::app_update::update_app;
 use gpui::Context;
 use photon_core::{BrowserState, DialogRequest, EngineEvent};
 use photon_performance::{EnginePerformanceStats, PerformanceMonitor, PerformanceTask};
@@ -13,10 +13,11 @@ use std::{
     },
 };
 
+use super::super::ffi::embedder;
 use super::super::presentation::{LeaseLedger, PresentationRuntime};
-use super::super::ui::{Favicon, FindResult, PhotonWebView};
-use super::super::{ffi::embedder, trace};
 use super::UiWake;
+use crate::platform::trace;
+use crate::platform::ui::{Favicon, FindResult, PhotonWebView};
 
 #[derive(Clone, Default)]
 pub(super) struct PageDetails {

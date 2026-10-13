@@ -235,7 +235,12 @@ impl BrowserWindow {
                 _ => None,
             })
             .collect();
-        sidebar(sections, collapsed, palette)
+        sidebar(
+            sections,
+            collapsed,
+            palette,
+            crate::platform::supports_elastic_scroll() && Settings::get(cx).elastic_scroll,
+        )
     }
 
     /// The space's favourites, or with none yet, the hint for adding one

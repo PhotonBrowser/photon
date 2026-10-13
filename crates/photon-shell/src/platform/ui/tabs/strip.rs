@@ -13,6 +13,10 @@ use super::{
 };
 
 /// The tabs side by side, then a button that opens a new tab.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "passes the distinct scroll, drag, focus, and layout handles for this strip"
+)]
 pub(in super::super) fn tab_strip(
     tabs: Vec<TabItem>,
     on_new_tab: ClickHandler,
@@ -21,6 +25,7 @@ pub(in super::super) fn tab_strip(
     on_bounds: TabPrepaint,
     scroll_handle: ScrollHandle,
     palette: ThemeColors,
+    elastic_scroll: bool,
 ) -> impl IntoElement {
     tab_strip_content(
         tabs,
@@ -30,6 +35,7 @@ pub(in super::super) fn tab_strip(
         on_bounds,
         scroll_handle,
         palette,
+        elastic_scroll,
     )
     .w_full()
 }
@@ -37,6 +43,10 @@ pub(in super::super) fn tab_strip(
 /// The intrinsic-width tab controls, without the full-width titlebar row.
 /// Workspace edit mode uses this to frame the visible controls rather than
 /// the empty titlebar around them.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "shares the tab-strip configuration with the full-width wrapper"
+)]
 pub(in super::super) fn tab_strip_content(
     tabs: Vec<TabItem>,
     on_new_tab: ClickHandler,
@@ -45,6 +55,7 @@ pub(in super::super) fn tab_strip_content(
     on_bounds: TabPrepaint,
     scroll_handle: ScrollHandle,
     palette: ThemeColors,
+    elastic_scroll: bool,
 ) -> gpui::Div {
     let tab_count = tabs.len();
     let mut focus_index = 0;
@@ -57,6 +68,7 @@ pub(in super::super) fn tab_strip_content(
         .flex_initial()
         .min_w_0()
         .overflow_x_scroll()
+        .elastic_scroll(elastic_scroll)
         .track_scroll(&scroll_handle);
     for (index, tab) in tabs.into_iter().enumerate() {
         let stops = TabParts::focus_stops(&tab.icon);

@@ -1,14 +1,10 @@
-//! Keyboard shortcuts drawn as keycaps in the platform's own notation:
-//! ⌘ ⇧ T on macOS, Ctrl Shift T elsewhere. [`action_kbd`] shows whatever
-//! keys are bound to an action, so labels follow the keymap.
+//! Keyboard shortcuts drawn in the platform's own notation. [`action_kbd`]
+//! shows whatever keys are bound to an action, so labels follow the keymap.
 
 use gpui::{Action, App, Div, KeyBinding, Modifiers, SharedString, div, prelude::*, px, rgb, rgba};
 
 use super::layout::h_stack;
 use super::{metrics, theme::ThemeColors};
-
-/// Whether shortcuts use macOS notation.
-const MAC: bool = cfg!(target_os = "macos");
 
 /// The keycaps for the keys bound to `action`, if any are. With several
 /// bindings, the one that takes precedence.
@@ -19,28 +15,30 @@ pub(super) fn action_kbd(action: &dyn Action, palette: ThemeColors, cx: &App) ->
     Some(kbd(binding, palette))
 }
 
-/// The keys bound to `action` as text, such as "⌘⇧T" on macOS or
-/// "Ctrl+Shift+T" elsewhere, for a sentence that mentions them.
+/// The keys bound to `action` as text in the platform's notation, for a
+/// sentence that mentions them.
 pub(super) fn action_keys(action: &dyn Action, cx: &App) -> Option<String> {
     let keymap = cx.key_bindings();
     let keymap = keymap.borrow();
     let binding = keymap.bindings_for_action(action).last()?;
+    let notation = crate::platform::keyboard_notation();
     let keystrokes = binding.keystrokes().iter().map(|keystroke| {
-        keycap_labels(keystroke.modifiers(), keystroke.key(), MAC)
+        keycap_labels(keystroke.modifiers(), keystroke.key(), notation)
             .iter()
             .map(SharedString::as_ref)
             .collect::<Vec<_>>()
-            .join(if MAC { "" } else { "+" })
+            .join(notation.separator)
     });
     Some(keystrokes.collect::<Vec<_>>().join(" "))
 }
 
 /// The keycaps for `binding`, one keystroke after another.
 pub(super) fn kbd(binding: &KeyBinding, palette: ThemeColors) -> Div {
+    let notation = crate::platform::keyboard_notation();
     let caps = binding
         .keystrokes()
         .iter()
-        .flat_map(|keystroke| keycap_labels(keystroke.modifiers(), keystroke.key(), MAC))
+        .flat_map(|keystroke| keycap_labels(keystroke.modifiers(), keystroke.key(), notation))
         .map(|label| keycap(label, palette));
     h_stack()
         .flex_shrink_0()
@@ -67,27 +65,30 @@ fn keycap(label: SharedString, palette: ThemeColors) -> Div {
 }
 
 /// A keystroke's caps: its modifiers in the platform's order, then its key.
-fn keycap_labels(modifiers: &Modifiers, key: &str, mac: bool) -> Vec<SharedString> {
+fn keycap_labels(
+    modifiers: &Modifiers,
+    key: &str,
+    notation: crate::platform::KeyboardNotation,
+) -> Vec<SharedString> {
     let held: &[(bool, &str, &str)] = &[
         (modifiers.function, "fn", "Fn"),
         (modifiers.control, "⌃", "Ctrl"),
         (modifiers.alt, "⌥", "Alt"),
         (modifiers.shift, "⇧", "Shift"),
-        (modifiers.platform, "⌘", PLATFORM_KEY),
+        (modifiers.platform, "⌘", notation.platform_key),
     ];
     held.iter()
         .filter(|(down, ..)| *down)
-        .map(|&(_, mac_label, label)| SharedString::from(if mac { mac_label } else { label }))
-        .chain(std::iter::once(key_label(key, mac)))
+        .map(|&(_, mac_label, label)| {
+            SharedString::from(if notation.mac_symbols {
+                mac_label
+            } else {
+                label
+            })
+        })
+        .chain(std::iter::once(key_label(key, notation.mac_symbols)))
         .collect()
 }
-
-/// The platform key's name away from macOS.
-const PLATFORM_KEY: &str = if cfg!(target_os = "windows") {
-    "Win"
-} else {
-    "Super"
-};
 
 /// How a key is printed on its cap.
 fn key_label(key: &str, mac: bool) -> SharedString {
@@ -123,10 +124,18 @@ mod tests {
     use super::*;
 
     fn labels(modifiers: Modifiers, key: &str, mac: bool) -> Vec<String> {
-        keycap_labels(&modifiers, key, mac)
-            .into_iter()
-            .map(|label| label.to_string())
-            .collect()
+        keycap_labels(
+            &modifiers,
+            key,
+            crate::platform::KeyboardNotation {
+                mac_symbols: mac,
+                platform_key: if mac { "⌘" } else { "Super" },
+                separator: if mac { "" } else { "+" },
+            },
+        )
+        .into_iter()
+        .map(|label| label.to_string())
+        .collect()
     }
 
     #[test]

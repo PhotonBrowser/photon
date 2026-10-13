@@ -21,19 +21,19 @@ use std::{
 };
 
 use super::ffi::embedder;
-use super::ui::PhotonWebView;
+use crate::platform::ui::PhotonWebView;
 use callbacks::*;
 use photon_core::EngineService;
-pub(super) use session::{EngineSession, RequestedWebView};
+pub(in crate::platform) use session::{EngineSession, RequestedWebView};
 
 #[derive(Clone)]
-pub(super) struct UiWake {
-    pub(super) app: AsyncApp,
-    pub(super) webview: WeakEntity<PhotonWebView>,
-    pub(super) runtime: Rc<EngineRuntime>,
+pub(in crate::platform) struct UiWake {
+    pub(in crate::platform) app: AsyncApp,
+    pub(in crate::platform) webview: WeakEntity<PhotonWebView>,
+    pub(in crate::platform) runtime: Rc<EngineRuntime>,
 }
 
-pub(super) struct EngineRuntime {
+pub(in crate::platform) struct EngineRuntime {
     runtime: *mut c_void,
     reduced_motion_observer: *mut c_void,
     callbacks: Box<RuntimeCallbacks>,
@@ -45,7 +45,7 @@ pub(super) struct EngineRuntime {
 impl EngineRuntime {
     /// Starts the Engine, keeping website data in `profile_dir`, or in a
     /// temporary profile when there is none.
-    pub(super) fn create(profile_dir: Option<&Path>) -> anyhow::Result<Self> {
+    pub(in crate::platform) fn create(profile_dir: Option<&Path>) -> anyhow::Result<Self> {
         let helper = std::env::var("PHOTON_HELPER_DIRECTORY")
             .context("PHOTON_HELPER_DIRECTORY is not set")?;
         let helper = CString::new(helper)?;
@@ -98,7 +98,7 @@ impl EngineRuntime {
         })
     }
 
-    pub(super) fn popup_policy(&self) -> PopupPolicy {
+    pub(in crate::platform) fn popup_policy(&self) -> PopupPolicy {
         match self.popup_policy.load(Ordering::Relaxed) {
             value if value == PopupPolicy::Allow as u8 => PopupPolicy::Allow,
             value if value == PopupPolicy::Block as u8 => PopupPolicy::Block,
@@ -106,8 +106,12 @@ impl EngineRuntime {
         }
     }
 
-    pub(super) fn set_popup_policy(&self, policy: PopupPolicy) {
+    pub(in crate::platform) fn set_popup_policy(&self, policy: PopupPolicy) {
         self.popup_policy.store(policy as u8, Ordering::Relaxed);
+    }
+
+    pub(in crate::platform) fn set_elastic_scroll(&self, enabled: bool) {
+        unsafe { embedder::photon_runtime_set_elastic_scroll_enabled(self.runtime, enabled) }
     }
 
     pub(in crate::platform) fn performance_tasks(&self) -> Vec<PerformanceTask> {
@@ -160,7 +164,7 @@ impl EngineRuntime {
         }
     }
 
-    pub(super) fn performance_dashboard_active(&self) -> bool {
+    pub(in crate::platform) fn performance_dashboard_active(&self) -> bool {
         self.performance_dashboard_users.get() > 0
     }
 }

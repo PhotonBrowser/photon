@@ -3,7 +3,7 @@
 //! the app-wide ones are handled here, without a window. The menu bar
 //! follows the frontmost window: its checkmarks, and Reload or Stop.
 
-use gpui::{App, Global, Menu, MenuItem, OsAction, SystemMenuType, Window};
+use gpui::{App, Global, Menu, MenuItem, OsAction, SystemMenuType};
 use gpui_elements::editable_text::actions::{Copy, Cut, Paste, Redo, SelectAll, Undo};
 use photon_brand::NAME;
 use photon_shortcuts::{
@@ -13,21 +13,8 @@ use photon_shortcuts::{
     ShowKeyboardShortcuts, StopLoading, ToggleSidebar, ToggleSidebarIcons, ToggleZenMode, ZoomIn,
     ZoomOut, ZoomWindow,
 };
-use std::rc::Rc;
 
-use super::super::super::engine::EngineRuntime;
-use super::super::super::trace;
-use super::super::workspace_layout::WorkspaceLayout;
-use super::{BrowserWindow, app, open_browser_window};
-
-/// What the menu bar shows of the frontmost window.
-#[derive(Clone, Copy, Default, PartialEq)]
-struct MenuBarState {
-    has_sidebar: bool,
-    sidebar_icons: bool,
-    zen: bool,
-    loading: bool,
-}
+use crate::platform::MenuBarState;
 
 /// The state the menu bar was last built for.
 struct ShownMenuBar(MenuBarState);
@@ -46,41 +33,20 @@ fn show_menu_bar(state: MenuBarState, cx: &mut App) {
     cx.set_menus(menu_bar(state));
 }
 
-impl BrowserWindow {
-    /// Shows this window's state in the menu bar while it is frontmost.
-    pub(super) fn update_menu_bar(&self, window: &Window, cx: &mut App) {
-        if !window.is_window_active() {
-            return;
-        }
-        let state = MenuBarState {
-            has_sidebar: WorkspaceLayout::current(cx).has_sidebar(),
-            sidebar_icons: self.sidebar.docked() && self.sidebar.collapsed(),
-            zen: self.sidebar.zen(),
-            loading: self
-                .active_webview()
-                .is_some_and(|webview| webview.read(cx).state.loading),
-        };
-        show_menu_bar(state, cx);
-    }
-}
-
 /// Installs the menu bar and Dock menu, and handles the actions that need
 /// no window: quitting, hiding, and opening a window, which the Dock menu
 /// asks for even while no window is active.
-pub(super) fn install_app_menus(runtime: Rc<EngineRuntime>, cx: &mut App) {
+pub(crate) fn install_app_menus(cx: &mut App) {
     cx.on_action(|_: &Quit, cx| cx.quit());
     cx.on_action(|_: &HideApp, cx| cx.hide());
     cx.on_action(|_: &HideOtherApps, cx| cx.hide_other_apps());
     cx.on_action(|_: &ShowAllApps, cx| cx.unhide_other_apps());
-    cx.on_action(move |_: &NewWindow, cx| {
-        cx.activate(true);
-        if let Err(error) = open_browser_window(runtime.clone(), app::initial_address(), false, cx)
-        {
-            trace(format_args!("new window: {error:#}"));
-        }
-    });
     show_menu_bar(MenuBarState::default(), cx);
     cx.set_dock_menu(vec![MenuItem::action("New Window", NewWindow)]);
+}
+
+pub(crate) fn update_menu_bar(state: MenuBarState, cx: &mut App) {
+    show_menu_bar(state, cx);
 }
 
 fn menu_bar(state: MenuBarState) -> Vec<Menu> {

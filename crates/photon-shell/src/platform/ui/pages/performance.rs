@@ -9,6 +9,7 @@ use std::{collections::VecDeque, time::Instant};
 
 use super::super::super::engine::PerformanceDashboardLease;
 use super::super::layout::{h_stack, v_stack};
+use super::super::settings::Settings;
 use super::super::{metrics, theme::ThemeColors, theme::palette};
 use super::layout::{group, heading, secondary_text};
 use super::{PageContext, PageDefinition, PageIcon};
@@ -244,7 +245,7 @@ impl PerformancePage {
                 palette,
             ))
             .child(secondary_text(
-                "Memory is physical footprint on macOS and a private resident estimate on Linux. Managed heap is a separate, last-GC estimate.",
+                "Memory uses the operating system's physical-footprint or private-resident estimate. Managed heap is a separate, last-GC estimate.",
                 palette,
             ))
     }
@@ -305,6 +306,9 @@ impl Render for PerformancePage {
             .id("performance-page")
             .size_full()
             .overflow_y_scroll()
+            .elastic_scroll(
+                crate::platform::supports_elastic_scroll() && Settings::get(cx).elastic_scroll,
+            )
             .p(px(metrics::PERFORMANCE_PAGE_INSET))
             .items_center()
             .child(

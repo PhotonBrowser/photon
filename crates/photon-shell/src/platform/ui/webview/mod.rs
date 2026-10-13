@@ -1,20 +1,20 @@
 //! The page surface, its tab state, and browser input forwarding.
 
 use super::super::engine::{EngineSession, RequestedWebView};
-use super::super::presentation::PresentedSurface;
 use super::input::{EditCommand, WebViewInput};
 use super::{metrics::PAGE_RADIUS, settings::Settings, theme::palette};
 use gpui::{
     AnyWindowHandle, Context, EventEmitter, FocusHandle, InteractiveElement, KeyDownEvent,
-    KeyUpEvent, MouseButton, NavigationDirection, ObjectFit, Render, Subscription, SurfaceSource,
-    Window, WindowAppearance, div, prelude::*, px, surface,
+    KeyUpEvent, MouseButton, NavigationDirection, Render, Subscription, Window, WindowAppearance,
+    div, prelude::*, px,
 };
 use gpui_elements::editable_text::actions::{Copy, Cut, Paste, Redo, SelectAll, Undo};
 use photon_core::{BrowserCommand, BrowserState, EngineEvent, PageCrashes, PageDialogs};
 use photon_performance::{PerformanceDiagnostics, performance_overlay};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+
+use crate::platform::renderer::PresentedSurface;
 use std::time::{Duration, Instant};
 
 use super::super::trace;
@@ -123,19 +123,13 @@ impl PhotonWebView {
 
 impl PhotonWebView {
     pub(in crate::platform) fn present_latest(&mut self, cx: &mut Context<Self>) {
-        self.session.drain_releases();
-        let Some(presented) = self.session.presentation.take_surface() else {
-            // A rejected frame completes its lease with no GPU work to follow.
-            self.session.drain_releases();
+        let Some(presented) = self.session.take_presented_surface() else {
             return;
         };
-        if let Some(replaced) = self.external.take() {
-            let pending = std::mem::take(&mut *replaced.retired_until_submitted.lock().unwrap());
-            let mut retired = presented.retired_until_submitted.lock().unwrap();
-            retired.push(replaced.retire());
-            retired.extend(pending);
-        }
-        self.external = Some(presented);
+        self.external = Some(crate::platform::renderer::replace_surface(
+            self.external.take(),
+            presented,
+        ));
         cx.notify();
     }
 
@@ -212,27 +206,14 @@ impl PhotonWebView {
         if self.session.shutdown_started {
             return;
         }
-        let final_releases = if let Some(presented) = self.external.as_ref() {
-            let releases = presented.retired_until_submitted.clone();
-            let mut pending = releases.lock().unwrap();
-            if !pending.iter().any(|retired| retired.key == presented.key) {
-                pending.push(presented.retire());
-            }
-            drop(pending);
-            releases
-        } else {
-            Arc::new(Mutex::new(Vec::new()))
-        };
-        self.session.begin_shutdown(final_releases);
+        self.session
+            .begin_shutdown_with_surface(self.external.take());
     }
 
     /// Lets pages follow the shell theme. Runs before the first viewport
     /// update, so the startup page loads with the right scheme.
     pub(super) fn update_color_scheme(&mut self, appearance: WindowAppearance) {
-        let dark = matches!(
-            appearance,
-            WindowAppearance::Dark | WindowAppearance::VibrantDark
-        );
+        let dark = crate::platform::is_dark_appearance(appearance);
         if self.sent_dark_color_scheme != Some(dark) {
             self.session.set_dark_color_scheme(dark);
             self.sent_dark_color_scheme = Some(dark);
@@ -530,9 +511,8 @@ impl Render for PhotonWebView {
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                 let should_consume = this.input.key_down(&mut this.session, event);
-                // AppKit routes printable input and non-character commands through its input
-                // context. Consume them after forwarding so commands such as Backspace are
-                // not replayed.
+                // Consume commands after forwarding so editing keys such as Backspace
+                // are not replayed by the native text input system.
                 if should_consume {
                     cx.stop_propagation();
                 }
@@ -544,12 +524,17 @@ impl Render for PhotonWebView {
             .rounded(px(PAGE_RADIUS))
             .overflow_hidden()
             .bg(gpui::rgb(palette.page_background));
-        if let Some(presented) = self.external.as_ref() {
-            let page_surface = surface(SurfaceSource::ExternalMetal(presented.surface.clone()))
-                .size_full()
-                .object_fit(ObjectFit::Fill)
-                .relative();
-            webview = webview.child(page_surface.rounded(px(PAGE_RADIUS)));
+        {
+            let page_surface = crate::platform::renderer::page_surface(
+                self.external.as_ref(),
+                crate::platform::PageSurfacePalette {
+                    background: palette.page_background,
+                    notice_surface: palette.menu_surface,
+                    notice_border: palette.menu_border,
+                    notice_text: palette.text_primary,
+                },
+            );
+            webview = webview.child(page_surface);
         }
         if let Some(indicator) = self.history_swipe_indicator(palette) {
             webview = webview.child(indicator);

@@ -13,7 +13,7 @@ mod js_dialog;
 mod kbd;
 mod layout;
 mod menu;
-pub(super) mod metrics;
+pub(super) use crate::platform::metrics;
 mod modal;
 mod motion;
 mod omnibox;
@@ -46,7 +46,9 @@ pub(super) type MouseUpHandler =
 pub(super) type KeyDownHandler =
     Box<dyn Fn(&gpui::KeyDownEvent, &mut gpui::Window, &mut gpui::App)>;
 
-pub(super) fn window_background_style(cx: &gpui::App) -> photon_core::WindowBackgroundStyle {
+pub(in crate::platform) fn window_background_style(
+    cx: &gpui::App,
+) -> photon_core::WindowBackgroundStyle {
     settings::Settings::get(cx).window_background_style
 }
 

@@ -13,10 +13,13 @@ use std::{
     },
 };
 
-use super::super::presentation::{GpuActivity, LeaseLedger, PresentationRuntime, RetiredSurface};
-use super::super::{ffi::embedder, trace};
+use super::super::ffi::embedder;
+use super::super::presentation::{
+    GpuActivity, LeaseLedger, PresentationRuntime, PresentedSurface, RetiredSurface,
+};
 use super::callbacks::*;
 use super::{EngineRuntime, UiWake, ZoomStep};
+use crate::platform::trace;
 
 static NEXT_PERFORMANCE_TASK_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -441,6 +444,34 @@ impl EngineSession {
 
     pub(in crate::platform) fn drain_releases(&mut self) {
         deliver_pending_releases(&self.callbacks);
+    }
+
+    pub(in crate::platform) fn take_presented_surface(&mut self) -> Option<PresentedSurface> {
+        self.drain_releases();
+        let presented = self.presentation.take_surface();
+        if presented.is_none() {
+            // A rejected frame completes its lease with no GPU work to follow.
+            self.drain_releases();
+        }
+        presented
+    }
+
+    pub(in crate::platform) fn begin_shutdown_with_surface(
+        &mut self,
+        presented: Option<PresentedSurface>,
+    ) {
+        let final_releases = if let Some(presented) = presented {
+            let releases = presented.retired_until_submitted.clone();
+            let mut pending = releases.lock().unwrap();
+            if !pending.iter().any(|retired| retired.key == presented.key) {
+                pending.push(presented.retire());
+            }
+            drop(pending);
+            releases
+        } else {
+            Arc::new(Mutex::new(Vec::new()))
+        };
+        self.begin_shutdown(final_releases);
     }
 
     pub(in crate::platform) fn begin_shutdown(

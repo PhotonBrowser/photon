@@ -12,6 +12,7 @@ use photon_shortcuts::{
 
 use super::super::super::engine::ZoomStep;
 use super::super::pages::SETTINGS;
+use super::super::settings::Settings;
 use super::BrowserWindow;
 use super::menu::RunMenuCommand;
 use super::page_menu::ActivatePageMenuItem;
@@ -82,6 +83,8 @@ impl BrowserWindow {
             .on_action(cx.listener(|this, _: &CloseTab, window, cx| {
                 if let Some(active_tab) = this.active_tab {
                     this.close_tab(active_tab, window, cx);
+                } else if this.tabs.is_empty() && !Settings::get(cx).close_window_with_last_tab {
+                    cx.quit();
                 }
             }))
             .on_action(cx.listener(|this, _: &ReopenClosedTab, window, cx| {

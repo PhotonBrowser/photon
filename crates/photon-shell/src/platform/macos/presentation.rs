@@ -18,10 +18,11 @@ use std::{
     },
 };
 
-use super::{ffi::embedder, trace};
+use super::ffi::embedder;
+use crate::platform::trace;
 use photon_presentation_ipc::{BackingDescriptor, Channel};
 
-pub(super) struct MachPortGuard(pub(super) mach_port_t);
+pub(in crate::platform) struct MachPortGuard(pub(super) mach_port_t);
 impl Drop for MachPortGuard {
     fn drop(&mut self) {
         unsafe { mach2::mach_port::mach_port_deallocate(mach_task_self(), self.0) };
@@ -29,14 +30,14 @@ impl Drop for MachPortGuard {
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub(super) struct FrameKey {
+pub(in crate::platform) struct FrameKey {
     pub(super) backing: u64,
     pub(super) generation: u64,
     pub(super) frame: u64,
 }
 
 #[derive(Clone, Copy)]
-pub(super) struct FrameReady {
+pub(in crate::platform) struct FrameReady {
     pub(super) key: FrameKey,
     pub(super) signal: u64,
     pub(super) width: i32,
@@ -44,7 +45,7 @@ pub(super) struct FrameReady {
 }
 
 #[derive(Clone, Copy)]
-pub(super) struct Release {
+pub(in crate::platform) struct Release {
     pub(super) key: FrameKey,
 }
 
@@ -59,14 +60,14 @@ struct Lease {
 /// forgotten once released, so the ledger stays as small as the frames in
 /// flight however long a page plays.
 #[derive(Default)]
-pub(super) struct LeaseLedger {
+pub(in crate::platform) struct LeaseLedger {
     held: HashMap<FrameKey, Lease>,
     counts: LeaseCounts,
     pending: Vec<Release>,
 }
 
 impl LeaseLedger {
-    pub(super) fn receive(&mut self, key: FrameKey) {
+    pub(in crate::platform) fn receive(&mut self, key: FrameKey) {
         assert!(
             self.held.insert(key, Lease::default()).is_none(),
             "duplicate native frame lease {key:?}"
@@ -74,20 +75,20 @@ impl LeaseLedger {
         self.counts.received += 1;
     }
 
-    pub(super) fn accept(&mut self, key: FrameKey) {
+    pub(in crate::platform) fn accept(&mut self, key: FrameKey) {
         let lease = self.held.get_mut(&key).expect("accepted an unknown frame");
         assert!(!lease.accepted, "duplicate accepted frame {key:?}");
         lease.accepted = true;
         self.counts.accepted += 1;
     }
 
-    pub(super) fn present(&mut self, key: FrameKey) {
+    pub(in crate::platform) fn present(&mut self, key: FrameKey) {
         assert!(self.held.get(&key).is_some_and(|lease| lease.accepted));
         self.counts.presented += 1;
     }
 
     /// Queues a held lease's release, once.
-    pub(super) fn complete(&mut self, key: FrameKey) {
+    pub(in crate::platform) fn complete(&mut self, key: FrameKey) {
         if let Some(lease) = self.held.get_mut(&key)
             && !lease.completed
         {
@@ -97,15 +98,15 @@ impl LeaseLedger {
         }
     }
 
-    pub(super) fn has_pending(&self) -> bool {
+    pub(in crate::platform) fn has_pending(&self) -> bool {
         !self.pending.is_empty()
     }
 
-    pub(super) fn take_pending(&mut self) -> Vec<Release> {
+    pub(in crate::platform) fn take_pending(&mut self) -> Vec<Release> {
         std::mem::take(&mut self.pending)
     }
 
-    pub(super) fn release(&mut self, key: FrameKey) {
+    pub(in crate::platform) fn release(&mut self, key: FrameKey) {
         let lease = self
             .held
             .remove(&key)
@@ -114,7 +115,7 @@ impl LeaseLedger {
         self.counts.released += 1;
     }
 
-    pub(super) fn counts(&self) -> LeaseCounts {
+    pub(in crate::platform) fn counts(&self) -> LeaseCounts {
         LeaseCounts {
             outstanding: self.held.len(),
             ..self.counts
@@ -123,7 +124,7 @@ impl LeaseLedger {
 }
 
 #[derive(Clone, Copy, Default)]
-pub(super) struct LeaseCounts {
+pub(in crate::platform) struct LeaseCounts {
     pub(super) received: usize,
     pub(super) accepted: usize,
     pub(super) presented: usize,
@@ -133,26 +134,26 @@ pub(super) struct LeaseCounts {
 }
 
 #[derive(Default)]
-pub(super) struct GpuActivity {
+pub(in crate::platform) struct GpuActivity {
     progress: Mutex<GpuProgress>,
     idle: Condvar,
 }
 
 #[derive(Default)]
-pub(super) struct GpuProgress {
+pub(in crate::platform) struct GpuProgress {
     in_flight: usize,
     submitted: usize,
     completed: usize,
 }
 
 impl GpuActivity {
-    pub(super) fn submitted(&self) {
+    pub(in crate::platform) fn submitted(&self) {
         let mut progress = self.progress.lock().unwrap();
         progress.in_flight += 1;
         progress.submitted += 1;
     }
 
-    pub(super) fn completed(&self) {
+    pub(in crate::platform) fn completed(&self) {
         let mut progress = self.progress.lock().unwrap();
         assert!(
             progress.in_flight > 0,
@@ -165,14 +166,14 @@ impl GpuActivity {
         }
     }
 
-    pub(super) fn wait_until_idle(&self) {
+    pub(in crate::platform) fn wait_until_idle(&self) {
         let mut progress = self.progress.lock().unwrap();
         while progress.in_flight != 0 {
             progress = self.idle.wait(progress).unwrap();
         }
     }
 
-    pub(super) fn counts(&self) -> (usize, usize, usize) {
+    pub(in crate::platform) fn counts(&self) -> (usize, usize, usize) {
         let progress = self.progress.lock().unwrap();
         (progress.submitted, progress.completed, progress.in_flight)
     }
@@ -180,7 +181,7 @@ impl GpuActivity {
 
 /// How a presented frame is being read by GPUI-CE command buffers.
 #[derive(Default)]
-pub(super) struct Sampling {
+pub(in crate::platform) struct Sampling {
     in_flight: AtomicUsize,
     /// Set once a command buffer sampling a newer frame has been submitted, so
     /// no command buffer submitted afterwards samples this one.
@@ -188,21 +189,21 @@ pub(super) struct Sampling {
 }
 
 /// A frame no longer displayed, released to Engine once nothing samples it.
-pub(super) struct RetiredSurface {
-    pub(super) key: FrameKey,
+pub(in crate::platform) struct RetiredSurface {
+    pub(in crate::platform) key: FrameKey,
     sampling: Arc<Sampling>,
 }
 
-pub(super) struct PresentedSurface {
-    pub(super) surface: ExternalMetalSurface,
-    pub(super) key: FrameKey,
+pub(in crate::platform) struct PresentedSurface {
+    pub(in crate::platform) surface: ExternalMetalSurface,
+    pub(in crate::platform) key: FrameKey,
     sampling: Arc<Sampling>,
     /// Frames this one replaced; they are superseded when it is first submitted.
-    pub(super) retired_until_submitted: Arc<Mutex<Vec<RetiredSurface>>>,
+    pub(in crate::platform) retired_until_submitted: Arc<Mutex<Vec<RetiredSurface>>>,
 }
 
 impl PresentedSurface {
-    pub(super) fn retire(&self) -> RetiredSurface {
+    pub(in crate::platform) fn retire(&self) -> RetiredSurface {
         RetiredSurface {
             key: self.key,
             sampling: self.sampling.clone(),
@@ -210,7 +211,7 @@ impl PresentedSurface {
     }
 }
 
-pub(super) struct Backing {
+pub(in crate::platform) struct Backing {
     image: CVPixelBuffer,
     iosurface_id: u32,
 }
@@ -222,7 +223,7 @@ fn schedule_release_drain(release_scheduler: &AtomicPtr<c_void>) {
     }
 }
 
-pub(super) struct PresentationRuntime {
+pub(in crate::platform) struct PresentationRuntime {
     channel: Channel,
     channel_id: String,
     consumer_event: Mutex<Option<SharedEvent>>,
@@ -236,7 +237,7 @@ pub(super) struct PresentationRuntime {
 }
 
 impl PresentationRuntime {
-    pub(super) fn new(
+    pub(in crate::platform) fn new(
         service: &str,
         channel_id: String,
         leases: Arc<Mutex<LeaseLedger>>,
@@ -256,7 +257,7 @@ impl PresentationRuntime {
         })
     }
 
-    pub(super) fn activate(&self) -> anyhow::Result<()> {
+    pub(in crate::platform) fn activate(&self) -> anyhow::Result<()> {
         let device = gpui_apple::metal_renderer::MetalRenderer::selected_device();
         match self.channel.import_shared_event(&self.channel_id, &device) {
             Ok(Some((event, engine_registry_id))) => {
@@ -274,7 +275,7 @@ impl PresentationRuntime {
         Ok(())
     }
 
-    pub(super) fn stop_accepting_frames(&self) {
+    pub(in crate::platform) fn stop_accepting_frames(&self) {
         self.accepting_frames.store(false, Ordering::Release);
         if let Some(ready) = self.latest.lock().unwrap().take() {
             self.leases.lock().unwrap().complete(ready.key);
@@ -285,11 +286,11 @@ impl PresentationRuntime {
         }
     }
 
-    pub(super) fn schedule_release_drain(&self) {
+    pub(in crate::platform) fn schedule_release_drain(&self) {
         schedule_release_drain(&self.release_scheduler);
     }
 
-    pub(super) fn register_backing(
+    pub(in crate::platform) fn register_backing(
         &self,
         descriptor: BackingDescriptor,
         port: mach_port_t,
@@ -369,7 +370,7 @@ impl PresentationRuntime {
         Ok(())
     }
 
-    pub(super) fn receive_frame(
+    pub(in crate::platform) fn receive_frame(
         &self,
         backing: u64,
         generation: u64,
@@ -425,7 +426,7 @@ impl PresentationRuntime {
         ));
     }
 
-    pub(super) fn take_surface(&self) -> Option<PresentedSurface> {
+    pub(in crate::platform) fn take_surface(&self) -> Option<PresentedSurface> {
         let ready = self.latest.lock().unwrap().take()?;
         let backings = self.backings.lock().unwrap();
         let Some(backing) = backings.get(&(ready.key.backing, ready.key.generation)) else {

@@ -11,12 +11,14 @@ pub(super) use super::super::layout::{label, secondary_text};
 pub(super) fn scrolling_column(
     id: impl Into<gpui::ElementId>,
     content: impl IntoElement,
+    elastic_scroll: bool,
 ) -> impl IntoElement {
     v_stack()
         .id(id)
         .size_full()
         .items_center()
         .overflow_y_scroll()
+        .elastic_scroll(elastic_scroll)
         .p(px(metrics::INTERNAL_PAGE_INSET))
         .child(
             v_stack()

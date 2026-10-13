@@ -14,8 +14,8 @@ use super::super::workspace_layout::WorkspaceLayout;
 use super::BrowserWindow;
 
 /// Opens a native menu anchored to this window's pointer position. Keeping an
-/// AppKit view anchor associates the popup with the browser window instead of
-/// asking the platform to place it at a detached global pointer location.
+/// A view anchor keeps the popup associated with this browser window instead
+/// of placing it at a detached global pointer location.
 pub(super) fn show_window_context_menu(window: &Window, items: Vec<MenuItem>, cx: &App) {
     let viewport = window.viewport_size();
     let pointer = window.mouse_position();

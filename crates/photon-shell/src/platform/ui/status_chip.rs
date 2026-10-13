@@ -27,6 +27,10 @@ pub(super) enum ChipIcon {
 
 /// A compact chip with an icon and message, an optional action button and
 /// an optional close button. A new `id` fades the chip in again.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "keeps the chip's optional behavior explicit at its call sites"
+)]
 pub(super) fn status_chip(
     id: ElementId,
     transition: Transition,

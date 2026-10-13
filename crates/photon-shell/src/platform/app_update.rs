@@ -1,9 +1,7 @@
-//! Updating the app from tasks that native callbacks start.
+//! Updating GPUI after asynchronous callbacks.
 //!
-//! AppKit and the Engine sometimes spin a nested event loop while the app is
-//! being updated, as when the menu bar is replaced while the Dock restarts.
-//! A task queued from a native callback can run inside that loop, where the
-//! app cannot be updated; it then waits a moment and tries again.
+//! A task can reach GPUI while a nested native event loop is active, so the
+//! update helper waits briefly and retries until the app is available.
 
 use gpui::{App, AsyncApp};
 use std::time::Duration;

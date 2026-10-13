@@ -331,6 +331,10 @@ pub(super) fn insertion_marker(axis: TabDragAxis, size: f32, palette: ThemeColor
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "keeps the tab audio button's accessibility and focus inputs explicit"
+)]
 fn audio_control_button(
     id: String,
     tab_label: String,

@@ -124,10 +124,10 @@ impl BrowserWindow {
                     focus_handle: self.tab_focus_handles[index].clone(),
                     on_select: Box::new(cx.listener(move |this, _, window, cx| {
                         cx.stop_propagation();
-                        if let Some(until) = this.suppress_tab_click_until.take() {
-                            if Instant::now() <= until {
-                                return;
-                            }
+                        if let Some(until) = this.suppress_tab_click_until.take()
+                            && Instant::now() <= until
+                        {
+                            return;
                         }
                         if let Some(index) = this.tab_index_by_id(stable_id) {
                             this.activate_tab(index, true, window, cx);

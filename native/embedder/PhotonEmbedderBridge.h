@@ -210,6 +210,7 @@ void photon_view_zoom(void* view, int step);
 void photon_view_restart_unresponsive_page(void* view);
 void photon_runtime_set_system_reduced_motion_preference(void* runtime,
     bool reduce_motion);
+void photon_runtime_set_elastic_scroll_enabled(void* runtime, bool enabled);
 void photon_runtime_set_service_callback(void* runtime, void* callback_data,
     PhotonServiceCallback callback);
 void photon_view_pointer(void* view, int kind, double x, double y, int button,

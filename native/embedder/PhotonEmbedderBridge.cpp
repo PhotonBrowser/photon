@@ -512,6 +512,13 @@ photon_runtime_set_system_reduced_motion_preference(void* runtime,
             ->runtime->set_system_reduced_motion_preference(reduce_motion);
 }
 
+extern "C" void photon_runtime_set_elastic_scroll_enabled(void* runtime,
+    bool enabled)
+{
+    if (runtime)
+        static_cast<RuntimeHandle*>(runtime)->runtime->set_elastic_scroll_enabled(enabled);
+}
+
 extern "C" void photon_runtime_clear_browsing_data(void* runtime,
     int64_t since_unix_seconds, bool cache, bool site_data, void* callback_data,
     PhotonBrowsingDataClearedCallback callback)

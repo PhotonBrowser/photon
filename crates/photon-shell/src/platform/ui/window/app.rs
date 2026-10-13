@@ -1,43 +1,34 @@
 //! App startup: key bindings, the Engine runtime and the first window.
 
-use gpui::{App, Global, QuitMode};
+use gpui::{App, QuitMode};
 use gpui_elements::editable_text::actions::{DEFAULT_INPUT_CONTEXT, default_bindings};
 use gpui_platform::application;
-use photon_shortcuts::browser_shortcuts;
+use photon_shortcuts::{NewWindow, browser_shortcuts};
 use std::rc::Rc;
 use std::time::Duration;
 
 use super::super::super::app_update::update_app;
 use super::super::super::engine::EngineRuntime;
-use super::super::super::motion_observer::ReducedMotionObserver;
 use super::super::history::load_browsing_history;
 use super::super::install_form_controls;
 use super::super::settings::{Settings, load_settings};
-use super::app_menus::install_app_menus;
 use super::open_urls::{open_received_urls, receive_opened_urls};
 use super::session::{load_session, restore_session};
-use super::{BrowserWindow, open_browser_window};
+use super::{BrowserWindow, BrowserWindowRegistry, open_browser_window};
 use photon_storage::Profile;
-
-/// Keeps the system reduced-motion preference flowing into GPUI.
-struct ReducedMotion {
-    _observer: Option<ReducedMotionObserver>,
-}
-
-impl Global for ReducedMotion {}
 
 pub fn run() {
     let application = application();
     let opened_urls = receive_opened_urls(&application);
     application.run(move |cx: &mut App| {
-        // GPUI keeps macOS apps alive after their last window closes by default. Photon
-        // has one browser window and owns an Engine runtime, so closing it must quit the
-        // app and run the registered Engine/GPU shutdown path.
+        cx.set_global(BrowserWindowRegistry::default());
+        // Quit when the last browser window closes so the shell can stop its
+        // Engine runtime and release native resources.
         cx.set_quit_mode(QuitMode::LastWindowClosed);
         cx.bind_keys(default_bindings().as_keybindings(Some(DEFAULT_INPUT_CONTEXT)));
         // Keep browser actions and their default bindings in the shortcuts crate.
         cx.bind_keys(browser_shortcuts());
-        follow_reduced_motion(cx);
+        crate::platform::motion_observer::follow(cx);
         let profile = open_profile();
         load_settings(profile.clone(), cx);
         let runtime = Rc::new(
@@ -54,7 +45,16 @@ pub fn run() {
         load_browsing_history(profile, cx);
         announce_service_restarts(&runtime, cx);
         quit_after_env_timeout(cx);
-        install_app_menus(runtime.clone(), cx);
+        crate::platform::app_menus::install_app_menus(cx);
+        let new_window_runtime = runtime.clone();
+        cx.on_action(move |_: &NewWindow, cx| {
+            cx.activate(true);
+            if let Err(error) =
+                open_browser_window(new_window_runtime.clone(), initial_address(), false, cx)
+            {
+                crate::platform::trace(format_args!("new window: {error:#}"));
+            }
+        });
         install_form_controls(cx);
         open_received_urls(opened_urls, runtime.clone(), cx);
         cx.activate(true);
@@ -73,6 +73,7 @@ fn follow_settings(runtime: &Rc<EngineRuntime>, cx: &mut App) {
     let apply = |runtime: &EngineRuntime, cx: &mut App| {
         cx.set_window_appearance(Settings::chosen_appearance(cx));
         runtime.set_popup_policy(Settings::get(cx).popup_policy);
+        runtime.set_elastic_scroll(Settings::get(cx).elastic_scroll);
     };
     apply(runtime, cx);
     let runtime = runtime.clone();
@@ -97,20 +98,6 @@ pub(super) fn initial_address() -> Option<String> {
         .ok()
         .map(|address| address.trim().to_owned())
         .filter(|address| !address.is_empty())
-}
-
-/// Keeps GPUI's reduce-motion flag in step with the system preference.
-fn follow_reduced_motion(cx: &mut App) {
-    let app = cx.to_async();
-    let observer = ReducedMotionObserver::new(move |reduce_motion| {
-        app.spawn(async move |cx| {
-            update_app(cx, |cx| cx.set_reduce_motion(reduce_motion)).await;
-        })
-        .detach();
-    });
-    cx.set_global(ReducedMotion {
-        _observer: observer,
-    });
 }
 
 /// Shows Engine service stops and restarts in every window.
