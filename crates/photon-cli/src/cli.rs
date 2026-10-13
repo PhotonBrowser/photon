@@ -66,8 +66,10 @@ enum Command {
         #[arg(value_enum)]
         scope: Option<CleanScope>,
     },
-    /// Check Rust formatting, compilation, and architecture rules.
+    /// Check formatting, lints, compilation, and architecture rules.
     Check,
+    /// Run Rust lints and native formatting checks.
+    Lint,
     /// Print a copyable AI prompt for fixing a check failure.
     FixPrompt,
     /// Format Photon-owned Rust and C++ files.
@@ -172,6 +174,7 @@ pub fn run() -> Result<(), String> {
             commands::build::clean(&root, scope)
         }
         Some(Command::Check) => commands::check::check(&root, verbose),
+        Some(Command::Lint) => commands::lint::lint(&root, verbose),
         Some(Command::FixPrompt) => {
             commands::check::print_fix_prompt(
                 &root,

@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
@@ -55,6 +56,71 @@ pub(crate) fn require_tool(tool: &str) -> Result<(), String> {
     output(tool, &["--version"], Path::new("."))
         .map(|_| ())
         .map_err(|_| format!("{tool} is missing; install it using your OS package manager"))
+}
+
+pub(crate) fn clang_format(root: &Path) -> Result<PathBuf, String> {
+    let executable_name = if cfg!(windows) {
+        "clang-format.exe"
+    } else {
+        "clang-format"
+    };
+    if let Ok(executable_path) = find_on_path(executable_name)
+        && let Ok(version) = output(&path(&executable_path), &["--version"], root)
+        && version.contains("version 21.")
+    {
+        return Ok(executable_path);
+    }
+
+    const VERSION: &str = "21.1.8";
+    let install_root = root.join("build/tools/clang-format").join(VERSION);
+    let relative_bin = if cfg!(windows) { "Scripts" } else { "bin" };
+    let executable = install_root.join(relative_bin).join(executable_name);
+    if executable.is_file() {
+        return Ok(executable);
+    }
+
+    stage("Install temporary clang-format tool");
+    let python = if cfg!(windows) { "python" } else { "python3" };
+    invoke(
+        python,
+        &[
+            "-m",
+            "pip",
+            "install",
+            "--disable-pip-version-check",
+            "--no-warn-script-location",
+            "--prefix",
+            &path(&install_root),
+            &format!("clang-format=={VERSION}"),
+        ],
+        root,
+        false,
+    )
+    .map_err(|error| {
+        format!(
+            "could not install temporary clang-format {VERSION}; install Python 3 with pip or install clang-format manually: {error}"
+        )
+    })?;
+
+    if executable.is_file() {
+        Ok(executable)
+    } else {
+        Err(format!(
+            "temporary clang-format installation completed but {} was not found",
+            executable.display()
+        ))
+    }
+}
+
+fn find_on_path(executable: &str) -> Result<PathBuf, String> {
+    let path_var = std::env::var_os("PATH").ok_or_else(|| "PATH is not set".to_owned())?;
+    for directory in std::env::split_paths(&path_var) {
+        let candidate = directory.join(executable);
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+    Err(format!("{executable} not found on PATH"))
 }
 
 pub(crate) fn require_tool_version(

@@ -15,6 +15,8 @@ cd photon
 
 `./photon setup` initializes the pinned Engine and GPUI-CE submodules, configures their Photon `origin` and upstream remotes from `photon.toml`, then switches both to their persistent development branches. Setup preserves initialized worktrees and does not advance dependency pins.
 
+For daily formatting, linting, checking, and build commands, see [Building Photon](Documentation/Building.md#common-commands). Run `./photon check` before sharing changes. Zed's clangd setup is documented in [Building Photon](Documentation/Building.md#zed-and-c-diagnostics).
+
 ## Existing checkout
 
 ```bash

@@ -1,23 +1,52 @@
 # Building Photon
 
-Photon's `./photon` script is the developer entry point. It requires Git, Rust/Cargo 1.85 or newer, a C++23-capable compiler, CMake 3.30 or newer, Ninja 1.10 or newer, Python 3, and the platform packages required by the pinned Engine. Bun and a browser-based UI host are not used.
+Use the `./photon` CLI for setup, formatting, linting, building, and running Photon. The toolchain requires Git, Rust/Cargo 1.85 or newer, a C++23-capable compiler, CMake 3.30 or newer, Ninja 1.10 or newer, Python 3 with pip, and the platform packages required by the pinned Engine. See [Ladybird build instructions](../Engine/Documentation/BuildInstructionsLadybird.md) for system packages.
 
-```bash
+## Common commands
+
+```sh
 ./photon setup
+./photon format
+./photon lint
 ./photon check
 ./photon test
 ./photon build
-./photon run --verbose
+./photon run
 ```
 
-`./photon run` builds the Engine and the direct GPUI-CE application, starts the Photon-owned macOS presentation broker, then opens the native window. Use `--url` to choose the initial page. `--shutdown-after-seconds N` runs for a fixed interval and then drains Metal work and frame leases; verbose mode prints the final submitted/completed/released/outstanding counts.
+- `./photon format` formats Photon-owned Rust and native files. If `clang-format` 21 is not on `PATH`, Photon installs version 21.1.8 with pip under the ignored `build/tools/` directory for this checkout.
+- `./photon lint` runs Clippy with warnings treated as errors and checks C, C++, and Objective-C formatting.
+- `./photon check` checks Rust formatting, runs linting, compiles the Cargo workspace, and verifies architecture and dependency checkout rules.
+- `./photon test` runs the Rust workspace tests.
+- `./photon build` builds the Engine and the GPUI-CE application.
+- `./photon run` builds and launches the native app. Use `--url URL` to choose the initial page. Use `--shutdown-after-seconds N` to exit after a fixed interval; `--verbose` prints the final presentation frame counts.
+- `./photon clean` removes generated build trees and stops the checkout-specific presentation broker.
 
-Build and test commands always use release mode. `--release` remains accepted for compatibility.
+`./photon check` includes the lint checks, so run it before sharing a change. Build and test commands use release mode by default; `--release` is accepted for compatibility.
 
-On macOS, set `PHOTON_WINDOW_BACKGROUND=opaque`, `blurred`, or `liquid-glass` before launching Photon. The default is `blurred`. Liquid Glass uses AppKit's regular glass effect on macOS 26 and later and falls back to the blurred material on older versions. AppKit controls the effect's blur strength; neither native material exposes a supported blur-radius setting.
+## Zed and C++ diagnostics
 
-The first Engine build configures Ladybird dependencies under `build/` and compiles Photon Engine helper processes plus LibPhotonEmbedder. The app remains Rust, with C++ limited to the narrow LibPhotonEmbedder bridge and required Apple XPC glue.
+Zed uses clangd with the root `.clangd` configuration for Photon C++, Objective-C++, and Objective-C files. The configuration supplies the native bridge's include paths and generated Engine headers. Run `./photon build` once to generate those headers. After changing `.clangd` or `.zed/settings.json`, run **zed: restart language server** from Zed's command palette.
 
-Incremental builds use the Engine fingerprint to rebuild Ladybird only when Engine sources or configuration change. Rust app or GPUI-CE changes rebuild the application. Build products and downloaded dependencies stay under ignored build directories.
+## Build behavior
 
-Use `./photon clean` to remove generated build trees and stop the checkout-specific presentation broker. `./photon setup` selects the persistent Engine and GPUI-CE development branches; `./photon sync --check` previews ahead/behind counts and conflicts, and `./photon sync` merges both upstreams. The `engine sync` and `gpui sync` subcommands work on one dependency and also accept `--check`. After testing and pushing dependency commits, `./photon pin` records their current commit IDs in Photon. See [Upstream maintenance](Upstream.md) for the distinction between local branches and recorded pins.
+The first Engine build configures Ladybird dependencies under `build/` and compiles Photon Engine helper processes plus LibPhotonEmbedder. Incremental builds use an Engine fingerprint to rebuild Ladybird only when Engine sources or configuration change. Rust app or GPUI-CE changes rebuild the application. Build products and downloaded tools stay under ignored build directories.
+
+On macOS, `./photon run` starts the Photon-owned presentation broker before opening the native window. Set `PHOTON_WINDOW_BACKGROUND` to `opaque`, `blurred` (the default), or `liquid-glass` before launching to choose the window background. Liquid Glass uses AppKit's regular glass effect on macOS 26 and later and falls back to blurred material on earlier versions.
+
+## Release channels (planned)
+
+Photon should add a separate canary channel for nightly builds when its release
+pipeline can produce, sign, and publish installable builds with a reliable
+update path. Canary should have its own channel identity and use the yellow
+logo variants in `crates/photon-brand/assets/`. Stable remains the default
+channel. Local development or debug builds are not canary releases; dev mode
+describes a build workflow, while canary identifies a distributed update
+channel. A local canary build may be useful for validating channel-specific
+behavior, but it should be selected explicitly.
+
+Linux shell work belongs under `crates/photon-shell/src/platform/linux/`, and native integration belongs under `native/embedder/linux/`. Those adapters are not implemented yet.
+
+## Upstream dependencies
+
+`./photon setup` initializes the pinned Engine and GPUI-CE submodules and selects their persistent Photon development branches. Use `./photon sync --check` to preview upstream changes, or `./photon sync` to merge them. `./photon engine sync` and `./photon gpui sync` work on one dependency; both accept `--check`. After testing and pushing dependency commits to Photon-owned remotes, `./photon pin` records the current commit IDs in Photon. See [Upstream maintenance](Upstream.md).

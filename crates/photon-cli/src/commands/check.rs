@@ -15,6 +15,7 @@ pub(crate) fn check(root: &Path, verbose: bool) -> Result<(), String> {
 fn check_inner(root: &Path, verbose: bool) -> Result<(), String> {
     stage("Check Rust formatting");
     invoke("cargo", &["fmt", "--all", "--", "--check"], root, verbose)?;
+    crate::commands::lint::lint(root, verbose)?;
     let cargo_args = ["check", "--workspace"];
     let engine_dir = root.join("build/engine-release");
     with_progress("Check Rust workspace", !verbose, || {

@@ -1,4 +1,7 @@
 {
+  "file_types": {
+    "C++": ["cc", "cpp", "cxx", "hh", "hpp", "hxx", "ipp", "tpp", "h", "C", "H"]
+  },
   "languages": {
     "TSX": {
       "formatter": {
