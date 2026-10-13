@@ -12,7 +12,7 @@ use super::super::tooltip::label_tooltip;
 use super::super::{ClickHandler, metrics, theme::ThemeColors};
 use super::{
     DraggedTab, TabDragAxis, TabDragMove, TabDrop, TabItem, TabParts, TabPrepaint,
-    animate_tab_entry, insertion_marker, is_foreign_tab_drag,
+    animate_tab_motion, insertion_marker, is_foreign_tab_drag,
 };
 
 /// The tabs, one row each: pinned tabs above a divider, then a row that
@@ -132,7 +132,7 @@ pub(in super::super) fn tab_list(
 /// on the row under the pointer. Hidden, the close button still sits under
 /// the pointer only when its row is hovered, so it is never clicked unseen.
 fn tab_row(parts: TabParts, palette: ThemeColors) -> AnyElement {
-    let entry_animation = parts.entry_animation;
+    let motion = parts.motion;
     let position_offset = parts.position_offset;
     let row = parts
         .tab
@@ -159,11 +159,11 @@ fn tab_row(parts: TabParts, palette: ThemeColors) -> AnyElement {
             .opacity(0.0)
             .group_hover(parts.group, |style| style.opacity(1.0))
     };
-    animate_tab_entry(
+    animate_tab_motion(
         row.child(parts.icon)
             .child(div().flex_1().min_w_0().truncate().child(parts.label))
             .child(close),
-        entry_animation,
+        motion,
         TabDragAxis::Vertical,
         position_offset,
     )
@@ -172,7 +172,7 @@ fn tab_row(parts: TabParts, palette: ThemeColors) -> AnyElement {
 /// A square holding only the tab's icon, for the collapsed sidebar. The
 /// tab's title stays its accessible name; middle-click still closes it.
 fn tab_tile(parts: TabParts, palette: ThemeColors) -> AnyElement {
-    let entry_animation = parts.entry_animation;
+    let motion = parts.motion;
     let position_offset = parts.position_offset;
     let tooltip = (!parts.suppress_tooltips).then(|| label_tooltip(parts.label.clone(), palette));
     let tile = collapsed_tile(parts.tab)
@@ -184,9 +184,9 @@ fn tab_tile(parts: TabParts, palette: ThemeColors) -> AnyElement {
     } else {
         tile.hover(|style| style.bg(rgba(palette.hover_surface)))
     };
-    animate_tab_entry(
+    animate_tab_motion(
         tile.child(parts.icon),
-        entry_animation,
+        motion,
         TabDragAxis::Vertical,
         position_offset,
     )

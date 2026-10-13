@@ -6,7 +6,7 @@ use gpui::{App, Context, DispatchPhase, KeyDownEvent, MouseButton, MouseDownEven
 use super::super::history::BrowsingHistory;
 use super::super::pages::PageIcon;
 use super::super::settings::Settings;
-use super::super::tabs::{TabIcon, TabItem};
+use super::super::tabs::{TabDragAxis, TabIcon, TabItem, TabMotion};
 use super::BrowserWindow;
 use super::content::TabContent;
 use std::time::Instant;
@@ -28,7 +28,11 @@ impl BrowserWindow {
     /// The listed tab `offset` places from the tab at `index`, wrapping at
     /// the ends; from a tab that is not listed, the first or last.
     pub(super) fn listed_tab_after(&self, index: usize, offset: isize, cx: &App) -> Option<usize> {
-        let listed = self.listed_tabs(cx);
+        let listed = self
+            .listed_tabs(cx)
+            .into_iter()
+            .filter(|&listed| !self.closing_tabs.contains(&self.tabs[listed].id))
+            .collect::<Vec<_>>();
         let count = listed.len() as isize;
         if count == 0 {
             return None;
@@ -50,7 +54,7 @@ impl BrowserWindow {
             .iter()
             .enumerate()
             .map(|(index, tab)| {
-                let (label, icon) = match &tab.content {
+                let (current_label, current_icon) = match &tab.content {
                     TabContent::Page(page) => {
                         let icon = match page.definition.icon {
                             PageIcon::Logo => TabIcon::Logo,
@@ -104,19 +108,91 @@ impl BrowserWindow {
                     }
                 };
                 let stable_id = tab.id;
-                self.tab_visuals
-                    .borrow_mut()
-                    .insert(stable_id, (label.clone(), icon.clone()));
+                let closing = self.closing_tabs.contains(&stable_id);
+                let (label, icon) = if closing {
+                    self.tab_visuals
+                        .borrow()
+                        .get(&stable_id)
+                        .cloned()
+                        .unwrap_or((current_label, current_icon))
+                } else {
+                    self.tab_visuals
+                        .borrow_mut()
+                        .insert(stable_id, (current_label.clone(), current_icon.clone()));
+                    (current_label, current_icon)
+                };
                 let dragging = self.tab_drag_layout.as_ref().is_some_and(|drag| {
                     drag.id == stable_id && !matches!(drag.phase, super::TabDragPhase::PendingDrag)
                 });
-                let entry_appearing = if dragging {
+                let entry_appearing = if closing {
+                    false
+                } else if dragging {
                     self.tab_entry_animations.borrow_mut().remove(&stable_id);
                     false
                 } else {
                     self.tab_entry_appearing(stable_id, &animations)
                 };
-                let icon_appearing = self.icon_appearing(stable_id, &icon, &animations);
+                let opacity = if dragging {
+                    super::super::metrics::TAB_DRAG_SOURCE_OPACITY
+                } else {
+                    1.0
+                };
+                let offset_scale = f32::from(animations.effect_strength_percent.min(300)) / 100.0;
+                let motion = if closing {
+                    let extent = self
+                        .closing_tab_extents
+                        .get(&stable_id)
+                        .copied()
+                        .unwrap_or_default();
+                    let has_following_tab = match axis {
+                        TabDragAxis::Horizontal => index + 1 < self.tabs.len(),
+                        TabDragAxis::Vertical => self
+                            .listed_tabs(cx)
+                            .into_iter()
+                            .skip_while(|&listed| listed != index)
+                            .skip(1)
+                            .any(|listed| self.tabs[listed].pin.is_some() == tab.pin.is_some()),
+                    };
+                    let trailing_gap = if has_following_tab {
+                        match axis {
+                            TabDragAxis::Horizontal => super::super::metrics::TAB_STRIP_GAP,
+                            TabDragAxis::Vertical => {
+                                super::super::metrics::SidebarSpacing::new(
+                                    self.sidebar.shows_icons(),
+                                )
+                                .item_gap
+                            }
+                        }
+                    } else {
+                        0.0
+                    };
+                    Some(TabMotion {
+                        id: format!("browser-tab-{stable_id}-motion").into(),
+                        layout_id: format!("browser-tab-{stable_id}-layout").into(),
+                        from: 1.0,
+                        target: 0.0,
+                        closing: true,
+                        extent,
+                        trailing_gap,
+                        opacity,
+                        offset_scale,
+                    })
+                } else if entry_appearing {
+                    Some(TabMotion {
+                        id: format!("browser-tab-{stable_id}-motion").into(),
+                        layout_id: format!("browser-tab-{stable_id}-layout").into(),
+                        from: 0.0,
+                        target: 1.0,
+                        closing: false,
+                        extent: 0.0,
+                        trailing_gap: 0.0,
+                        opacity,
+                        offset_scale,
+                    })
+                } else {
+                    None
+                };
+                let icon_appearing = !closing && self.icon_appearing(stable_id, &icon, &animations);
                 let insertion_before = self.incoming_tab_drag.as_ref().and_then(|incoming| {
                     (incoming.pinned == tab.pin.is_some() && incoming.before_id == Some(stable_id))
                         .then_some(incoming.size)
@@ -127,14 +203,19 @@ impl BrowserWindow {
                 });
                 TabItem {
                     id: format!("browser-tab-{stable_id}"),
-                    entry_appearing,
+                    motion,
+                    closing,
                     label,
                     icon_appearing: icon_appearing && !entry_appearing,
                     animations,
                     icon,
                     index,
                     pinned: tab.pin.is_some(),
-                    active: self.active_tab == Some(index),
+                    active: if closing {
+                        self.closing_tab_active.contains(&stable_id)
+                    } else {
+                        self.active_tab == Some(index)
+                    },
                     focus_handle: self.tab_focus_handles[index].clone(),
                     on_select: Box::new(cx.listener(move |this, _, window, cx| {
                         cx.stop_propagation();
@@ -160,9 +241,10 @@ impl BrowserWindow {
                     })),
                     on_toggle_audio: Box::new(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
-                        if let Some(webview) = this
-                            .tab_index_by_id(stable_id)
-                            .and_then(|index| this.tabs[index].content.webview())
+                        if !this.closing_tabs.contains(&stable_id)
+                            && let Some(webview) = this
+                                .tab_index_by_id(stable_id)
+                                .and_then(|index| this.tabs[index].content.webview())
                         {
                             webview.update(cx, |view, cx| view.toggle_audio_mute(cx));
                         }
@@ -171,6 +253,12 @@ impl BrowserWindow {
                         let browser = browser.clone();
                         let pinned = tab.pin.is_some();
                         Box::new(move |event, phase, hitbox, axis, window, cx| {
+                            if browser
+                                .update(cx, |this, _| this.closing_tabs.contains(&stable_id))
+                                .unwrap_or(true)
+                            {
+                                return;
+                            }
                             if phase != DispatchPhase::Bubble
                                 || event.button != MouseButton::Left
                                 || !hitbox.contains(&event.position)
@@ -255,7 +343,9 @@ impl BrowserWindow {
                     on_context_menu: Box::new(cx.listener(
                         move |this, _: &MouseDownEvent, window, cx| {
                             cx.stop_propagation();
-                            if let Some(index) = this.tab_index_by_id(stable_id) {
+                            if !this.closing_tabs.contains(&stable_id)
+                                && let Some(index) = this.tab_index_by_id(stable_id)
+                            {
                                 this.show_tab_menu(index, window, cx);
                             }
                         },

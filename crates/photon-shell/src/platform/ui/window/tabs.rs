@@ -14,8 +14,8 @@ use super::super::icons::LOADING_SPINNER_STEPS;
 use super::super::pages::{NEW_TAB, PageDefinition, find_page};
 use super::super::settings::Settings;
 use super::super::tabs::{
-    DraggedTab, ICON_ENTRANCE, TAB_ENTRY_MOTION, TabDragAxis, TabDragPreview, TabDrop, TabExit,
-    TabIcon, TabPrepaint,
+    DraggedTab, ICON_ENTRANCE, TAB_CLOSE_DURATION, TabDragAxis, TabDragPreview, TabDrop, TabIcon,
+    TabPrepaint,
 };
 use super::super::workspace_layout::WorkspaceLayout;
 use super::BrowserWindow;
@@ -1103,6 +1103,12 @@ impl BrowserWindow {
         let target = cx.entity().downgrade();
         let transfer = self.tab_drop_handler(cx);
         Rc::new(move |dragged, window, cx| {
+            if target
+                .update(cx, |browser, _| browser.closing_tabs.contains(&target_id))
+                .unwrap_or(true)
+            {
+                return;
+            }
             if dragged.source != window.window_handle() {
                 let Some(target_pinned) = target
                     .update(cx, |browser, _| {
@@ -1317,7 +1323,10 @@ impl BrowserWindow {
             TabDragAxis::Vertical => self.listed_tabs(cx),
         }
         .into_iter()
-        .filter(|&index| self.tabs[index].pin.is_some() == pinned)
+        .filter(|&index| {
+            self.tabs[index].pin.is_some() == pinned
+                && !self.closing_tabs.contains(&self.tabs[index].id)
+        })
         .collect();
         candidates.sort_by(|left, right| {
             let left = self.tab_slot_origin(self.tabs[*left].id, axis);
@@ -1477,7 +1486,7 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if index >= self.tabs.len() {
+        if index >= self.tabs.len() || self.closing_tabs.contains(&self.tabs[index].id) {
             return;
         }
         let was_active = self.active_tab == Some(index);
@@ -1537,7 +1546,7 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if index >= self.tabs.len() {
+        if index >= self.tabs.len() || self.closing_tabs.contains(&self.tabs[index].id) {
             return;
         }
         if self.active_tab != Some(index) {
@@ -1893,54 +1902,99 @@ impl BrowserWindow {
     }
 
     pub(super) fn close_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
-        if index >= self.tabs.len() {
+        if index >= self.tabs.len() || self.closing_tabs.contains(&self.tabs[index].id) {
+            return;
+        }
+        let animations = Settings::get(cx).animations;
+        let id = self.tabs[index].id;
+        let closes_last_window_tab =
+            self.tabs.len() == 1 && Settings::get(cx).close_window_with_last_tab;
+        let axis = self.tab_axis(cx);
+        let extent = self.tab_geometry.get(&id).map(|bounds| match axis {
+            TabDragAxis::Horizontal => f32::from(bounds.size.width),
+            TabDragAxis::Vertical => f32::from(bounds.size.height),
+        });
+        let can_animate = !closes_last_window_tab
+            && animations.enabled
+            && !cx.reduce_motion()
+            && extent.is_some_and(|extent| extent > 0.0);
+
+        if !can_animate {
+            self.finish_close_tab(index, window, cx);
             return;
         }
 
-        let removed = self.tabs[index].clone();
-        let animations = Settings::get(cx).animations;
-        let closes_window = self.tabs.len() == 1 && Settings::get(cx).close_window_with_last_tab;
-        let visual = self.tab_visuals.borrow_mut().remove(&removed.id);
-        let exit = if closes_window || !animations.enabled || cx.reduce_motion() {
-            None
-        } else {
-            self.tab_geometry.get(&removed.id).copied().zip(visual).map(
-                |(bounds, (label, icon))| TabExit {
-                    id: removed.id,
-                    label,
-                    icon,
-                    active: self.active_tab == Some(index),
-                    pinned: removed.pin.is_some(),
-                    axis: self.tab_axis(cx),
-                    collapsed: self.sidebar.shows_icons(),
-                    bounds,
-                    started: Instant::now(),
-                    duration: TAB_ENTRY_MOTION.exit_duration(&animations),
-                    finished_frame: false,
-                    favicon_image_to_drop: None,
-                },
-            )
-        };
-        let has_exit = exit.is_some();
-        if let Some(exit) = exit {
-            self.tab_exits.borrow_mut().push(exit);
-        }
         let cancel_drag = self
             .tab_drag_layout
             .as_ref()
-            .is_some_and(|drag| drag.id == removed.id);
+            .is_some_and(|drag| drag.id == id);
         if cancel_drag {
             if let Some(drag) = self.tab_drag_layout.as_mut() {
                 drag.phase = super::TabDragPhase::Cancelled;
             }
             self.clear_previous_target(cx);
-            self.clear_favourites_drag_hover(window.window_handle(), removed.id, cx);
+            self.clear_favourites_drag_hover(window.window_handle(), id, cx);
             let _ = cx.stop_active_drag(window);
             window.release_pointer();
             self.tab_drag_layout = None;
-            self.tab_position_animations.remove(&removed.id);
+            self.tab_position_animations.remove(&id);
             Self::notify_other_tab_drop_targets(cx, window.window_handle());
         }
+        let was_active = self.active_tab == Some(index);
+        self.closing_tabs.insert(id);
+        if was_active {
+            self.closing_tab_active.insert(id);
+        }
+        self.closing_tab_extents
+            .insert(id, extent.unwrap_or_default());
+        if was_active {
+            if let Some(next) = self.tab_to_activate_after_closing(index, cx) {
+                self.activate_tab(next, true, window, cx);
+            } else {
+                if let Some(webview) = self.tabs[index].content.webview() {
+                    webview.update(cx, |view, _| {
+                        view.session.set_visible(false);
+                        view.session.set_focus(false);
+                    });
+                }
+                self.active_tab = None;
+                self.close_find_bar(false, window, cx);
+                self.omnibox.update(cx, |omnibox, cx| {
+                    omnibox.set_content(None, None, window, cx)
+                });
+                self.show_empty_new_tab_page(window, cx);
+            }
+        }
+        cx.notify();
+
+        let handle = window.window_handle();
+        let close_task = cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(TAB_CLOSE_DURATION).await;
+            update_app(cx, |cx| {
+                handle
+                    .update(cx, |_, window, cx| {
+                        this.update(cx, |this, cx| {
+                            this.tab_close_tasks.remove(&id);
+                            if let Some(index) = this.tab_index_by_id(id)
+                                && this.closing_tabs.contains(&id)
+                            {
+                                this.finish_close_tab(index, window, cx);
+                            }
+                        })
+                    })
+                    .ok()
+            })
+            .await;
+        });
+        self.tab_close_tasks.insert(id, close_task);
+    }
+
+    fn finish_close_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if index >= self.tabs.len() {
+            return;
+        }
+        let removed = self.tabs[index].clone();
+        let closes_window = self.tabs.len() == 1 && Settings::get(cx).close_window_with_last_tab;
         if let Some(webview) = removed.content.webview() {
             let favicon = webview.update(cx, |view, _| {
                 view.session.set_visible(false);
@@ -1948,19 +2002,7 @@ impl BrowserWindow {
                 view.favicon.take()
             });
             if let Some(favicon) = favicon {
-                let mut exits = self.tab_exits.borrow_mut();
-                let deferred_drop = has_exit
-                    && exits
-                        .iter_mut()
-                        .find(|exit| exit.id == removed.id && exit.shows_favicon())
-                        .is_some_and(|exit| {
-                            exit.favicon_image_to_drop = Some(favicon.image.clone());
-                            true
-                        });
-                drop(exits);
-                if !deferred_drop {
-                    cx.drop_image(favicon.image, Some(window));
-                }
+                cx.drop_image(favicon.image, Some(window));
             }
         }
         self.revealed_icons.borrow_mut().remove(&removed.id);
@@ -1968,9 +2010,12 @@ impl BrowserWindow {
         self.tab_entry_animations.borrow_mut().remove(&removed.id);
         self.tab_position_animations.remove(&removed.id);
         self.tab_geometry.remove(&removed.id);
+        self.closing_tabs.remove(&removed.id);
+        self.closing_tab_active.remove(&removed.id);
+        self.closing_tab_extents.remove(&removed.id);
+        self.tab_close_tasks.remove(&removed.id);
 
         if closes_window {
-            // Closed with its last tab, the window has nothing to reopen.
             self.record_session_state(WindowSession::default(), cx);
             window.remove_window();
             return;
@@ -1978,11 +2023,9 @@ impl BrowserWindow {
         self.remember_closed(index, &removed.content, cx);
 
         let was_active = self.active_tab == Some(index);
-        let next = if was_active {
-            self.tab_after_closing(index, cx)
-        } else {
-            None
-        };
+        let next = was_active
+            .then(|| self.tab_after_closing(index, cx))
+            .flatten();
         let closed = self.tabs.remove(index);
         drop(self.tab_subscriptions.remove(index));
         self.tab_focus_handles.remove(index);
@@ -2003,7 +2046,9 @@ impl BrowserWindow {
             self.omnibox.update(cx, |omnibox, cx| {
                 omnibox.set_content(None, None, window, cx)
             });
-            self.show_empty_new_tab_page(window, cx);
+            if self.empty_page.is_none() {
+                self.show_empty_new_tab_page(window, cx);
+            }
             cx.notify();
             return;
         }
@@ -2012,10 +2057,37 @@ impl BrowserWindow {
                 Some(active_tab) => self.activate_tab(active_tab, true, window, cx),
                 // The space has no other tab; show it a new tab page, as an
                 // empty space does when switched to.
-                None => self.insert_page(self.tabs.len(), NEW_TAB, window, cx),
+                None if self.closing_tabs.is_empty() => {
+                    self.insert_page(self.tabs.len(), NEW_TAB, window, cx)
+                }
+                None => {}
             }
+        } else if self.active_tab.is_none() && self.closing_tabs.is_empty() {
+            self.insert_page(self.tabs.len(), NEW_TAB, window, cx);
         } else {
             cx.notify();
+        }
+    }
+
+    /// The next existing tab to activate while `index` is still mounted.
+    fn tab_to_activate_after_closing(&self, index: usize, cx: &Context<Self>) -> Option<usize> {
+        let listed = self.listed_tabs(cx);
+        if let Some(position) = listed.iter().position(|&listed| listed == index) {
+            listed
+                .iter()
+                .skip(position + 1)
+                .chain(listed[..position].iter().rev())
+                .copied()
+                .find(|&candidate| {
+                    candidate != index && !self.closing_tabs.contains(&self.tabs[candidate].id)
+                })
+        } else {
+            listed
+                .into_iter()
+                .filter(|&candidate| {
+                    candidate != index && !self.closing_tabs.contains(&self.tabs[candidate].id)
+                })
+                .max_by_key(|&candidate| self.tabs[candidate].last_active)
         }
     }
 
@@ -2028,13 +2100,19 @@ impl BrowserWindow {
         let listed = self.listed_tabs(cx);
         let next = match listed.iter().position(|&listed| listed == index) {
             Some(position) => listed
-                .get(position + 1)
-                .or_else(|| listed.get(position.checked_sub(1)?))
-                .copied(),
-            None => listed
                 .iter()
+                .skip(position + 1)
+                .chain(listed[..position].iter().rev())
                 .copied()
-                .max_by_key(|&listed| self.tabs[listed].last_active),
+                .find(|&candidate| {
+                    candidate != index && !self.closing_tabs.contains(&self.tabs[candidate].id)
+                }),
+            None => listed
+                .into_iter()
+                .filter(|&candidate| {
+                    candidate != index && !self.closing_tabs.contains(&self.tabs[candidate].id)
+                })
+                .max_by_key(|&candidate| self.tabs[candidate].last_active),
         };
         next.map(|next| if next > index { next - 1 } else { next })
     }
@@ -2135,6 +2213,9 @@ impl BrowserWindow {
         let Some(index) = self.tab_index_by_id(tab_id) else {
             return;
         };
+        if self.closing_tabs.contains(&tab_id) {
+            return;
+        }
         if event.keystroke.modifiers.modified() {
             return;
         }
@@ -2533,3 +2614,12 @@ mod tab_drag_tests {
         );
     }
 }
+            if target
+                .update(cx, |browser, _| browser.closing_tabs.contains(&target_id))
+                .unwrap_or(true)
+            {
+                return;
+            }
+        if self.closing_tabs.contains(&tab_id) {
+            return;
+        }

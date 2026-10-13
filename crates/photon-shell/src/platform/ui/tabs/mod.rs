@@ -8,26 +8,23 @@ mod list;
 mod strip;
 
 use gpui::{
-    AnyElement, AnyWindowHandle, App, Bounds, Context, DispatchPhase, ElementId, FocusHandle,
-    Hitbox, ImageSource, MouseButton, MouseDownEvent, MouseMoveEvent, ObjectFit, Render, Role,
-    Stateful, Window, div, img, prelude::*, px, rgb, rgba,
+    AnimationExt, AnyElement, AnyWindowHandle, App, Bounds, Context, DispatchPhase, ElementId,
+    FocusHandle, Hitbox, ImageSource, MouseButton, MouseDownEvent, MouseMoveEvent, ObjectFit,
+    Render, Role, SpringAnimation, SpringConfig, Stateful, Window, div, img, prelude::*, px, rgb,
+    rgba,
 };
 
 use super::Favicon;
 use super::controls::FocusRing;
 use super::controls::{OwnsClicks, Pressable};
 use super::icons::{audio_icon, close_icon, globe_icon, loading_spinner, photon_logo};
-use super::layout::h_stack;
-use super::motion::{AnimateIn, Edge, Entrance, Speed};
+use super::layout::{h_stack, v_stack};
+use super::motion::{AnimateIn, Entrance};
 use super::{
     ClickHandler, KeyDownHandler, MouseDownHandler, MouseUpHandler, metrics, theme::ThemeColors,
 };
 pub(super) use list::tab_list;
-use std::{
-    rc::Rc,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{rc::Rc, time::Duration};
 pub(super) use strip::tab_strip;
 
 pub(super) type TabPointerDown =
@@ -115,195 +112,105 @@ impl TabIcon {
 /// How a tab icon appears.
 pub(super) const ICON_ENTRANCE: Entrance = Entrance::pop(metrics::TAB_FAVICON_SIZE);
 
-/// A new tab settles into its slot as it fades and slides into view.
-pub(super) const TAB_ENTRY_MOTION: Entrance = Entrance::new().fade_from(0.0).speed(Speed::Standard);
+/// A closing tab settles out of its slot with the same spring used by its entry.
+const TAB_MOTION_SPRING: SpringConfig = SpringConfig::new(1_800.0, 84.85, 1.0);
+const TAB_MOTION_EPSILON: f32 = 0.001;
+pub(super) const TAB_CLOSE_DURATION: Duration = Duration::from_millis(260);
 
-pub(super) fn animate_tab_entry<E>(
+#[derive(Clone)]
+pub(super) struct TabMotion {
+    pub id: ElementId,
+    pub layout_id: ElementId,
+    pub from: f32,
+    pub target: f32,
+    pub closing: bool,
+    pub extent: f32,
+    pub trailing_gap: f32,
+    pub opacity: f32,
+    pub offset_scale: f32,
+}
+
+pub(super) fn animate_tab_motion<E>(
     element: E,
-    animation: Option<(ElementId, photon_core::AnimationSettings)>,
+    motion: Option<TabMotion>,
     axis: TabDragAxis,
     position_offset: f32,
 ) -> AnyElement
 where
     E: Styled + IntoElement + 'static,
 {
-    let Some((id, settings)) = animation else {
+    let Some(motion) = motion else {
         return element.into_any_element();
     };
-    let entrance = match axis {
-        TabDragAxis::Horizontal => {
-            TAB_ENTRY_MOTION.slide_from(Edge::Left, metrics::TAB_ENTRY_OFFSET)
+    let element = if motion.closing {
+        match axis {
+            TabDragAxis::Horizontal => element.flex_none().min_w_0().w_full(),
+            TabDragAxis::Vertical => element.flex_none().min_h_0().h_full(),
         }
-        TabDragAxis::Vertical => TAB_ENTRY_MOTION.slide_down(metrics::TAB_ENTRY_OFFSET),
+    } else {
+        element
     };
-    let base_offset = match axis {
-        TabDragAxis::Horizontal => (position_offset, 0.0),
-        TabDragAxis::Vertical => (0.0, position_offset),
-    };
-    element
-        .animate_in_with_offset(id, entrance, &settings, base_offset)
-        .into_any_element()
-}
-
-/// A tab's last visible appearance, retained briefly after it closes.
-pub(super) struct TabExit {
-    pub id: u64,
-    pub label: String,
-    pub icon: TabIcon,
-    pub active: bool,
-    pub pinned: bool,
-    pub axis: TabDragAxis,
-    pub collapsed: bool,
-    pub bounds: Bounds<gpui::Pixels>,
-    pub started: Instant,
-    pub duration: Duration,
-    /// Keep one fully faded frame mounted before removing this visual.
-    pub finished_frame: bool,
-    /// The tab view's favicon image must outlive its exit visual.
-    pub favicon_image_to_drop: Option<Arc<gpui::RenderImage>>,
-}
-
-impl TabExit {
-    pub fn shows_favicon(&self) -> bool {
-        matches!(
-            &self.icon,
-            TabIcon::Favicon(_)
-                | TabIcon::Audio {
-                    favicon: Some(_),
-                    ..
+    let element = element.with_spring(
+        motion.id,
+        SpringAnimation::new(TAB_MOTION_SPRING)
+            .with_epsilon(TAB_MOTION_EPSILON)
+            .to(motion.target)
+            .from(motion.from),
+        move |element, value| {
+            let progress = value.clamp(0.0, 1.0);
+            let leaving = 1.0 - progress;
+            let offset = match axis {
+                TabDragAxis::Horizontal => {
+                    -metrics::TAB_ENTRY_OFFSET * leaving * motion.offset_scale
                 }
-        )
+                TabDragAxis::Vertical => metrics::TAB_ENTRY_OFFSET * leaving * motion.offset_scale,
+            };
+            element
+                .opacity(motion.opacity * progress)
+                .when(axis == TabDragAxis::Horizontal, |element| {
+                    element.left(px(position_offset + offset))
+                })
+                .when(axis == TabDragAxis::Vertical, |element| {
+                    element.top(px(position_offset + offset))
+                })
+        },
+    );
+    if !motion.closing {
+        return element.into_any_element();
     }
-}
 
-/// Draws a just-closed tab over its last bounds while it fades and slides away.
-pub(super) fn tab_exit_element(
-    exit: &TabExit,
-    palette: ThemeColors,
-    progress: f32,
-    request_next_frame: bool,
-) -> AnyElement {
-    let eased = progress.clamp(0.0, 1.0).powi(3);
-    let opacity = 1.0 - eased;
-    let offset = -metrics::TAB_ENTRY_OFFSET * eased;
-    let color = if exit.active {
-        palette.text_primary
-    } else {
-        palette.text_secondary
-    };
-    let icon_size = if exit.axis == TabDragAxis::Vertical {
-        metrics::SidebarSpacing::new(exit.collapsed).icon_size
-    } else {
-        metrics::TAB_FAVICON_SIZE
-    };
-    let icon = tab_exit_icon(&exit.icon, color, icon_size, palette);
-    let close = h_stack()
-        .flex_shrink_0()
-        .items_center()
-        .justify_center()
-        .size(px(metrics::TAB_CLOSE_BUTTON_SIZE))
-        .child(close_icon(palette.text_secondary, metrics::TAB_ICON_SIZE));
-    let content = match (exit.axis, exit.collapsed, exit.pinned) {
-        (TabDragAxis::Horizontal, _, true) => div()
-            .size_full()
-            .items_center()
-            .justify_center()
-            .child(icon),
-        (TabDragAxis::Vertical, true, _) => div()
-            .size_full()
-            .items_center()
-            .justify_center()
-            .child(icon),
-        (TabDragAxis::Horizontal, _, false) => h_stack()
-            .size_full()
-            .items_center()
-            .gap(px(metrics::TAB_CLOSE_GAP))
-            .px(px(metrics::TAB_HORIZONTAL_PADDING))
-            .text_size(px(metrics::TAB_FONT_SIZE))
-            .child(icon)
-            .child(
-                div()
-                    .flex_1()
+    let layout_spring = SpringAnimation::new(TAB_MOTION_SPRING)
+        .with_epsilon(TAB_MOTION_EPSILON)
+        .to(0.0)
+        .from(1.0);
+    match axis {
+        TabDragAxis::Horizontal => h_stack()
+            .flex_none()
+            .min_w_0()
+            .overflow_hidden()
+            .child(element)
+            .with_spring(motion.layout_id, layout_spring, move |layout, value| {
+                let progress = value.clamp(0.0, 1.0);
+                layout
+                    .flex_none()
                     .min_w_0()
-                    .truncate()
-                    .child(exit.label.clone()),
-            )
-            .child(close),
-        (TabDragAxis::Vertical, false, _) => h_stack()
-            .size_full()
-            .items_center()
-            .gap(px(metrics::SIDEBAR_TAB_ICON_GAP))
-            .pl(px(metrics::SIDEBAR_TAB_PADDING))
-            .pr(px(metrics::SIDEBAR_PADDING))
-            .text_size(px(metrics::SIDEBAR_FONT_SIZE))
-            .child(icon)
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .truncate()
-                    .child(exit.label.clone()),
-            )
-            .child(close),
-    };
-    let origin = exit.bounds.origin;
-    let element = div()
-        .id(format!("browser-tab-exit-{}", exit.id))
-        .absolute()
-        .left(px(f32::from(origin.x)
-            + if exit.axis == TabDragAxis::Horizontal {
-                offset
-            } else {
-                0.0
-            }))
-        .top(px(f32::from(origin.y)
-            + if exit.axis == TabDragAxis::Vertical {
-                offset
-            } else {
-                0.0
-            }))
-        .w(exit.bounds.size.width)
-        .h(exit.bounds.size.height)
-        .rounded(px(if exit.axis == TabDragAxis::Horizontal {
-            metrics::CONTROL_RADIUS
-        } else {
-            metrics::SIDEBAR_ITEM_RADIUS
-        }))
-        .text_color(rgb(color))
-        .when(exit.active, |element| {
-            element.bg(rgba(palette.selected_surface))
-        })
-        .opacity(opacity)
-        .child(content)
-        .on_prepaint(move |_, window, _| {
-            if request_next_frame {
-                window.request_animation_frame();
-            }
-        });
-    element.into_any_element()
-}
-
-fn tab_exit_icon(icon: &TabIcon, color: u32, size: f32, palette: ThemeColors) -> AnyElement {
-    match icon {
-        TabIcon::Loading(step) => loading_spinner(color, size, *step).into_any_element(),
-        TabIcon::Favicon(favicon) => img(ImageSource::Render(favicon.image.clone()))
-            .object_fit(ObjectFit::Contain)
-            .size(px(size))
-            .flex_shrink_0()
+                    .w(px(motion.extent * progress))
+                    .mr(px(-motion.trailing_gap * (1.0 - progress)))
+            })
             .into_any_element(),
-        TabIcon::Audio { muted, .. } => div()
-            .size(px(metrics::TAB_AUDIO_BUTTON_SIZE))
-            .flex_shrink_0()
-            .items_center()
-            .justify_center()
-            .child(audio_icon(color, metrics::TAB_AUDIO_ICON_SIZE, *muted))
-            .into_any_element(),
-        TabIcon::Page => globe_icon(color, size).into_any_element(),
-        TabIcon::Symbol(symbol) => symbol(color, size),
-        TabIcon::Logo => img(photon_logo(palette.logo_tint))
-            .object_fit(ObjectFit::Contain)
-            .size(px(size))
-            .flex_shrink_0()
+        TabDragAxis::Vertical => v_stack()
+            .flex_none()
+            .min_h_0()
+            .overflow_hidden()
+            .child(element)
+            .with_spring(motion.layout_id, layout_spring, move |layout, value| {
+                let progress = value.clamp(0.0, 1.0);
+                layout
+                    .flex_none()
+                    .min_h_0()
+                    .h(px(motion.extent * progress))
+                    .mb(px(-motion.trailing_gap * (1.0 - progress)))
+            })
             .into_any_element(),
     }
 }
@@ -335,8 +242,10 @@ where
 
 pub(super) struct TabItem {
     pub id: String,
-    /// Whether this tab is still within its first appearance animation.
-    pub entry_appearing: bool,
+    /// The tab's entrance or in-place closing spring.
+    pub motion: Option<TabMotion>,
+    /// The tab is leaving and should no longer respond to input.
+    pub closing: bool,
     /// The tab's place among the window's tabs, which a list may not show
     /// all of.
     pub index: usize,
@@ -378,7 +287,7 @@ struct TabParts {
     pinned: bool,
     suppress_tooltips: bool,
     group: String,
-    entry_animation: Option<(ElementId, photon_core::AnimationSettings)>,
+    motion: Option<TabMotion>,
     position_offset: f32,
 }
 
@@ -401,21 +310,22 @@ impl TabParts {
         let audio_control = matches!(&tab.icon, TabIcon::Audio { .. });
         let position_offset = tab.position_offset;
         let animations = tab.animations;
-        let entry_animation = tab
-            .entry_appearing
-            .then(|| (format!("{tab_id}-entry").into(), animations));
+        let motion = tab.motion.clone();
         let dragged = tab.dragging;
         let suppress_tooltips = tab.suppress_tooltips;
-        let focus_handle = tab.focus_handle.tab_index(focus_index).tab_stop(tab.active);
+        let focus_handle = tab
+            .focus_handle
+            .tab_index(focus_index)
+            .tab_stop(tab.active && !tab.closing);
         let element = h_stack()
             .id(tab.id.clone())
             .group(tab.id.clone())
             .role(Role::Tab)
             .aria_label(tab.label.clone())
-            .aria_selected(tab.active)
+            .aria_selected(tab.active && !tab.closing)
             .aria_position_in_set(position + 1)
             .aria_size_of_set(tab_count)
-            .track_focus(&focus_handle)
+            .when(!tab.closing, |element| element.track_focus(&focus_handle))
             .focus_ring(palette)
             .items_center()
             .text_color(rgb(if tab.active {
@@ -481,6 +391,7 @@ impl TabParts {
                 focus_index + 1,
                 icon_color,
                 !suppress_tooltips,
+                !tab.closing,
                 palette,
             ),
             TabIcon::Logo => sized_icon(
@@ -498,6 +409,11 @@ impl TabParts {
             focus_index + 1 + if audio_control { 1 } else { 0 },
             palette,
         );
+        let close = if tab.closing {
+            close.tab_stop(false)
+        } else {
+            close
+        };
         Self {
             tab: element,
             icon,
@@ -507,7 +423,7 @@ impl TabParts {
             pinned: tab.pinned,
             suppress_tooltips,
             group: tab_id,
-            entry_animation,
+            motion,
             position_offset,
         }
     }
@@ -550,6 +466,7 @@ fn audio_control_button(
     focus_index: isize,
     icon_color: u32,
     show_tooltip: bool,
+    tab_stop: bool,
     palette: ThemeColors,
 ) -> AnyElement {
     let label = if muted {
@@ -563,6 +480,7 @@ fn audio_control_button(
         .role(Role::Button)
         .aria_label(label)
         .tab_index(focus_index)
+        .tab_stop(tab_stop)
         .focus_ring(palette)
         .flex_shrink_0()
         .relative()
