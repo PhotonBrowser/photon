@@ -36,7 +36,7 @@ is restored after exiting fullscreen. The shell removes titlebar insets
 reserved for window controls in native and borderless fullscreen, so its
 content can use that space when the controls are hidden. It configures the
 behavior in
-[`platform/window_settings.rs`](../../crates/photon-shell/src/platform/window_settings.rs);
+[`platform/macos/window_settings.rs`](../../crates/photon-shell/src/platform/macos/window_settings.rs);
 the generic AppKit integration stays in the GPUI-CE submodule.
 
 Photon owns XPC presentation, frame ordering, generations, retirement, release

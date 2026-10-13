@@ -3,16 +3,10 @@
 ```text
 photon-app
     └── photon-shell
-        ├── GPUI-CE window and Photon browser UI
-        ├── photon-performance diagnostics and overlay
-        ├── Photon Engine session adapter
-        │       ↓ narrow native embedder API
-        │   Photon Engine / Ladybird
-        └── native presentation lifecycle
-                ↓ uses
-            photon-presentation-ipc ←── photon-presentation-broker
-                ↓ XPC descriptors
-            IOSurface + MTLSharedEvent → GPUI-CE external Metal surface
+        ├── platform/ui/ (shared GPUI browser chrome and WebView)
+        └── platform target selection
+            ├── macos/ (native controls, Engine session, Metal renderer)
+            └── linux/ (opaque window and blank renderer placeholders)
 
 photon-ffi ── photon-core ── photon-omnibox
                     ↑
@@ -22,6 +16,38 @@ photon-shell ── photon-storage
 The desktop app uses the framework-independent Rust browser model directly.
 `photon-ffi` is the separate static library for native callers that need the C
 API; it is not part of the desktop shell's internal state path.
+
+## Platform split and Linux landing point
+
+`crates/photon-shell/src/platform/mod.rs` selects target adapters while the
+shared GPUI browser chrome and `PhotonWebView` live under
+[`platform/ui/`](../crates/photon-shell/src/platform/ui/mod.rs). macOS supplies
+native controls and its Metal page renderer in
+[`platform/macos/`](../crates/photon-shell/src/platform/macos/mod.rs). Linux's
+window adapter and page-renderer landing point are under
+[`platform/linux/`](../crates/photon-shell/src/platform/linux/mod.rs). Its page
+area is deliberately blank and displays a bottom-right “Linux renderer not
+implemented yet” notice until a Linux Engine surface is connected. The Linux
+application shell and Engine session are not wired up yet, so the target still
+exits with an implementation notice.
+
+Linux window settings leave windows opaque and reserve no space for macOS
+traffic lights. The Linux renderer stub is
+[`platform/linux/renderer.rs`](../crates/photon-shell/src/platform/linux/renderer.rs);
+the active macOS renderer is
+[`platform/macos/renderer.rs`](../crates/photon-shell/src/platform/macos/renderer.rs).
+Put Linux native embedder sources under
+[`native/embedder/linux/`](../native/embedder/linux/README.md), and macOS
+Objective-C++ helpers under [`native/embedder/macos/`](../native/embedder/macos/).
+The shell build script only builds and links the current Engine bridge on macOS.
+
+Linux will reuse the browser rules and services in `photon-core`,
+`photon-omnibox`, `photon-storage`, `photon-brand`, `photon-shortcuts`, and
+`photon-performance`, plus the same GPUI views under `platform/ui`. To complete
+the Linux shell, implement its Engine session, system services, window adapter,
+and page renderer under `platform/linux`; the shared WebView view should continue
+to own page input and browser UI while each adapter provides its native
+presentation surface.
 
 ## Ownership
 
@@ -69,102 +95,40 @@ API; it is not part of the desktop shell's internal state path.
 ## Rust package map
 
 ```text
-crates/
-├── photon-app/                       # Runnable Photon entry point
-├── photon-shell/                     # GPUI-CE shell and native Engine adapter
-│   └── src/platform/
-│       ├── engine/                   # Engine runtime and per-tab sessions
-│       │   ├── mod.rs                # The runtime every tab's session shares
-│       │   ├── session.rs            # A tab's session: navigation, input, presentation, shutdown
-│       │   ├── callback_state.rs     # What a tab's Engine callbacks share and update
-│       │   └── callbacks.rs          # Engine C callbacks
-│       ├── presentation.rs           # IOSurface frames, leases, GPU completion
-│       ├── window_settings.rs        # Native window options and material choice
-│       ├── default_browser.rs        # Whether macOS opens web links with the browser
-│       └── ui/
-│           ├── window/               # Browser window: layout, commands, rendering
-│           │   ├── app.rs            # App startup and the first window
-│           │   ├── tabs.rs           # Tab lifecycle
-│           │   ├── chrome.rs         # Renders independent workspace controls and panels
-│           │   ├── workspace.rs      # Composes chrome, active page, and window overlays
-│           │   ├── command_bar.rs    # Opening the command bar and carrying out its choice
-│           │   ├── side_dock/        # The sidebar: shown, collapsed to icons, hidden, revealed, or tucked away by Zen mode
-│           │   │   ├── mod.rs        # Its state and motion
-│           │   │   ├── commands.rs   # Showing, collapsing, Zen mode and the native window controls
-│           │   │   ├── edges.rs      # Resizing from its edge and revealing it from the window's edge
-│           │   │   └── view.rs       # Drawing it
-│           │   ├── tab_items.rs      # The tabs as both layouts draw them
-│           │   ├── tab_menu.rs       # Tab menu, reordering and bulk tab actions
-│           │   ├── favourites.rs     # Favourite tiles with their own tabs, and their menus
-│           │   ├── pinned.rs         # Pinned tabs, saved and reopened, and closing unused tabs
-│           │   ├── spaces.rs         # Switching spaces, and creating, changing and removing them
-│           │   ├── content.rs        # What a tab shows: a web view or one of the browser's pages
-│           │   ├── menu.rs           # Commands native menus run on a tab, favourite or space
-│           │   ├── context_menu.rs   # Native browser menu for right-clicks on empty chrome
-│           │   ├── keyboard_shortcuts.rs # Opens the keyboard shortcuts dialog
-│           │   ├── page_menu.rs      # Native page right-click menu from the Engine's items
-│           │   ├── app_menus.rs      # macOS menu bar, Dock menu and app-wide actions
-│           │   ├── open_urls.rs      # Opens addresses macOS hands the browser in new tabs
-│           │   ├── title.rs          # Window title follows the active page
-│           │   ├── session.rs        # Saves and reopens windows and tabs across restarts
-│           │   ├── find.rs           # Opening and closing the find bar
-│           │   ├── zoom.rs           # Zoom commands and the zoom chip
-│           │   ├── popups.rs         # Pop-up window confirmation
-│           │   ├── popup_window.rs   # Minimal windows for site pop-ups
-│           │   ├── actions.rs        # Keyboard shortcuts
-│           │   └── alerts.rs         # Crash and restart notices, JavaScript dialogs
-│           ├── webview/              # Page surface composition and tab state
-│           │   ├── favicon.rs        # The page icon
-│           │   ├── crashes.rs        # Crash recovery notices
-│           │   ├── dialogs.rs        # JavaScript dialog requests and replies
-│           │   ├── find.rs           # Find-in-page state
-│           │   ├── zoom.rs           # Page zoom
-│           │   ├── context_menu.rs   # Page right-click menu requests
-│           │   └── history.rs        # Recording visits in the history
-│           ├── pages/                # Photon's own pages at photon:// addresses, drawn natively in a tab
-│           │   ├── registry.rs       # Every page, found by its photon:// name
-│           │   ├── new_tab/          # Logo, shortcut tiles, customise panel, adding a shortcut
-│           │   ├── settings/         # Sidebar, one module per section, and resetting
-│           │   ├── layout.rs         # Page columns, headings and groups
-│           │   └── controls.rs       # Choices, switches and checkboxes
-│           ├── tabs/                 # Tab rows shared by both layouts: the strip and the sidebar list
-│           ├── toolbar.rs            # Shared row for individually placed toolbar controls
-│           ├── workspace_layout/     # Resolves saved workspace layouts for the shell
-│           │   ├── mod.rs            # The layout in effect and where components sit
-│           │   ├── catalog.rs        # Each component's placements and sizes
-│           │   └── legacy.rs         # Upgrades layouts saved by older versions
-│           ├── sidebar/              # Side dock host, favourites, navigation and footer panels
-│           ├── omnibox/              # Address field and its suggestion panel
-│           ├── command_bar/          # The ⌘T command bar: field and result rows
-│           ├── space_editor.rs       # The dialog for a space's name and colour
-│           ├── color_picker.rs       # Window colour swatches and the gradient switch
-│           ├── history.rs            # Shared browsing history, saved to the profile
-│           ├── settings.rs           # Shared settings, saved to the profile
-│           ├── js_dialog.rs          # JavaScript alert, confirm and prompt
-│           ├── modal.rs              # Reusable centered modal
-│           ├── kbd.rs                # Keyboard shortcuts as keycaps, in macOS or PC notation
-│           ├── shortcuts_dialog.rs   # Dialog listing every keyboard shortcut
-│           ├── motion.rs             # Entrance and exit animations, presets and Presence
-│           ├── menu.rs               # Popover surface and menu rows
-│           ├── controls.rs           # Segmented choices, switches, checkbox marks, text fields
-│           ├── layout.rs             # Stacks and elevation levels
-│           ├── button.rs             # Shared text and icon buttons
-│           ├── status_chip.rs        # Bottom-right crash and restart chips
-│           ├── find_bar.rs           # Find-in-page bar
-│           ├── input.rs              # Keyboard, pointer, and scroll forwarding
-│           ├── theme.rs              # Semantic color roles for each appearance and transparency
-│           └── metrics.rs            # Shared UI dimensions and typography
-├── photon-performance/               # Performance diagnostics model and overlay
-├── photon-core/                      # Framework-independent browser model
-├── photon-omnibox/                   # Search engines, address resolution, suggestions
-├── photon-storage/                   # On-disk profile: history, icons, website data
-├── photon-brand/                     # Browser name, bundle identifier, page scheme, profile folder, logo and app icon
-├── photon-ffi/                       # Exported C API and static library
-├── photon-shortcuts/                 # Browser actions and key bindings
-├── photon-cli/                       # `./photon` developer commands
-├── photon-presentation-ipc/          # XPC protocol, client, and native transport
-└── photon-presentation-broker/       # macOS XPC service executable
+crates/photon-shell/src/
+├── lib.rs                         # Public run entry point
+└── platform/
+    ├── mod.rs                     # Selects the target adapter and shared contracts
+    ├── app_update.rs              # Safe GPUI update retries for async callbacks
+    ├── ui/                         # Shared browser chrome and PhotonWebView source
+    │   ├── window/                 # Browser layout, tabs, commands and overlays
+    │   ├── webview/                # Shared page state, input and browser UI
+    │   ├── pages/                  # Photon pages, including new tab and settings
+    │   ├── tabs/, sidebar/         # Shared browser controls and layouts
+    │   ├── theme.rs                # Shared semantic color roles
+    │   └── metrics.rs              # Shared dimensions and type sizes
+    ├── macos/                      # Native controls and current Engine backend
+    │   ├── engine/                 # Engine runtime and per-tab sessions
+    │   ├── presentation.rs         # IOSurface frames, leases and GPU completion
+    │   ├── renderer.rs             # External Metal surface element
+    │   ├── window_settings.rs      # Traffic lights and macOS window materials
+    │   ├── app_menus.rs            # Menu bar and Dock integration
+    │   └── ffi.rs                  # macOS native embedder declarations
+    └── linux/                      # Linux backend landing point
+        ├── renderer.rs             # Blank page with bottom-right implementation notice
+        └── window_settings.rs      # Opaque window, no vibrancy or macOS controls
+
+native/embedder/
+├── PhotonEmbedderBridge.cpp       # Shared LibPhotonEmbedder C++ bridge
+├── PhotonEmbedderBridge.h
+├── linux/                         # Linux native integration landing point
+└── macos/                         # Objective-C++ and AppKit helpers
 ```
+
+`platform/ui/` is the single GPUI view source. The Linux application is not yet
+wired to it because its Engine session backend is still missing; when that
+backend is added, Linux should compile these same views and select only its own
+window and page renderer adapters.
 
 | Package | Owns | Depends on |
 | --- | --- | --- |
@@ -191,7 +155,8 @@ owned by the shell; the presentation XPC implementation lives inside
 | Change | Start here |
 | --- | --- |
 | Performance diagnostics or overlay | [`photon-performance`](../crates/photon-performance/src/lib.rs) and the Engine adapter |
-| GPUI-CE native window size, titlebar, traffic lights, blur | [`platform/window_settings.rs`](../crates/photon-shell/src/platform/window_settings.rs) and [`ui/metrics.rs`](../crates/photon-shell/src/platform/ui/metrics.rs) |
+| Shared GPUI window size and layout measurements | [`platform/ui/metrics.rs`](../crates/photon-shell/src/platform/ui/metrics.rs) |
+| Native window controls and materials | [`platform/macos/window_settings.rs`](../crates/photon-shell/src/platform/macos/window_settings.rs) and [`platform/linux/window_settings.rs`](../crates/photon-shell/src/platform/linux/window_settings.rs) |
 | Shell colors, appearance, transparency, or theme mapping | [`ui/theme.rs`](../crates/photon-shell/src/platform/ui/theme.rs) |
 | Menus, popovers, and shared controls | [`ui/menu.rs`](../crates/photon-shell/src/platform/ui/menu.rs) and [`ui/controls.rs`](../crates/photon-shell/src/platform/ui/controls.rs) |
 | The browser's name, bundle identifier, page scheme, profile folder, logo, or app icon | [`photon-brand`](../crates/photon-brand/src/lib.rs) |
@@ -199,13 +164,14 @@ owned by the shell; the presentation XPC implementation lives inside
 | Window layout or app startup | [`ui/window/`](../crates/photon-shell/src/platform/ui/window/mod.rs) |
 | Dialogs, modals, and buttons | [`ui/js_dialog.rs`](../crates/photon-shell/src/platform/ui/js_dialog.rs), [`ui/modal.rs`](../crates/photon-shell/src/platform/ui/modal.rs), [`ui/button.rs`](../crates/photon-shell/src/platform/ui/button.rs), and [`photon-core/src/dialogs.rs`](../crates/photon-core/src/dialogs.rs) |
 | Crash recovery and its notices | [`photon-core/src/crashes.rs`](../crates/photon-core/src/crashes.rs), [`ui/window/alerts.rs`](../crates/photon-shell/src/platform/ui/window/alerts.rs), and [`ui/status_chip.rs`](../crates/photon-shell/src/platform/ui/status_chip.rs) |
-| Page surface composition | [`ui/webview/`](../crates/photon-shell/src/platform/ui/webview/mod.rs) |
+| Shared WebView component and input | [`platform/ui/webview/`](../crates/photon-shell/src/platform/ui/webview/mod.rs) |
+| Page renderer | [`platform/macos/renderer.rs`](../crates/photon-shell/src/platform/macos/renderer.rs) or [`platform/linux/renderer.rs`](../crates/photon-shell/src/platform/linux/renderer.rs) |
 | Keyboard, pointer, or scroll forwarding | [`ui/input.rs`](../crates/photon-shell/src/platform/ui/input.rs) |
-| Engine session or callback behavior | [`platform/engine/`](../crates/photon-shell/src/platform/engine/mod.rs) |
-| Frame acceptance, presentation order, or release lifetime | [`platform/presentation.rs`](../crates/photon-shell/src/platform/presentation.rs) |
+| Engine session or callback behavior | [`platform/macos/engine/`](../crates/photon-shell/src/platform/macos/engine/mod.rs) |
+| Frame acceptance, presentation order, or release lifetime | [`platform/macos/presentation.rs`](../crates/photon-shell/src/platform/macos/presentation.rs) |
 | XPC messages, descriptor transport, or broker connection | [`photon-presentation-ipc`](../crates/photon-presentation-ipc/src/lib.rs) |
-| Engine frame pacing or pausing Engine while the window is occluded | [`platform/display.rs`](../crates/photon-shell/src/platform/display.rs), [`platform/window_observer.rs`](../crates/photon-shell/src/platform/window_observer.rs), then [`ui/window/`](../crates/photon-shell/src/platform/ui/window/mod.rs) |
-| Rust declarations for native embedder functions | [`platform/ffi.rs`](../crates/photon-shell/src/platform/ffi.rs) and [`PhotonEmbedderBridge.h`](../native/embedder/PhotonEmbedderBridge.h) |
+| Engine frame pacing or pausing Engine while the window is occluded | [`platform/macos/display.rs`](../crates/photon-shell/src/platform/macos/display.rs), [`platform/macos/window_observer.rs`](../crates/photon-shell/src/platform/macos/window_observer.rs), then [`ui/window/`](../crates/photon-shell/src/platform/ui/window/mod.rs) |
+| Rust declarations for native embedder functions | [`platform/macos/ffi.rs`](../crates/photon-shell/src/platform/macos/ffi.rs) and [`PhotonEmbedderBridge.h`](../native/embedder/PhotonEmbedderBridge.h) |
 | Browser state and command rules | [`photon-core/src/state.rs`](../crates/photon-core/src/state.rs) |
 | Browser settings and profile persistence | [`photon-core/src/settings.rs`](../crates/photon-core/src/settings.rs), [`photon-core/src/workspace.rs`](../crates/photon-core/src/workspace.rs), [`ui/settings.rs`](../crates/photon-shell/src/platform/ui/settings.rs), and [`photon-storage/src/profile.rs`](../crates/photon-storage/src/profile.rs) |
 | New tab page, settings page, and their controls | [`ui/pages/`](../crates/photon-shell/src/platform/ui/pages/mod.rs) and the rules in [`photon-core/src/new_tab.rs`](../crates/photon-core/src/new_tab.rs) |
@@ -221,9 +187,11 @@ owned by the shell; the presentation XPC implementation lives inside
 | `./photon` command behavior | [`photon-cli/src/commands/`](../crates/photon-cli/src/commands/) |
 | The development `Photon.app` bundle `./photon run` builds in `~/Library/Application Support/Photon/Development/`: Info.plist, icon, web-link registration | [`photon-cli/src/commands/app_bundle.rs`](../crates/photon-cli/src/commands/app_bundle.rs) |
 
-Keep window policy in `window_settings.rs`, shared presentation values in
-`ui/metrics.rs`, shell color roles in `ui/theme.rs`, browser rules in core and
-omnibox, frame lifecycle in the shell presentation module, and XPC transport in
+Keep macOS window policy in `platform/macos/window_settings.rs`, Linux window
+policy in `platform/linux/window_settings.rs`, shared measurements in
+`platform/ui/metrics.rs`, shared shell color roles in `platform/ui/theme.rs`,
+browser rules in core and omnibox, frame lifecycle in the macOS presentation
+module, and XPC transport in
 `photon-presentation-ipc`. Add a crate only when the code has an independent
 ownership boundary or a useful consumer outside its current crate.
 

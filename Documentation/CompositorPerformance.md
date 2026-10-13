@@ -12,7 +12,7 @@ Two separate problems stack: a 60 fps ceiling, then a release round trip that mi
 - `ContextState::m_display_refresh_rate` = 60 → both `FramePacer`s use a 16.7 ms interval.
 - `m_display_id` empty → `TimerVSyncScheduler` (millisecond-rounded `Core::Timer`, unaligned to vsync) instead of `CVDisplayLinkVSyncScheduler`.
 
-Fix: `Photon::View::set_display_metadata(display_id, refresh_rate)` (mirrors Qt's `WebContentView::set_display_metadata`), re-sent for new pages in `prepare_page_for_tab`. The shell calls it from the WebView's prepaint with the window's `CGDirectDisplayID`; `crates/photon-shell/src/platform/display.rs` reads the rate from `CGDisplayMode`, falling back to the `CVDisplayLink` nominal period.
+Fix: `Photon::View::set_display_metadata(display_id, refresh_rate)` (mirrors Qt's `WebContentView::set_display_metadata`), re-sent for new pages in `prepare_page_for_tab`. The shell calls it from the WebView's prepaint with the window's `CGDirectDisplayID`; `crates/photon-shell/src/platform/macos/display.rs` reads the rate from `CGDisplayMode`, falling back to the `CVDisplayLink` nominal period.
 
 ## 2. Release round trip longer than one tick — fixed
 
