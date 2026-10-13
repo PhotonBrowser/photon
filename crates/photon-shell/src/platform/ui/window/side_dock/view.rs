@@ -3,7 +3,7 @@
 //! over it, and its content stays put while its width changes, fading
 //! between icons and labels.
 
-use gpui::{AnyElement, Context, Div, Stateful, Window, div, prelude::*, px, rgba};
+use gpui::{AnyElement, Context, Div, Stateful, Window, div, prelude::*, px};
 use photon_core::DockRegion;
 
 use super::super::super::button::toolbar_button;
@@ -380,8 +380,6 @@ fn revealed_surface(palette: ThemeColors) -> Div {
         .absolute()
         .inset_0()
         .rounded(px(metrics::SIDEBAR_REVEAL_RADIUS))
-        .border_1()
-        .border_color(rgba(palette.menu_border))
         .raised(palette)
         .elevated(Elevation::High)
 }

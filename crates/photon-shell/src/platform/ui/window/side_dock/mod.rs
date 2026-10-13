@@ -25,6 +25,7 @@ use super::super::workspace_layout::WorkspaceLayout;
 #[derive(Clone, Copy, PartialEq)]
 struct WindowControls {
     visible: bool,
+    revealed: bool,
     /// Stacked at the top of the collapsed sidebar, rather than in a row.
     column: bool,
 }
@@ -270,6 +271,7 @@ impl SidebarState {
         };
         WindowControls {
             visible,
+            revealed: self.over_page(),
             column: region == Some(DockRegion::Leading)
                 && self.docked()
                 && self.collapsed

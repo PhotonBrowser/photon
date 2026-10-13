@@ -58,6 +58,7 @@ pub(in crate::platform) fn update_native_controls(
     animations: &AnimationSettings,
     visible: bool,
     column: bool,
+    revealed: bool,
     offset: f32,
     layout_changed: bool,
 ) {
@@ -73,7 +74,12 @@ pub(in crate::platform) fn update_native_controls(
             (Axis::Horizontal, WINDOW_CONTROLS_ORIGIN)
         };
         window.set_traffic_light_axis(axis);
-        window.set_traffic_light_position(point(px(x), px(y)));
+        let inset = if revealed {
+            metrics::SIDEBAR_REVEAL_INSET
+        } else {
+            0.0
+        };
+        window.set_traffic_light_position(point(px(x + inset), px(y + inset)));
         window.set_traffic_lights_visible(true);
     } else {
         // The sidebar offset carries controls out while they fade away.

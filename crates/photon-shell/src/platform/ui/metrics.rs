@@ -294,7 +294,7 @@ pub(super) const SIDEBAR_SEPARATOR_MARGIN: f32 = 8.0;
 pub(super) const SIDEBAR_SEPARATOR_INSET: f32 = 10.0;
 /// Gap around a sidebar temporarily revealed over the page.
 pub(super) const SIDEBAR_REVEAL_INSET: f32 = 8.0;
-pub(super) const SIDEBAR_REVEAL_RADIUS: f32 = 16.0;
+pub(super) const SIDEBAR_REVEAL_RADIUS: f32 = PAGE_RADIUS;
 /// The spaces in the sidebar's footer: a dot each, larger while shown.
 pub(super) const SPACE_DOT_SIZE: f32 = 7.0;
 pub(super) const SPACE_DOT_ACTIVE_SIZE: f32 = 10.0;

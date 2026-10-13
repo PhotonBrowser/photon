@@ -100,6 +100,7 @@ impl BrowserWindow {
             &animations,
             controls.visible,
             controls.column,
+            controls.revealed,
             offset,
             layout_changed,
         );

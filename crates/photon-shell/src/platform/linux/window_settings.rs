@@ -21,6 +21,7 @@ pub(crate) fn update_native_controls(
     _: &AnimationSettings,
     _: bool,
     _: bool,
+    _: bool,
     _: f32,
     _: bool,
 ) {
