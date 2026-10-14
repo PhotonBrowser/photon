@@ -87,6 +87,13 @@ impl Settings {
         cx.global::<Self>().profile.is_some()
     }
 
+    pub(super) fn config_path(cx: &App) -> Option<std::path::PathBuf> {
+        cx.global::<Self>()
+            .profile
+            .as_ref()
+            .map(|profile| profile.settings_path().to_path_buf())
+    }
+
     /// Changes the settings, notifies observers, and saves them shortly.
     pub(super) fn update(cx: &mut App, update: impl FnOnce(&mut BrowserSettings)) {
         cx.update_global::<Self, _>(|store, cx| {

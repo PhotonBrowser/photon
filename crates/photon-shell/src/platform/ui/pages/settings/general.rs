@@ -22,8 +22,40 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
     v_stack()
         .gap(px(metrics::INTERNAL_PAGE_SECTION_GAP))
         .child(default_browser(palette))
+        .child(config_file(palette, cx))
         .child(restore_session(palette, cx))
         .child(elastic_scroll(palette, cx))
+}
+
+fn config_file(palette: ThemeColors, cx: &App) -> impl IntoElement {
+    let path = Settings::config_path(cx);
+    let control = button(
+        "settings-open-config",
+        "Open config file",
+        ButtonKind::Secondary,
+        path.is_some(),
+        ButtonSize::Regular,
+        palette,
+        Box::new(move |_, _, _| {
+            if let Some(path) = &path {
+                #[cfg(target_os = "macos")]
+                let (program, args) = ("open", vec![path.as_os_str()]);
+                #[cfg(target_os = "linux")]
+                let (program, args) = ("xdg-open", vec![path.as_os_str()]);
+                #[cfg(any(target_os = "macos", target_os = "linux"))]
+                {
+                    let _ = std::process::Command::new(program).args(args).spawn();
+                }
+            }
+        }),
+    );
+    v_stack()
+        .gap(px(metrics::MENU_ITEM_GAP))
+        .child(group(palette).child(control_row("Configuration", control)))
+        .child(secondary_text(
+            "Edit browser preferences in config.json.",
+            palette,
+        ))
 }
 
 fn elastic_scroll(palette: ThemeColors, cx: &App) -> impl IntoElement {
