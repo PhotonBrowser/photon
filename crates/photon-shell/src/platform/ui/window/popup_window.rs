@@ -79,8 +79,6 @@ pub(super) fn open_minimal_window(
                         WebViewEvent::ContextMenuRequested
                         | WebViewEvent::OpenInNewTab { .. }
                         | WebViewEvent::Peek(_) => {}
-                        #[cfg(target_os = "macos")]
-                        WebViewEvent::SleepEligibilityChanged => {}
                     }
                 },
             );

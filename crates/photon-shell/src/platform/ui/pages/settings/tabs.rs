@@ -48,8 +48,8 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
             .into_any_element(),
             match sleep_mode {
                 TabSleepMode::Off => "Keep automatic tab sleeping disabled.".into(),
-                TabSleepMode::Balanced => "After 1–5 minutes idle, hide rendering for quiet pages and preserve their live state. Pages using audio or recent CPU or network activity stay awake.".into(),
-                TabSleepMode::Maximum => "After 5 seconds idle, hide rendering for quiet pages and preserve their live state. Pages using audio or recent CPU or network activity stay awake.".into(),
+                TabSleepMode::Balanced => "After one minute in another tab, stop rendering loaded, silent pages and keep their live state.".into(),
+                TabSleepMode::Maximum => "After five seconds in another tab, stop rendering loaded, silent pages and keep their live state.".into(),
             },
         ))
         .child(setting(

@@ -317,8 +317,6 @@ impl BrowserWindow {
         if tab_sleep_mode != self.tab_sleep_mode {
             self.tab_sleep_mode = tab_sleep_mode;
             self.sleep_idle_tabs(window, cx);
-        } else {
-            self.sync_activity_monitors(tab_sleep_mode, cx);
         }
         let background_style = Settings::get(cx).window_background_style;
         if background_style != self.window_background_style {

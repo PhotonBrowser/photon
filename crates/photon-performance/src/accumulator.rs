@@ -4,7 +4,7 @@ use std::{
         Mutex,
         atomic::{AtomicBool, Ordering},
     },
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 /// A browser tab and the performance data its Engine view currently reports.
@@ -59,9 +59,6 @@ struct PerformanceAccumulator {
     last_input_at: Option<Instant>,
     last_frame_at: Option<Instant>,
     frame_gaps: VecDeque<(Instant, f64)>,
-    cpu_sample_seen: bool,
-    last_activity_at: Option<Instant>,
-    activity_monitor_started_at: Option<Instant>,
 }
 
 impl PerformanceAccumulator {
@@ -102,41 +99,12 @@ impl PerformanceAccumulator {
     }
 
     fn set_engine_stats(&mut self, stats: EnginePerformanceStats) {
-        self.cpu_sample_seen |= stats.cpu_percent.is_some();
-        if stats.cpu_percent.is_some_and(|cpu| cpu > 0.0)
-            || stats.download_bytes_per_second > 0
-            || stats.upload_bytes_per_second > 0
-        {
-            self.last_activity_at = Some(Instant::now());
-        }
         self.snapshot.frames_per_second = stats.frames_per_second;
         self.snapshot.cpu_percent = stats.cpu_percent;
         self.snapshot.memory_bytes = stats.memory_bytes;
         self.snapshot.managed_heap_bytes = stats.managed_heap_bytes;
         self.snapshot.download_bytes_per_second = stats.download_bytes_per_second;
         self.snapshot.upload_bytes_per_second = stats.upload_bytes_per_second;
-    }
-
-    fn activity_status(&self, recent_for: Duration) -> Option<bool> {
-        self.cpu_sample_seen.then(|| {
-            self.last_activity_at
-                .is_some_and(|at| at.elapsed() <= recent_for)
-        })
-    }
-
-    fn activity_idle_for(&self) -> Option<Duration> {
-        if !self.cpu_sample_seen {
-            return None;
-        }
-        self.last_activity_at
-            .or(self.activity_monitor_started_at)
-            .map(|at| at.elapsed())
-    }
-
-    fn reset_activity_tracking(&mut self, enabled: bool) {
-        self.cpu_sample_seen = false;
-        self.last_activity_at = None;
-        self.activity_monitor_started_at = enabled.then(Instant::now);
     }
 
     /// Starts a fresh timing window after the overlay has been enabled.
@@ -156,7 +124,6 @@ pub struct PerformanceMonitor {
     accumulator: Mutex<PerformanceAccumulator>,
     overlay_enabled: AtomicBool,
     dashboard_enabled: AtomicBool,
-    activity_monitor_enabled: AtomicBool,
 }
 
 impl PerformanceMonitor {
@@ -165,40 +132,8 @@ impl PerformanceMonitor {
             || self.dashboard_enabled.load(Ordering::Acquire)
     }
 
-    pub fn is_activity_monitor_enabled(&self) -> bool {
-        self.activity_monitor_enabled.load(Ordering::Acquire)
-    }
-
     pub fn should_monitor_engine(&self) -> bool {
-        self.is_enabled() || self.is_activity_monitor_enabled()
-    }
-
-    /// Returns whether this page used CPU or the network recently. `None`
-    /// means the Engine has not produced an attributable CPU sample yet.
-    pub fn activity_status(&self, recent_for: Duration) -> Option<bool> {
-        self.accumulator.lock().unwrap().activity_status(recent_for)
-    }
-
-    /// Returns how long this page has gone without measured CPU or network
-    /// activity. `None` means the Engine has not produced an attributable CPU
-    /// sample yet.
-    pub fn activity_idle_for(&self) -> Option<Duration> {
-        self.accumulator.lock().unwrap().activity_idle_for()
-    }
-
-    /// Starts or stops the lightweight Engine sampling needed by tab sleeping.
-    pub fn set_activity_monitor_enabled(&self, enabled: bool) -> bool {
-        let changed = self
-            .activity_monitor_enabled
-            .swap(enabled, Ordering::AcqRel)
-            != enabled;
-        if changed {
-            self.accumulator
-                .lock()
-                .unwrap()
-                .reset_activity_tracking(enabled);
-        }
-        changed
+        self.is_enabled()
     }
 
     pub fn snapshot(&self) -> PerformanceDiagnostics {

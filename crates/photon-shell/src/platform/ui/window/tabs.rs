@@ -1543,7 +1543,7 @@ impl BrowserWindow {
         if index >= self.tabs.len() || self.closing_tabs.contains(&self.tabs[index].id) {
             return;
         }
-        if !self.wake_tab(index, cx) {
+        if !self.wake_tab(index) {
             return;
         }
         if self.active_tab != Some(index) {
@@ -1581,7 +1581,6 @@ impl BrowserWindow {
         if let Some(webview) = webview.as_ref() {
             let window_visible = self.window_visible;
             webview.update(cx, |view, cx| {
-                view.set_activity_monitor_enabled(false);
                 view.session.set_visible(window_visible);
                 if focus_contents {
                     window.focus(&view.focus_handle, cx);
@@ -1596,9 +1595,8 @@ impl BrowserWindow {
             }
         });
         self.sync_dialog(window, cx);
-        self.sync_activity_monitors(Settings::get(cx).tab_sleep_mode, cx);
-        self.wake_tab_sleep_scheduler();
         cx.notify();
+        self.wake_tab_sleep_scheduler();
     }
 
     fn move_tab_focus(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
@@ -1875,9 +1873,8 @@ impl BrowserWindow {
                     view.session.set_focus(false);
                 });
             }
-            self.sync_activity_monitors(Settings::get(cx).tab_sleep_mode, cx);
-            self.wake_tab_sleep_scheduler();
             cx.notify();
+            self.wake_tab_sleep_scheduler();
         }
     }
 

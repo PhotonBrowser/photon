@@ -131,7 +131,6 @@ impl EngineSession {
             ui_wake: Mutex::new(None),
             redraw_pending: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             performance: Arc::new(PerformanceMonitor::default()),
-            reported_activity: Mutex::default(),
             page_details: Mutex::default(),
             navigation_timing: navigation_timing.clone(),
         });
@@ -394,24 +393,6 @@ impl EngineSession {
 
     pub(in crate::platform) fn set_diagnostics_enabled(&mut self, enabled: bool) {
         self.callbacks.set_diagnostics_enabled(enabled);
-    }
-
-    pub(in crate::platform) fn is_activity_monitor_enabled(&self) -> bool {
-        self.callbacks.performance.is_activity_monitor_enabled()
-    }
-
-    pub(in crate::platform) fn activity_status(&self) -> Option<bool> {
-        self.callbacks
-            .performance
-            .activity_status(std::time::Duration::from_secs(2))
-    }
-
-    pub(in crate::platform) fn activity_idle_for(&self) -> Option<std::time::Duration> {
-        self.callbacks.performance.activity_idle_for()
-    }
-
-    pub(in crate::platform) fn set_activity_monitor_enabled(&mut self, enabled: bool) {
-        self.callbacks.set_activity_monitor_enabled(enabled);
     }
 
     #[allow(clippy::too_many_arguments)]

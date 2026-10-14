@@ -40,7 +40,7 @@ impl TabContent {
         match self {
             Self::Page(page) => page.view(palette),
             Self::Web(webview) => webview.clone().into_any_element(),
-            Self::Sleeping(sleeping) => sleeping.webview.clone().into_any_element(),
+            Self::Sleeping(_) => div().into_any_element(),
         }
     }
 
@@ -193,7 +193,7 @@ impl BrowserWindow {
 
     /// Makes a hidden page visible again without replacing its live Engine
     /// session, preserving its DOM, script state, form values, and scroll.
-    pub(super) fn wake_tab(&mut self, index: usize, cx: &mut Context<Self>) -> bool {
+    pub(super) fn wake_tab(&mut self, index: usize) -> bool {
         let Some(tab) = self.tabs.get(index) else {
             return false;
         };
@@ -201,7 +201,6 @@ impl BrowserWindow {
             return true;
         };
         let webview = sleeping.webview.clone();
-        webview.update(cx, |view, _| view.set_activity_monitor_enabled(false));
         self.tabs[index].content = TabContent::Web(webview);
         self.revealed_icons
             .borrow_mut()
@@ -241,8 +240,6 @@ impl BrowserWindow {
                     this.sync_dialog(window, cx);
                     cx.notify();
                 }
-                #[cfg(target_os = "macos")]
-                WebViewEvent::SleepEligibilityChanged => this.wake_tab_sleep_scheduler(),
                 WebViewEvent::ContextMenuRequested
                     if this.active_webview().as_ref() == Some(webview) =>
                 {

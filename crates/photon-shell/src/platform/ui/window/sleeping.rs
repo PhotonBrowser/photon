@@ -1,10 +1,9 @@
-//! Schedule quiet inactive Engine views to sleep at their deadlines.
+//! Stop rendering inactive Engine views after their sleep deadlines.
 
 use futures::channel::mpsc::{Sender, channel};
 use futures::future::{Either, select};
 use futures::{FutureExt, StreamExt, pin_mut};
 use gpui::{Context, Task, Window};
-use photon_core::TabSleepMode;
 use std::time::{Duration, Instant};
 
 use crate::platform::app_update::update_app;
@@ -13,10 +12,6 @@ use super::super::super::trace;
 use super::super::settings::Settings;
 use super::BrowserWindow;
 use super::content::{BrowserTab, SleepingTab, TabContent};
-
-/// The activity monitor samples page quietness at this interval.
-/// Allow two samples after the sleep timeout before putting a tab to sleep.
-const SLEEP_CHECK_INTERVAL: Duration = Duration::from_millis(500);
 
 pub(super) type TabSleepWaker = Sender<()>;
 
@@ -75,41 +70,30 @@ impl BrowserWindow {
     }
 
     fn next_sleep_check_delay(&self, cx: &gpui::App) -> Option<Duration> {
-        let mode = Settings::get(cx).tab_sleep_mode;
-        if mode == TabSleepMode::Off {
-            return None;
-        }
-        let eligible = self
-            .tabs
-            .iter()
-            .enumerate()
-            .filter(|(index, tab)| self.is_sleep_candidate(*index, tab, cx))
-            .count();
-        let timeout = photon_tab_sleep::idle_timeout(mode, eligible)?;
-        let activity_quiet_for = timeout + SLEEP_CHECK_INTERVAL * 2;
+        let timeout = photon_tab_sleep::idle_timeout(Settings::get(cx).tab_sleep_mode)?;
         let now = Instant::now();
         self.tabs
             .iter()
             .enumerate()
-            .filter_map(|(index, tab)| {
-                if !self.is_sleep_candidate(index, tab, cx) {
-                    return None;
-                }
+            .filter(|(index, tab)| self.is_sleep_candidate(*index, tab))
+            .filter_map(|(_, tab)| {
                 let TabContent::Web(webview) = &tab.content else {
                     return None;
                 };
-                let idle_for = webview.read(cx).current_activity_idle_for()?;
-                let active_delay = (tab.last_active + timeout).saturating_duration_since(now);
-                let quiet_delay = activity_quiet_for.saturating_sub(idle_for);
-                Some(active_delay.max(quiet_delay))
+                let view = webview.read(cx);
+                let safe_to_sleep = view.has_page()
+                    && !view.state.loading
+                    && !view.audio_playing
+                    && !view.page_unresponsive
+                    && view.dialogs.open().is_none();
+                safe_to_sleep.then(|| (tab.last_active + timeout).saturating_duration_since(now))
             })
             .min()
     }
 
     pub(super) fn sleep_idle_tabs(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         let mode = Settings::get(cx).tab_sleep_mode;
-        self.sync_activity_monitors(mode, cx);
-        if mode == TabSleepMode::Off {
+        let Some(timeout) = photon_tab_sleep::idle_timeout(mode) else {
             let mut woke = 0;
             for tab in &mut self.tabs {
                 if let TabContent::Sleeping(sleeping) = &tab.content {
@@ -121,15 +105,6 @@ impl BrowserWindow {
                 cx.notify();
             }
             return;
-        }
-        let eligible = self
-            .tabs
-            .iter()
-            .enumerate()
-            .filter(|(index, tab)| self.is_sleep_candidate(*index, tab, cx))
-            .count();
-        let Some(timeout) = photon_tab_sleep::idle_timeout(mode, eligible) else {
-            return;
         };
 
         let mut changed = 0;
@@ -138,7 +113,7 @@ impl BrowserWindow {
             let Some(webview) = tab.content.webview() else {
                 continue;
             };
-            let candidate = self.is_sleep_candidate(index, tab, cx);
+            let candidate = self.is_sleep_candidate(index, tab);
             let sleeping = matches!(&tab.content, TabContent::Sleeping(_));
             if !candidate {
                 if sleeping {
@@ -150,27 +125,12 @@ impl BrowserWindow {
             if sleeping || tab.last_active.elapsed() < timeout {
                 continue;
             }
-            // Engine activity is sampled on its own 500 ms timer. Require two
-            // more sweep intervals of quiet so work near the sleep deadline
-            // can be reported before the tab is marked asleep.
-            let activity_quiet_for = timeout + SLEEP_CHECK_INTERVAL * 2;
-            if !webview
-                .read(cx)
-                .current_activity_idle_for()
-                .is_some_and(|idle_for| idle_for >= activity_quiet_for)
-            {
-                continue;
-            }
             let safe_to_sleep = webview.update(cx, |view, _| {
                 if !view.has_page()
                     || view.state.loading
                     || view.audio_playing
                     || view.page_unresponsive
                     || view.dialogs.open().is_some()
-                    || view.activity_status != Some(false)
-                    || !view
-                        .current_activity_idle_for()
-                        .is_some_and(|idle_for| idle_for >= activity_quiet_for)
                 {
                     return false;
                 }
@@ -191,37 +151,7 @@ impl BrowserWindow {
         }
     }
 
-    pub(super) fn sync_activity_monitors(&mut self, mode: TabSleepMode, cx: &mut Context<Self>) {
-        for (index, tab) in self.tabs.iter().enumerate() {
-            let enabled = mode != TabSleepMode::Off
-                && self.active_tab != Some(index)
-                && tab.pin.is_none()
-                && tab.favourite.is_none();
-            if let Some(webview) = tab.content.webview()
-                && webview.read(cx).activity_monitor_enabled() != enabled
-            {
-                webview.update(cx, |view, _| view.set_activity_monitor_enabled(enabled));
-            }
-        }
-    }
-
-    fn is_sleep_candidate(&self, index: usize, tab: &BrowserTab, cx: &Context<Self>) -> bool {
-        if self.active_tab == Some(index)
-            || self.closing_tabs.contains(&tab.id)
-            || tab.pin.is_some()
-            || tab.favourite.is_some()
-        {
-            return false;
-        }
-        let Some(webview) = tab.content.webview() else {
-            return false;
-        };
-        let view = webview.read(cx);
-        view.has_page()
-            && !view.state.loading
-            && !view.audio_playing
-            && !view.page_unresponsive
-            && view.dialogs.open().is_none()
-            && view.activity_status == Some(false)
+    fn is_sleep_candidate(&self, index: usize, tab: &BrowserTab) -> bool {
+        self.active_tab != Some(index) && !self.closing_tabs.contains(&tab.id)
     }
 }
