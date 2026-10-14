@@ -157,6 +157,9 @@ Each selected installation gets a unique JSON file. Multi-browser runs also
 write one standalone HTML comparison report with no external assets. The HTML
 shows summary statistics and expandable serialized raw reports.
 
+Generated reports in `tools/velocity/results/` are ignored by Git. Keep any
+baseline you want to version in a separate, intentionally tracked directory.
+
 JSON schema version 2 stores benchmark and browser identity, browser version and
 executable path, timestamp, OS and architecture, startup mode, timeouts,
 profile strategy, warm-up status, cancellation and cleanup failures, random seed,

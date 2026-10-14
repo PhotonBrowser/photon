@@ -1,5 +1,6 @@
 build/
 target/
+tools/velocity/results/
 .cache/
 .DS_Store
 *.user
