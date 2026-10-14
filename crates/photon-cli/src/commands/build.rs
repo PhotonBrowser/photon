@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Instant;
 use std::{
@@ -9,6 +9,16 @@ use std::{
 use crate::support::{
     diagnostics, invoke, output, path, require_tool_version, stage, success, with_progress,
 };
+
+const HELPER_PROCESS_TARGETS: &[&str] = &[
+    "WebContent",
+    "WebWorker",
+    "Compositor",
+    "RequestServer",
+    "ImageDecoder",
+    "MediaServer",
+    "AudioServer",
+];
 
 pub(crate) fn build(root: &Path, release: bool, verbose: bool) -> Result<(), String> {
     let started = Instant::now();
@@ -85,19 +95,19 @@ pub(crate) fn engine_build(root: &Path, release: bool, verbose: bool) -> Result<
     });
     let fingerprint = engine_fingerprint(root, release)?;
     let fingerprint_path = dir.join(".photon-build-fingerprint");
-    let mut required_outputs = vec![
-        dir.join("lib64/liblagom-photonembedder.so"),
-        dir.join("bin/WebContent"),
-        dir.join("bin/WebWorker"),
-        dir.join("bin/Compositor"),
-        dir.join("bin/RequestServer"),
-        dir.join("bin/ImageDecoder"),
-    ];
+    let mut required_outputs = vec![embedder_library_output(&dir)];
+    required_outputs.extend(
+        HELPER_PROCESS_TARGETS
+            .iter()
+            .map(|name| helper_process_executable(root, &dir, release, name)),
+    );
     if cfg!(target_os = "macos") {
-        let helper_dir = root
-            .join("build")
-            .join(if release { "app-release" } else { "app-debug" });
-        required_outputs.push(helper_dir.join("ProcessReaper"));
+        required_outputs.push(helper_process_executable(
+            root,
+            &dir,
+            release,
+            "ProcessReaper",
+        ));
         required_outputs.extend([
             root.join("build/Resources/fonts/NotoEmoji.ttf"),
             root.join("build/Resources/fonts/SerenitySans-Regular.ttf"),
@@ -141,13 +151,7 @@ pub(crate) fn engine_build(root: &Path, release: bool, verbose: bool) -> Result<
     let mode = if release { "Release" } else { "Debug" };
     let source_arg = path(&root.join("Engine"));
     let build_arg = path(&dir);
-    let helper_path = if cfg!(any(target_os = "macos", target_os = "windows")) {
-        root.join("build")
-            .join(if release { "app-release" } else { "app-debug" })
-    } else {
-        dir.join("bin")
-    };
-    let helper_dir = path(&helper_path);
+    let helper_dir = path(&helper_process_dir(root, &dir, release));
     let build_type = format!("-DCMAKE_BUILD_TYPE={mode}");
     let vcpkg_type = format!("-DLADYBIRD_VCPKG_TYPE={}", mode.to_ascii_lowercase());
     with_progress("Configure Photon Engine", !verbose, || {
@@ -173,18 +177,7 @@ pub(crate) fn engine_build(root: &Path, release: bool, verbose: bool) -> Result<
             verbose,
         )
     })?;
-    let mut targets = vec![
-        "WebContent",
-        "RequestServer",
-        "ImageDecoder",
-        "Compositor",
-        "MediaServer",
-        "WebWorker",
-        "LibPhotonEmbedder",
-    ];
-    if cfg!(target_os = "macos") {
-        targets.push("ProcessReaper");
-    }
+    let targets = engine_build_targets();
     let mut build_args = vec!["--build", build_arg.as_str(), "--target"];
     build_args.extend(targets);
     with_progress(
@@ -200,22 +193,47 @@ pub(crate) fn engine_build(root: &Path, release: bool, verbose: bool) -> Result<
     })
 }
 
-fn engine_targets_are_current(engine_dir: &Path, root: &Path) -> Result<bool, String> {
-    let engine_dir = path(engine_dir);
-    let mut targets = vec![
-        "WebContent",
-        "RequestServer",
-        "ImageDecoder",
-        "Compositor",
-        "MediaServer",
-        "WebWorker",
-        "LibPhotonEmbedder",
-    ];
+fn helper_process_dir(root: &Path, engine_dir: &Path, release: bool) -> PathBuf {
+    if cfg!(any(target_os = "macos", target_os = "windows")) {
+        root.join("build")
+            .join(if release { "app-release" } else { "app-debug" })
+    } else {
+        engine_dir.join("bin")
+    }
+}
+
+fn helper_process_executable(root: &Path, engine_dir: &Path, release: bool, name: &str) -> PathBuf {
+    let filename = if cfg!(target_os = "windows") {
+        format!("{name}.exe")
+    } else {
+        name.to_owned()
+    };
+    helper_process_dir(root, engine_dir, release).join(filename)
+}
+
+fn embedder_library_output(engine_dir: &Path) -> PathBuf {
+    if cfg!(target_os = "macos") {
+        engine_dir.join("lib/liblagom-photonembedder.dylib")
+    } else if cfg!(target_os = "windows") {
+        engine_dir.join("bin/lagom-photonembedder.dll")
+    } else {
+        engine_dir.join("lib64/liblagom-photonembedder.so")
+    }
+}
+
+fn engine_build_targets() -> Vec<&'static str> {
+    let mut targets = HELPER_PROCESS_TARGETS.to_vec();
+    targets.push("LibPhotonEmbedder");
     if cfg!(target_os = "macos") {
         targets.push("ProcessReaper");
     }
+    targets
+}
+
+fn engine_targets_are_current(engine_dir: &Path, root: &Path) -> Result<bool, String> {
+    let engine_dir = path(engine_dir);
     let mut args = vec!["-C", &engine_dir, "-n"];
-    args.extend(targets);
+    args.extend(engine_build_targets());
     let result = Command::new("ninja")
         .args(args)
         .current_dir(root)
@@ -346,14 +364,7 @@ pub(crate) fn run_direct(
         "engine-debug"
     });
     let service = super::presentation_broker::ensure(root, verbose)?;
-    let app_build = root
-        .join("build")
-        .join(if release { "app-release" } else { "app-debug" });
-    let helper_dir = if cfg!(any(target_os = "macos", target_os = "windows")) {
-        app_build
-    } else {
-        engine.join("bin")
-    };
+    let helper_dir = helper_process_dir(root, &engine, release);
     let built = root
         .join("target")
         .join(if release { "release" } else { "debug" })
@@ -457,4 +468,14 @@ pub(crate) fn clean(root: &Path, scope: Option<&str>) -> Result<(), String> {
     }
     println!("Generated build trees removed.");
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use super::engine_build_targets;
+
+    #[test]
+    fn audio_server_is_built_as_a_helper_process() {
+        assert!(engine_build_targets().contains(&"AudioServer"));
+    }
 }
