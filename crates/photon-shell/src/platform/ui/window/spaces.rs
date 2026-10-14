@@ -110,11 +110,17 @@ impl BrowserWindow {
         };
         self.spaces.shown = active;
         self.spaces.switched = Some((edge, Instant::now()));
+        let shows_spaces = self.shows_spaces(cx);
+        if shows_spaces {
+            // The space container has its own entrance. Drop pending row
+            // entrances so remounting tabs cannot replay their springs.
+            self.tab_entry_animations.borrow_mut().clear();
+        }
         let Some(active_tab) = self.active_tab else {
             cx.notify();
             return;
         };
-        if !self.shows_spaces(cx) || self.tabs[active_tab].space == active {
+        if !shows_spaces || self.tabs[active_tab].space == active {
             cx.notify();
             return;
         }
@@ -127,6 +133,9 @@ impl BrowserWindow {
             .map(|(index, _)| index);
         match latest {
             Some(index) => self.activate_tab(index, true, window, cx),
+            None if shows_spaces => {
+                self.insert_page_immediately(self.tabs.len(), NEW_TAB, window, cx);
+            }
             None => self.insert_page(self.tabs.len(), NEW_TAB, window, cx),
         }
     }

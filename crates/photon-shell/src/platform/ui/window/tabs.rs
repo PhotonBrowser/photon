@@ -25,6 +25,7 @@ use super::content::{
 use super::registry::BrowserWindowRegistry;
 use crate::platform::app_update::update_app;
 use crate::platform::engine::RequestedWebView;
+use crate::platform::window_config;
 
 /// A closed tab's page and position, for reopening.
 pub(super) struct ClosedTab {
@@ -1376,13 +1377,13 @@ impl BrowserWindow {
         let tab = self.tabs[index].clone();
         let cursor_position = window.inner_window_bounds().get_bounds().origin + position;
         let move_anchor = gpui::point(
-            gpui::px(super::super::metrics::INITIAL_WINDOW_WIDTH / 2.0),
-            gpui::px(super::super::metrics::INITIAL_WINDOW_HEIGHT / 2.0),
+            gpui::px(window_config::INITIAL_WIDTH / 2.0),
+            gpui::px(window_config::INITIAL_HEIGHT / 2.0),
         );
         let new_window_origin = detached_window_origin(
             cursor_position,
-            super::super::metrics::INITIAL_WINDOW_WIDTH,
-            super::super::metrics::INITIAL_WINDOW_HEIGHT,
+            window_config::INITIAL_WIDTH,
+            window_config::INITIAL_HEIGHT,
         );
         let source_display_id = window.display(cx).map(|display| display.id());
         let Ok(new_window) = super::open_browser_window_at(
@@ -1773,6 +1774,19 @@ impl BrowserWindow {
     ) {
         let content = self.new_page(page, cx);
         self.insert_content(index, content, true, window, cx);
+    }
+
+    /// Inserts a page without a row entrance, for when another container
+    /// transition already brings the tab into view.
+    pub(super) fn insert_page_immediately(
+        &mut self,
+        index: usize,
+        page: &'static PageDefinition,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let content = self.new_page(page, cx);
+        self.insert_tab_at_immediately(index, content, None, true, window, cx);
     }
 
     /// Inserts a tab of today's tabs, never among the pinned ones.

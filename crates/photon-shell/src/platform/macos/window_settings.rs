@@ -6,7 +6,10 @@ use gpui::{
 };
 use photon_core::{AnimationSettings, WindowBackgroundStyle};
 
-use crate::platform::ui::{metrics, window_background_style};
+use crate::platform::{
+    ui::{metrics, window_background_style},
+    window_config,
+};
 
 const TRAFFIC_LIGHTS_ENABLED_ON_HOVER: bool = true;
 const WINDOW_CONTROLS_HEIGHT: f32 = 14.0;
@@ -132,11 +135,16 @@ pub(in crate::platform) fn apply_background_style(window: &Window, style: Window
 
 /// Builds a Photon browser window's initial size, titlebar, and native backing.
 pub(in crate::platform) fn options(cx: &App) -> WindowOptions {
-    options_for_size(
+    let mut options = options_for_size(
         cx,
-        metrics::INITIAL_WINDOW_WIDTH,
-        metrics::INITIAL_WINDOW_HEIGHT,
-    )
+        window_config::INITIAL_WIDTH,
+        window_config::INITIAL_HEIGHT,
+    );
+    options.window_min_size = Some(size(
+        px(window_config::MIN_WIDTH),
+        px(window_config::MIN_HEIGHT),
+    ));
+    options
 }
 
 /// Builds normal browser window options at a known screen position.
@@ -147,16 +155,21 @@ pub(in crate::platform) fn options_at(
     let bounds = Bounds {
         origin,
         size: size(
-            px(metrics::INITIAL_WINDOW_WIDTH),
-            px(metrics::INITIAL_WINDOW_HEIGHT),
+            px(window_config::INITIAL_WIDTH),
+            px(window_config::INITIAL_HEIGHT),
         ),
     };
-    options_for_size(
+    let mut options = options_for_size(
         cx,
-        metrics::INITIAL_WINDOW_WIDTH,
-        metrics::INITIAL_WINDOW_HEIGHT,
-    )
-    .window_bounds(Some(WindowBounds::Windowed(bounds)))
+        window_config::INITIAL_WIDTH,
+        window_config::INITIAL_HEIGHT,
+    );
+    options.window_min_size = Some(size(
+        px(window_config::MIN_WIDTH),
+        px(window_config::MIN_HEIGHT),
+    ));
+    options.window_bounds = Some(WindowBounds::Windowed(bounds));
+    options
 }
 
 pub(in crate::platform) fn popup_options(
@@ -166,17 +179,17 @@ pub(in crate::platform) fn popup_options(
 ) -> WindowOptions {
     let width = width
         .map(|width| width as f32)
-        .unwrap_or(metrics::POPUP_WINDOW_WIDTH)
+        .unwrap_or(window_config::POPUP_WIDTH)
         .clamp(
-            metrics::POPUP_MIN_WINDOW_WIDTH,
-            metrics::POPUP_MAX_WINDOW_WIDTH,
+            window_config::POPUP_MIN_WIDTH,
+            window_config::POPUP_MAX_WIDTH,
         );
     let height = height
         .map(|height| height as f32)
-        .unwrap_or(metrics::POPUP_WINDOW_HEIGHT)
+        .unwrap_or(window_config::POPUP_HEIGHT)
         .clamp(
-            metrics::POPUP_MIN_WINDOW_HEIGHT,
-            metrics::POPUP_MAX_WINDOW_HEIGHT,
+            window_config::POPUP_MIN_HEIGHT,
+            window_config::POPUP_MAX_HEIGHT,
         );
     options_for_size(cx, width, height)
 }
@@ -187,7 +200,7 @@ fn options_for_size(cx: &App, width: f32, height: f32) -> WindowOptions {
         .window_bounds(Some(WindowBounds::Windowed(bounds)))
         .titlebar(Some(
             TitlebarOptions::default()
-                .appears_transparent(true)
+                .appears_transparent(window_config::MACOS_TRANSPARENT_TITLEBAR)
                 .traffic_light_position(point(
                     px(WINDOW_CONTROLS_ORIGIN.0),
                     px(WINDOW_CONTROLS_ORIGIN.1),
@@ -196,7 +209,7 @@ fn options_for_size(cx: &App, width: f32, height: f32) -> WindowOptions {
         .macos_window_background(configured_background(window_background_style(cx)))
         // The titlebar hosts interactive UI, so the shell moves the window itself
         // from empty titlebar space instead of letting AppKit drag from anywhere in it.
-        .app_owns_titlebar_drag(true)
+        .app_owns_titlebar_drag(window_config::MACOS_APP_OWNS_TITLEBAR_DRAG)
 }
 
 #[cfg(test)]

@@ -10,6 +10,7 @@ mod macos;
 pub(crate) mod metrics;
 #[cfg(target_os = "macos")]
 mod ui;
+pub(crate) mod window_config;
 
 #[cfg(target_os = "linux")]
 #[allow(unused_imports)]

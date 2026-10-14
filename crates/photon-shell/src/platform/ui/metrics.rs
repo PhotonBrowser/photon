@@ -4,15 +4,6 @@
 //! visually consistent and can be tuned without searching individual views.
 
 pub(super) const TITLEBAR_HEIGHT: f32 = 36.0;
-pub(in crate::platform) const INITIAL_WINDOW_WIDTH: f32 = 1200.0;
-pub(in crate::platform) const INITIAL_WINDOW_HEIGHT: f32 = 760.0;
-pub(in crate::platform) const POPUP_WINDOW_WIDTH: f32 = 720.0;
-pub(in crate::platform) const POPUP_WINDOW_HEIGHT: f32 = 620.0;
-pub(in crate::platform) const POPUP_MIN_WINDOW_WIDTH: f32 = 360.0;
-pub(in crate::platform) const POPUP_MAX_WINDOW_WIDTH: f32 = 1280.0;
-pub(in crate::platform) const POPUP_MIN_WINDOW_HEIGHT: f32 = 320.0;
-pub(in crate::platform) const POPUP_MAX_WINDOW_HEIGHT: f32 = 1000.0;
-
 pub(super) const TAB_HEIGHT: f32 = 28.0;
 pub(super) const TAB_MIN_WIDTH: f32 = 72.0;
 /// A pinned tab in the strip, which shows only its icon.
