@@ -213,8 +213,8 @@ impl Omnibox {
         } else {
             display_domain(&url)
         };
-        if self.current_url != shown {
-            self.current_url = shown;
+        if self.current_url != shown || self.input.read(cx).as_str() != shown {
+            self.show(shown, cx);
             cx.notify();
         }
     }
