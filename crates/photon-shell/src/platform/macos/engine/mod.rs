@@ -27,6 +27,15 @@ use callbacks::*;
 use photon_core::EngineService;
 pub(in crate::platform) use session::{EngineSession, RequestedWebView};
 
+#[derive(Clone, Debug)]
+pub(crate) struct RegisteredEngineProcess {
+    pub(crate) pid: u32,
+    pub(crate) role: String,
+    pub(crate) start_time_in_microseconds: Option<u64>,
+    pub(crate) parent_pid: Option<u32>,
+    pub(crate) parent_start_time_in_microseconds: Option<u64>,
+}
+
 #[derive(Clone)]
 pub(in crate::platform) struct UiWake {
     pub(in crate::platform) app: AsyncApp,
@@ -198,6 +207,49 @@ impl EngineRuntime {
             );
         }
         self.service_callback.replace(Some(callback));
+    }
+
+    pub(in crate::platform) fn registered_processes(&self) -> Vec<RegisteredEngineProcess> {
+        unsafe extern "C" fn collect(
+            context: *mut c_void,
+            pid: i32,
+            role: *const std::ffi::c_char,
+            has_start_time: bool,
+            start_time_in_microseconds: u64,
+            has_parent_pid: bool,
+            parent_pid: i32,
+            has_parent_start_time: bool,
+            parent_start_time_in_microseconds: u64,
+        ) {
+            if context.is_null() || pid <= 0 || role.is_null() {
+                return;
+            }
+            // SAFETY: the embedder invokes this callback synchronously with the
+            // Vec pointer supplied below and a process-role string that stays
+            // valid for the duration of the callback.
+            let processes = unsafe { &mut *context.cast::<Vec<RegisteredEngineProcess>>() };
+            let role = unsafe { CStr::from_ptr(role) }
+                .to_string_lossy()
+                .into_owned();
+            processes.push(RegisteredEngineProcess {
+                pid: pid as u32,
+                role,
+                start_time_in_microseconds: has_start_time.then_some(start_time_in_microseconds),
+                parent_pid: has_parent_pid.then_some(parent_pid as u32),
+                parent_start_time_in_microseconds: has_parent_start_time
+                    .then_some(parent_start_time_in_microseconds),
+            });
+        }
+
+        let mut processes = Vec::new();
+        unsafe {
+            embedder::photon_runtime_list_registered_processes(
+                self.runtime,
+                (&mut processes as *mut Vec<RegisteredEngineProcess>).cast(),
+                Some(collect),
+            );
+        }
+        processes
     }
 }
 

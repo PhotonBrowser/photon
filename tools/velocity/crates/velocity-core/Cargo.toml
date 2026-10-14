@@ -1,0 +1,11 @@
+[package]
+name = "velocity-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+velocity-browser = { path = "../velocity-browser" }
+velocity-metrics = { path = "../velocity-metrics" }

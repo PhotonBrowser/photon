@@ -1,0 +1,13 @@
+[workspace]
+members = [
+    "crates/velocity-browser",
+    "crates/velocity-core",
+    "crates/velocity-metrics",
+    "crates/velocity-cli",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "BSD-2-Clause"

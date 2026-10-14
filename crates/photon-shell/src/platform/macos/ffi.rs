@@ -68,7 +68,6 @@ pub(super) mod embedder {
 
     pub(crate) type SelectDropdownCallback =
         unsafe extern "C" fn(*mut c_void, f64, f64, f64, *const SelectItem, usize);
-
     pub(crate) type FrameCallback = unsafe extern "C" fn(
         *mut c_void,
         i32,
@@ -88,7 +87,16 @@ pub(super) mod embedder {
     pub(crate) struct ViewCallbacks {
         pub callback_data: *mut c_void,
         pub state_callback: Option<
-            unsafe extern "C" fn(*mut c_void, *const c_char, *const c_char, bool, bool, bool),
+            unsafe extern "C" fn(
+                *mut c_void,
+                *const c_char,
+                *const c_char,
+                bool,
+                bool,
+                bool,
+                bool,
+                bool,
+            ),
         >,
         pub navigation_timing_callback:
             Option<unsafe extern "C" fn(*mut c_void, i32, *const c_char)>,
@@ -216,6 +224,23 @@ pub(super) mod embedder {
             callback_data: *mut c_void,
             callback: Option<unsafe extern "C" fn(*mut c_void, i32, bool)>,
         );
+        pub fn photon_runtime_list_registered_processes(
+            runtime: *mut c_void,
+            callback_data: *mut c_void,
+            callback: Option<
+                unsafe extern "C" fn(
+                    *mut c_void,
+                    i32,
+                    *const c_char,
+                    bool,
+                    u64,
+                    bool,
+                    i32,
+                    bool,
+                    u64,
+                ),
+            >,
+        );
         pub fn photon_view_pointer(
             view: *mut c_void,
             kind: i32,
@@ -270,6 +295,7 @@ pub(super) mod embedder {
         pub fn photon_default_browser_is_current() -> bool;
         pub fn photon_default_browser_request();
         pub fn photon_view_navigate(view: *mut c_void, url: *const c_char);
+        pub fn photon_view_install_speedometer_result_observer(view: *mut c_void) -> bool;
         pub fn photon_view_reload(view: *mut c_void);
         pub fn photon_view_stop_loading(view: *mut c_void);
         pub fn photon_view_go_back(view: *mut c_void);

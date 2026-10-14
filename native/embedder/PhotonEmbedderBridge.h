@@ -9,7 +9,7 @@ using PhotonFrameCallback = void (*)(void*, int, int, size_t, double,
     std::uint8_t const*, size_t, uint64_t,
     uint64_t, uint64_t, uint64_t, uint64_t);
 using PhotonStateCallback = void (*)(void*, char const*, char const*, bool,
-    bool, bool);
+    bool, bool, bool, bool);
 using PhotonNavigationTimingCallback = void (*)(void*, int, char const*);
 using PhotonErrorCallback = void (*)(void*, char const*);
 using PhotonCrashCallback = void (*)(void*, char const*);
@@ -98,6 +98,7 @@ using PhotonNewWebViewCallback = void (*)(void*, void*, void*,
 // Called with the service (0 compositor, 1 network) and whether it has been
 // restarted (true) or has just stopped (false).
 using PhotonServiceCallback = void (*)(void*, int, bool);
+using PhotonRegisteredProcessCallback = void (*)(void*, int32_t, char const*, bool, uint64_t, bool, int32_t, bool, uint64_t);
 #if defined(__APPLE__)
 using PhotonReducedMotionChangedCallback = void (*)(void*, bool);
 // Called with whether the window is visible and whether its display or the
@@ -177,6 +178,7 @@ void photon_view_release_native_frame(void* view, uint64_t backing_id,
 bool photon_view_set_native_metal_presentation(void* view, bool enabled);
 #endif
 void photon_view_navigate(void* view, char const* url);
+bool photon_view_install_speedometer_result_observer(void* view);
 void photon_view_reload(void* view);
 void photon_view_stop_loading(void* view);
 void photon_view_go_back(void* view);
@@ -215,6 +217,8 @@ void photon_runtime_set_system_reduced_motion_preference(void* runtime,
 void photon_runtime_set_elastic_scroll_enabled(void* runtime, bool enabled);
 void photon_runtime_set_service_callback(void* runtime, void* callback_data,
     PhotonServiceCallback callback);
+void photon_runtime_list_registered_processes(void* runtime, void* callback_data,
+    PhotonRegisteredProcessCallback callback);
 void photon_view_pointer(void* view, int kind, double x, double y, int button,
     uint8_t buttons, bool shift, bool control, bool alt,
     bool meta, double wheel_x, double wheel_y,

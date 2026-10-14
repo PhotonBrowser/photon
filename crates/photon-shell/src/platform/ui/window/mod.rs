@@ -3,6 +3,7 @@
 mod actions;
 mod alerts;
 mod app;
+mod automation;
 mod background_noise;
 mod chrome;
 mod command_bar;

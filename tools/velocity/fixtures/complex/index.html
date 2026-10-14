@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Velocity complex fixture</title>
+  <style>
+    :root { color-scheme: light; font: 14px/1.4 sans-serif; }
+    body { margin: 1.5rem; background: #f2f4f7; }
+    header, article { background: white; border: 1px solid #d5dae1; border-radius: 8px; padding: 1rem; }
+    .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; }
+    article { min-height: 8rem; box-shadow: 0 1px 3px #0001; }
+    .bar { height: .5rem; background: #5577aa; margin: .75rem 0; }
+    @media (max-width: 800px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  </style>
+</head>
+<body>
+  <header><h1>Velocity complex fixture</h1><p>Deterministic local layout workload.</p></header>
+  <main class="grid"><!-- VELOCITY_COMPLEX_CARDS --></main>
+</body>
+</html>

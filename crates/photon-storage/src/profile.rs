@@ -10,7 +10,7 @@ use super::favicons::{self, FaviconPixels};
 use super::{atomic, history_file};
 
 const HISTORY_FILE: &str = "History.json";
-const SETTINGS_FILE: &str = "Settings.json";
+const SETTINGS_FILE: &str = "config.json";
 const SESSION_FILE: &str = "Session.json";
 const FAVICONS_DIR: &str = "Favicons";
 const ENGINE_DIR: &str = "Engine";
@@ -38,12 +38,17 @@ impl DataUsage {
 #[derive(Clone, Debug)]
 pub struct Profile {
     root: PathBuf,
+    settings_path: PathBuf,
 }
 
 impl Profile {
     /// Opens the profile at `root`, creating its folders as needed.
     pub fn open(root: impl Into<PathBuf>) -> io::Result<Self> {
-        let profile = Self { root: root.into() };
+        let root = root.into();
+        let profile = Self {
+            settings_path: root.join(SETTINGS_FILE),
+            root,
+        };
         fs::create_dir_all(profile.favicons_dir())?;
         fs::create_dir_all(profile.engine_dir())?;
         Ok(profile)
@@ -52,7 +57,56 @@ impl Profile {
     /// Opens the default profile: `PHOTON_PROFILE_DIR` when set, otherwise
     /// the platform's application data folder.
     pub fn open_default() -> io::Result<Self> {
-        Self::open(Self::default_root()?)
+        let isolated_profile =
+            std::env::var_os("PHOTON_PROFILE_DIR").is_some_and(|root| !root.is_empty());
+        let mut profile = Self::open(Self::default_root()?)?;
+        // Managed automation sessions must not read or write the user's
+        // global Photon settings file.
+        if !isolated_profile {
+            profile.settings_path = Self::default_settings_path()?;
+        }
+        if !profile.settings_path.exists() {
+            let legacy_settings = profile.root.join("Settings.json");
+            if let Ok(bytes) = fs::read(legacy_settings) {
+                atomic::write(&profile.settings_path, &bytes)?;
+            } else {
+                profile.save_settings(&BrowserSettings::default())?;
+            }
+        }
+        Ok(profile)
+    }
+
+    fn default_settings_path() -> io::Result<PathBuf> {
+        if cfg!(target_os = "macos") {
+            let home = std::env::var_os("HOME")
+                .filter(|home| !home.is_empty())
+                .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "HOME is not set"))?;
+            Ok(PathBuf::from(home)
+                .join("Library/Application Support")
+                .join(photon_brand::DATA_FOLDER)
+                .join(SETTINGS_FILE))
+        } else {
+            let config = std::env::var_os("XDG_CONFIG_HOME")
+                .filter(|path| !path.is_empty())
+                .map(PathBuf::from)
+                .or_else(|| {
+                    std::env::var_os("HOME")
+                        .filter(|home| !home.is_empty())
+                        .map(|home| PathBuf::from(home).join(".config"))
+                })
+                .ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::NotFound,
+                        "XDG_CONFIG_HOME and HOME are not set",
+                    )
+                })?;
+            Ok(config.join(photon_brand::DATA_FOLDER).join(SETTINGS_FILE))
+        }
+    }
+
+    /// The user-editable browser settings file.
+    pub fn settings_path(&self) -> &Path {
+        &self.settings_path
     }
 
     /// Where the default profile lives.
@@ -106,7 +160,7 @@ impl Profile {
     /// be read. Unknown fields are ignored so older builds can open newer
     /// profiles safely.
     pub fn load_settings(&self) -> BrowserSettings {
-        let Ok(bytes) = fs::read(self.root.join(SETTINGS_FILE)) else {
+        let Ok(bytes) = fs::read(&self.settings_path) else {
             return BrowserSettings::default();
         };
         let Ok(mut document) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
@@ -142,16 +196,14 @@ impl Profile {
         let seconds = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |elapsed| elapsed.as_secs());
-        let backup = self
-            .root
-            .join(format!("Settings.unreadable-{seconds}.json"));
+        let backup = self.root.join(format!("config.unreadable-{seconds}.json"));
         let _ = atomic::write(&backup, bytes);
     }
 
     pub fn save_settings(&self, settings: &BrowserSettings) -> io::Result<()> {
         let bytes = serde_json::to_vec_pretty(settings)
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-        atomic::write(&self.root.join(SETTINGS_FILE), &bytes)
+        atomic::write(&self.settings_path, &bytes)
     }
 
     /// The windows and tabs open when the browser last saved them, or none
@@ -323,7 +375,7 @@ mod tests {
                 entry
                     .file_name()
                     .to_string_lossy()
-                    .starts_with("Settings.unreadable-")
+                    .starts_with("config.unreadable-")
             })
             .count();
         assert_eq!(backups, 1);

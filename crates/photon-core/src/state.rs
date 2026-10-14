@@ -10,6 +10,9 @@ pub struct BrowserState {
     pub loading: bool,
     pub can_go_back: bool,
     pub can_go_forward: bool,
+    /// Whether the current top-level document uses an encrypted connection.
+    /// `None` means its URL has no HTTP connection security state.
+    pub connection_secure: Option<bool>,
     pub error: Option<String>,
 }
 
@@ -137,6 +140,7 @@ mod tests {
             loading: true,
             can_go_back: true,
             can_go_forward: false,
+            connection_secure: Some(true),
             error: None,
         }));
         assert_eq!(state.url, "https://example.com/");

@@ -54,6 +54,7 @@ pub(super) const WINDOW_CONTROL_GROUP_WIDTH: f32 =
     TOOLBAR_BUTTON_SIZE * 3.0 + WINDOW_CONTROL_GAP * 2.0;
 
 pub(super) const MENU_WIDTH: f32 = 220.0;
+pub(super) const SITE_INFO_WIDTH: f32 = 280.0;
 
 /// A keycap in a keyboard shortcut.
 pub(super) const KBD_HEIGHT: f32 = 18.0;
@@ -135,6 +136,7 @@ pub(super) const OMNIBOX_HEIGHT: f32 = 28.0;
 pub(super) const SIDEBAR_OMNIBOX_HEIGHT: f32 = 38.0;
 pub(super) const SIDEBAR_OMNIBOX_RADIUS: f32 = 12.0;
 pub(super) const SIDEBAR_OMNIBOX_FONT_SIZE: f32 = 15.0;
+pub(super) const SIDEBAR_OMNIBOX_TEXT_INSET: f32 = TOOLBAR_BUTTON_SIZE + SIDEBAR_PADDING;
 pub(super) const OMNIBOX_BORDER_WIDTH: f32 = 1.0;
 pub(super) const OMNIBOX_HORIZONTAL_PADDING: f32 = 12.0;
 pub(super) const OMNIBOX_GAP: f32 = 8.0;

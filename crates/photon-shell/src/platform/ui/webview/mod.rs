@@ -121,6 +121,16 @@ impl Drop for PhotonWebView {
 }
 
 impl PhotonWebView {
+    pub(in crate::platform) fn probe_speedometer_result(&mut self) -> bool {
+        self.session.install_speedometer_result_observer()
+    }
+
+    pub(in crate::platform) fn registered_engine_processes(
+        &self,
+    ) -> Vec<super::super::engine::RegisteredEngineProcess> {
+        self.session.registered_engine_processes()
+    }
+
     /// Runs an editing command in the page.
     fn edit(&mut self, command: EditCommand) {
         self.input.edit(&mut self.session, command);

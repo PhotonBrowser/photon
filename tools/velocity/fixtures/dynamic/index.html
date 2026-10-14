@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Velocity dynamic fixture</title>
+  <style>
+    body { margin: 2rem; font: 14px sans-serif; }
+    #items { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .5rem; }
+    .item { min-height: 2.5rem; padding: .5rem; border: 1px solid #9aa8ba; }
+  </style>
+</head>
+<body>
+  <h1>Velocity dynamic fixture</h1>
+  <p>Deterministic DOM update workload.</p>
+  <main id="items"></main>
+  <script>
+    (() => {
+      const query = new URLSearchParams(location.search);
+      const intensity = Math.max(1, Math.min(10000, Number(query.get('intensity')) || 25));
+      const updateInterval = Math.max(10, Number(query.get('update_ms')) || 100);
+      const root = document.getElementById('items');
+      const nodes = Array.from({ length: intensity }, (_, index) => {
+        const node = document.createElement('div');
+        node.className = 'item';
+        node.textContent = `item ${index}: 0`;
+        root.append(node);
+        return node;
+      });
+      let tick = 0;
+      setInterval(() => {
+        const node = nodes[tick % nodes.length];
+        node.textContent = `item ${tick % nodes.length}: ${tick}`;
+        node.style.borderWidth = `${1 + (tick % 3)}px`;
+        tick += 1;
+      }, updateInterval);
+    })();
+  </script>
+</body>
+</html>

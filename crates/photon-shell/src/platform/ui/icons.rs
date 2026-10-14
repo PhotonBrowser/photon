@@ -113,6 +113,11 @@ pub(super) fn shield_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("shield"), color, size)
 }
 
+/// Horizontal controls, for site information in the sidebar address field.
+pub(super) fn sliders_horizontal_icon(color: u32, size: f32) -> impl IntoElement {
+    icon(lucide!("sliders-horizontal"), color, size)
+}
+
 /// A window with a panel down its left side, for showing or hiding the
 /// sidebar.
 pub(super) fn sidebar_icon(color: u32, size: f32) -> impl IntoElement {

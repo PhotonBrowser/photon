@@ -61,7 +61,9 @@ Photon::ViewCallbacks make_view_callbacks(
     result.state_changed = [=](Photon::ViewState const& state) {
         if (state_callback)
             state_callback(callback_data, state.url.c_str(), state.title.c_str(),
-                state.loading, state.can_go_back, state.can_go_forward);
+                state.loading, state.can_go_back, state.can_go_forward,
+                state.connection_secure.has_value(),
+                state.connection_secure.value_or(false));
     };
     if (navigation_timing_callback) {
         result.navigation_timing = [=](Photon::NavigationTimingEvent event, std::string const& url) {
@@ -359,6 +361,11 @@ extern "C" void photon_view_navigate(void* view, char const* url)
         static_cast<ViewHandle*>(view)->view->navigate(url);
 }
 
+extern "C" bool photon_view_install_speedometer_result_observer(void* view)
+{
+    return view && static_cast<Photon::View*>(view)->install_speedometer_result_observer();
+}
+
 extern "C" void photon_view_reload(void* view)
 {
     if (view)
@@ -568,6 +575,22 @@ extern "C" void photon_runtime_set_service_callback(void* runtime,
         [=](Photon::EngineService service, bool restarted) {
             callback(callback_data, static_cast<int>(service), restarted);
         });
+}
+
+extern "C" void photon_runtime_list_registered_processes(void* runtime,
+    void* callback_data, PhotonRegisteredProcessCallback callback)
+{
+    if (!runtime || !callback)
+        return;
+    for (auto const& process : static_cast<RuntimeHandle*>(runtime)->runtime->registered_engine_processes()) {
+        auto has_start_time = process.start_time_in_microseconds.has_value();
+        auto has_parent_pid = process.parent_pid.has_value();
+        auto has_parent_start_time = process.parent_start_time_in_microseconds.has_value();
+        callback(callback_data, process.pid, process.role.c_str(), has_start_time,
+            has_start_time ? *process.start_time_in_microseconds : 0, has_parent_pid,
+            has_parent_pid ? *process.parent_pid : 0, has_parent_start_time,
+            has_parent_start_time ? *process.parent_start_time_in_microseconds : 0);
+    }
 }
 
 extern "C" void photon_view_pointer(void* view, int kind, double x, double y,

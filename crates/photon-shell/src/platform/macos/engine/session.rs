@@ -48,6 +48,12 @@ pub(in crate::platform) struct RequestedWebView {
 }
 
 impl EngineSession {
+    pub(in crate::platform) fn registered_engine_processes(
+        &self,
+    ) -> Vec<super::RegisteredEngineProcess> {
+        self._runtime.registered_processes()
+    }
+
     pub(in crate::platform) fn create(
         runtime: Rc<EngineRuntime>,
         width: i32,
@@ -210,6 +216,10 @@ impl EngineSession {
         if let Some(url) = self.startup_url.take() {
             self.load(&url);
         }
+    }
+
+    pub(in crate::platform) fn install_speedometer_result_observer(&mut self) -> bool {
+        unsafe { embedder::photon_view_install_speedometer_result_observer(self.view) }
     }
 
     pub(in crate::platform) fn execute(&mut self, command: BrowserCommand) -> anyhow::Result<()> {

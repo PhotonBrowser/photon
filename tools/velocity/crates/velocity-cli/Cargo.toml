@@ -1,0 +1,22 @@
+[package]
+name = "velocity-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "velocity"
+path = "src/main.rs"
+
+[dependencies]
+comfy-table = "8.0.1"
+velocity-browser = { path = "../velocity-browser" }
+velocity-core = { path = "../velocity-core" }
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+sha2 = "0.10"
+termimad = "0.35.5"
+velocity-metrics = { path = "../velocity-metrics" }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"

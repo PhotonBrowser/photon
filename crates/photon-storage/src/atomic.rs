@@ -13,6 +13,9 @@ static NEXT_TEMPORARY: AtomicU64 = AtomicU64::new(0);
 /// disk, and renaming it over the original. Readers see the old contents or
 /// the new, never part of either.
 pub(crate) fn write(path: &Path, contents: &[u8]) -> io::Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
     let mut temporary = path.as_os_str().to_owned();
     temporary.push(format!(
         ".{}-{}.tmp",

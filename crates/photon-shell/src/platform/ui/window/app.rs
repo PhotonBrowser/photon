@@ -12,12 +12,20 @@ use super::super::super::engine::EngineRuntime;
 use super::super::history::load_browsing_history;
 use super::super::install_form_controls;
 use super::super::settings::{Settings, load_settings};
+use super::automation::AutomationLaunch;
 use super::open_urls::{open_received_urls, receive_opened_urls};
 use super::session::{load_session, restore_session};
 use super::{BrowserWindow, BrowserWindowRegistry, open_browser_window};
 use photon_storage::Profile;
 
 pub fn run() {
+    let automation_launch = match AutomationLaunch::from_process_arguments() {
+        Ok(launch) => launch,
+        Err(error) => {
+            eprintln!("Photon automation startup: {error}");
+            std::process::exit(2);
+        }
+    };
     let application = application();
     let opened_urls = receive_opened_urls(&application);
     application.run(move |cx: &mut App| {
@@ -63,6 +71,11 @@ pub fn run() {
         let address = initial_address();
         if address.is_some() || !restore_session(&saved_session, &runtime, cx) {
             open_browser_window(runtime, address, true, cx).expect("open GPUI-CE Photon window");
+        }
+        if let Some(launch) = automation_launch {
+            super::automation::install(launch, cx).unwrap_or_else(|error| {
+                panic!("could not start Photon automation server: {error}")
+            });
         }
     });
 }

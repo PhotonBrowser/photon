@@ -4262,6 +4262,7 @@ dependencies = [
  "gpui_ce_platform",
  "image",
  "io-surface",
+ "libc",
  "mach2",
  "metal",
  "objc",
@@ -4274,6 +4275,8 @@ dependencies = [
  "photon-storage",
  "photon-tab-sleep",
  "raw-window-handle",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

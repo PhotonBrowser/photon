@@ -148,6 +148,7 @@ pub unsafe extern "C" fn photon_browser_update(
         loading: handle.navigation_active,
         can_go_back: back,
         can_go_forward: forward,
+        connection_secure: None,
         error: None,
     };
     handle.url = c_string(&state.url);

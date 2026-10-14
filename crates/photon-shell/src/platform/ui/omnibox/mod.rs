@@ -8,6 +8,7 @@
 mod editing;
 mod panel;
 mod rows;
+mod site_info;
 
 pub(super) use rows::{icon_slot, matched_text, row_text, suggestion_icon};
 
@@ -38,6 +39,8 @@ struct FieldStyle {
     radius: f32,
     font_size: f32,
     idle_icon: bool,
+    center_text: bool,
+    trailing_site_info: bool,
 }
 
 impl FieldStyle {
@@ -48,12 +51,16 @@ impl FieldStyle {
                 radius: metrics::OMNIBOX_RADIUS,
                 font_size: metrics::OMNIBOX_FONT_SIZE,
                 idle_icon: true,
+                center_text: false,
+                trailing_site_info: false,
             },
             OmniboxPlacement::Sidebar => Self {
                 height: metrics::SIDEBAR_OMNIBOX_HEIGHT,
                 radius: metrics::SIDEBAR_OMNIBOX_RADIUS,
                 font_size: metrics::SIDEBAR_OMNIBOX_FONT_SIZE,
                 idle_icon: false,
+                center_text: true,
+                trailing_site_info: true,
             },
         }
     }
@@ -74,6 +81,7 @@ pub(super) struct Omnibox {
     current_url: String,
     /// The submitted text cannot be opened. Cleared by the next edit.
     invalid: bool,
+    site_info_open: bool,
     /// What the typed text could open. While there are any, the field opens
     /// into a panel listing them.
     suggestions: Vec<Suggestion>,
@@ -123,6 +131,7 @@ impl Omnibox {
             page_address: None,
             current_url: String::new(),
             invalid: false,
+            site_info_open: false,
             suggestions: Vec::new(),
             selected: 0,
             hovered: None,
@@ -155,6 +164,7 @@ impl Omnibox {
         self.webview = webview;
         self.page_address = page_address;
         self.close_suggestions(cx);
+        self.site_info_open = false;
         self.invalid = false;
         let input_focus = self.input.focus_handle(cx);
         self._page_subscriptions = vec![
@@ -203,7 +213,10 @@ impl Omnibox {
         } else {
             display_domain(&url)
         };
-        self.show(shown, cx);
+        if self.current_url != shown {
+            self.current_url = shown;
+            cx.notify();
+        }
     }
 
     /// Shows the full address, selected, as editing starts.
@@ -307,8 +320,9 @@ impl Render for Omnibox {
         field_box = if editing && !self.suggestions.is_empty() {
             field_box.child(self.open_panel(palette, cx))
         } else {
-            field_box.child(self.field_content(palette, cx))
+            field_box.child(self.field_content(palette, editing, cx))
         };
+        field_box = field_box.child(self.site_info_popover(palette, cx));
         if self.invalid {
             field_box = field_box.aria_description(INVALID_ADDRESS_DESCRIPTION);
         }

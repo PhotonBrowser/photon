@@ -41,6 +41,8 @@ pub(super) unsafe extern "C" fn on_engine_state(
     loading: bool,
     can_go_back: bool,
     can_go_forward: bool,
+    has_connection_security: bool,
+    connection_secure: bool,
 ) {
     let url = unsafe { engine_string(url) };
     let title = unsafe { engine_string(title) }.unwrap_or_default();
@@ -55,6 +57,7 @@ pub(super) unsafe extern "C" fn on_engine_state(
             loading,
             can_go_back,
             can_go_forward,
+            connection_secure: has_connection_security.then_some(connection_secure),
             error: None,
         });
     }
