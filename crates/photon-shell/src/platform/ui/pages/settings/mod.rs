@@ -22,7 +22,7 @@ use super::super::icons::{
     sidebar_icon,
 };
 use super::super::layout::{h_stack, v_stack};
-use super::super::motion::{AnimateIn, Entrance, Presence};
+use super::super::motion::{AnimateIn, Entrance, Presence, fade};
 use super::super::settings::Settings;
 use super::super::{ClickHandler, metrics, theme::ThemeColors, theme::palette};
 use super::layout::{heading, scrolling_column, secondary_text};
@@ -38,7 +38,7 @@ use std::rc::Rc;
 use std::time::Instant;
 
 /// How a picked section appears.
-const SECTION_MOTION: Entrance = Entrance::fade();
+const SECTION_MOTION: Entrance = fade();
 
 /// A part of the settings, shown on its own.
 #[derive(Clone, Copy, PartialEq)]

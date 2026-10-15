@@ -9,7 +9,7 @@ use photon_core::DockRegion;
 use super::super::super::button::toolbar_button;
 use super::super::super::icons::{sidebar_expand_icon, sidebar_icon};
 use super::super::super::layout::{Elevated, Elevation, Raised, v_stack};
-use super::super::super::motion::{AnimateIn, Edge, Entrance};
+use super::super::super::motion::{AnimateIn, Edge, slide_in};
 use super::super::super::pages::SETTINGS;
 use super::super::super::settings::Settings;
 use super::super::super::sidebar::{
@@ -330,14 +330,14 @@ impl BrowserWindow {
         );
         match self
             .spaces
-            .arriving_from(Entrance::slide_in(Edge::Left).total_duration(&Settings::motion(cx)))
+            .arriving_from(slide_in(Edge::Left).total_duration(&Settings::motion(cx)))
         {
             Some(edge) => div()
                 .w_full()
                 .child(tabs)
                 .animate_in(
                     ("space-tabs", space as usize),
-                    Entrance::slide_in(edge),
+                    slide_in(edge),
                     &Settings::motion(cx),
                 )
                 .into_any_element(),

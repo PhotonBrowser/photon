@@ -13,7 +13,7 @@ use super::super::super::history::BrowsingHistory;
 use super::super::super::icons::{add_icon, close_icon, globe_icon};
 use super::super::super::layout::{h_stack, v_stack};
 use super::super::super::motion::pressable;
-use super::super::super::motion::{AnimateIn, Entrance};
+use super::super::super::motion::{AnimateIn, fade};
 use super::super::super::settings::Settings;
 use super::super::super::{metrics, theme::ThemeColors};
 use super::NewTabPage;
@@ -123,7 +123,7 @@ impl NewTabPage {
                     ))
                     .animate_in(
                         ("new-tab-remove-shortcut", index),
-                        Entrance::fade(),
+                        fade(),
                         &super::super::super::settings::Settings::motion(cx),
                     ),
             );

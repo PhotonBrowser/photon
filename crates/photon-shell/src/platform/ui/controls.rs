@@ -14,7 +14,7 @@ use gpui_elements::editable_text::EditableTextElement;
 use super::icons::check_icon;
 use super::layout::v_stack;
 use super::layout::{ControlSurface, Elevated, Elevation, h_stack};
-use super::motion::{AnimateIn, Entrance};
+use super::motion::{AnimateIn, fade};
 use super::motion::{
     CONTROL_THUMB_HELD_STRETCH_X, SLIDER_EDGE_STRETCH_MAX, SLIDER_EDGE_STRETCH_SPEED_RANGE,
     SLIDER_EDGE_STRETCH_SPEED_THRESHOLD, control_left_transition, control_scale_transition,
@@ -930,7 +930,7 @@ impl RenderOnce for CheckMark {
                 changes => check
                     .animate_in(
                         (id, changes.to_string()),
-                        Entrance::fade(),
+                        fade(),
                         &super::settings::Settings::motion(cx),
                     )
                     .into_any_element(),

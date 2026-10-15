@@ -53,7 +53,7 @@ use super::command_bar::CommandBar;
 use super::find_bar::FindBar;
 use super::history::BrowsingHistory;
 use super::js_dialog::DialogHost;
-use super::motion::{Presence, Tween};
+use super::motion::{Presence, Tween, TweenCurve};
 use super::omnibox::{Omnibox, OmniboxEvent};
 use super::pages::find_page;
 use super::settings::Settings;
@@ -250,11 +250,10 @@ impl TabPositionAnimation {
         axis: TabDragAxis,
         from: f32,
         duration: Duration,
-        settings: &super::motion::MotionSettings,
-        cx: &App,
+        settings: &super::motion::MotionConfig,
     ) -> Self {
-        let mut tween = Tween::at(from);
-        tween.animate_to_for(0.0, duration, settings, cx);
+        let mut tween = Tween::at_with_curve(from, TweenCurve::SmoothStep);
+        tween.animate_to_for(0.0, duration, settings);
         Self { axis, tween }
     }
 

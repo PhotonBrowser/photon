@@ -2094,6 +2094,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "gpui-motion"
+version = "0.1.0"
+dependencies = [
+ "gpui-ce",
+ "gpui_ce_platform",
+]
+
+[[package]]
 name = "gpui_ce_apple"
 version = "0.1.0"
 dependencies = [
@@ -4214,13 +4222,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "photon-motion"
-version = "0.1.0"
-dependencies = [
- "gpui-ce",
-]
-
-[[package]]
 name = "photon-omnibox"
 version = "0.1.0"
 dependencies = [
@@ -4266,6 +4267,7 @@ dependencies = [
  "foreign-types",
  "futures",
  "gpui-ce",
+ "gpui-motion",
  "gpui_ce_apple",
  "gpui_ce_elements",
  "gpui_ce_platform",
@@ -4277,7 +4279,6 @@ dependencies = [
  "objc",
  "photon-brand",
  "photon-core",
- "photon-motion",
  "photon-omnibox",
  "photon-performance",
  "photon-presentation-ipc",

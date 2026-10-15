@@ -11,7 +11,7 @@ photon-app
 photon-ffi ── photon-core ── photon-omnibox
                     ↑
 photon-shell ── photon-storage
-            └── photon-motion
+            └── gpui-motion
 photon-core ── photon-tab-sleep
 ```
 
@@ -84,9 +84,11 @@ presentation surface.
   chart history, current-process sampling, value formatting, chart drawing, and
   the GPUI diagnostics overlay. It has no Engine IPC, native embedder, or
   window-lifecycle dependencies.
-- `crates/photon-motion` provides reusable GPUI motion settings, entrance and
-  exit effects, presence, tweens, and control transitions. It has no browser or
-  native-platform dependencies, so other GPUI apps can use the same primitives.
+- `crates/gpui-motion` provides reusable GPUI entrance and exit effects,
+  presence, tweens, spring helpers, and control transitions. It depends on
+  GPUI-CE and has no Photon, browser, or native-platform dependencies. The shell
+  owns its visual presets and adapts persisted browser preferences to the
+  crate's `MotionConfig`.
 - `crates/photon-tab-sleep` owns the framework-independent tab sleep modes and
   adaptive idle-time policy. The shell hides rendering for quiet inactive
   Engine views while retaining their live sessions, so selection restores the
@@ -146,9 +148,9 @@ window and page renderer adapters.
 | Package | Owns | Depends on |
 | --- | --- | --- |
 | `photon-app` | Runnable Photon entry point | `photon-shell` |
-| `photon-shell` | Window-bound GPUI views, Engine session adapter, native presentation lifecycle, browser input | GPUI-CE, `photon-core`, `photon-motion`, `photon-performance`, `photon-shortcuts`, `photon-storage`, `photon-tab-sleep`, `photon-brand`, `photon-presentation-ipc`, native embedder bridge |
+| `photon-shell` | Window-bound GPUI views, Engine session adapter, native presentation lifecycle, browser input | GPUI-CE, `photon-core`, `gpui-motion`, `photon-performance`, `photon-shortcuts`, `photon-storage`, `photon-tab-sleep`, `photon-brand`, `photon-presentation-ipc`, native embedder bridge |
 | `photon-performance` | Performance snapshots, monitor state, timing accumulation, formatting, GPUI overlay | GPUI-CE |
-| `photon-motion` | Reusable GPUI motion primitives, transitions, presence, and tweens | GPUI-CE |
+| `gpui-motion` | Reusable GPUI motion primitives, transitions, presence, and tweens | GPUI-CE |
 | `photon-core` | Browser state, commands, shared address normalization, history rules, settings, clearing requests, command bar results | `photon-omnibox`, `photon-tab-sleep`, `photon-brand`, serde |
 | `photon-omnibox` | Search engine list, address/query resolution, suggestion and word matching | `photon-brand`, URL parsing library |
 | `photon-storage` | Profile folder, history and settings files, saved page icons, data usage | `photon-core`, `photon-brand`, serde |

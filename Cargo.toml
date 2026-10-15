@@ -3,7 +3,7 @@ resolver = "2"
 members = [
     "crates/photon-cli",
     "crates/photon-core",
-    "crates/photon-motion",
+    "crates/gpui-motion",
     "crates/photon-ffi",
     "crates/photon-app",
     "crates/photon-brand",

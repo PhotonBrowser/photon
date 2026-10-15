@@ -24,12 +24,12 @@ use super::controls::themed_text_input;
 use super::history::BrowsingHistory;
 use super::icons::search_icon_sized;
 use super::layout::{Elevated, Elevation, Raised, h_stack, v_stack};
-use super::motion::Entrance;
+use super::motion::{Entrance, popover};
 use super::settings::Settings;
 use super::{metrics, theme::palette};
 
 /// How the command bar appears.
-pub(super) const COMMAND_BAR_MOTION: Entrance = Entrance::popover();
+pub(super) const COMMAND_BAR_MOTION: Entrance = popover();
 
 /// An open tab, as the command bar offers it.
 pub(super) struct TabSummary {

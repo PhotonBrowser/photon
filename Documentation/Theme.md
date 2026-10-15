@@ -123,8 +123,11 @@ folder, then add a function that loads it with `lucide!("name")`.
 
 ## Motion
 
-[`motion.rs`](../crates/photon-shell/src/platform/ui/motion.rs) is the shell's
-animation system. An `Entrance` describes how an element appears, combining:
+[`gpui-motion`](../crates/gpui-motion/README.md) provides reusable animation
+mechanics. The shell's
+[`motion.rs`](../crates/photon-shell/src/platform/ui/motion.rs) keeps Photon
+visual presets and distances. An `Entrance` describes an element effect,
+composed from:
 
 - `fade_from(opacity)`: fades to fully opaque.
 - `slide_from(edge, distance)`, or `slide_up`, `slide_down`, `slide_left` and
@@ -132,38 +135,42 @@ animation system. An `Entrance` describes how an element appears, combining:
 - `blur_from(radius)`: sharpens from a blur.
 - `grow_from(size, fraction)`: grows a fixed-size element, such as an icon.
 
-Timing comes from `speed(Speed::Quick | Standard | Gentle)` (120, 200 and
-320 ms) or `duration`, plus `delay` for staggering, and `curve(...)`: `EaseOut`
-(the default), `Linear`, `EaseInOut`, `Overshoot`, or a spring such as
-`Curve::SNAPPY` and `Curve::BOUNCY`. Distances come from `motion::distance`.
+Timing comes from `speed(Speed::Quick | Standard | Gentle)` or `duration`, plus
+`delay` for staggering, and `curve(...)`: `EaseOut` (the default), `Linear`,
+`EaseInOut`, `Overshoot`, or a spring such as `Curve::SNAPPY` and
+`Curve::BOUNCY`. The default timing tiers are 120, 200 and 320 ms. Distances
+come from the shell's `motion::distance` values.
 
 | Preset | Effect | Used for |
 | --- | --- | --- |
-| `Entrance::fade()` | Quick fade | Status chips, settings sections, checkmarks |
-| `Entrance::rise()` | Fade while rising | Panels and dialogs |
-| `Entrance::fall()` | Fade while falling | The find bar |
-| `Entrance::popover()` | Quick fade with a slight drop | Menus and popovers (`MENU_MOTION`) |
-| `Entrance::slide_in(edge)` | Fade while sliding in from an edge | Sidebars and sheets |
-| `Entrance::focus()` | Fade while sharpening from a blur | Content replaced in place |
-| `Entrance::pop(size)` | Grow with a little overshoot | Tab icons |
+| Shell `fade()` | Quick fade | Status chips, settings sections, checkmarks |
+| Shell `rise()` | Fade while rising | Panels and dialogs |
+| Shell `fall()` | Fade while falling | The find bar |
+| Shell `popover()` | Quick fade with a slight drop | Menus and popovers (`MENU_MOTION`) |
+| Shell `slide_in(edge)` | Fade while sliding in from an edge | Sidebars and sheets |
+| Shell `pop(size)` | Grow with a little overshoot | Tab icons |
 
-Apply it with `element.animate_in(id, entrance)`. It plays the first time the
-element is shown under that id; a new id plays it again.
+Apply it with `element.animate_in(id, entrance, &motion_config)`. It plays the
+first time the element is shown under that id; a new id plays it again.
 
 Elements also leave the way they came. `animate_out` plays an entrance
-backwards, quicker and accelerating away, and `animate(id, entrance,
-transition)` picks the direction. A removed element is gone at once, so keep
-it drawn while it leaves with `Presence`: each render, pass the owner's
-current value to `presence.sync(value, entrance, cx)` and draw what it
-returns, the current value entering or the last one leaving. Menus, chips,
-the find bar, dialogs and the customise menu work this way.
+backwards, quicker and accelerating away. `animate(id, entrance, transition,
+&motion_config)` picks the direction. A removed element is gone at once, so
+keep it drawn while it leaves with `Presence`: each render, pass the owner's
+current value to `presence.sync(value, entrance, &motion_config, cx)` and draw
+what it returns, the current value entering or the last one leaving. Menus,
+chips, the find bar, dialogs and the customise menu work this way.
 
 Layout that animates as a whole, such as the sidebar opening while the page
 narrows beside it, uses a `Tween`: a value from 0 to 1 that eases in and out
 toward its target and can turn back midway without jumping. Its owner reads
 it as it draws and asks for another frame while it runs.
 
-Every animation follows the system's reduced-motion setting.
+The shell adapts its persisted animation preferences and the current
+system reduced-motion preference into `gpui_motion::MotionConfig`. When motion
+is unavailable, effects use their final values and `Presence` releases exiting
+items immediately. `Tween` can also sample against the current config so a
+running layout value settles after a preference change.
 
 ### Animate changes, not appearances
 

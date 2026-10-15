@@ -16,11 +16,11 @@ use super::controls::themed_text_input;
 use super::icons::{chevron_down_icon, chevron_up_icon, close_icon, search_icon_sized};
 use super::layout::h_stack;
 use super::layout::{Elevated, Elevation, Raised};
-use super::motion::Entrance;
+use super::motion::{Entrance, fall};
 use super::{PhotonWebView, WebViewEvent, metrics, theme::palette};
 
 /// How the bar drops in and lifts away.
-pub(super) const FIND_BAR_MOTION: Entrance = Entrance::fall();
+pub(super) const FIND_BAR_MOTION: Entrance = fall();
 
 /// Asks the window to close the bar.
 pub(super) struct CloseFindBar;

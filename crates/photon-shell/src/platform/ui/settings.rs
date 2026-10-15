@@ -6,8 +6,8 @@
 //! after they happen, off the main thread, and once more when the app quits.
 
 use gpui::{App, BorrowAppContext, Global, Task, WindowAppearance};
+use gpui_motion::{MotionConfig, MotionTimings};
 use photon_core::{BrowserSettings, ThemeMode};
-use photon_motion::MotionSettings;
 use photon_omnibox::SearchEngines;
 use photon_storage::{Profile, ProfileWriteTicket};
 use std::cell::OnceCell;
@@ -85,15 +85,19 @@ pub(in crate::platform) fn load_settings(
 
 impl Settings {
     /// The reusable motion framework's view of the saved and system settings.
-    pub(super) fn motion(cx: &App) -> MotionSettings {
+    pub(super) fn motion(cx: &App) -> MotionConfig {
         let settings = Self::get(cx).animations;
-        MotionSettings {
+        MotionConfig {
             enabled: settings.enabled,
-            reduced_motion: cx.reduce_motion(),
-            quick_duration_ms: settings.quick_duration_ms,
-            standard_duration_ms: settings.standard_duration_ms,
-            gentle_duration_ms: settings.gentle_duration_ms,
-            effect_strength_percent: settings.effect_strength_percent,
+            reduce_motion: cx.reduce_motion(),
+            effect_strength: f32::from(settings.effect_strength_percent.min(300)) / 100.0,
+            timings: MotionTimings {
+                quick: Duration::from_millis(u64::from(settings.quick_duration_ms.min(2_000))),
+                standard: Duration::from_millis(u64::from(
+                    settings.standard_duration_ms.min(2_000),
+                )),
+                gentle: Duration::from_millis(u64::from(settings.gentle_duration_ms.min(2_000))),
+            },
         }
     }
 

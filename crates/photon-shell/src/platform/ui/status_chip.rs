@@ -1,18 +1,18 @@
 //! A small status chip in the window's bottom-right corner.
 
 use gpui::{ElementId, Role, SharedString, prelude::*, px, rgb, rgba};
-use photon_motion::MotionSettings;
+use gpui_motion::MotionConfig;
 
 use super::button::{ButtonKind, ButtonSize, button, icon_button};
 use super::controls::OwnsClicks;
 use super::icons::{check_icon, close_icon, loading_spinner, search_icon_sized, warning_icon};
 use super::layout::h_stack;
 use super::layout::{Elevated, Elevation, Raised};
-use super::motion::{AnimateIn, Entrance, Transition};
+use super::motion::{AnimateIn, Entrance, Transition, fade};
 use super::{ClickHandler, metrics, theme::ThemeColors};
 
 /// How chips appear and disappear.
-pub(super) const CHIP_MOTION: Entrance = Entrance::fade();
+pub(super) const CHIP_MOTION: Entrance = fade();
 
 /// What a chip's leading icon shows.
 #[derive(Clone)]
@@ -39,7 +39,7 @@ pub(super) fn status_chip(
     message: SharedString,
     action: Option<(&'static str, ClickHandler)>,
     on_dismiss: Option<ClickHandler>,
-    animations: MotionSettings,
+    animations: MotionConfig,
 ) -> impl IntoElement {
     let icon_size = metrics::CHIP_ICON_SIZE;
     let icon = match icon {

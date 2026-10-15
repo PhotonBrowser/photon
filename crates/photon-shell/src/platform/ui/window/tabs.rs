@@ -360,7 +360,6 @@ impl BrowserWindow {
                             from,
                             Duration::from_millis(super::super::metrics::TAB_REORDER_DURATION_MS),
                             &Settings::motion(cx),
-                            cx,
                         ),
                     );
                 }
@@ -907,7 +906,6 @@ impl BrowserWindow {
                         from,
                         Duration::from_millis(super::super::metrics::TAB_REORDER_DURATION_MS),
                         &Settings::motion(cx),
-                        cx,
                     ),
                 );
             } else {
@@ -986,7 +984,6 @@ impl BrowserWindow {
                     current_offset,
                     Duration::from_millis(super::super::metrics::TAB_DROP_SETTLE_DURATION_MS),
                     &Settings::motion(cx),
-                    cx,
                 ),
             );
         } else {
@@ -2001,7 +1998,6 @@ impl BrowserWindow {
                                     super::super::metrics::TAB_REORDER_DURATION_MS,
                                 ),
                                 &Settings::motion(cx),
-                                cx,
                             ),
                         );
                     }
@@ -2429,7 +2425,7 @@ impl BrowserWindow {
         &self,
         tab: u64,
         icon: &TabIcon,
-        animations: &super::super::motion::MotionSettings,
+        animations: &super::super::motion::MotionConfig,
     ) -> bool {
         let Some(revealed) = icon.revealed() else {
             return false;

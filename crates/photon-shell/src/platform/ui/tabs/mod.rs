@@ -20,7 +20,7 @@ use super::icons::{
     audio_icon, close_icon, globe_icon, loading_spinner, photon_logo, sleeping_icon,
 };
 use super::layout::{h_stack, v_stack};
-use super::motion::{AnimateIn, Entrance, animate_spring};
+use super::motion::{AnimateIn, AnimateSpring, Entrance, SpringSpec, pop};
 use super::{
     ClickHandler, KeyDownHandler, MouseDownHandler, MouseUpHandler, metrics, theme::ThemeColors,
 };
@@ -115,7 +115,7 @@ impl TabIcon {
 }
 
 /// How a tab icon appears.
-pub(super) const ICON_ENTRANCE: Entrance = Entrance::pop(metrics::TAB_FAVICON_SIZE);
+pub(super) const ICON_ENTRANCE: Entrance = pop(metrics::TAB_FAVICON_SIZE);
 
 /// A closing tab settles out of its slot with the same spring used by its entry.
 const TAB_MOTION_SPRING: SpringConfig = SpringConfig::new(1_800.0, 84.85, 1.0);
@@ -166,13 +166,14 @@ where
     } else {
         element
     };
-    let element = animate_spring(
-        element,
+    let element = element.animate_spring(
         motion.id,
-        TAB_MOTION_SPRING,
-        TAB_MOTION_EPSILON,
         motion.from,
         motion.target,
+        SpringSpec {
+            config: TAB_MOTION_SPRING,
+            epsilon: TAB_MOTION_EPSILON,
+        },
         move |element, value| {
             let progress = value.clamp(0.0, 1.0);
             let leaving = 1.0 - progress;
@@ -225,7 +226,7 @@ fn sized_icon<E>(
     id: ElementId,
     appearing: bool,
     size: f32,
-    animations: &super::motion::MotionSettings,
+    animations: &super::motion::MotionConfig,
 ) -> AnyElement
 where
     E: Styled + IntoElement + 'static,
@@ -253,7 +254,7 @@ pub(super) struct TabItem {
     pub icon: TabIcon,
     /// Whether the icon is still growing in after it first appeared.
     pub icon_appearing: bool,
-    pub animations: super::motion::MotionSettings,
+    pub animations: super::motion::MotionConfig,
     pub sleeping: bool,
     /// Whether the tab is pinned above today's tabs.
     pub pinned: bool,

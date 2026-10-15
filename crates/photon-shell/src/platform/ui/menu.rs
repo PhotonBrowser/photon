@@ -7,7 +7,7 @@ use super::icons::check_icon;
 use super::layout::{Elevated, Elevation, Raised};
 use super::layout::{h_stack, v_stack};
 use super::motion::pressable;
-use super::motion::{AnimateIn, Entrance, Transition};
+use super::motion::{AnimateIn, Entrance, Transition, popover};
 use super::settings::Settings;
 use super::{metrics, theme::ThemeColors};
 
@@ -18,7 +18,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 /// How menus open and close.
-pub(super) const MENU_MOTION: Entrance = Entrance::popover();
+pub(super) const MENU_MOTION: Entrance = popover();
 
 /// A raised surface for menus and small panels, `width` wide. It animates in
 /// each time it opens and out as it closes, so every popover, dropdown and

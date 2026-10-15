@@ -17,7 +17,7 @@ use gpui::{App, Task};
 use photon_core::DockRegion;
 
 use super::super::metrics;
-use super::super::motion::{Speed, Tween, mix};
+use super::super::motion::{MotionConfig, Speed, Tween, mix};
 use super::super::settings::Settings;
 use super::super::workspace_layout::WorkspaceLayout;
 
@@ -160,6 +160,21 @@ impl SidebarState {
             .any(Tween::is_running)
     }
 
+    /// Finishes decorative tweens if the application or platform disables motion.
+    pub(super) fn settle_if_motion_disabled(&mut self, config: &MotionConfig) {
+        if config.allows_motion() {
+            return;
+        }
+        for tween in [
+            &mut self.shown,
+            &mut self.expanded,
+            &mut self.tucked,
+            &mut self.reveal,
+        ] {
+            tween.jump_to(tween.target());
+        }
+    }
+
     /// Once a revealed sidebar has been kept shown and the page has made
     /// room for it, it is no longer revealed.
     pub(super) fn settle(&mut self) {
@@ -174,7 +189,7 @@ impl SidebarState {
     fn follow_docked(&mut self, cx: &App) {
         let docked = self.docked();
         self.shown
-            .animate_to(progress(docked), Speed::Gentle, &Settings::motion(cx), cx);
+            .animate_to(progress(docked), Speed::Gentle, &Settings::motion(cx));
         if !docked {
             self.revealed = false;
             self.reveal.jump_to(0.0);
@@ -204,7 +219,7 @@ impl SidebarState {
             self.tucked.jump_to(0.0);
         } else {
             self.tucked
-                .animate_to(0.0, Speed::Gentle, &Settings::motion(cx), cx);
+                .animate_to(0.0, Speed::Gentle, &Settings::motion(cx));
             self.follow_docked(cx);
         }
     }
@@ -215,7 +230,7 @@ impl SidebarState {
         }
         self.zen = zen;
         self.tucked
-            .animate_to(progress(zen), Speed::Gentle, &Settings::motion(cx), cx);
+            .animate_to(progress(zen), Speed::Gentle, &Settings::motion(cx));
         self.follow_docked(cx);
         true
     }
@@ -233,7 +248,7 @@ impl SidebarState {
             self.expanded.jump_to(target);
         } else {
             self.expanded
-                .animate_to(target, Speed::Standard, &Settings::motion(cx), cx);
+                .animate_to(target, Speed::Standard, &Settings::motion(cx));
         }
         true
     }
@@ -243,12 +258,8 @@ impl SidebarState {
             return false;
         }
         self.revealed = revealed;
-        self.reveal.animate_to(
-            progress(revealed),
-            Speed::Standard,
-            &Settings::motion(cx),
-            cx,
-        );
+        self.reveal
+            .animate_to(progress(revealed), Speed::Standard, &Settings::motion(cx));
         true
     }
 

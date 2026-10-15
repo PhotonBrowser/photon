@@ -10,13 +10,13 @@ use super::super::button::icon_button;
 use super::super::controls::OwnsClicks;
 use super::super::icons::{close_icon, open_in_tab_icon};
 use super::super::layout::{Elevated, Elevation, Raised, h_stack, v_stack};
-use super::super::motion::{AnimateIn, Entrance, Presence};
+use super::super::motion::{AnimateIn, Entrance, Presence, fade, rise};
 use super::super::{PhotonWebView, WebViewEvent, metrics, theme::ThemeColors};
 use super::BrowserWindow;
 use super::content::{create_webview, follow_appearance};
 
 /// How the preview rises in, and leaves the same way.
-const PEEK_MOTION: Entrance = Entrance::rise();
+const PEEK_MOTION: Entrance = rise();
 
 /// The page shown in the preview, and the window following it.
 pub(super) struct Peek {
@@ -176,7 +176,7 @@ impl BrowserWindow {
         }
         Some(
             overlay
-                .animate("peek-backdrop", Entrance::fade(), transition, &animations)
+                .animate("peek-backdrop", fade(), transition, &animations)
                 .into_any_element(),
         )
     }
