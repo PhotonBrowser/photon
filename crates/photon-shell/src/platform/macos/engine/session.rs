@@ -95,6 +95,10 @@ impl EngineSession {
         startup_url: Option<CString>,
         create_native_view: impl FnOnce(*mut c_void, *const embedder::ViewCallbacks) -> *mut c_void,
     ) -> anyhow::Result<Self> {
+        anyhow::ensure!(
+            runtime.is_available(),
+            "web pages are unavailable in the UI-only build"
+        );
         let service = std::env::var("PHOTON_PRESENTATION_XPC_SERVICE")
             .context("presentation broker service is not set")?;
         let channel_id = presentation_channel_id();

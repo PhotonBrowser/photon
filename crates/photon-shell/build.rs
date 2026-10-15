@@ -10,9 +10,9 @@ fn main() {
     let out = PathBuf::from(env::var_os("OUT_DIR").unwrap());
     generate_background_noise(&out);
 
-    // The checked-in Engine build and this native bridge currently provide the
-    // macOS implementation. Linux will get its own native sources and Engine
-    // link inputs under native/embedder/linux/ when that adapter is built.
+    // macOS Engine builds add the embedder bridge and link inputs. Both macOS
+    // modes build the native window helpers; Linux will get its own sources
+    // and Engine link inputs under native/embedder/linux/ when that adapter is built.
     if env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("macos") {
         return;
     }
@@ -21,32 +21,50 @@ fn main() {
         .join("../..")
         .canonicalize()
         .unwrap();
-    let engine_build = env::var_os("PHOTON_ENGINE_BUILD_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| root.join("build/engine-release"));
-    let generated = engine_build.join("Libraries");
-    let fallback = out.join("include/LibPhotonEmbedder/Export.h");
-    if !generated.join("LibPhotonEmbedder/Export.h").is_file() {
-        std::fs::create_dir_all(fallback.parent().unwrap()).unwrap();
-        std::fs::write(&fallback, "#pragma once\n#define PHOTONEMBEDDER_API\n").unwrap();
+    let ui_only = env::var_os("CARGO_FEATURE_UI_ONLY").is_some();
+    if !ui_only {
+        let engine_build = env::var_os("PHOTON_ENGINE_BUILD_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| root.join("build/engine-release"));
+        let generated = engine_build.join("Libraries");
+        let fallback = out.join("include/LibPhotonEmbedder/Export.h");
+        if !generated.join("LibPhotonEmbedder/Export.h").is_file() {
+            std::fs::create_dir_all(fallback.parent().unwrap()).unwrap();
+            std::fs::write(&fallback, "#pragma once\n#define PHOTONEMBEDDER_API\n").unwrap();
+        }
+        cc::Build::new()
+            .cpp(true)
+            .std("c++20")
+            .file(root.join("native/embedder/PhotonEmbedderBridge.cpp"))
+            .include(root.join("native/embedder"))
+            .include(root.join("native/embedder/macos"))
+            .include(root.join("Engine/Libraries/LibPhotonEmbedder/include"))
+            .include(root.join("Engine/Libraries"))
+            .include(if generated.join("LibPhotonEmbedder/Export.h").is_file() {
+                generated
+            } else {
+                out.join("include")
+            })
+            .compile("photon_embedder_bridge_direct");
+        for source in [
+            "native/embedder/PhotonEmbedderBridge.cpp",
+            "native/embedder/PhotonEmbedderBridge.h",
+        ] {
+            println!("cargo:rerun-if-changed={}", root.join(source).display());
+        }
+        println!(
+            "cargo:rustc-link-search=native={}",
+            engine_build.join("lib64").display()
+        );
+        if !engine_build.join("lib64").exists() {
+            println!(
+                "cargo:rustc-link-search=native={}",
+                engine_build.join("lib").display()
+            );
+        }
+        println!("cargo:rustc-link-lib=dylib=lagom-photonembedder");
     }
-    cc::Build::new()
-        .cpp(true)
-        .std("c++20")
-        .file(root.join("native/embedder/PhotonEmbedderBridge.cpp"))
-        .include(root.join("native/embedder"))
-        .include(root.join("native/embedder/macos"))
-        .include(root.join("Engine/Libraries/LibPhotonEmbedder/include"))
-        .include(root.join("Engine/Libraries"))
-        .include(if generated.join("LibPhotonEmbedder/Export.h").is_file() {
-            generated
-        } else {
-            out.join("include")
-        })
-        .compile("photon_embedder_bridge_direct");
     for source in [
-        "native/embedder/PhotonEmbedderBridge.cpp",
-        "native/embedder/PhotonEmbedderBridge.h",
         "native/embedder/macos/DefaultBrowser.mm",
         "native/embedder/macos/ReducedMotionObserver.mm",
         "native/embedder/macos/SystemClipboard.h",
@@ -55,17 +73,6 @@ fn main() {
     ] {
         println!("cargo:rerun-if-changed={}", root.join(source).display());
     }
-    println!(
-        "cargo:rustc-link-search=native={}",
-        engine_build.join("lib64").display()
-    );
-    if !engine_build.join("lib64").exists() {
-        println!(
-            "cargo:rustc-link-search=native={}",
-            engine_build.join("lib").display()
-        );
-    }
-    println!("cargo:rustc-link-lib=dylib=lagom-photonembedder");
     cc::Build::new()
         .cpp(true)
         .file(root.join("native/embedder/macos/DefaultBrowser.mm"))

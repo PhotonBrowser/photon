@@ -5,6 +5,13 @@ use std::{env, path::PathBuf};
 
 fn main() {
     let root = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap()).join("../..");
+    if env::var_os("CARGO_FEATURE_UI_ONLY").is_some() {
+        if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
+            println!("cargo:rustc-link-arg-bins=-Wl,-undefined,dynamic_lookup");
+        }
+        println!("cargo:rerun-if-env-changed=PHOTON_ENGINE_BUILD_DIR");
+        return;
+    }
     let engine_build = env::var_os("PHOTON_ENGINE_BUILD_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| root.join("build/engine-release"));

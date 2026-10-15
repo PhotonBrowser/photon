@@ -1729,6 +1729,7 @@ impl BrowserWindow {
         );
     }
 
+    #[cfg(not(feature = "ui-only"))]
     pub(super) fn insert_webview_immediately(
         &mut self,
         index: usize,

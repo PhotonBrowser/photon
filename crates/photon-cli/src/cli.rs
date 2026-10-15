@@ -48,11 +48,14 @@ enum Command {
         #[arg(long, default_value_t = true)]
         release: bool,
     },
-    /// Build Photon Engine and launch the direct GPUI-CE application.
+    /// Build and launch the direct GPUI-CE application.
     Run {
         /// Build with optimizations (the default).
         #[arg(long, default_value_t = true)]
         release: bool,
+        /// Build and launch the shell without building, linking, or starting Photon Engine.
+        #[arg(long)]
+        ui: bool,
         /// Navigate the PhotonWebView to this URL after launch.
         #[arg(long)]
         url: Option<String>,
@@ -158,15 +161,25 @@ pub fn run() -> Result<(), String> {
         Some(Command::Build { release }) => commands::build::build(&root, release, verbose),
         Some(Command::Run {
             release,
+            ui,
             url,
             shutdown_after_seconds,
-        }) => commands::build::run_direct(
-            &root,
-            release,
-            verbose,
-            url.as_deref(),
-            shutdown_after_seconds,
-        ),
+        }) => {
+            if ui {
+                if url.is_some() {
+                    return Err("--url cannot be used with --ui".into());
+                }
+                commands::build::run_ui(&root, release, verbose, shutdown_after_seconds)
+            } else {
+                commands::build::run_direct(
+                    &root,
+                    release,
+                    verbose,
+                    url.as_deref(),
+                    shutdown_after_seconds,
+                )
+            }
+        }
         Some(Command::Clean { scope }) => {
             let scope = scope.map(|scope| match scope {
                 CleanScope::Engine => "engine",

@@ -42,20 +42,20 @@ fn build_app(root: &Path, release: bool, verbose: bool) -> Result<(), String> {
     if release {
         args.push("--release");
     }
-    invoke_cargo_with_engine(&args, root, &engine, verbose)
+    invoke_cargo(&args, root, Some(&engine), verbose)
 }
 
-fn invoke_cargo_with_engine(
+fn invoke_cargo(
     args: &[&str],
     root: &Path,
-    engine_dir: &Path,
+    engine_dir: Option<&Path>,
     verbose: bool,
 ) -> Result<(), String> {
     let mut command = Command::new("cargo");
-    command
-        .args(args)
-        .current_dir(root)
-        .env("PHOTON_ENGINE_BUILD_DIR", engine_dir);
+    command.args(args).current_dir(root);
+    if let Some(engine_dir) = engine_dir {
+        command.env("PHOTON_ENGINE_BUILD_DIR", engine_dir);
+    }
     if verbose {
         return command
             .status()
@@ -414,6 +414,55 @@ pub(crate) fn run_direct(
         Ok(())
     } else {
         Err(format!("Photon GPUI-CE exited with {status}"))
+    }
+}
+
+/// Builds and launches the existing browser shell without building or linking Photon Engine.
+pub(crate) fn run_ui(
+    root: &Path,
+    release: bool,
+    verbose: bool,
+    shutdown_after_seconds: Option<u64>,
+) -> Result<(), String> {
+    if !cfg!(target_os = "macos") {
+        return Err("the UI-only GPUI-CE shell currently supports macOS only".into());
+    }
+
+    stage("Build Photon UI-only shell");
+    let mut args = vec![
+        "build",
+        "-p",
+        "photon-app",
+        "--bin",
+        "Photon",
+        "--features",
+        "ui-only",
+    ];
+    if release {
+        args.push("--release");
+    }
+    invoke_cargo(&args, root, None, verbose)?;
+
+    let built = root
+        .join("target")
+        .join(if release { "release" } else { "debug" })
+        .join("Photon");
+    let executable = super::app_bundle::ensure_ui(root, &built)?;
+    let mut process = Command::new(executable);
+    process.current_dir(root);
+    if verbose {
+        process.env("PHOTON_VERBOSE", "1");
+    }
+    if let Some(seconds) = shutdown_after_seconds {
+        process.env("PHOTON_SHUTDOWN_AFTER_SECONDS", seconds.to_string());
+    }
+    let status = process
+        .status()
+        .map_err(|error| format!("cannot start UI-only Photon shell: {error}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("UI-only Photon shell exited with {status}"))
     }
 }
 

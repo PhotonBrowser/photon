@@ -6,24 +6,29 @@ mod callbacks;
 pub(super) mod navigation_timing;
 mod session;
 
+#[cfg(not(feature = "ui-only"))]
 use anyhow::Context as _;
 use gpui::{AsyncApp, WeakEntity};
 use photon_core::{ClearBrowsingData, PopupPolicy};
 use photon_performance::PerformanceTask;
+#[cfg(not(feature = "ui-only"))]
+use std::cell::RefCell;
 use std::{
-    cell::{Cell, RefCell},
-    ffi::{CStr, CString, c_void},
-    path::Path,
+    cell::Cell,
+    ffi::{CStr, c_void},
     rc::Rc,
     sync::{
         Mutex,
         atomic::{AtomicU8, Ordering},
     },
 };
+#[cfg(not(feature = "ui-only"))]
+use std::{ffi::CString, path::Path};
 
 use super::ffi::embedder;
 use crate::platform::ui::PhotonWebView;
 use callbacks::*;
+#[cfg(not(feature = "ui-only"))]
 use photon_core::EngineService;
 pub(in crate::platform) use session::{EngineSession, RequestedWebView};
 
@@ -47,6 +52,7 @@ pub(in crate::platform) struct EngineRuntime {
     runtime: *mut c_void,
     reduced_motion_observer: *mut c_void,
     callbacks: Box<RuntimeCallbacks>,
+    #[cfg(not(feature = "ui-only"))]
     service_callback: RefCell<Option<Box<ServiceCallback>>>,
     popup_policy: AtomicU8,
     performance_dashboard_users: Cell<usize>,
@@ -55,6 +61,7 @@ pub(in crate::platform) struct EngineRuntime {
 impl EngineRuntime {
     /// Starts the Engine, keeping website data in `profile_dir`, or in a
     /// temporary profile when there is none.
+    #[cfg(not(feature = "ui-only"))]
     pub(in crate::platform) fn create(profile_dir: Option<&Path>) -> anyhow::Result<Self> {
         let helper = std::env::var("PHOTON_HELPER_DIRECTORY")
             .context("PHOTON_HELPER_DIRECTORY is not set")?;
@@ -102,10 +109,29 @@ impl EngineRuntime {
             runtime,
             reduced_motion_observer,
             callbacks,
+            #[cfg(not(feature = "ui-only"))]
             service_callback: RefCell::default(),
             popup_policy: AtomicU8::new(PopupPolicy::Ask as u8),
             performance_dashboard_users: Cell::new(0),
         })
+    }
+
+    /// Creates the shell runtime used by UI-only builds, with no Engine handles.
+    #[cfg(feature = "ui-only")]
+    pub(in crate::platform) fn without_engine() -> Self {
+        Self {
+            runtime: std::ptr::null_mut(),
+            reduced_motion_observer: std::ptr::null_mut(),
+            callbacks: Box::new(RuntimeCallbacks {
+                views: Mutex::new(Vec::new()),
+            }),
+            popup_policy: AtomicU8::new(PopupPolicy::Ask as u8),
+            performance_dashboard_users: Cell::new(0),
+        }
+    }
+
+    pub(in crate::platform) fn is_available(&self) -> bool {
+        !self.runtime.is_null()
     }
 
     pub(in crate::platform) fn popup_policy(&self) -> PopupPolicy {
@@ -121,10 +147,16 @@ impl EngineRuntime {
     }
 
     pub(in crate::platform) fn set_elastic_scroll(&self, enabled: bool) {
+        if !self.is_available() {
+            return;
+        }
         unsafe { embedder::photon_runtime_set_elastic_scroll_enabled(self.runtime, enabled) }
     }
 
     pub(in crate::platform) fn performance_tasks(&self) -> Vec<PerformanceTask> {
+        if !self.is_available() {
+            return Vec::new();
+        }
         let views = {
             let mut views = self.callbacks.views.lock().unwrap();
             views.retain(|view| view.strong_count() > 0);
@@ -161,6 +193,9 @@ impl EngineRuntime {
     }
 
     fn set_performance_dashboard_enabled(&self, enabled: bool) {
+        if !self.is_available() {
+            return;
+        }
         let views = self
             .callbacks
             .views
@@ -194,10 +229,14 @@ impl EngineRuntime {
     /// Calls `on_change(service, restarted)` on the main thread when an Engine
     /// service stops (`false`) and once it is running again (`true`). It must
     /// not update GPUI entities synchronously.
+    #[cfg(not(feature = "ui-only"))]
     pub(in crate::platform) fn on_service_change(
         &self,
         on_change: impl Fn(EngineService, bool) + 'static,
     ) {
+        if !self.is_available() {
+            return;
+        }
         let mut callback: Box<ServiceCallback> = Box::new(Box::new(on_change));
         unsafe {
             embedder::photon_runtime_set_service_callback(
@@ -210,6 +249,9 @@ impl EngineRuntime {
     }
 
     pub(in crate::platform) fn registered_processes(&self) -> Vec<RegisteredEngineProcess> {
+        if !self.is_available() {
+            return Vec::new();
+        }
         unsafe extern "C" fn collect(
             context: *mut c_void,
             pid: i32,
@@ -261,7 +303,7 @@ impl EngineRuntime {
         request: &ClearBrowsingData,
         done: impl FnOnce() + 'static,
     ) {
-        if !request.touches_engine() {
+        if !self.is_available() || !request.touches_engine() {
             done();
             return;
         }
@@ -309,6 +351,7 @@ pub(in crate::platform) enum ZoomStep {
     Reset,
 }
 
+#[cfg(not(feature = "ui-only"))]
 unsafe extern "C" fn on_system_reduced_motion_changed(runtime: *mut c_void, reduce_motion: bool) {
     if !runtime.is_null() {
         unsafe {

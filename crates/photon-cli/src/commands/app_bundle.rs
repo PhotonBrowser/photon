@@ -41,6 +41,28 @@ pub(super) fn ensure(
 ) -> Result<PathBuf, String> {
     stage("Bundle Photon development app");
     let bundle = bundle_path()?;
+    let executable = write_bundle(root, built, &bundle, info_plist(environment))?;
+    register(&bundle);
+    Ok(executable)
+}
+
+/// Puts the UI-only shell in an app bundle with Photon metadata and icon.
+/// Its separate bundle identity and location keep it distinct from the
+/// browser bundle, and it is deliberately not registered as a link handler.
+pub(super) fn ensure_ui(root: &Path, built: &Path) -> Result<PathBuf, String> {
+    stage("Bundle Photon UI-only shell");
+    let bundle = bundle_path()?
+        .with_file_name("UI-only")
+        .join(format!("{NAME}.app"));
+    write_bundle(root, built, &bundle, ui_info_plist())
+}
+
+fn write_bundle(
+    root: &Path,
+    built: &Path,
+    bundle: &Path,
+    plist: String,
+) -> Result<PathBuf, String> {
     let contents = bundle.join("Contents");
     let macos = contents.join("MacOS");
     std::fs::create_dir_all(&macos).map_err(|error| error.to_string())?;
@@ -57,10 +79,8 @@ pub(super) fn ensure(
                 bundle.display()
             )
         })?;
-    std::fs::write(contents.join("Info.plist"), info_plist(environment))
-        .map_err(|error| error.to_string())?;
+    std::fs::write(contents.join("Info.plist"), plist).map_err(|error| error.to_string())?;
     write_icon(root, &contents.join("Resources"))?;
-    register(&bundle);
     Ok(executable)
 }
 
@@ -237,11 +257,42 @@ fn register(bundle: &Path) {
 }
 
 fn info_plist(environment: &[(&str, String)]) -> String {
+    info_plist_for(environment, DEVELOPMENT_BUNDLE_IDENTIFIER, true)
+}
+
+fn ui_info_plist() -> String {
+    info_plist_for(
+        &[],
+        &format!("{DEVELOPMENT_BUNDLE_IDENTIFIER}.ui-only"),
+        false,
+    )
+}
+
+fn info_plist_for(
+    environment: &[(&str, String)],
+    bundle_identifier: &str,
+    handles_browser_documents: bool,
+) -> String {
     let string = |value: &str| format!("<string>{}</string>", xml_escape(value));
     let environment = environment
         .iter()
         .map(|(key, value)| format!("<key>{}</key>{}", xml_escape(key), string(value)))
         .collect::<String>();
+    let browser_document_handlers = if handles_browser_documents {
+        r#"<key>CFBundleURLTypes</key><array><dict>
+<key>CFBundleURLName</key><string>Web site URL</string>
+<key>CFBundleTypeRole</key><string>Viewer</string>
+<key>CFBundleURLSchemes</key><array><string>http</string><string>https</string></array>
+</dict></array>
+<key>CFBundleDocumentTypes</key><array><dict>
+<key>CFBundleTypeName</key><string>HTML document</string>
+<key>CFBundleTypeRole</key><string>Viewer</string>
+<key>LSHandlerRank</key><string>Alternate</string>
+<key>LSItemContentTypes</key><array><string>public.html</string><string>public.xhtml</string></array>
+</dict></array>"#
+    } else {
+        ""
+    };
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -257,24 +308,15 @@ fn info_plist(environment: &[(&str, String)]) -> String {
 <key>CFBundleVersion</key>{version}
 <key>LSMinimumSystemVersion</key>{minimum}
 <key>NSHighResolutionCapable</key><true/>
-<key>CFBundleURLTypes</key><array><dict>
-<key>CFBundleURLName</key><string>Web site URL</string>
-<key>CFBundleTypeRole</key><string>Viewer</string>
-<key>CFBundleURLSchemes</key><array><string>http</string><string>https</string></array>
-</dict></array>
-<key>CFBundleDocumentTypes</key><array><dict>
-<key>CFBundleTypeName</key><string>HTML document</string>
-<key>CFBundleTypeRole</key><string>Viewer</string>
-<key>LSHandlerRank</key><string>Alternate</string>
-<key>LSItemContentTypes</key><array><string>public.html</string><string>public.xhtml</string></array>
-</dict></array>
+{browser_document_handlers}
 <key>LSEnvironment</key><dict>{environment}</dict>
 </dict></plist>
 "#,
-        identifier = string(DEVELOPMENT_BUNDLE_IDENTIFIER),
+        identifier = string(bundle_identifier),
         name = string(NAME),
         version = string(env!("CARGO_PKG_VERSION")),
         minimum = string(MINIMUM_SYSTEM_VERSION),
+        browser_document_handlers = browser_document_handlers,
     )
 }
 
@@ -288,5 +330,14 @@ mod tests {
         assert!(plist.contains("<string>https</string>"));
         assert!(plist.contains("<string>public.html</string>"));
         assert!(plist.contains("<key>PHOTON_HELPER_DIRECTORY</key><string>/a &amp; b</string>"));
+    }
+
+    #[test]
+    fn ui_bundle_has_metadata_without_browser_handlers() {
+        let plist = ui_info_plist();
+        assert!(plist.contains("<string>org.photonbrowser.photon.development.ui-only</string>"));
+        assert!(plist.contains("<key>CFBundleIconFile</key>"));
+        assert!(!plist.contains("CFBundleURLTypes"));
+        assert!(!plist.contains("CFBundleDocumentTypes"));
     }
 }

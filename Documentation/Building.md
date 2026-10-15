@@ -20,6 +20,7 @@ Use the `./photon` CLI for setup, formatting, linting, building, and running Pho
 - `./photon test` runs the Rust workspace tests.
 - `./photon build` builds the Engine and the GPUI-CE application.
 - `./photon run` builds and launches the native app. Use `--url URL` to choose the initial page. Use `--shutdown-after-seconds N` to exit after a fixed interval; `--verbose` prints the final presentation frame counts.
+- `./photon run --ui` builds and launches the same browser window with the New Tab page, without building, linking, or starting Photon Engine. Shell-owned pages remain available; web pages cannot be opened in this mode. This path currently supports macOS only.
 - `./photon clean` removes generated build trees and stops the checkout-specific presentation broker.
 
 `./photon check` includes the lint checks, so run it before sharing a change. Build and test commands use release mode by default; `--release` is accepted for compatibility.

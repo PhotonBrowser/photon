@@ -136,6 +136,7 @@ pub(super) mod embedder {
     }
 
     unsafe extern "C" {
+        #[cfg(not(feature = "ui-only"))]
         pub fn photon_runtime_create(
             helper_directory: *const c_char,
             profile_path: *const c_char,
@@ -158,6 +159,7 @@ pub(super) mod embedder {
         pub fn photon_runtime_schedule_native_release_drain(runtime: *mut c_void);
         pub fn photon_runtime_destroy(runtime: *mut c_void);
         #[cfg(target_os = "macos")]
+        #[cfg(not(feature = "ui-only"))]
         pub fn photon_runtime_use_system_clipboard(runtime: *mut c_void);
         pub fn photon_view_create(
             runtime: *mut c_void,
@@ -214,11 +216,13 @@ pub(super) mod embedder {
             accepted: bool,
             text: *const c_char,
         );
+        #[cfg(not(feature = "ui-only"))]
         pub fn photon_runtime_set_system_reduced_motion_preference(
             runtime: *mut c_void,
             reduce_motion: bool,
         );
         pub fn photon_runtime_set_elastic_scroll_enabled(runtime: *mut c_void, enabled: bool);
+        #[cfg(not(feature = "ui-only"))]
         pub fn photon_runtime_set_service_callback(
             runtime: *mut c_void,
             callback_data: *mut c_void,

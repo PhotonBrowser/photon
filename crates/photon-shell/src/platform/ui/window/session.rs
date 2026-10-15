@@ -6,19 +6,27 @@
 //! Closing one of several windows forgets it; closing the last keeps it, as
 //! that quits the browser.
 
-use gpui::{App, BorrowAppContext, Context, Global, Task, Window};
+#[cfg(not(feature = "ui-only"))]
+use gpui::Window;
+use gpui::{App, BorrowAppContext, Context, Global, Task};
 use photon_core::{Session, SessionTab, WindowSession};
 use photon_storage::{Profile, ProfileWriteTicket};
+#[cfg(not(feature = "ui-only"))]
 use std::rc::Rc;
 use std::time::Duration;
 
+#[cfg(not(feature = "ui-only"))]
 use super::super::super::engine::EngineRuntime;
 use super::super::super::trace;
+#[cfg(not(feature = "ui-only"))]
 use super::super::pages::find_page;
 use super::super::settings::Settings;
+use super::BrowserWindow;
 use super::command_bar::tab_summary;
+#[cfg(not(feature = "ui-only"))]
 use super::content::create_webview;
-use super::{BrowserWindow, open_browser_window};
+#[cfg(not(feature = "ui-only"))]
+use super::open_browser_window;
 use crate::platform::app_update::update_app;
 
 /// How long after a change the session is saved, so a burst saves once.
@@ -113,6 +121,7 @@ pub(super) fn load_session(profile: Option<Profile>, cx: &mut App) -> Session {
 
 /// Reopens the windows of a saved session, the first with the pinned tabs
 /// too, as the first window at launch has. Returns whether any opened.
+#[cfg(not(feature = "ui-only"))]
 pub(super) fn restore_session(
     session: &Session,
     runtime: &Rc<EngineRuntime>,
@@ -202,6 +211,7 @@ impl BrowserWindow {
 
     /// Opens a saved window's tabs in their spaces, in the background, then
     /// shows the one that was in use.
+    #[cfg(not(feature = "ui-only"))]
     fn restore_tabs(&mut self, saved: &WindowSession, window: &mut Window, cx: &mut Context<Self>) {
         let first = self.tabs.len();
         for tab in &saved.tabs {

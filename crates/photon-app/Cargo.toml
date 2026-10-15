@@ -4,6 +4,9 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+ui-only = ["photon-shell/ui-only"]
+
 [[bin]]
 name = "Photon"
 path = "src/main.rs"

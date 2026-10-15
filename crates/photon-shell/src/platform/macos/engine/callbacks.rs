@@ -2,7 +2,9 @@
 
 use crate::platform::app_update::update_app;
 use mach2::port::mach_port_t;
-use photon_core::{BrowserState, DialogKind, DialogRequest, EngineService};
+#[cfg(not(feature = "ui-only"))]
+use photon_core::EngineService;
+use photon_core::{BrowserState, DialogKind, DialogRequest};
 use std::{
     ffi::{CStr, c_char, c_void},
     sync::atomic::{AtomicU64, Ordering},
@@ -10,7 +12,8 @@ use std::{
 
 use super::super::ffi::embedder;
 use super::super::presentation::MachPortGuard;
-pub(super) use super::callback_state::{CallbackState, RuntimeCallbacks, deliver_pending_releases};
+pub(super) use super::callback_state::deliver_pending_releases;
+pub(super) use super::callback_state::{CallbackState, RuntimeCallbacks};
 use super::{EngineSession, RequestedWebView};
 use crate::platform::trace;
 use crate::platform::ui::{Favicon, FindResult, PageMenuItem, SelectDropdown, SelectItem};
@@ -336,8 +339,10 @@ pub(super) unsafe extern "C" fn on_engine_browsing_data_cleared(context: *mut c_
 }
 
 /// Called on the main thread with an Engine service's stop or restart.
+#[cfg(not(feature = "ui-only"))]
 pub(super) type ServiceCallback = Box<dyn Fn(EngineService, bool)>;
 
+#[cfg(not(feature = "ui-only"))]
 pub(super) unsafe extern "C" fn on_engine_service(
     context: *mut c_void,
     service: i32,
@@ -494,6 +499,7 @@ pub(super) unsafe extern "C" fn on_engine_native_frame(
     callbacks.request_redraw();
 }
 
+#[cfg(not(feature = "ui-only"))]
 pub(super) unsafe extern "C" fn on_native_release_drain(context: *mut c_void) {
     if context.is_null() {
         return;

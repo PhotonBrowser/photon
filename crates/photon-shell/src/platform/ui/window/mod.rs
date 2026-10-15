@@ -1,6 +1,7 @@
 //! The browser window: its tabs, chrome, menus and page area.
 
 mod actions;
+#[cfg_attr(feature = "ui-only", allow(dead_code))]
 mod alerts;
 mod app;
 mod automation;
@@ -13,6 +14,7 @@ mod favourites;
 mod find;
 mod keyboard_shortcuts;
 mod menu;
+#[cfg(not(feature = "ui-only"))]
 mod open_urls;
 mod page_menu;
 mod peek;
@@ -366,7 +368,7 @@ impl BrowserWindow {
             BrowserCommand::NewTab => self.open_tab(window, cx),
             BrowserCommand::NewWindow => {
                 if let Err(error) =
-                    open_browser_window(self.runtime.clone(), app::initial_address(), false, cx)
+                    open_browser_window(self.runtime.clone(), app::launch_address(), false, cx)
                 {
                     trace(format_args!("new window: {error:#}"));
                 }

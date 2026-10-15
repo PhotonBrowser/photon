@@ -7,6 +7,7 @@ use photon_shortcuts::{NewWindow, browser_shortcuts};
 use std::rc::Rc;
 use std::time::Duration;
 
+#[cfg(not(feature = "ui-only"))]
 use super::super::super::app_update::update_app;
 use super::super::super::engine::EngineRuntime;
 use super::super::history::load_browsing_history;
@@ -14,9 +15,12 @@ use super::super::install_form_controls;
 use super::super::settings::{Settings, load_settings};
 use super::automation::AutomationLaunch;
 use super::menu::RunMenuCommand;
-use super::page_menu::ActivatePageMenuItem;
+#[cfg(not(feature = "ui-only"))]
 use super::open_urls::{open_received_urls, receive_opened_urls};
-use super::session::{load_session, restore_session};
+use super::page_menu::ActivatePageMenuItem;
+use super::session::load_session;
+#[cfg(not(feature = "ui-only"))]
+use super::session::restore_session;
 use super::{BrowserWindow, BrowserWindowRegistry, open_browser_window};
 use photon_storage::Profile;
 
@@ -29,6 +33,7 @@ pub fn run() {
         }
     };
     let application = application();
+    #[cfg(not(feature = "ui-only"))]
     let opened_urls = receive_opened_urls(&application);
     let automation_mode = automation_launch.is_some();
     application.run(move |cx: &mut App| {
@@ -52,6 +57,9 @@ pub fn run() {
         crate::platform::motion_observer::follow(cx);
         let profile = open_profile();
         load_settings(profile.clone(), cx);
+        #[cfg(feature = "ui-only")]
+        let runtime = Rc::new(EngineRuntime::without_engine());
+        #[cfg(not(feature = "ui-only"))]
         let runtime = Rc::new(
             EngineRuntime::create(
                 profile
@@ -62,8 +70,12 @@ pub fn run() {
             .unwrap_or_else(|error| panic!("could not start Photon Engine: {error:#}")),
         );
         follow_settings(&runtime, cx);
+        #[cfg(feature = "ui-only")]
+        load_session(None, cx);
+        #[cfg(not(feature = "ui-only"))]
         let saved_session = load_session(profile.clone(), cx);
         load_browsing_history(profile, cx);
+        #[cfg(not(feature = "ui-only"))]
         announce_service_restarts(&runtime, cx);
         quit_after_env_timeout(cx);
         crate::platform::app_menus::install_app_menus(cx);
@@ -71,7 +83,7 @@ pub fn run() {
         cx.on_action(move |_: &NewWindow, cx| {
             cx.activate(true);
             if let Err(error) =
-                open_browser_window(new_window_runtime.clone(), initial_address(), false, cx)
+                open_browser_window(new_window_runtime.clone(), launch_address(), false, cx)
             {
                 crate::platform::trace(format_args!("new window: {error:#}"));
             }
@@ -112,13 +124,26 @@ pub fn run() {
             });
         });
         install_form_controls(cx);
+        #[cfg(not(feature = "ui-only"))]
         open_received_urls(opened_urls, runtime.clone(), cx);
         cx.activate(true);
-        // An address to open starts afresh; otherwise last time's windows
-        // come back, or a new one opens.
-        let address = initial_address();
-        if address.is_some() || !restore_session(&saved_session, &runtime, cx) {
-            open_browser_window(runtime, address, true, cx).expect("open GPUI-CE Photon window");
+        #[cfg(feature = "ui-only")]
+        open_browser_window(
+            runtime,
+            Some(photon_core::internal_page_url("newtab")),
+            false,
+            cx,
+        )
+        .expect("open UI-only Photon window");
+        #[cfg(not(feature = "ui-only"))]
+        {
+            // An address to open starts afresh; otherwise last time's windows
+            // come back, or a new one opens.
+            let address = initial_address();
+            if address.is_some() || !restore_session(&saved_session, &runtime, cx) {
+                open_browser_window(runtime, address, true, cx)
+                    .expect("open GPUI-CE Photon window");
+            }
         }
         if let Some(launch) = automation_launch {
             super::automation::install(launch, cx).unwrap_or_else(|error| {
@@ -153,7 +178,20 @@ fn open_profile() -> Option<Profile> {
         .ok()
 }
 
+/// The address a newly opened window starts at.
+pub(super) fn launch_address() -> Option<String> {
+    #[cfg(feature = "ui-only")]
+    {
+        Some(photon_core::internal_page_url("newtab"))
+    }
+    #[cfg(not(feature = "ui-only"))]
+    {
+        initial_address()
+    }
+}
+
 /// The address to open at startup, from PHOTON_URL.
+#[cfg(not(feature = "ui-only"))]
 pub(super) fn initial_address() -> Option<String> {
     std::env::var("PHOTON_URL")
         .ok()
@@ -162,6 +200,7 @@ pub(super) fn initial_address() -> Option<String> {
 }
 
 /// Shows Engine service stops and restarts in every window.
+#[cfg(not(feature = "ui-only"))]
 fn announce_service_restarts(runtime: &EngineRuntime, cx: &mut App) {
     let app = cx.to_async();
     runtime.on_service_change(move |_, restarted| {
