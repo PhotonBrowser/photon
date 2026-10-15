@@ -14,8 +14,6 @@ use super::super::super::engine::ZoomStep;
 use super::super::pages::SETTINGS;
 use super::super::settings::Settings;
 use super::BrowserWindow;
-use super::menu::RunMenuCommand;
-use super::page_menu::ActivatePageMenuItem;
 
 impl BrowserWindow {
     /// Handles the browser's shortcuts and Escape on the window's root element.
@@ -59,12 +57,6 @@ impl BrowserWindow {
             }))
             .on_action(cx.listener(|this, _: &NewTab, window, cx| {
                 this.dispatch_command(BrowserCommand::NewTab, window, cx);
-            }))
-            .on_action(cx.listener(|this, item: &RunMenuCommand, window, cx| {
-                this.run_menu_command(item, window, cx);
-            }))
-            .on_action(cx.listener(|this, item: &ActivatePageMenuItem, _, cx| {
-                this.activate_page_menu_item(item, cx);
             }))
             .on_action(|_: &MinimizeWindow, window, _| window.minimize_window())
             .on_action(|_: &ZoomWindow, window, _| window.zoom_window())

@@ -13,6 +13,8 @@ use super::super::history::load_browsing_history;
 use super::super::install_form_controls;
 use super::super::settings::{Settings, load_settings};
 use super::automation::AutomationLaunch;
+use super::menu::RunMenuCommand;
+use super::page_menu::ActivatePageMenuItem;
 use super::open_urls::{open_received_urls, receive_opened_urls};
 use super::session::{load_session, restore_session};
 use super::{BrowserWindow, BrowserWindowRegistry, open_browser_window};
@@ -62,6 +64,41 @@ pub fn run() {
             {
                 crate::platform::trace(format_args!("new window: {error:#}"));
             }
+        });
+        cx.on_action(|item: &RunMenuCommand, cx| {
+            let command = item.clone();
+            let Some(window) = cx
+                .active_window()
+                .and_then(|window| window.downcast::<BrowserWindow>())
+            else {
+                return;
+            };
+            // Native menu actions are validated independently of the focused
+            // view, then dispatched through the app. Defer window access until
+            // that dispatch has released its current window update.
+            cx.defer(move |cx| {
+                window
+                    .update(cx, |browser, window, cx| {
+                        browser.run_menu_command(&command, window, cx);
+                    })
+                    .ok();
+            });
+        });
+        cx.on_action(|item: &ActivatePageMenuItem, cx| {
+            let item = item.clone();
+            let Some(window) = cx
+                .active_window()
+                .and_then(|window| window.downcast::<BrowserWindow>())
+            else {
+                return;
+            };
+            cx.defer(move |cx| {
+                window
+                    .update(cx, |browser, _, cx| {
+                        browser.activate_page_menu_item(&item, cx);
+                    })
+                    .ok();
+            });
         });
         install_form_controls(cx);
         open_received_urls(opened_urls, runtime.clone(), cx);
