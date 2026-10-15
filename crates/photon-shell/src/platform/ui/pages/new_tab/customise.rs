@@ -24,7 +24,7 @@ impl NewTabPage {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let animations = super::super::super::settings::Settings::get(cx).animations;
+        let animations = super::super::super::settings::Settings::motion(cx);
         let shown = self.customising.then_some(());
         let menu = self
             .customise_presence

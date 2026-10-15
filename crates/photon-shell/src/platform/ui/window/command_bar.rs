@@ -35,7 +35,7 @@ impl BrowserWindow {
 
     /// The open command bar, or one closing, drawn over the window.
     pub(super) fn command_bar_overlay(&mut self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let animations = super::super::settings::Settings::get(cx).animations;
+        let animations = super::super::settings::Settings::motion(cx);
         let (bar, transition) = self.command_bar_presence.sync(
             self.command_bar.clone(),
             COMMAND_BAR_MOTION,
@@ -51,7 +51,7 @@ impl BrowserWindow {
                     "command-bar-motion",
                     COMMAND_BAR_MOTION,
                     transition,
-                    &super::super::settings::Settings::get(cx).animations,
+                    &super::super::settings::Settings::motion(cx),
                 )
                 .into_any_element(),
         )

@@ -189,7 +189,7 @@ impl BrowserWindow {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> Option<impl IntoElement + use<>> {
-        let animations = Settings::get(cx).animations;
+        let animations = Settings::motion(cx);
         let notice = self.notice(cx);
         if let Some(deadline) = notice.as_ref().and_then(|notice| notice.expires_at) {
             self.expire_notice_at(deadline, cx);

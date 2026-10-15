@@ -49,7 +49,7 @@ impl SettingsPage {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        let animations = Settings::get(cx).animations;
+        let animations = Settings::motion(cx);
         let ((), transition) = self.reset_presence.sync(
             self.confirming_reset.then_some(()),
             MODAL_MOTION,

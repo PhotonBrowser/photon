@@ -173,12 +173,8 @@ impl SidebarState {
     /// Hidden, it leaves with the page.
     fn follow_docked(&mut self, cx: &App) {
         let docked = self.docked();
-        self.shown.animate_to(
-            progress(docked),
-            Speed::Gentle,
-            &Settings::get(cx).animations,
-            cx,
-        );
+        self.shown
+            .animate_to(progress(docked), Speed::Gentle, &Settings::motion(cx), cx);
         if !docked {
             self.revealed = false;
             self.reveal.jump_to(0.0);
@@ -208,7 +204,7 @@ impl SidebarState {
             self.tucked.jump_to(0.0);
         } else {
             self.tucked
-                .animate_to(0.0, Speed::Gentle, &Settings::get(cx).animations, cx);
+                .animate_to(0.0, Speed::Gentle, &Settings::motion(cx), cx);
             self.follow_docked(cx);
         }
     }
@@ -218,12 +214,8 @@ impl SidebarState {
             return false;
         }
         self.zen = zen;
-        self.tucked.animate_to(
-            progress(zen),
-            Speed::Gentle,
-            &Settings::get(cx).animations,
-            cx,
-        );
+        self.tucked
+            .animate_to(progress(zen), Speed::Gentle, &Settings::motion(cx), cx);
         self.follow_docked(cx);
         true
     }
@@ -241,7 +233,7 @@ impl SidebarState {
             self.expanded.jump_to(target);
         } else {
             self.expanded
-                .animate_to(target, Speed::Standard, &Settings::get(cx).animations, cx);
+                .animate_to(target, Speed::Standard, &Settings::motion(cx), cx);
         }
         true
     }
@@ -254,7 +246,7 @@ impl SidebarState {
         self.reveal.animate_to(
             progress(revealed),
             Speed::Standard,
-            &Settings::get(cx).animations,
+            &Settings::motion(cx),
             cx,
         );
         true

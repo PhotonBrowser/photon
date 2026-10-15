@@ -232,14 +232,13 @@ impl Render for SettingsPage {
         // again, as when switching back to this tab, appears at once.
         let content = match self.section_picked_at {
             Some(picked)
-                if picked.elapsed()
-                    < SECTION_MOTION.total_duration(&Settings::get(cx).animations) =>
+                if picked.elapsed() < SECTION_MOTION.total_duration(&Settings::motion(cx)) =>
             {
                 content
                     .animate_in(
                         (ElementId::from("settings-section"), section.id()),
                         SECTION_MOTION,
-                        &Settings::get(cx).animations,
+                        &Settings::motion(cx),
                     )
                     .into_any_element()
             }

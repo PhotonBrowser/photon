@@ -92,7 +92,7 @@ impl RenderOnce for StretchThumb {
             -extension * 0.5
         };
 
-        let animations = super::settings::Settings::get(cx).animations;
+        let animations = super::settings::Settings::motion(cx);
 
         div()
             .relative()
@@ -298,8 +298,8 @@ impl RenderOnce for IntensitySlider {
         let thumb_is_pressed = *thumb_press.read(cx);
         let stretch = *elastic_stretch.read(cx);
         let direction = *thumb_direction.read(cx);
-        let animations = super::settings::Settings::get(cx).animations;
-        let animations_enabled = animations.enabled;
+        let animations_enabled = super::settings::Settings::get(cx).animations.enabled;
+        let animations = super::settings::Settings::motion(cx);
         let press_start = thumb_press.clone();
         let press_end = thumb_press;
         let drag_sample_start = drag_sample.clone();
@@ -681,7 +681,7 @@ impl RenderOnce for Switch {
             on_toggle,
             dragged,
         } = self;
-        let animations = super::settings::Settings::get(cx).animations;
+        let animations = super::settings::Settings::motion(cx);
         let pressed = window.use_keyed_state(
             ElementId::Name(format!("{id}-switch-pressed").into()),
             cx,
@@ -931,7 +931,7 @@ impl RenderOnce for CheckMark {
                     .animate_in(
                         (id, changes.to_string()),
                         Entrance::fade(),
-                        &super::settings::Settings::get(cx).animations,
+                        &super::settings::Settings::motion(cx),
                     )
                     .into_any_element(),
             })

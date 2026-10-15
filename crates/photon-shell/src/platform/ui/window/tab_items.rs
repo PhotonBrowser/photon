@@ -56,6 +56,7 @@ impl BrowserWindow {
     ) -> Vec<TabItem> {
         let browser = cx.entity().downgrade();
         let animations = Settings::get(cx).animations;
+        let motion_settings = Settings::motion(cx);
         let axis = self.tab_axis(cx);
         let suppress_tooltips = self.tab_drag_active();
         indices
@@ -193,7 +194,8 @@ impl BrowserWindow {
                 } else {
                     None
                 };
-                let icon_appearing = !closing && self.icon_appearing(stable_id, &icon, &animations);
+                let icon_appearing =
+                    !closing && self.icon_appearing(stable_id, &icon, &motion_settings);
                 let insertion_before = self.incoming_tab_drag.as_ref().and_then(|incoming| {
                     (incoming.pinned == tab.pin.is_some() && incoming.before_id == Some(stable_id))
                         .then_some(incoming.size)
@@ -208,7 +210,7 @@ impl BrowserWindow {
                     closing,
                     label,
                     icon_appearing: icon_appearing && !entry_appearing,
-                    animations,
+                    animations: motion_settings,
                     icon,
                     sleeping: matches!(&tab.content, TabContent::Sleeping(_)),
                     pinned: tab.pin.is_some(),

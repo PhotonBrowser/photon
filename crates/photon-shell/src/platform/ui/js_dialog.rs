@@ -69,7 +69,7 @@ impl DialogHost {
 
     /// The dialog over the window, while shown or animating away.
     pub(super) fn overlay<V: 'static>(&mut self, cx: &mut Context<V>) -> Option<AnyElement> {
-        let animations = Settings::get(cx).animations;
+        let animations = Settings::motion(cx);
         self.presence
             .sync(self.dialog.clone(), MODAL_MOTION, &animations, cx)
             .map(|(dialog, _)| dialog.into_any_element())

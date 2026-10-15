@@ -53,7 +53,7 @@ pub(super) fn popover_surface(
             "browser-menu-motion",
             MENU_MOTION,
             transition,
-            &Settings::get(cx).animations,
+            &Settings::motion(cx),
         )
 }
 

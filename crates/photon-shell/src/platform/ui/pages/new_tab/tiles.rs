@@ -124,7 +124,7 @@ impl NewTabPage {
                     .animate_in(
                         ("new-tab-remove-shortcut", index),
                         Entrance::fade(),
-                        &super::super::super::settings::Settings::get(cx).animations,
+                        &super::super::super::settings::Settings::motion(cx),
                     ),
             );
         }

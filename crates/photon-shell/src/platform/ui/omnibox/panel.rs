@@ -242,7 +242,7 @@ impl Omnibox {
                 .child(rows.animate_in(
                     "omnibox-suggestions-appear",
                     Entrance::fade(),
-                    &super::super::settings::Settings::get(cx).animations,
+                    &super::super::settings::Settings::motion(cx),
                 )),
         )
         .priority(1)

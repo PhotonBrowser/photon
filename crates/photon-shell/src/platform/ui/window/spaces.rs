@@ -316,7 +316,7 @@ impl BrowserWindow {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        let animations = Settings::get(cx).animations;
+        let animations = Settings::motion(cx);
         let open = self
             .spaces
             .editor

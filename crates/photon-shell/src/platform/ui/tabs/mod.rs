@@ -8,10 +8,9 @@ mod list;
 mod strip;
 
 use gpui::{
-    AnimationExt, AnyElement, AnyWindowHandle, App, Bounds, Context, DispatchPhase, ElementId,
-    FocusHandle, Hitbox, ImageSource, MouseButton, MouseDownEvent, MouseMoveEvent, ObjectFit,
-    Render, Role, SpringAnimation, SpringConfig, Stateful, Window, div, img, prelude::*, px, rgb,
-    rgba,
+    AnyElement, AnyWindowHandle, App, Bounds, Context, DispatchPhase, ElementId, FocusHandle,
+    Hitbox, ImageSource, MouseButton, MouseDownEvent, MouseMoveEvent, ObjectFit, Render, Role,
+    SpringConfig, Stateful, Window, div, img, prelude::*, px, rgb, rgba,
 };
 
 use super::Favicon;
@@ -21,7 +20,7 @@ use super::icons::{
     audio_icon, close_icon, globe_icon, loading_spinner, photon_logo, sleeping_icon,
 };
 use super::layout::{h_stack, v_stack};
-use super::motion::{AnimateIn, Entrance};
+use super::motion::{AnimateIn, Entrance, animate_spring};
 use super::{
     ClickHandler, KeyDownHandler, MouseDownHandler, MouseUpHandler, metrics, theme::ThemeColors,
 };
@@ -167,12 +166,13 @@ where
     } else {
         element
     };
-    let element = element.with_spring(
+    let element = animate_spring(
+        element,
         motion.id,
-        SpringAnimation::new(TAB_MOTION_SPRING)
-            .with_epsilon(TAB_MOTION_EPSILON)
-            .to(motion.target)
-            .from(motion.from),
+        TAB_MOTION_SPRING,
+        TAB_MOTION_EPSILON,
+        motion.from,
+        motion.target,
         move |element, value| {
             let progress = value.clamp(0.0, 1.0);
             let leaving = 1.0 - progress;
@@ -225,7 +225,7 @@ fn sized_icon<E>(
     id: ElementId,
     appearing: bool,
     size: f32,
-    animations: &photon_core::AnimationSettings,
+    animations: &super::motion::MotionSettings,
 ) -> AnyElement
 where
     E: Styled + IntoElement + 'static,
@@ -253,7 +253,7 @@ pub(super) struct TabItem {
     pub icon: TabIcon,
     /// Whether the icon is still growing in after it first appeared.
     pub icon_appearing: bool,
-    pub animations: photon_core::AnimationSettings,
+    pub animations: super::motion::MotionSettings,
     pub sleeping: bool,
     /// Whether the tab is pinned above today's tabs.
     pub pinned: bool,

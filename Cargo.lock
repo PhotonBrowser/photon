@@ -4214,6 +4214,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "photon-motion"
+version = "0.1.0"
+dependencies = [
+ "gpui-ce",
+]
+
+[[package]]
 name = "photon-omnibox"
 version = "0.1.0"
 dependencies = [
@@ -4270,6 +4277,7 @@ dependencies = [
  "objc",
  "photon-brand",
  "photon-core",
+ "photon-motion",
  "photon-omnibox",
  "photon-performance",
  "photon-presentation-ipc",

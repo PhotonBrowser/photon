@@ -58,7 +58,7 @@ where
         ElementId::Name(format!("{id}-panel").into()),
         PANEL_MOTION,
         transition,
-        &Settings::get(cx).animations,
+        &Settings::motion(cx),
     );
     let mut modal = div()
         .id(id)
@@ -77,6 +77,6 @@ where
         ElementId::Name(format!("{id}-backdrop").into()),
         MODAL_MOTION,
         transition,
-        &Settings::get(cx).animations,
+        &Settings::motion(cx),
     )
 }

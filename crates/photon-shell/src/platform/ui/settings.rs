@@ -7,6 +7,7 @@
 
 use gpui::{App, BorrowAppContext, Global, Task, WindowAppearance};
 use photon_core::{BrowserSettings, ThemeMode};
+use photon_motion::MotionSettings;
 use photon_omnibox::SearchEngines;
 use photon_storage::{Profile, ProfileWriteTicket};
 use std::cell::OnceCell;
@@ -83,6 +84,19 @@ pub(in crate::platform) fn load_settings(
 }
 
 impl Settings {
+    /// The reusable motion framework's view of the saved and system settings.
+    pub(super) fn motion(cx: &App) -> MotionSettings {
+        let settings = Self::get(cx).animations;
+        MotionSettings {
+            enabled: settings.enabled,
+            reduced_motion: cx.reduce_motion(),
+            quick_duration_ms: settings.quick_duration_ms,
+            standard_duration_ms: settings.standard_duration_ms,
+            gentle_duration_ms: settings.gentle_duration_ms,
+            effect_strength_percent: settings.effect_strength_percent,
+        }
+    }
+
     pub(super) fn get(cx: &App) -> &BrowserSettings {
         &cx.global::<Self>().settings
     }

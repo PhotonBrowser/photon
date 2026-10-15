@@ -34,7 +34,7 @@ impl BrowserWindow {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        let animations = super::super::settings::Settings::get(cx).animations;
+        let animations = super::super::settings::Settings::motion(cx);
         let open = self
             .shortcuts_dialog
             .as_ref()

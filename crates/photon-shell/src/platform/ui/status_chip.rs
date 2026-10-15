@@ -1,7 +1,7 @@
 //! A small status chip in the window's bottom-right corner.
 
 use gpui::{ElementId, Role, SharedString, prelude::*, px, rgb, rgba};
-use photon_core::AnimationSettings;
+use photon_motion::MotionSettings;
 
 use super::button::{ButtonKind, ButtonSize, button, icon_button};
 use super::controls::OwnsClicks;
@@ -39,7 +39,7 @@ pub(super) fn status_chip(
     message: SharedString,
     action: Option<(&'static str, ClickHandler)>,
     on_dismiss: Option<ClickHandler>,
-    animations: AnimationSettings,
+    animations: MotionSettings,
 ) -> impl IntoElement {
     let icon_size = metrics::CHIP_ICON_SIZE;
     let icon = match icon {

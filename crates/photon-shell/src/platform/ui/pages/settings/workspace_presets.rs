@@ -171,7 +171,7 @@ impl SettingsPage {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        let animations = Settings::get(cx).animations;
+        let animations = Settings::motion(cx);
         let ((), transition) = self.workspace_preset_presence.sync(
             self.workspace_preset_draft.as_ref().map(|_| ()),
             MODAL_MOTION,
@@ -284,7 +284,7 @@ impl SettingsPage {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        let animations = Settings::get(cx).animations;
+        let animations = Settings::motion(cx);
         let ((), transition) = self.delete_preset_presence.sync(
             self.pending_delete_preset.as_ref().map(|_| ()),
             MODAL_MOTION,

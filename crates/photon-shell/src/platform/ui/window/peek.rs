@@ -98,7 +98,7 @@ impl BrowserWindow {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        let animations = super::super::settings::Settings::get(cx).animations;
+        let animations = super::super::settings::Settings::motion(cx);
         let shown = self.peek.open.as_ref().map(|peek| peek.webview.clone());
         let (webview, transition) = self
             .peek

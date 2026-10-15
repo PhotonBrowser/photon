@@ -42,7 +42,7 @@ use photon_core::{BrowserCommand, TabSleepMode, WindowBackgroundStyle};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::rc::Rc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use super::super::app_update::update_app;
 use super::super::engine::EngineRuntime;
@@ -53,7 +53,7 @@ use super::command_bar::CommandBar;
 use super::find_bar::FindBar;
 use super::history::BrowsingHistory;
 use super::js_dialog::DialogHost;
-use super::motion::Presence;
+use super::motion::{Presence, Tween};
 use super::omnibox::{Omnibox, OmniboxEvent};
 use super::pages::find_page;
 use super::settings::Settings;
@@ -242,33 +242,28 @@ enum TabDragPhase {
 #[derive(Clone, Copy, Debug)]
 struct TabPositionAnimation {
     axis: TabDragAxis,
-    from: f32,
-    started: Instant,
-    duration: std::time::Duration,
+    tween: Tween,
 }
 
 impl TabPositionAnimation {
-    fn new(axis: TabDragAxis, from: f32, duration_ms: u64) -> Self {
-        Self {
-            axis,
-            from,
-            started: Instant::now(),
-            duration: std::time::Duration::from_millis(duration_ms),
-        }
+    fn new(
+        axis: TabDragAxis,
+        from: f32,
+        duration: Duration,
+        settings: &super::motion::MotionSettings,
+        cx: &App,
+    ) -> Self {
+        let mut tween = Tween::at(from);
+        tween.animate_to_for(0.0, duration, settings, cx);
+        Self { axis, tween }
     }
 
     fn value(self) -> f32 {
-        let elapsed = self.started.elapsed();
-        if elapsed >= self.duration || self.duration.is_zero() {
-            return 0.0;
-        }
-        let progress = elapsed.as_secs_f32() / self.duration.as_secs_f32();
-        let eased = progress * progress * (3.0 - 2.0 * progress);
-        self.from * (1.0 - eased)
+        self.tween.value()
     }
 
     fn is_running(self) -> bool {
-        self.started.elapsed() < self.duration
+        self.tween.is_running()
     }
 }
 

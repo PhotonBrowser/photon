@@ -60,7 +60,7 @@ impl RenderOnce for Dropdown {
             options,
             palette,
         } = self;
-        let animations = super::settings::Settings::get(cx).animations;
+        let animations = super::settings::Settings::motion(cx);
         let open_state =
             window.use_keyed_state(ElementId::from(id), cx, |_, _| OpenState::default());
         let focus = window

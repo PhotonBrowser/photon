@@ -358,7 +358,9 @@ impl BrowserWindow {
                         super::TabPositionAnimation::new(
                             axis,
                             from,
-                            super::super::metrics::TAB_REORDER_DURATION_MS,
+                            Duration::from_millis(super::super::metrics::TAB_REORDER_DURATION_MS),
+                            &Settings::motion(cx),
+                            cx,
                         ),
                     );
                 }
@@ -903,7 +905,9 @@ impl BrowserWindow {
                     super::TabPositionAnimation::new(
                         axis,
                         from,
-                        super::super::metrics::TAB_REORDER_DURATION_MS,
+                        Duration::from_millis(super::super::metrics::TAB_REORDER_DURATION_MS),
+                        &Settings::motion(cx),
+                        cx,
                     ),
                 );
             } else {
@@ -980,7 +984,9 @@ impl BrowserWindow {
                 super::TabPositionAnimation::new(
                     drag.axis,
                     current_offset,
-                    super::super::metrics::TAB_DROP_SETTLE_DURATION_MS,
+                    Duration::from_millis(super::super::metrics::TAB_DROP_SETTLE_DURATION_MS),
+                    &Settings::motion(cx),
+                    cx,
                 ),
             );
         } else {
@@ -1991,7 +1997,11 @@ impl BrowserWindow {
                             super::TabPositionAnimation::new(
                                 axis,
                                 from,
-                                super::super::metrics::TAB_REORDER_DURATION_MS,
+                                Duration::from_millis(
+                                    super::super::metrics::TAB_REORDER_DURATION_MS,
+                                ),
+                                &Settings::motion(cx),
+                                cx,
                             ),
                         );
                     }
@@ -2419,7 +2429,7 @@ impl BrowserWindow {
         &self,
         tab: u64,
         icon: &TabIcon,
-        animations: &photon_core::AnimationSettings,
+        animations: &super::super::motion::MotionSettings,
     ) -> bool {
         let Some(revealed) = icon.revealed() else {
             return false;
@@ -2658,7 +2668,10 @@ mod tab_drag_tests {
 
     #[test]
     fn old_orientation_offsets_do_not_leak_into_the_new_layout() {
-        let animation = TabPositionAnimation::new(TabDragAxis::Horizontal, 24.0, 1_000);
+        let animation = TabPositionAnimation {
+            axis: TabDragAxis::Horizontal,
+            tween: super::super::Tween::at(24.0),
+        };
         assert!(tab_position_animation_offset(Some(animation), TabDragAxis::Horizontal) > 0.0);
         assert_eq!(
             tab_position_animation_offset(Some(animation), TabDragAxis::Vertical),

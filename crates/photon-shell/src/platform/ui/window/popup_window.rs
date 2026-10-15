@@ -133,14 +133,13 @@ impl MinimalPopupWindow {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        let animations = Settings::get(cx).animations;
         let origin = self
             .pending_popups
             .first()
             .map(|popup| popup.origin.clone());
         let (origin, transition) =
             self.popup_presence
-                .sync(origin, MODAL_MOTION, &animations, cx)?;
+                .sync(origin, MODAL_MOTION, &Settings::motion(cx), cx)?;
         Some(popup_confirmation_dialog(
             origin,
             transition,

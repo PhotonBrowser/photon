@@ -75,7 +75,7 @@ impl NewTabPage {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> Option<impl IntoElement> {
-        let animations = Settings::get(cx).animations;
+        let animations = Settings::motion(cx);
         // A closed form stays drawn while it fades away.
         let (form, transition) =
             self.adding_presence

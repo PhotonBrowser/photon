@@ -20,7 +20,7 @@ impl Render for BrowserWindow {
         let palette = palette(window, cx);
         let background_noise_intensity =
             super::super::settings::Settings::get(cx).background_noise_intensity;
-        let animations = super::super::settings::Settings::get(cx).animations;
+        let animations = super::super::settings::Settings::motion(cx);
         let find_bar = self.find_bar_presence.sync(
             self.find_bar.as_ref().map(|(bar, _)| bar.clone()),
             FIND_BAR_MOTION,
