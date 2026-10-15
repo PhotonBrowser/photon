@@ -74,3 +74,15 @@ fn trace(args: std::fmt::Arguments<'_>) {
         eprintln!("[PhotonWebView/GPUI-CE] {args}");
     }
 }
+
+pub(crate) fn automation_lifecycle_trace(args: std::fmt::Arguments<'_>) {
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    static EMITTED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    if *ENABLED.get_or_init(|| {
+        std::env::var_os("PHOTON_AUTOMATION_LIFECYCLE_TRACE").is_some()
+            && std::env::args_os().any(|argument| argument == "--automation-socket")
+    }) && EMITTED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 64
+    {
+        eprintln!("[PhotonAutomationLifecycle] {args}");
+    }
+}

@@ -30,11 +30,22 @@ pub fn run() {
     };
     let application = application();
     let opened_urls = receive_opened_urls(&application);
+    let automation_mode = automation_launch.is_some();
     application.run(move |cx: &mut App| {
         cx.set_global(BrowserWindowRegistry::default());
         // Quit when the last browser window closes so the shell can stop its
         // Engine runtime and release native resources.
         cx.set_quit_mode(QuitMode::LastWindowClosed);
+        if automation_mode {
+            cx.on_app_quit(|cx| {
+                crate::platform::automation_lifecycle_trace(format_args!(
+                    "app_quit open_windows={}",
+                    cx.windows().len()
+                ));
+                async {}
+            })
+            .detach();
+        }
         cx.bind_keys(default_bindings().as_keybindings(Some(DEFAULT_INPUT_CONTEXT)));
         // Keep browser actions and their default bindings in the shortcuts crate.
         cx.bind_keys(browser_shortcuts());

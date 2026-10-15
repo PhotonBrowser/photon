@@ -335,6 +335,11 @@ impl BrowserWindow {
         trace(format_args!(
             "window visible={visible} display-changed={display_changed}"
         ));
+        crate::platform::automation_lifecycle_trace(format_args!(
+            "window_visibility_changed visible={visible} display_changed={display_changed} tabs={} active_tab={:?}",
+            self.tabs.len(),
+            self.active_tab
+        ));
         if self.window_visible != visible {
             self.window_visible = visible;
             if let Some(webview) = self.active_webview() {
@@ -558,7 +563,14 @@ fn open_browser_window_at(
                 window_background_style: Settings::get(cx).window_background_style,
                 _window_release: {
                     let key = cx.entity_id().as_u64();
-                    cx.on_release(move |_, cx| {
+                    cx.on_release(move |this, cx| {
+                        crate::platform::automation_lifecycle_trace(format_args!(
+                            "window_release id={} tabs={} active_tab={:?} visible={}",
+                            registry_window_id,
+                            this.tabs.len(),
+                            this.active_tab,
+                            this.window_visible
+                        ));
                         BrowserWindow::forget_session(key, cx);
                         BrowserWindowRegistry::unregister_window(registry_window_id, cx);
                     })

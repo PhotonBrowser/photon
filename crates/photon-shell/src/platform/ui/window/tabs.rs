@@ -1671,6 +1671,13 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        crate::platform::automation_lifecycle_trace(format_args!(
+            "engine_new_tab_request tabs={} active_tab={:?} activate={} url={}",
+            self.tabs.len(),
+            self.active_tab,
+            activate,
+            address.split(['?', '#']).next().unwrap_or_default()
+        ));
         let index = self
             .tabs
             .iter()
@@ -1687,6 +1694,12 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        crate::platform::automation_lifecycle_trace(format_args!(
+            "engine_popup_request tabs={} active_tab={:?} activate={}",
+            self.tabs.len(),
+            self.active_tab,
+            request.activate
+        ));
         let webview = create_webview_from_session(cx, self.runtime.clone(), request.session);
         self.insert_webview(self.tabs.len(), webview, None, request.activate, window, cx);
     }
@@ -1857,6 +1870,21 @@ impl BrowserWindow {
         cx: &mut Context<Self>,
     ) {
         let index = index.min(self.tabs.len());
+        let page_address = content.page_address();
+        let page = page_address.as_deref().unwrap_or_else(|| {
+            if content.webview().is_some() {
+                "webview"
+            } else {
+                "page"
+            }
+        });
+        crate::platform::automation_lifecycle_trace(format_args!(
+            "tab_insert index={} previous_count={} activate={} page={}",
+            index,
+            self.tabs.len(),
+            options.activate,
+            page.split(['?', '#']).next().unwrap_or_default()
+        ));
         let subscription = self.subscribe_to_content(&content, window, cx);
         let id = Self::allocate_tab_id();
         if options.animate_appearance {
@@ -2023,6 +2051,14 @@ impl BrowserWindow {
         let id = self.tabs[index].id;
         let closes_last_window_tab =
             self.tabs.len() == 1 && Settings::get(cx).close_window_with_last_tab;
+        crate::platform::automation_lifecycle_trace(format_args!(
+            "tab_close_request tab_id={} index={} count={} active_tab={:?} closes_last_window_tab={}",
+            id,
+            index,
+            self.tabs.len(),
+            self.active_tab,
+            closes_last_window_tab
+        ));
         let axis = self.tab_axis(cx);
         let extent = self.tab_geometry.get(&id).map(|bounds| match axis {
             TabDragAxis::Horizontal => f32::from(bounds.size.width),

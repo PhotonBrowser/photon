@@ -838,8 +838,10 @@ fn close_tab(tab_id: u64, cx: &mut App) -> DispatchResult {
 
 fn activate_tab(tab_id: u64, cx: &mut App) -> DispatchResult {
     let (handle, index) = find_tab(tab_id, cx)?;
+    cx.activate(true);
     handle
         .update(cx, |browser, window, cx| {
+            window.activate();
             browser.activate_tab(index, true, window, cx);
             Ok::<_, (&'static str, String)>(())
         })
@@ -896,10 +898,10 @@ fn tab_status(tab_id: u64, cx: &App) -> DispatchResult {
         index,
         tab,
         browser.active_tab == Some(index),
-        cx,
-    ))
         browser_windows(cx).len(),
         browser.tabs.len(),
+        cx,
+    ))
 }
 
 fn find_window(
@@ -1003,8 +1005,6 @@ mod tests {
     };
 
     #[test]
-    fn url_validation_allows_only_blank_and_http_urls() {
-    #[test]
     fn accepted_automation_streams_are_blocking_before_request_reads() {
         let socket_path = std::env::temp_dir().join(format!(
             "photon-automation-test-{}-{}.sock",
@@ -1029,6 +1029,8 @@ mod tests {
         std::fs::remove_file(socket_path).unwrap();
     }
 
+    #[test]
+    fn url_validation_allows_only_blank_and_http_urls() {
         assert!(validate_url("about:blank").is_ok());
         assert!(validate_url("http://127.0.0.1:1234/simple").is_ok());
         assert!(validate_url("https://example.test/path").is_ok());
@@ -1072,8 +1074,6 @@ mod tests {
     }
 
     #[test]
-    fn protocol_rejects_malformed_oversized_unauthorized_and_old_requests() {
-    #[test]
     fn unavailable_application_response_keeps_request_correlation() {
         let response =
             serde_json::to_value(application_unavailable("request-29".to_owned())).unwrap();
@@ -1081,6 +1081,8 @@ mod tests {
         assert_eq!(response["error"]["code"], "application_unavailable");
     }
 
+    #[test]
+    fn protocol_rejects_malformed_oversized_unauthorized_and_old_requests() {
         assert_eq!(
             decode_authenticated_request(b"{bad json", &"a".repeat(64))
                 .err()
