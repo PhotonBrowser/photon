@@ -1,9 +1,8 @@
 //! The history's file format: versioned JSON with bounded fields and lists.
 
 use photon_core::{HISTORY_MAX_PAGES, HISTORY_MAX_SEARCHES, History, HistoryEntry, SearchEntry};
-use serde::de::{self, SeqAccess, Visitor};
-use serde::{Deserialize, Deserializer, Serialize};
-use std::fmt;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::io;
 
 /// Maximum encoded history size read from or written to a profile.
@@ -11,6 +10,9 @@ pub(crate) const MAX_HISTORY_FILE_BYTES: usize = 64 * 1024 * 1024;
 const MAX_URL_BYTES: usize = 4 * 1024;
 const MAX_TITLE_BYTES: usize = 4 * 1024;
 const MAX_QUERY_BYTES: usize = 2 * 1024;
+const MAX_DEPTH: usize = 32;
+const MAX_COLLECTION_ITEMS: usize = HISTORY_MAX_PAGES;
+const MAX_STRING_BYTES: usize = 8 * 1024;
 
 /// Bumped when the format changes incompatibly; older files are rejected.
 const VERSION: u32 = 1;
@@ -38,113 +40,18 @@ struct Search<'a> {
 }
 
 #[derive(Deserialize)]
-struct HistoryFileRead {
-    version: u32,
-    pages: BoundedVec<PageRead, HISTORY_MAX_PAGES>,
-    searches: BoundedVec<SearchRead, HISTORY_MAX_SEARCHES>,
-}
-
-#[derive(Deserialize)]
 struct PageRead {
-    url: BoundedString<MAX_URL_BYTES>,
-    title: BoundedString<MAX_TITLE_BYTES>,
+    url: String,
+    title: String,
     visit_count: u32,
     last_visit: u64,
 }
 
 #[derive(Deserialize)]
 struct SearchRead {
-    query: BoundedString<MAX_QUERY_BYTES>,
+    query: String,
     count: u32,
     last_used: u64,
-}
-
-struct BoundedString<const MAX: usize>(String);
-
-impl<'de, const MAX: usize> Deserialize<'de> for BoundedString<MAX> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct StringVisitor<const MAX: usize>;
-
-        impl<const MAX: usize> Visitor<'_> for StringVisitor<MAX> {
-            type Value = BoundedString<MAX>;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-                write!(formatter, "a string no longer than {MAX} bytes")
-            }
-
-            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                if value.len() > MAX {
-                    return Err(E::custom("profile string exceeds its size limit"));
-                }
-                Ok(BoundedString(value.to_owned()))
-            }
-
-            fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                if value.len() > MAX {
-                    return Err(E::custom("profile string exceeds its size limit"));
-                }
-                Ok(BoundedString(value))
-            }
-        }
-
-        deserializer.deserialize_string(StringVisitor::<MAX>)
-    }
-}
-
-struct BoundedVec<T, const MAX: usize>(Vec<T>);
-
-impl<T, const MAX: usize> Default for BoundedVec<T, MAX> {
-    fn default() -> Self {
-        Self(Vec::new())
-    }
-}
-
-impl<'de, T, const MAX: usize> Deserialize<'de> for BoundedVec<T, MAX>
-where
-    T: Deserialize<'de>,
-{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct VecVisitor<T, const MAX: usize>(std::marker::PhantomData<T>);
-
-        impl<'de, T, const MAX: usize> Visitor<'de> for VecVisitor<T, MAX>
-        where
-            T: Deserialize<'de>,
-        {
-            type Value = BoundedVec<T, MAX>;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-                write!(formatter, "a list with at most {MAX} items")
-            }
-
-            fn visit_seq<A>(self, mut sequence: A) -> Result<Self::Value, A::Error>
-            where
-                A: SeqAccess<'de>,
-            {
-                let mut values = Vec::with_capacity(sequence.size_hint().unwrap_or(0).min(MAX));
-                while let Some(value) = sequence.next_element()? {
-                    if values.len() == MAX {
-                        return Err(de::Error::custom("profile list exceeds its item limit"));
-                    }
-                    values.push(value);
-                }
-                Ok(BoundedVec(values))
-            }
-        }
-
-        deserializer.deserialize_seq(VecVisitor::<T, MAX>(std::marker::PhantomData))
-    }
 }
 
 pub(crate) fn encode(history: &History) -> io::Result<Vec<u8>> {
@@ -196,38 +103,110 @@ pub(crate) fn encode(history: &History) -> io::Result<Vec<u8>> {
     Ok(bytes)
 }
 
-/// The history in `bytes`, or `None` when it exceeds a limit or cannot be
-/// read by this version of Photon.
-pub(crate) fn decode(bytes: &[u8]) -> Option<History> {
+/// The history in `bytes`, recovering intact rows when individual entries are
+/// damaged while retaining the source file for later recovery.
+pub(crate) fn decode(bytes: &[u8]) -> super::ProfileLoadOutcome<History> {
     if bytes.len() > MAX_HISTORY_FILE_BYTES {
-        return None;
+        return super::ProfileLoadOutcome::Corrupt;
     }
-    let file: HistoryFileRead = serde_json::from_slice(bytes).ok()?;
-    if file.version != VERSION {
-        return None;
+    let document: Value = match serde_json::from_slice(bytes) {
+        Ok(document) => document,
+        Err(_) => return super::ProfileLoadOutcome::Corrupt,
+    };
+    if validate_json_tree(&document, 0).is_err() {
+        return super::ProfileLoadOutcome::Corrupt;
     }
-    let pages = file
-        .pages
-        .0
-        .into_iter()
-        .map(|page| HistoryEntry {
-            url: page.url.0,
-            title: page.title.0,
+    let Value::Object(fields) = &document else {
+        return super::ProfileLoadOutcome::Corrupt;
+    };
+    let Some(version) = fields.get("version").and_then(Value::as_u64) else {
+        return super::ProfileLoadOutcome::Corrupt;
+    };
+    if version != u64::from(VERSION) {
+        return super::ProfileLoadOutcome::Unsupported;
+    }
+    let Some(Value::Array(page_values)) = fields.get("pages") else {
+        return super::ProfileLoadOutcome::Corrupt;
+    };
+    let Some(Value::Array(search_values)) = fields.get("searches") else {
+        return super::ProfileLoadOutcome::Corrupt;
+    };
+    if page_values.len() > HISTORY_MAX_PAGES || search_values.len() > HISTORY_MAX_SEARCHES {
+        return super::ProfileLoadOutcome::Corrupt;
+    }
+
+    let mut partially_recovered = false;
+    let mut pages = Vec::with_capacity(page_values.len());
+    for value in page_values {
+        let Ok(page) = serde_json::from_value::<PageRead>(value.clone()) else {
+            partially_recovered = true;
+            continue;
+        };
+        if page.url.len() > MAX_URL_BYTES || page.title.len() > MAX_TITLE_BYTES {
+            partially_recovered = true;
+            continue;
+        }
+        pages.push(HistoryEntry {
+            url: page.url,
+            title: page.title,
             visit_count: page.visit_count,
             last_visit: page.last_visit,
-        })
-        .collect();
-    let searches = file
-        .searches
-        .0
-        .into_iter()
-        .map(|search| SearchEntry {
-            query: search.query.0,
+        });
+    }
+
+    let mut searches = Vec::with_capacity(search_values.len());
+    for value in search_values {
+        let Ok(search) = serde_json::from_value::<SearchRead>(value.clone()) else {
+            partially_recovered = true;
+            continue;
+        };
+        if search.query.len() > MAX_QUERY_BYTES {
+            partially_recovered = true;
+            continue;
+        }
+        searches.push(SearchEntry {
+            query: search.query,
             count: search.count,
             last_used: search.last_used,
-        })
-        .collect();
-    Some(History::from_parts(pages, searches))
+        });
+    }
+
+    let history = History::from_parts(pages, searches);
+    if partially_recovered {
+        super::ProfileLoadOutcome::PartiallyRecovered(history)
+    } else {
+        super::ProfileLoadOutcome::Loaded(history)
+    }
+}
+
+fn validate_json_tree(value: &Value, depth: usize) -> Result<(), ()> {
+    if depth > MAX_DEPTH {
+        return Err(());
+    }
+    match value {
+        Value::String(string) if string.len() > MAX_STRING_BYTES => Err(()),
+        Value::Array(items) => {
+            if items.len() > MAX_COLLECTION_ITEMS {
+                return Err(());
+            }
+            items
+                .iter()
+                .try_for_each(|item| validate_json_tree(item, depth + 1))
+        }
+        Value::Object(fields) => {
+            if fields.len() > MAX_COLLECTION_ITEMS {
+                return Err(());
+            }
+            for (key, value) in fields {
+                if key.len() > 256 {
+                    return Err(());
+                }
+                validate_json_tree(value, depth + 1)?;
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
 }
 
 fn invalid_data(message: &'static str) -> io::Error {
@@ -237,6 +216,7 @@ fn invalid_data(message: &'static str) -> io::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ProfileLoadOutcome;
 
     fn page_count(count: usize) -> Vec<u8> {
         let pages = (0..count)
@@ -270,8 +250,14 @@ mod tests {
 
     #[test]
     fn history_page_count_is_bounded_at_decode_and_encode() {
-        assert!(decode(&page_count(HISTORY_MAX_PAGES)).is_some());
-        assert!(decode(&page_count(HISTORY_MAX_PAGES + 1)).is_none());
+        assert!(matches!(
+            decode(&page_count(HISTORY_MAX_PAGES)),
+            ProfileLoadOutcome::Loaded(_)
+        ));
+        assert!(matches!(
+            decode(&page_count(HISTORY_MAX_PAGES + 1)),
+            ProfileLoadOutcome::Corrupt
+        ));
 
         let pages = (0..=HISTORY_MAX_PAGES)
             .map(|index| HistoryEntry {
@@ -287,8 +273,14 @@ mod tests {
 
     #[test]
     fn history_search_count_is_bounded_at_decode_and_encode() {
-        assert!(decode(&search_count(HISTORY_MAX_SEARCHES)).is_some());
-        assert!(decode(&search_count(HISTORY_MAX_SEARCHES + 1)).is_none());
+        assert!(matches!(
+            decode(&search_count(HISTORY_MAX_SEARCHES)),
+            ProfileLoadOutcome::Loaded(_)
+        ));
+        assert!(matches!(
+            decode(&search_count(HISTORY_MAX_SEARCHES + 1)),
+            ProfileLoadOutcome::Corrupt
+        ));
 
         let searches = (0..=HISTORY_MAX_SEARCHES)
             .map(|index| SearchEntry {
@@ -303,38 +295,38 @@ mod tests {
 
     #[test]
     fn history_strings_are_bounded_at_decode_and_encode() {
-        assert!(
+        assert!(matches!(
             decode(&string_fields(
                 &"u".repeat(MAX_URL_BYTES),
                 &"t".repeat(MAX_TITLE_BYTES),
                 &"q".repeat(MAX_QUERY_BYTES),
-            ))
-            .is_some()
-        );
-        assert!(
+            )),
+            ProfileLoadOutcome::Loaded(_)
+        ));
+        assert!(matches!(
             decode(&string_fields(
                 &"u".repeat(MAX_URL_BYTES + 1),
                 "title",
                 "query",
-            ))
-            .is_none()
-        );
-        assert!(
+            )),
+            ProfileLoadOutcome::PartiallyRecovered(_)
+        ));
+        assert!(matches!(
             decode(&string_fields(
                 "url",
                 &"t".repeat(MAX_TITLE_BYTES + 1),
                 "query",
-            ))
-            .is_none()
-        );
-        assert!(
+            )),
+            ProfileLoadOutcome::PartiallyRecovered(_)
+        ));
+        assert!(matches!(
             decode(&string_fields(
                 "url",
                 "title",
                 &"q".repeat(MAX_QUERY_BYTES + 1),
-            ))
-            .is_none()
-        );
+            )),
+            ProfileLoadOutcome::PartiallyRecovered(_)
+        ));
 
         let history = History::from_parts(
             vec![HistoryEntry {
@@ -350,11 +342,29 @@ mod tests {
 
     #[test]
     fn rejects_oversized_files_and_malformed_nested_json() {
-        assert!(decode(&vec![b' '; MAX_HISTORY_FILE_BYTES + 1]).is_none());
+        assert!(matches!(
+            decode(&vec![b' '; MAX_HISTORY_FILE_BYTES + 1]),
+            ProfileLoadOutcome::Corrupt
+        ));
         let nested = format!(
             "{{\"unknown\":{}}}",
             "[".repeat(130) + "null" + &"]".repeat(130)
         );
-        assert!(decode(nested.as_bytes()).is_none());
+        assert!(matches!(
+            decode(nested.as_bytes()),
+            ProfileLoadOutcome::Corrupt
+        ));
+    }
+
+    #[test]
+    fn reports_unsupported_versions_and_recovers_valid_rows() {
+        let unsupported = br#"{"version":99,"pages":[],"searches":[]}"#;
+        assert_eq!(decode(unsupported), ProfileLoadOutcome::Unsupported);
+
+        let damaged = br#"{"version":1,"pages":[{"url":"https://ok.example/","title":"OK","visit_count":1,"last_visit":1},{"url":7}],"searches":[]}"#;
+        let ProfileLoadOutcome::PartiallyRecovered(history) = decode(damaged) else {
+            panic!("recovers the valid row");
+        };
+        assert_eq!(history.pages().len(), 1);
     }
 }

@@ -15,3 +15,28 @@ mod session_file;
 
 pub use favicons::FaviconPixels;
 pub use profile::{DataUsage, Profile, ProfileWriteTicket};
+
+/// What Photon could recover from a saved profile file.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ProfileLoadOutcome<T> {
+    /// No saved file exists yet. This is normal for a new profile.
+    Missing,
+    /// The complete file was read and decoded.
+    Loaded(T),
+    /// Some records were recovered; damaged records were skipped.
+    PartiallyRecovered(T),
+    /// The file uses a format version this build does not understand.
+    Unsupported,
+    /// The file could not be decoded or exceeded a safety limit.
+    Corrupt,
+}
+
+impl<T: Default> ProfileLoadOutcome<T> {
+    /// Returns recovered data, or an empty value when no data was recoverable.
+    pub fn into_value(self) -> T {
+        match self {
+            Self::Loaded(value) | Self::PartiallyRecovered(value) => value,
+            Self::Missing | Self::Unsupported | Self::Corrupt => T::default(),
+        }
+    }
+}

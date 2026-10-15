@@ -7,11 +7,11 @@ use std::collections::HashSet;
 use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use super::favicons::{self, FaviconPixels};
-use super::{atomic, history_file, session_file};
+use super::{ProfileLoadOutcome, atomic, history_file, session_file};
 
 const HISTORY_FILE: &str = "History.json";
 const SETTINGS_FILE: &str = "config.toml";
@@ -33,6 +33,7 @@ const MAX_SPACE_PINS: usize = 256;
 const MAX_NEW_TAB_PINS: usize = 12;
 const MAX_NEW_TAB_HIDDEN: usize = 2_048;
 const MAX_LEGACY_FAVOURITES: usize = 256;
+static NEXT_DAMAGED_BACKUP: AtomicU64 = AtomicU64::new(0);
 
 /// How much disk a profile's data takes, in bytes.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -79,6 +80,10 @@ struct ProfileWrites {
     settings_generation: AtomicU64,
     history_generation: AtomicU64,
     session_generation: AtomicU64,
+    history_source_checked: AtomicBool,
+    session_source_checked: AtomicBool,
+    history_write_blocked: AtomicBool,
+    session_write_blocked: AtomicBool,
     serial: Mutex<()>,
 }
 
@@ -96,6 +101,22 @@ impl ProfileWrites {
             SnapshotKind::Settings => &self.settings_generation,
             SnapshotKind::History => &self.history_generation,
             SnapshotKind::Session => &self.session_generation,
+        }
+    }
+
+    fn write_blocked(&self, kind: SnapshotKind) -> Option<&AtomicBool> {
+        match kind {
+            SnapshotKind::History => Some(&self.history_write_blocked),
+            SnapshotKind::Session => Some(&self.session_write_blocked),
+            SnapshotKind::Settings => None,
+        }
+    }
+
+    fn source_checked(&self, kind: SnapshotKind) -> Option<&AtomicBool> {
+        match kind {
+            SnapshotKind::History => Some(&self.history_source_checked),
+            SnapshotKind::Session => Some(&self.session_source_checked),
+            SnapshotKind::Settings => None,
         }
     }
 }
@@ -216,17 +237,21 @@ impl Profile {
         self.root.join(FAVICONS_DIR)
     }
 
-    /// The saved history, or an empty one when there is none or it cannot
-    /// be read.
+    /// The saved history, or an empty one when there is none or it cannot be
+    /// read. Use [`Self::load_history_outcome`] to distinguish these cases.
     pub fn load_history(&self) -> History {
-        read_limited(
-            &self.root.join(HISTORY_FILE),
+        self.load_history_outcome().into_value()
+    }
+
+    /// Loads history while reporting missing, partially recovered, unsupported
+    /// and corrupt files separately.
+    pub fn load_history_outcome(&self) -> ProfileLoadOutcome<History> {
+        self.load_profile_data(
+            SnapshotKind::History,
+            HISTORY_FILE,
             history_file::MAX_HISTORY_FILE_BYTES,
+            history_file::decode,
         )
-        .ok()
-        .flatten()
-        .and_then(|bytes| history_file::decode(&bytes))
-        .unwrap_or_default()
     }
 
     pub fn save_history(&self, history: &History) -> io::Result<()> {
@@ -336,16 +361,21 @@ impl Profile {
     }
 
     /// The windows and tabs open when the browser last saved them, or none
-    /// when there is no session or it cannot be read.
+    /// when there is no session or it cannot be read. Use
+    /// [`Self::load_session_outcome`] to distinguish these cases.
     pub fn load_session(&self) -> Session {
-        read_limited(
-            &self.root.join(SESSION_FILE),
+        self.load_session_outcome().into_value()
+    }
+
+    /// Loads a session while reporting missing, partially recovered,
+    /// unsupported and corrupt files separately.
+    pub fn load_session_outcome(&self) -> ProfileLoadOutcome<Session> {
+        self.load_profile_data(
+            SnapshotKind::Session,
+            SESSION_FILE,
             session_file::MAX_SESSION_FILE_BYTES,
+            session_file::decode,
         )
-        .ok()
-        .flatten()
-        .and_then(|bytes| session_file::decode(&bytes))
-        .unwrap_or_default()
     }
 
     pub fn save_session(&self, session: &Session) -> io::Result<()> {
@@ -392,8 +422,139 @@ impl Profile {
         if self.writes.generation(kind).load(Ordering::Acquire) != ticket.generation {
             return Ok(false);
         }
+        if self
+            .writes
+            .source_checked(kind)
+            .is_some_and(|checked| !checked.load(Ordering::Acquire))
+        {
+            self.preserve_existing_data_before_write(kind);
+        }
+        if self
+            .writes
+            .write_blocked(kind)
+            .is_some_and(|blocked| blocked.load(Ordering::Acquire))
+        {
+            let name = match kind {
+                SnapshotKind::History => "history",
+                SnapshotKind::Session => "session",
+                SnapshotKind::Settings => unreachable!(),
+            };
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                format!(
+                    "damaged profile {name} data could not be preserved; refusing to replace it"
+                ),
+            ));
+        }
         write()?;
         Ok(true)
+    }
+
+    fn load_profile_data<T>(
+        &self,
+        kind: SnapshotKind,
+        filename: &str,
+        limit: usize,
+        decode: impl FnOnce(&[u8]) -> ProfileLoadOutcome<T>,
+    ) -> ProfileLoadOutcome<T> {
+        let _serial = self
+            .writes
+            .serial
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        self.load_profile_data_unlocked(kind, filename, limit, decode)
+    }
+
+    fn load_profile_data_unlocked<T>(
+        &self,
+        kind: SnapshotKind,
+        filename: &str,
+        limit: usize,
+        decode: impl FnOnce(&[u8]) -> ProfileLoadOutcome<T>,
+    ) -> ProfileLoadOutcome<T> {
+        let path = self.root.join(filename);
+        let read = read_limited(&path, limit);
+        let (outcome, read_error) = match read {
+            Ok(Some(bytes)) => (decode(&bytes), None),
+            Ok(None) => {
+                self.mark_source_checked(kind);
+                return ProfileLoadOutcome::Missing;
+            }
+            Err(error) => (ProfileLoadOutcome::Corrupt, Some(error)),
+        };
+        let Some(status) = damaged_outcome_name(&outcome) else {
+            if let Some(blocked) = self.writes.write_blocked(kind) {
+                blocked.store(false, Ordering::Release);
+            }
+            self.mark_source_checked(kind);
+            return outcome;
+        };
+
+        let data_name = match kind {
+            SnapshotKind::History => "history",
+            SnapshotKind::Session => "session",
+            SnapshotKind::Settings => unreachable!(),
+        };
+        if let Some(blocked) = self.writes.write_blocked(kind) {
+            blocked.store(true, Ordering::Release);
+        }
+        match archive_damaged_file(&path) {
+            Ok(backup) => {
+                if let Some(blocked) = self.writes.write_blocked(kind) {
+                    blocked.store(false, Ordering::Release);
+                }
+                let backup_name = backup.file_name().unwrap_or_default().to_string_lossy();
+                let read_detail = read_error
+                    .as_ref()
+                    .map(|error| format!(" (read failed: {error})"))
+                    .unwrap_or_default();
+                eprintln!(
+                    "Photon profile {data_name} data is {status}{read_detail}; preserved it as {backup_name}"
+                );
+            }
+            Err(error) => {
+                let backup_error = error.to_string();
+                let detail = read_error
+                    .as_ref()
+                    .map(|read_error| {
+                        format!("reading failed: {read_error}; backup failed: {backup_error}")
+                    })
+                    .unwrap_or_else(|| format!("backup failed: {backup_error}"));
+                eprintln!(
+                    "Photon profile {data_name} data is {status}; could not preserve it before replacement ({detail})"
+                );
+            }
+        }
+        self.mark_source_checked(kind);
+        outcome
+    }
+
+    fn mark_source_checked(&self, kind: SnapshotKind) {
+        if let Some(checked) = self.writes.source_checked(kind) {
+            checked.store(true, Ordering::Release);
+        }
+    }
+
+    fn preserve_existing_data_before_write(&self, kind: SnapshotKind) {
+        match kind {
+            SnapshotKind::History => {
+                let _ = self.load_profile_data_unlocked(
+                    kind,
+                    HISTORY_FILE,
+                    history_file::MAX_HISTORY_FILE_BYTES,
+                    history_file::decode,
+                );
+            }
+            SnapshotKind::Session => {
+                let _ = self.load_profile_data_unlocked(
+                    kind,
+                    SESSION_FILE,
+                    session_file::MAX_SESSION_FILE_BYTES,
+                    session_file::decode,
+                );
+            }
+            SnapshotKind::Settings => {}
+        }
     }
 
     pub fn load_favicon(&self, url: &str) -> Option<FaviconPixels> {
@@ -608,6 +769,42 @@ fn remove_if_present(path: &Path) -> io::Result<()> {
         Err(error) if error.kind() != io::ErrorKind::NotFound => Err(error),
         _ => Ok(()),
     }
+}
+
+fn damaged_outcome_name<T>(outcome: &ProfileLoadOutcome<T>) -> Option<&'static str> {
+    match outcome {
+        ProfileLoadOutcome::PartiallyRecovered(_) => Some("partially recovered"),
+        ProfileLoadOutcome::Unsupported => Some("unsupported"),
+        ProfileLoadOutcome::Corrupt => Some("corrupt or unreadable"),
+        ProfileLoadOutcome::Missing | ProfileLoadOutcome::Loaded(_) => None,
+    }
+}
+
+fn archive_damaged_file(path: &Path) -> io::Result<PathBuf> {
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let filename = path
+        .file_name()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "profile file has no name"))?
+        .to_string_lossy();
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_nanos());
+    for _ in 0..100 {
+        let sequence = NEXT_DAMAGED_BACKUP.fetch_add(1, Ordering::Relaxed);
+        let backup = parent.join(format!(
+            "{filename}.damaged-{timestamp}-{}-{sequence}.bak",
+            std::process::id()
+        ));
+        match fs::rename(path, &backup) {
+            Ok(()) => return Ok(backup),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::AlreadyExists,
+        "could not find a unique damaged profile backup name",
+    ))
 }
 
 fn file_size(path: &Path) -> u64 {
@@ -854,6 +1051,10 @@ mod tests {
         history.record_search("photon browser", 6);
         profile.0.save_history(&history).expect("saves");
         assert_eq!(profile.0.load_history(), history);
+        assert_eq!(
+            profile.0.load_history_outcome(),
+            ProfileLoadOutcome::Loaded(history)
+        );
     }
 
     #[test]
@@ -895,6 +1096,10 @@ mod tests {
         };
         profile.0.save_session(&session).expect("saves");
         assert_eq!(profile.0.load_session(), session);
+        assert_eq!(
+            profile.0.load_session_outcome(),
+            ProfileLoadOutcome::Loaded(session)
+        );
     }
 
     #[test]
@@ -908,7 +1113,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_invalid_session_without_changing_the_source_file() {
+    fn preserves_invalid_session_before_a_later_save_replaces_it() {
         let profile = TemporaryProfile::new("invalid-session");
         let contents = serde_json::to_vec(&serde_json::json!({
             "windows": [{"tabs": [], "active": 0}]
@@ -917,7 +1122,136 @@ mod tests {
         let path = profile.0.root().join(SESSION_FILE);
         fs::write(&path, &contents).expect("writes invalid session");
 
-        assert_eq!(profile.0.load_session(), Session::default());
+        let ProfileLoadOutcome::PartiallyRecovered(session) = profile.0.load_session_outcome()
+        else {
+            panic!("recovers the session structure");
+        };
+        assert!(session.windows[0].tabs.is_empty());
+        assert_eq!(session.windows[0].active, None);
+        assert!(!path.exists());
+        let backup = fs::read_dir(profile.0.root())
+            .unwrap()
+            .filter_map(Result::ok)
+            .find(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("Session.json.damaged-")
+            })
+            .expect("preserves the invalid session");
+        assert_eq!(fs::read(backup.path()).unwrap(), contents);
+
+        let session = Session::default();
+        profile
+            .0
+            .save_session(&session)
+            .expect("saves recovered session");
+        assert!(path.exists());
+        assert_eq!(fs::read(backup.path()).unwrap(), contents);
+    }
+
+    #[test]
+    fn direct_save_preserves_damaged_session_before_replacing_it() {
+        let profile = TemporaryProfile::new("direct-damaged-session-save");
+        let path = profile.0.root().join(SESSION_FILE);
+        let contents = b"not session JSON";
+        fs::write(&path, contents).expect("writes damaged session");
+
+        profile
+            .0
+            .save_session(&Session::default())
+            .expect("saves a new session");
+
+        let backup = fs::read_dir(profile.0.root())
+            .unwrap()
+            .filter_map(Result::ok)
+            .find(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("Session.json.damaged-")
+            })
+            .expect("preserves the file before saving");
+        assert_eq!(fs::read(backup.path()).unwrap(), contents);
+        assert_eq!(
+            profile.0.load_session_outcome(),
+            ProfileLoadOutcome::Loaded(Session::default())
+        );
+    }
+
+    #[test]
+    fn distinguishes_missing_and_unsupported_history_files() {
+        let profile = TemporaryProfile::new("history-load-outcomes");
+        let path = profile.0.root().join(HISTORY_FILE);
+        assert_eq!(
+            profile.0.load_history_outcome(),
+            ProfileLoadOutcome::Missing
+        );
+
+        let unsupported = br#"{"version":99,"pages":[],"searches":[]}"#;
+        fs::write(&path, unsupported).expect("writes an unsupported format");
+        assert_eq!(
+            profile.0.load_history_outcome(),
+            ProfileLoadOutcome::Unsupported
+        );
+        assert!(!path.exists());
+        let backup = fs::read_dir(profile.0.root())
+            .unwrap()
+            .filter_map(Result::ok)
+            .find(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("History.json.damaged-")
+            })
+            .expect("preserves the unsupported history file");
+        assert_eq!(fs::read(backup.path()).unwrap(), unsupported);
+    }
+
+    #[test]
+    fn preserves_source_data_when_history_is_partially_recovered() {
+        let profile = TemporaryProfile::new("partial-history");
+        let contents = br#"{"version":1,"pages":[{"url":"https://ok.example/","title":"OK","visit_count":1,"last_visit":1},{"url":7}],"searches":[]}"#;
+        let path = profile.0.root().join(HISTORY_FILE);
+        fs::write(&path, contents).expect("writes partially damaged history");
+
+        let ProfileLoadOutcome::PartiallyRecovered(history) = profile.0.load_history_outcome()
+        else {
+            panic!("recovers the valid history row");
+        };
+        assert_eq!(history.pages().len(), 1);
+        assert!(!path.exists());
+        let backup = fs::read_dir(profile.0.root())
+            .unwrap()
+            .filter_map(Result::ok)
+            .find(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("History.json.damaged-")
+            })
+            .expect("preserves the original history file");
+        assert_eq!(fs::read(backup.path()).unwrap(), contents);
+    }
+
+    #[test]
+    fn refuses_to_replace_damaged_data_when_backup_cannot_be_made() {
+        let profile = TemporaryProfile::new("blocked-damaged-session");
+        let path = profile.0.root().join(SESSION_FILE);
+        let contents = b"damaged session";
+        fs::write(&path, contents).expect("writes invalid session");
+        profile
+            .0
+            .writes
+            .session_write_blocked
+            .store(true, Ordering::Release);
+        profile
+            .0
+            .writes
+            .session_source_checked
+            .store(true, Ordering::Release);
+
+        assert!(profile.0.save_session(&Session::default()).is_err());
         assert_eq!(fs::read(path).unwrap(), contents);
     }
 
@@ -1259,11 +1593,22 @@ mod tests {
         let path = profile.0.root().join(HISTORY_FILE);
         let contents = b"{ not json";
         fs::write(&path, contents).expect("writes");
-        assert_eq!(profile.0.load_history(), History::default());
         assert_eq!(
-            fs::read(path).expect("history source stays intact"),
-            contents
+            profile.0.load_history_outcome(),
+            ProfileLoadOutcome::Corrupt
         );
+        assert!(!path.exists());
+        let backup = fs::read_dir(profile.0.root())
+            .unwrap()
+            .filter_map(Result::ok)
+            .find(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("History.json.damaged-")
+            })
+            .expect("preserves the unreadable history");
+        assert_eq!(fs::read(backup.path()).unwrap(), contents);
     }
 
     #[test]
