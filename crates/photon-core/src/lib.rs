@@ -21,7 +21,7 @@ pub use browsing_data::ClearBrowsingData;
 pub use command_bar::{Command, CommandBarResult, OpenTab, command_bar_results};
 pub use crashes::{CrashResponse, EngineService, PageCrashes};
 pub use dialogs::{DialogKind, DialogReply, DialogRequest, PageDialogs};
-pub use history::{History, HistoryEntry, SearchEntry};
+pub use history::{HISTORY_MAX_PAGES, HISTORY_MAX_SEARCHES, History, HistoryEntry, SearchEntry};
 pub use internal_pages::{internal_page_name, internal_page_url};
 pub use new_tab::{NewTabSettings, SHORTCUT_COUNTS, Shortcut, site_name};
 pub use photon_omnibox::{

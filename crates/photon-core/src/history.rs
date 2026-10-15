@@ -12,10 +12,11 @@ use photon_omnibox::{
 
 use super::browsing_data::ClearBrowsingData;
 
-/// How many pages the history keeps; the least recently visited go first.
-const MAX_PAGES: usize = 10_000;
-/// How many searches the history keeps.
-const MAX_SEARCHES: usize = 1_000;
+/// How many pages history and its profile file keep; the least recently
+/// visited go first.
+pub const HISTORY_MAX_PAGES: usize = 10_000;
+/// How many searches history and its profile file keep.
+pub const HISTORY_MAX_SEARCHES: usize = 1_000;
 
 /// A page in the history.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -93,8 +94,8 @@ impl History {
         };
         self.page_search_cache.push(cache_page_search_text(&entry));
         self.pages.push(entry);
-        if self.pages.len() > MAX_PAGES {
-            trim_oldest(&mut self.pages, MAX_PAGES, |entry| entry.last_visit);
+        if self.pages.len() > HISTORY_MAX_PAGES {
+            trim_oldest(&mut self.pages, HISTORY_MAX_PAGES, |entry| entry.last_visit);
             self.rebuild_page_search_cache();
         }
     }
@@ -131,7 +132,9 @@ impl History {
                     count: 1,
                     last_used: now,
                 });
-                trim_oldest(&mut self.searches, MAX_SEARCHES, |entry| entry.last_used);
+                trim_oldest(&mut self.searches, HISTORY_MAX_SEARCHES, |entry| {
+                    entry.last_used
+                });
             }
         }
     }
@@ -316,7 +319,7 @@ mod tests {
 
     #[test]
     fn suggests_one_and_two_character_inputs_from_a_full_history() {
-        let pages = (0..MAX_PAGES)
+        let pages = (0..HISTORY_MAX_PAGES)
             .map(|index| HistoryEntry {
                 url: format!("https://site{index}.example/home"),
                 title: "Example page".to_owned(),

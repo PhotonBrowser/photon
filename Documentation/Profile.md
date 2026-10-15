@@ -25,6 +25,19 @@ this build cannot read is treated as empty. The crate is plain file access
 over core types, with no GPUI or Engine dependency, and has tests for each
 file.
 
+Profile input is bounded before decoding. Settings files are limited to 1 MiB,
+history files to 64 MiB, and session files to 32 MiB. Settings also limit nested
+structure to 32 levels, strings to 8 KiB, keys to 256 bytes, spaces to 128,
+workspace presets to 32, layout components to 64, and general lists to 4,096
+items. Each space keeps at most 256 pinned tabs and 12 favourites; the new tab
+page keeps 12 pins and 2,048 hidden sites, and legacy sidebar favourites are
+limited to 256.
+History follows the core limits of 10,000 pages and 1,000 searches; page URLs
+and titles are limited to 4 KiB, and search queries to 2 KiB. Sessions allow up
+to 64 windows, 256 tabs per window, and 2,048 tabs total; tab URLs are limited
+to 8 KiB and titles to 4 KiB. Over-limit files are rejected without modifying
+the source file.
+
 ## Settings
 
 `BrowserSettings` in [`photon-core`](../crates/photon-core/src/settings.rs)

@@ -1,15 +1,17 @@
 //! A profile folder and what is kept in it.
 
-use photon_core::{BrowserSettings, ClearBrowsingData, History, Session, WorkspaceSettings};
+use photon_core::{
+    BrowserSettings, ClearBrowsingData, History, MAX_FAVOURITES, Session, WorkspaceSettings,
+};
 use std::collections::HashSet;
 use std::fs;
-use std::io;
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use super::favicons::{self, FaviconPixels};
-use super::{atomic, history_file};
+use super::{atomic, history_file, session_file};
 
 const HISTORY_FILE: &str = "History.json";
 const SETTINGS_FILE: &str = "config.toml";
@@ -18,6 +20,19 @@ const FAVICONS_DIR: &str = "Favicons";
 const ENGINE_DIR: &str = "Engine";
 /// Where in its folder the Engine keeps its network cache.
 const ENGINE_CACHE_DIR: &str = "cache";
+/// Profile files are capped before their contents are parsed.
+const MAX_SETTINGS_FILE_BYTES: usize = 1024 * 1024;
+const MAX_SETTINGS_DEPTH: usize = 32;
+const MAX_SETTINGS_COLLECTION_ITEMS: usize = 4_096;
+const MAX_SETTINGS_STRING_BYTES: usize = 8 * 1024;
+const MAX_SETTINGS_KEY_BYTES: usize = 256;
+const MAX_WORKSPACE_PRESETS: usize = 32;
+const MAX_LAYOUT_COMPONENTS: usize = 64;
+const MAX_SPACES: usize = 128;
+const MAX_SPACE_PINS: usize = 256;
+const MAX_NEW_TAB_PINS: usize = 12;
+const MAX_NEW_TAB_HIDDEN: usize = 2_048;
+const MAX_LEGACY_FAVOURITES: usize = 256;
 
 /// How much disk a profile's data takes, in bytes.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -204,10 +219,14 @@ impl Profile {
     /// The saved history, or an empty one when there is none or it cannot
     /// be read.
     pub fn load_history(&self) -> History {
-        fs::read(self.root.join(HISTORY_FILE))
-            .ok()
-            .and_then(|bytes| history_file::decode(&bytes))
-            .unwrap_or_default()
+        read_limited(
+            &self.root.join(HISTORY_FILE),
+            history_file::MAX_HISTORY_FILE_BYTES,
+        )
+        .ok()
+        .flatten()
+        .and_then(|bytes| history_file::decode(&bytes))
+        .unwrap_or_default()
     }
 
     pub fn save_history(&self, history: &History) -> io::Result<()> {
@@ -231,7 +250,7 @@ impl Profile {
         self.write_snapshot(ticket, SnapshotKind::History, || {
             atomic::write(
                 &self.root.join(HISTORY_FILE),
-                &history_file::encode(history),
+                &history_file::encode(history)?,
             )
         })
     }
@@ -240,8 +259,9 @@ impl Profile {
     /// be read. Unknown fields are ignored so older builds can open newer
     /// profiles safely.
     pub fn load_settings(&self) -> BrowserSettings {
-        let Ok(bytes) = fs::read(&self.settings_path) else {
-            return BrowserSettings::default();
+        let bytes = match read_limited(&self.settings_path, MAX_SETTINGS_FILE_BYTES) {
+            Ok(Some(bytes)) => bytes,
+            Ok(None) | Err(_) => return BrowserSettings::default(),
         };
         let Ok(source) = std::str::from_utf8(&bytes) else {
             self.keep_unreadable_settings(&bytes);
@@ -251,8 +271,18 @@ impl Profile {
             self.keep_unreadable_settings(&bytes);
             return BrowserSettings::default();
         };
+        if !valid_settings_document(&document) {
+            self.keep_unreadable_settings(&bytes);
+            return BrowserSettings::default();
+        }
 
-        let (settings, partially_unreadable) = decode_toml_settings(document);
+        let (mut settings, partially_unreadable) = decode_toml_settings(document);
+        settings.sidebar.width = settings.sidebar.width();
+        settings.new_tab.shortcut_count = settings.new_tab.shortcut_limit();
+        if !valid_settings_state(&settings) {
+            self.keep_unreadable_settings(&bytes);
+            return BrowserSettings::default();
+        }
         if partially_unreadable {
             self.keep_unreadable_settings(&bytes);
         }
@@ -290,6 +320,17 @@ impl Profile {
         self.write_snapshot(ticket, SnapshotKind::Settings, || {
             let contents = toml::to_string_pretty(settings)
                 .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+            let document = toml::from_str::<toml::Value>(&contents)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+            if contents.len() > MAX_SETTINGS_FILE_BYTES
+                || !valid_settings_state(settings)
+                || !valid_settings_document(&document)
+            {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "settings exceed a profile data limit",
+                ));
+            }
             atomic::write(&self.settings_path, contents.as_bytes())
         })
     }
@@ -297,10 +338,14 @@ impl Profile {
     /// The windows and tabs open when the browser last saved them, or none
     /// when there is no session or it cannot be read.
     pub fn load_session(&self) -> Session {
-        fs::read(self.root.join(SESSION_FILE))
-            .ok()
-            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-            .unwrap_or_default()
+        read_limited(
+            &self.root.join(SESSION_FILE),
+            session_file::MAX_SESSION_FILE_BYTES,
+        )
+        .ok()
+        .flatten()
+        .and_then(|bytes| session_file::decode(&bytes))
+        .unwrap_or_default()
     }
 
     pub fn save_session(&self, session: &Session) -> io::Result<()> {
@@ -322,8 +367,7 @@ impl Profile {
         session: &Session,
     ) -> io::Result<bool> {
         self.write_snapshot(ticket, SnapshotKind::Session, || {
-            let bytes = serde_json::to_vec_pretty(session)
-                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+            let bytes = session_file::encode(session)?;
             atomic::write(&self.root.join(SESSION_FILE), &bytes)
         })
     }
@@ -417,6 +461,146 @@ impl Profile {
                 .saturating_sub(folder_size(&self.engine_dir().join(ENGINE_CACHE_DIR))),
         }
     }
+}
+
+fn read_limited(path: &Path, limit: usize) -> io::Result<Option<Vec<u8>>> {
+    let file = match fs::File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    let mut bytes = Vec::with_capacity(limit.min(64 * 1024));
+    file.take(limit as u64 + 1).read_to_end(&mut bytes)?;
+    if bytes.len() > limit {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "profile file exceeds its size limit",
+        ));
+    }
+    Ok(Some(bytes))
+}
+
+fn valid_settings_document(document: &toml::Value) -> bool {
+    if !matches!(document, toml::Value::Table(_)) || !valid_toml_value(document, 0) {
+        return false;
+    }
+
+    let spaces = document.get("spaces");
+    if !array_within(spaces.and_then(|spaces| spaces.get("spaces")), MAX_SPACES) {
+        return false;
+    }
+    if let Some(toml::Value::Array(spaces)) = spaces.and_then(|spaces| spaces.get("spaces")) {
+        for space in spaces {
+            if !array_within(space.get("pinned_tabs"), MAX_SPACE_PINS)
+                || !array_within(space.get("favourites"), MAX_FAVOURITES)
+                || !layout_components_within(space.get("layout_override"))
+            {
+                return false;
+            }
+        }
+    }
+
+    let new_tab = document.get("new_tab");
+    if !array_within(
+        new_tab.and_then(|new_tab| new_tab.get("pinned")),
+        MAX_NEW_TAB_PINS,
+    ) || !array_within(
+        new_tab.and_then(|new_tab| new_tab.get("hidden")),
+        MAX_NEW_TAB_HIDDEN,
+    ) || !array_within(
+        document
+            .get("sidebar")
+            .and_then(|sidebar| sidebar.get("favourites")),
+        MAX_LEGACY_FAVOURITES,
+    ) {
+        return false;
+    }
+
+    if let Some(workspace) = document.get("workspace") {
+        if !array_within(workspace.get("presets"), MAX_WORKSPACE_PRESETS) {
+            return false;
+        }
+        if let Some(toml::Value::Array(presets)) = workspace.get("presets")
+            && presets
+                .iter()
+                .any(|preset| !layout_components_within(preset.get("layout")))
+        {
+            return false;
+        }
+    }
+    true
+}
+
+fn valid_toml_value(value: &toml::Value, depth: usize) -> bool {
+    if depth > MAX_SETTINGS_DEPTH {
+        return false;
+    }
+    match value {
+        toml::Value::String(string) => string.len() <= MAX_SETTINGS_STRING_BYTES,
+        toml::Value::Array(items) => {
+            items.len() <= MAX_SETTINGS_COLLECTION_ITEMS
+                && items.iter().all(|item| valid_toml_value(item, depth + 1))
+        }
+        toml::Value::Table(fields) => {
+            fields.len() <= MAX_SETTINGS_COLLECTION_ITEMS
+                && fields.iter().all(|(key, value)| {
+                    key.len() <= MAX_SETTINGS_KEY_BYTES && valid_toml_value(value, depth + 1)
+                })
+        }
+        _ => true,
+    }
+}
+
+fn array_within(value: Option<&toml::Value>, limit: usize) -> bool {
+    value.is_none_or(|value| match value {
+        toml::Value::Array(items) => items.len() <= limit,
+        _ => true,
+    })
+}
+
+fn layout_components_within(value: Option<&toml::Value>) -> bool {
+    array_within(
+        value.and_then(|layout| layout.get("components")),
+        MAX_LAYOUT_COMPONENTS,
+    )
+}
+
+fn valid_settings_state(settings: &BrowserSettings) -> bool {
+    if !settings.workspace.is_valid()
+        || settings.spaces.all().len() > MAX_SPACES
+        || settings.new_tab.pinned.len() > MAX_NEW_TAB_PINS
+        || settings.new_tab.hidden.len() > MAX_NEW_TAB_HIDDEN
+        || settings.sidebar.favourites.len() > MAX_LEGACY_FAVOURITES
+        || settings.default_search_engine.len() > 1_024
+    {
+        return false;
+    }
+    let mut ids = HashSet::new();
+    settings.spaces.all().iter().all(|space| {
+        ids.insert(space.id)
+            && space.name.len() <= 256
+            && space.pinned_tabs.len() <= MAX_SPACE_PINS
+            && space.favourites.len() <= MAX_FAVOURITES
+            && space
+                .pinned_tabs
+                .iter()
+                .chain(&space.favourites)
+                .all(|shortcut| shortcut.title.len() <= 1_024 && shortcut.url.len() <= 8 * 1024)
+    }) && settings
+        .new_tab
+        .pinned
+        .iter()
+        .all(|shortcut| shortcut.title.len() <= 1_024 && shortcut.url.len() <= 8 * 1024)
+        && settings
+            .new_tab
+            .hidden
+            .iter()
+            .all(|url| url.len() <= 8 * 1024)
+        && settings
+            .sidebar
+            .favourites
+            .iter()
+            .all(|shortcut| shortcut.title.len() <= 1_024 && shortcut.url.len() <= 8 * 1024)
 }
 
 fn remove_if_present(path: &Path) -> io::Result<()> {
@@ -523,6 +707,126 @@ mod tests {
         }
     }
 
+    fn table<K: Into<String>>(fields: impl IntoIterator<Item = (K, toml::Value)>) -> toml::Value {
+        toml::Value::Table(
+            fields
+                .into_iter()
+                .map(|(key, value)| (key.into(), value))
+                .collect(),
+        )
+    }
+
+    fn array(count: usize) -> toml::Value {
+        toml::Value::Array(vec![toml::Value::Boolean(true); count])
+    }
+
+    #[test]
+    fn profile_file_reads_stop_at_the_limit_and_keep_the_source_unchanged() {
+        let profile = TemporaryProfile::new("bounded-file-read");
+        let path = profile.0.root().join("bounded.bin");
+        fs::write(&path, b"12345678").expect("writes boundary-sized file");
+        assert_eq!(
+            read_limited(&path, 8).expect("reads at limit"),
+            Some(b"12345678".to_vec())
+        );
+
+        fs::write(&path, b"123456789").expect("writes oversized file");
+        assert!(read_limited(&path, 8).is_err());
+        assert_eq!(fs::read(&path).expect("source stays intact"), b"123456789");
+    }
+
+    #[test]
+    fn settings_input_checks_string_depth_and_collection_boundaries() {
+        let at_string_limit = table([(
+            "unknown",
+            toml::Value::String("x".repeat(MAX_SETTINGS_STRING_BYTES)),
+        )]);
+        let over_string_limit = table([(
+            "unknown",
+            toml::Value::String("x".repeat(MAX_SETTINGS_STRING_BYTES + 1)),
+        )]);
+        assert!(valid_settings_document(&at_string_limit));
+        assert!(!valid_settings_document(&over_string_limit));
+
+        let at_collection_limit = table([("unknown", array(MAX_SETTINGS_COLLECTION_ITEMS))]);
+        let over_collection_limit = table([("unknown", array(MAX_SETTINGS_COLLECTION_ITEMS + 1))]);
+        assert!(valid_settings_document(&at_collection_limit));
+        assert!(!valid_settings_document(&over_collection_limit));
+
+        let at_depth_limit = (0..MAX_SETTINGS_DEPTH - 1)
+            .fold(toml::Value::Boolean(true), |value, _| {
+                toml::Value::Array(vec![value])
+            });
+        let at_depth_limit = table([("unknown", at_depth_limit)]);
+        let over_depth_limit = (0..MAX_SETTINGS_DEPTH)
+            .fold(toml::Value::Boolean(true), |value, _| {
+                toml::Value::Array(vec![value])
+            });
+        let over_depth_limit = table([("unknown", over_depth_limit)]);
+        assert!(valid_settings_document(&at_depth_limit));
+        assert!(!valid_settings_document(&over_depth_limit));
+
+        let at_space_limit = table([("spaces", table([("spaces", array(MAX_SPACES))]))]);
+        let over_space_limit = table([("spaces", table([("spaces", array(MAX_SPACES + 1))]))]);
+        assert!(valid_settings_document(&at_space_limit));
+        assert!(!valid_settings_document(&over_space_limit));
+
+        let at_pin_limit = table([("new_tab", table([("pinned", array(MAX_NEW_TAB_PINS))]))]);
+        let over_pin_limit = table([("new_tab", table([("pinned", array(MAX_NEW_TAB_PINS + 1))]))]);
+        assert!(valid_settings_document(&at_pin_limit));
+        assert!(!valid_settings_document(&over_pin_limit));
+
+        let layout = |count| table([("components", array(count))]);
+        let preset_doc = |count, components| {
+            table([(
+                "workspace",
+                table([(
+                    "presets",
+                    toml::Value::Array(vec![table([("layout", layout(components))]); count]),
+                )]),
+            )])
+        };
+        assert!(valid_settings_document(&preset_doc(
+            MAX_WORKSPACE_PRESETS,
+            0
+        )));
+        assert!(!valid_settings_document(&preset_doc(
+            MAX_WORKSPACE_PRESETS + 1,
+            0
+        )));
+        assert!(valid_settings_document(&preset_doc(
+            1,
+            MAX_LAYOUT_COMPONENTS
+        )));
+        assert!(!valid_settings_document(&preset_doc(
+            1,
+            MAX_LAYOUT_COMPONENTS + 1
+        )));
+
+        let space_doc = |count| {
+            table([(
+                "spaces",
+                table([(
+                    "spaces",
+                    toml::Value::Array(vec![table([("pinned_tabs", array(count))])]),
+                )]),
+            )])
+        };
+        assert!(valid_settings_document(&space_doc(MAX_SPACE_PINS)));
+        assert!(!valid_settings_document(&space_doc(MAX_SPACE_PINS + 1)));
+
+        let key_at_limit = table([(
+            "k".repeat(MAX_SETTINGS_KEY_BYTES),
+            toml::Value::Boolean(true),
+        )]);
+        let key_over_limit = table([(
+            "k".repeat(MAX_SETTINGS_KEY_BYTES + 1),
+            toml::Value::Boolean(true),
+        )]);
+        assert!(valid_settings_document(&key_at_limit));
+        assert!(!valid_settings_document(&key_over_limit));
+    }
+
     fn migrate_legacy_json(profile: &TemporaryProfile, contents: &[u8]) {
         let legacy_path = profile.0.root().join("config.json");
         fs::write(&legacy_path, contents).expect("writes legacy settings");
@@ -555,14 +859,13 @@ mod tests {
     #[test]
     fn keeps_readable_settings_and_backs_up_the_file_when_one_is_not() {
         let profile = TemporaryProfile::new("lenient");
-        std::fs::write(
-            profile.0.root().join(SETTINGS_FILE),
-            "show_full_address = true\ntheme = \"from-a-newer-build\"\n",
-        )
-        .unwrap();
+        let path = profile.0.settings_path().to_owned();
+        let contents = "show_full_address = true\ntheme = \"from-a-newer-build\"\n";
+        std::fs::write(&path, contents).unwrap();
         let settings = profile.0.load_settings();
         assert!(settings.show_full_address);
         assert_eq!(settings.theme, BrowserSettings::default().theme);
+        assert_eq!(fs::read_to_string(path).unwrap(), contents);
         let backups = std::fs::read_dir(profile.0.root())
             .unwrap()
             .filter_map(Result::ok)
@@ -592,6 +895,30 @@ mod tests {
         };
         profile.0.save_session(&session).expect("saves");
         assert_eq!(profile.0.load_session(), session);
+    }
+
+    #[test]
+    fn rejects_oversized_settings_without_changing_the_source_file() {
+        let profile = TemporaryProfile::new("oversized-settings");
+        let contents = vec![b'#'; MAX_SETTINGS_FILE_BYTES + 1];
+        fs::write(profile.0.settings_path(), &contents).expect("writes oversized settings");
+
+        assert_eq!(profile.0.load_settings(), BrowserSettings::default());
+        assert_eq!(fs::read(profile.0.settings_path()).unwrap(), contents);
+    }
+
+    #[test]
+    fn rejects_invalid_session_without_changing_the_source_file() {
+        let profile = TemporaryProfile::new("invalid-session");
+        let contents = serde_json::to_vec(&serde_json::json!({
+            "windows": [{"tabs": [], "active": 0}]
+        }))
+        .unwrap();
+        let path = profile.0.root().join(SESSION_FILE);
+        fs::write(&path, &contents).expect("writes invalid session");
+
+        assert_eq!(profile.0.load_session(), Session::default());
+        assert_eq!(fs::read(path).unwrap(), contents);
     }
 
     #[test]
@@ -929,8 +1256,14 @@ mod tests {
     #[test]
     fn ignores_an_unreadable_history() {
         let profile = TemporaryProfile::new("corrupt");
-        fs::write(profile.0.root().join(HISTORY_FILE), b"{ not json").expect("writes");
+        let path = profile.0.root().join(HISTORY_FILE);
+        let contents = b"{ not json";
+        fs::write(&path, contents).expect("writes");
         assert_eq!(profile.0.load_history(), History::default());
+        assert_eq!(
+            fs::read(path).expect("history source stays intact"),
+            contents
+        );
     }
 
     #[test]

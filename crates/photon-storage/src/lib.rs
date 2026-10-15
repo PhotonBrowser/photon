@@ -9,8 +9,9 @@
 mod atomic;
 mod favicons;
 mod history_file;
+mod migrations;
 mod profile;
+mod session_file;
 
 pub use favicons::FaviconPixels;
 pub use profile::{DataUsage, Profile, ProfileWriteTicket};
-mod migrations;
