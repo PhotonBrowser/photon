@@ -10,6 +10,8 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use velocity_browser::{BrowserAutomationAdapter, BrowserEngine, BrowserInstallation};
+#[cfg(target_os = "macos")]
+use velocity_browser::{PhotonSpeedometerResult, PhotonTab};
 use velocity_core::{ReportBrowser, unique_run_id};
 use velocity_metrics::summarize_metric_values;
 
@@ -91,6 +93,8 @@ struct CleanupStatus {
 struct SpeedometerFailure {
     stage: String,
     message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    progress: Option<Box<BenchmarkProgressDiagnostics>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -106,7 +110,65 @@ struct SpeedometerIteration {
     completion_verified: bool,
     warnings: Vec<String>,
     failure: Option<SpeedometerFailure>,
+    #[serde(default)]
+    diagnostics: IterationDiagnostics,
     cleanup: CleanupStatus,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+struct IterationDiagnostics {
+    failure_kind: Option<String>,
+    elapsed_before_failure_ms: Option<f64>,
+    automation_connection_state: Option<String>,
+    last_automation_operation: Option<String>,
+    last_benchmark_state: Option<String>,
+    benchmark_progress: Option<BenchmarkProgressDiagnostics>,
+    cleanup_initiation_reason: Option<String>,
+    process: Option<BrowserProcessDiagnostics>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct BenchmarkProgressDiagnostics {
+    state: Option<String>,
+    benchmark_running: Option<bool>,
+    current_suite: Option<String>,
+    current_test: Option<String>,
+    current_iteration: Option<usize>,
+    completed_tests: Option<usize>,
+    total_tests: Option<usize>,
+    runner_is_running: Option<bool>,
+    runner_finished_test_count: Option<usize>,
+    runner_marks: Vec<String>,
+    document_visibility_state: Option<String>,
+    test_frame_src: Option<String>,
+    test_frame_location: Option<String>,
+    test_frame_ready_state: Option<String>,
+    test_frame_visibility_state: Option<String>,
+    test_frame_has_todo_app: Option<bool>,
+    test_frame_has_new_todo: Option<bool>,
+    test_frame_boot_diagnostics: Option<String>,
+    test_frame_onload_handler: Option<bool>,
+    test_frame_error: Option<String>,
+    last_progress_age_ms: Option<f64>,
+    document_generation: Option<u64>,
+    document_url: Option<String>,
+    document_ready_state: Option<String>,
+    window_count: Option<usize>,
+    tab_count: Option<usize>,
+    observer_errors: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct BrowserProcessDiagnostics {
+    pid: u32,
+    session_id: u32,
+    process_start_time: Option<velocity_metrics::ProcessStartTime>,
+    executable_path: String,
+    session_process_count: usize,
+    exit_status_observed: bool,
+    exit_code: Option<i32>,
+    exit_signal: Option<i32>,
+    output_capture_note: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -472,7 +534,7 @@ fn run_benchmark(options: Options) -> Result<(), String> {
         .collect::<Vec<_>>();
     let comparison = assess_comparison(&browser_results, &source, options.runs);
     let report = SpeedometerReport {
-        schema_version: 1,
+        schema_version: 2,
         benchmark: "speedometer".to_owned(),
         benchmark_version: SPEEDOMETER_VERSION.to_owned(),
         source,
@@ -582,6 +644,7 @@ fn execute_iteration(
         completion_verified: false,
         warnings: Vec::new(),
         failure: None,
+        diagnostics: IterationDiagnostics::default(),
         cleanup: CleanupStatus {
             browser_closed: true,
             profile_removed: true,
@@ -596,6 +659,7 @@ fn execute_iteration(
                 "{} has no verified Speedometer automation adapter; supported adapters are CDP for Chrome/Helium and the negotiated Photon protocol",
                 installation.metadata.name
             ),
+            progress: None,
         });
         return result;
     }
@@ -603,6 +667,7 @@ fn execute_iteration(
         result.failure = Some(SpeedometerFailure {
             stage: "cancelled".to_owned(),
             message: "cancelled before browser launch".to_owned(),
+            progress: None,
         });
         return result;
     }
@@ -615,6 +680,7 @@ fn execute_iteration(
                 result.failure = Some(SpeedometerFailure {
                     stage: "setup".to_owned(),
                     message: error,
+                    progress: None,
                 });
                 return result;
             }
@@ -651,6 +717,7 @@ fn execute_iteration(
             result.failure = Some(SpeedometerFailure {
                 stage: "launch".to_owned(),
                 message: error.to_string(),
+                progress: None,
             });
             cleanup_photon_directory(
                 automation_directory.as_deref(),
@@ -671,6 +738,7 @@ fn execute_iteration(
         let timing = launch_timing.as_ref().ok_or_else(|| SpeedometerFailure {
             stage: "launch".to_owned(),
             message: "process driver did not report browser launch timing".to_owned(),
+            progress: None,
         })?;
         let cancellation = CancellationToken::default();
         if CANCELLED.load(std::sync::atomic::Ordering::Relaxed) {
@@ -694,12 +762,14 @@ fn execute_iteration(
             return Err(SpeedometerFailure {
                 stage: "window_readiness".to_owned(),
                 message: failure,
+                progress: None,
             });
         }
         if CANCELLED.load(std::sync::atomic::Ordering::Relaxed) {
             return Err(SpeedometerFailure {
                 stage: "cancelled".to_owned(),
                 message: "cancelled while waiting for browser window readiness".to_owned(),
+                progress: None,
             });
         }
         if photon {
@@ -707,6 +777,7 @@ fn execute_iteration(
                 socket_path.as_deref().ok_or_else(|| SpeedometerFailure {
                     stage: "setup".to_owned(),
                     message: "Photon automation socket was not prepared".to_owned(),
+                    progress: None,
                 })?,
                 source_url,
                 timeout,
@@ -720,6 +791,7 @@ fn execute_iteration(
                     .ok_or_else(|| SpeedometerFailure {
                         stage: "setup".to_owned(),
                         message: "Chromium session has no isolated profile for CDP".to_owned(),
+                        progress: None,
                     })?;
             run_chromium_speedometer(profile, source_url, timeout)
         }
@@ -733,6 +805,57 @@ fn execute_iteration(
         result.warnings = outcome.warnings.clone();
     } else if let Err(failure) = automation_result {
         result.failure = Some(failure);
+    }
+
+    let process_diagnostics = match driver.diagnostics(&session.identity) {
+        Ok(diagnostics) => {
+            result.diagnostics.process = Some(BrowserProcessDiagnostics {
+                pid: session.identity.pid,
+                session_id: session.identity.session_id,
+                process_start_time: session.identity.start_time,
+                executable_path: session
+                    .identity
+                    .executable_path
+                    .to_string_lossy()
+                    .into_owned(),
+                session_process_count: diagnostics.session_process_count,
+                exit_status_observed: diagnostics.exit_status_observed,
+                exit_code: diagnostics.exit_code,
+                exit_signal: diagnostics.exit_signal,
+                output_capture_note: "not captured: browser helper output shares inherited streams and may include host paths or personal profile metadata".to_owned(),
+            });
+            Some(diagnostics)
+        }
+        Err(error) => {
+            result.warnings.push(format!(
+                "could not collect managed process diagnostics: {error}"
+            ));
+            None
+        }
+    };
+    if let Some(failure) = result.failure.as_ref() {
+        result.diagnostics.failure_kind = Some(classify_failure(
+            failure,
+            process_diagnostics
+                .as_ref()
+                .is_some_and(|diagnostics| diagnostics.fatal_signal_observed),
+            process_diagnostics
+                .as_ref()
+                .is_some_and(|diagnostics| diagnostics.exit_status_observed),
+        ));
+        result.diagnostics.elapsed_before_failure_ms =
+            Some(started.elapsed().as_secs_f64() * 1000.0);
+        result.diagnostics.automation_connection_state = Some(connection_state(failure));
+        result.diagnostics.last_automation_operation = Some(last_operation(failure));
+        result.diagnostics.last_benchmark_state = Some(failure.message.clone());
+        result.diagnostics.benchmark_progress = failure.progress.as_deref().cloned();
+        result.diagnostics.cleanup_initiation_reason = Some(format!(
+            "managed cleanup began after {} failure",
+            failure.stage
+        ));
+    } else {
+        result.diagnostics.cleanup_initiation_reason =
+            Some("benchmark completed; managed close requested".to_owned());
     }
 
     match manager.close(&session.session_id) {
@@ -765,12 +888,14 @@ fn execute_iteration(
                 .detail
                 .clone()
                 .unwrap_or_else(|| "managed browser could not be closed".to_owned()),
+            progress: None,
         });
     }
     if !result.cleanup.profile_removed && result.failure.is_none() {
         result.failure = Some(SpeedometerFailure {
             stage: "cleanup".to_owned(),
             message: "managed browser profile remains after cleanup".to_owned(),
+            progress: None,
         });
     }
     result
@@ -890,7 +1015,7 @@ fn run_photon_speedometer(
     }
     let tabs = client
         .list_tabs(Duration::from_secs(5))
-        .map_err(|error| automation_failure("automation", error.to_string()))?;
+        .map_err(|error| automation_failure("tab_discovery", error.to_string()))?;
     let [tab] = tabs.as_slice() else {
         return Err(automation_failure(
             "automation",
@@ -901,11 +1026,17 @@ fn run_photon_speedometer(
         ));
     };
     let tab_id = tab.tab_id;
+    let initial_window_count = tab.window_count;
+    let initial_tab_count = tab.tab_count;
+    client
+        .activate_tab(tab_id, Duration::from_secs(5))
+        .map_err(|error| automation_failure("window_activation", error.to_string()))?;
     client
         .navigate(tab_id, source_url, Duration::from_secs(10))
         .map_err(|error| automation_failure("navigation", error.to_string()))?;
     let deadline = Instant::now() + timeout;
-    loop {
+    let mut last_tab_state = "no Photon tab status received".to_owned();
+    let document_generation = loop {
         if CANCELLED.load(std::sync::atomic::Ordering::Relaxed) {
             return Err(automation_failure(
                 "cancelled",
@@ -915,72 +1046,212 @@ fn run_photon_speedometer(
         if Instant::now() >= deadline {
             return Err(automation_failure(
                 "page_readiness",
-                "Photon did not load the Speedometer document before the configured timeout",
+                format!(
+                    "Photon did not report a completed engine document load before the configured timeout; last tab state: {last_tab_state}"
+                ),
             ));
         }
         let status = client
             .tab_status(tab_id, Duration::from_secs(5))
-            .map_err(|error| automation_failure("automation", error.to_string()))?;
-        if status
-            .url
+            .map_err(|error| automation_failure("tab_status", error.to_string()))?;
+        let expected_document_url = document_url(source_url);
+        let url_matches = status.url.as_deref().map(document_url) == Some(expected_document_url);
+        let title_matches = status
+            .title
             .as_deref()
-            .is_some_and(|url| url == source_url || url.starts_with(&format!("{source_url}#")))
+            .is_some_and(|title| title.contains("Speedometer 3.1"));
+        last_tab_state = format!(
+            "url_matches={url_matches}, navigation_state={}, loading={}, engine_load_finished={}, document_generation={}, window_count={}, tab_count={}, title_matches={title_matches}, error_state={}",
+            status.navigation_state.as_deref().unwrap_or("unavailable"),
+            status
+                .loading
+                .map_or_else(|| "unavailable".to_owned(), |value| value.to_string()),
+            status
+                .engine_load_finished
+                .map_or_else(|| "unavailable".to_owned(), |value| value.to_string()),
+            status
+                .document_generation
+                .map_or_else(|| "unavailable".to_owned(), |value| value.to_string()),
+            status
+                .window_count
+                .or(initial_window_count)
+                .map_or_else(|| "unavailable".to_owned(), |value| value.to_string()),
+            status
+                .tab_count
+                .or(initial_tab_count)
+                .map_or_else(|| "unavailable".to_owned(), |value| value.to_string()),
+            status.error_state.as_deref().unwrap_or("none")
+        );
+        if status.error_state.as_deref() == Some("page_crashed") {
+            return Err(automation_failure(
+                "navigation_failed",
+                format!(
+                    "Photon reports a crash in the controlled tab; last tab state: {last_tab_state}"
+                ),
+            ));
+        }
+        if url_matches
             && status.loading == Some(false)
-            && status
-                .title
-                .as_deref()
-                .is_some_and(|title| title.contains("Speedometer 3.1"))
+            && status.engine_load_finished == Some(true)
+            && title_matches
         {
-            break;
+            break status.document_generation.ok_or_else(|| {
+                automation_failure(
+                    "page_readiness",
+                    "Photon completed the Speedometer load without a document generation",
+                )
+            })?;
         }
         thread::sleep(Duration::from_millis(250));
-    }
+    };
     client
-        .install_speedometer_result_observer(tab_id, Duration::from_secs(10))
+        .install_speedometer_result_observer(tab_id, document_generation, Duration::from_secs(10))
         .map_err(|error| automation_failure("result_observer", error.to_string()))?;
 
     let mut started_observed = None;
+    let mut last_observed_state = "the observer has not published a Speedometer state".to_owned();
+    let mut last_progress_key = None;
+    let mut last_progress_at = Instant::now();
+    let mut last_progress: Option<BenchmarkProgressDiagnostics> = None;
     let result = loop {
         if CANCELLED.load(std::sync::atomic::Ordering::Relaxed) {
-            return Err(automation_failure(
-                "cancelled",
-                "cancelled while waiting for Speedometer completion",
+            return Err(with_progress(
+                automation_failure(
+                    "cancelled",
+                    "cancelled while waiting for Speedometer completion",
+                ),
+                last_progress.clone(),
             ));
         }
         if Instant::now() >= deadline {
-            return Err(automation_failure(
-                "benchmark_completion",
-                "Photon Speedometer did not reach a verified completion state before the configured timeout",
+            return Err(with_progress(
+                automation_failure(
+                    "benchmark_completion",
+                    format!(
+                        "Photon Speedometer did not reach a verified completion state before the configured timeout; last observed state: {last_observed_state}"
+                    ),
+                ),
+                last_progress.clone(),
             ));
         }
         let status = client
             .tab_status(tab_id, Duration::from_secs(5))
-            .map_err(|error| automation_failure("automation", error.to_string()))?;
-        match parse_speedometer_result_title(status.title.as_deref())
-            .map_err(|error| automation_failure("score_extraction", error.to_string()))?
-        {
+            .map_err(|error| {
+                with_progress(
+                    automation_failure(
+                        "tab_status",
+                        format!("{error}; last observed Speedometer state: {last_observed_state}"),
+                    ),
+                    last_progress.clone(),
+                )
+            })?;
+        if !same_speedometer_document(
+            document_generation,
+            source_url,
+            status.document_generation,
+            status.url.as_deref(),
+        ) {
+            let failure = automation_failure(
+                "navigation_replaced",
+                format!(
+                    "Speedometer navigation changed while running (expected document generation {document_generation}, observed generation or URL differs: {})",
+                    status.document_generation.map_or_else(
+                        || "unavailable".to_owned(),
+                        |generation| generation.to_string()
+                    )
+                ),
+            );
+            return Err(with_progress(failure, last_progress.clone()));
+        }
+        if status.error_state.as_deref() == Some("page_crashed") {
+            return Err(with_progress(
+                automation_failure(
+                    "navigation_failed",
+                    "Photon reports that the Speedometer document crashed while the benchmark was running",
+                ),
+                last_progress.clone(),
+            ));
+        }
+        let observer_status = match parse_speedometer_result_title(status.title.as_deref()) {
+            Ok(status) => status,
+            Err(error) => {
+                return Err(with_progress(
+                    automation_failure("score_extraction", error.to_string()),
+                    last_progress.clone(),
+                ));
+            }
+        };
+        if let Some(observer_status) = observer_status.as_ref() {
+            if !same_speedometer_document(
+                document_generation,
+                source_url,
+                observer_status.document_generation,
+                observer_status.document_url.as_deref(),
+            ) {
+                return Err(with_progress(
+                    automation_failure(
+                        "navigation_replaced",
+                        "Speedometer observer state belongs to a different document generation or URL",
+                    ),
+                    last_progress.clone(),
+                ));
+            }
+            let progress_key = (
+                observer_status.state.clone(),
+                observer_status.current_suite.clone(),
+                observer_status.current_test.clone(),
+                observer_status.current_iteration,
+                observer_status.completed_tests,
+                observer_status.total_tests,
+            );
+            if last_progress_key.as_ref() != Some(&progress_key) {
+                last_progress_key = Some(progress_key);
+                last_progress_at = Instant::now();
+            }
+            let progress = progress_diagnostics(
+                observer_status,
+                &status,
+                last_progress_at.elapsed().as_secs_f64() * 1000.0,
+            );
+            last_observed_state = describe_progress(&progress);
+            last_progress = Some(progress);
+        } else {
+            last_observed_state = "the observer has not published a Speedometer state".to_owned();
+        }
+        match observer_status {
             Some(status) if status.state == "running" => {
                 if status.viewport_warning {
-                    return Err(automation_failure(
-                        "page_readiness",
-                        "Speedometer reports that Photon viewport is smaller than its recommended 850 × 650 pixels",
+                    return Err(with_progress(
+                        automation_failure(
+                            "page_readiness",
+                            "Speedometer reports that Photon viewport is smaller than its recommended 850 × 650 pixels",
+                        ),
+                        last_progress.clone(),
                     ));
                 }
-                started_observed.get_or_insert_with(Instant::now);
+                if status.benchmark_running == Some(true) {
+                    started_observed.get_or_insert_with(Instant::now);
+                }
             }
             Some(status) if status.state == "failed" => {
-                return Err(automation_failure(
-                    "benchmark_failure",
-                    status.error.unwrap_or_else(|| {
-                        "official benchmark reported an invalid score".to_owned()
-                    }),
+                return Err(with_progress(
+                    automation_failure(
+                        "benchmark_failure",
+                        status.error.unwrap_or_else(|| {
+                            "official benchmark reported an invalid score".to_owned()
+                        }),
+                    ),
+                    last_progress.clone(),
                 ));
             }
             Some(status) if status.state == "complete" => {
                 if status.viewport_warning {
-                    return Err(automation_failure(
-                        "page_readiness",
-                        "Speedometer reports that Photon viewport is smaller than its recommended 850 × 650 pixels",
+                    return Err(with_progress(
+                        automation_failure(
+                            "page_readiness",
+                            "Speedometer reports that Photon viewport is smaller than its recommended 850 × 650 pixels",
+                        ),
+                        last_progress.clone(),
                     ));
                 }
                 break status;
@@ -989,17 +1260,22 @@ fn run_photon_speedometer(
         }
         thread::sleep(Duration::from_millis(250));
     };
-    validate_speedometer_version(&result.version)?;
+    validate_speedometer_version(&result.version)
+        .map_err(|failure| with_progress(failure, last_progress.clone()))?;
     let score = result
         .score
         .filter(|score| score.is_finite() && *score > 0.0)
         .ok_or_else(|| {
-            automation_failure(
-                "score_validation",
-                "Photon returned a missing or invalid official score",
+            with_progress(
+                automation_failure(
+                    "score_validation",
+                    "Photon returned a missing or invalid official score",
+                ),
+                last_progress.clone(),
             )
         })?;
-    validate_internal_scores(&result.internal_scores)?;
+    validate_internal_scores(&result.internal_scores)
+        .map_err(|failure| with_progress(failure, last_progress.clone()))?;
     let completed_at = Instant::now();
     let mut warnings = Vec::new();
     if started_observed.is_none() {
@@ -1015,6 +1291,160 @@ fn run_photon_speedometer(
             .map(|started| completed_at.duration_since(started).as_secs_f64() * 1000.0),
         warnings,
     })
+}
+
+#[cfg(target_os = "macos")]
+fn document_url(url: &str) -> &str {
+    url.split(['?', '#']).next().unwrap_or(url)
+}
+
+#[cfg(target_os = "macos")]
+fn same_speedometer_document(
+    expected_generation: u64,
+    expected_url: &str,
+    observed_generation: Option<u64>,
+    observed_url: Option<&str>,
+) -> bool {
+    observed_generation == Some(expected_generation)
+        && observed_url.map(document_url) == Some(document_url(expected_url))
+}
+
+#[cfg(target_os = "macos")]
+fn progress_diagnostics(
+    observer: &PhotonSpeedometerResult,
+    tab: &PhotonTab,
+    last_progress_age_ms: f64,
+) -> BenchmarkProgressDiagnostics {
+    BenchmarkProgressDiagnostics {
+        state: Some(observer.state.clone()),
+        benchmark_running: observer.benchmark_running,
+        current_suite: observer.current_suite.clone(),
+        current_test: observer.current_test.clone(),
+        current_iteration: observer.current_iteration,
+        completed_tests: observer.completed_tests,
+        total_tests: observer.total_tests,
+        runner_is_running: observer.runner_is_running,
+        runner_finished_test_count: observer.runner_finished_test_count,
+        runner_marks: observer.runner_marks.clone(),
+        document_visibility_state: observer.document_visibility_state.clone(),
+        test_frame_src: observer.test_frame_src.clone(),
+        test_frame_location: observer.test_frame_location.clone(),
+        test_frame_ready_state: observer.test_frame_ready_state.clone(),
+        test_frame_visibility_state: observer.test_frame_visibility_state.clone(),
+        test_frame_has_todo_app: observer.test_frame_has_todo_app,
+        test_frame_has_new_todo: observer.test_frame_has_new_todo,
+        test_frame_boot_diagnostics: observer.test_frame_boot_diagnostics.clone(),
+        test_frame_onload_handler: observer.test_frame_onload_handler,
+        test_frame_error: observer.test_frame_error.clone(),
+        last_progress_age_ms: Some(last_progress_age_ms),
+        document_generation: observer.document_generation,
+        document_url: observer.document_url.clone(),
+        document_ready_state: observer.document_ready_state.clone(),
+        window_count: tab.window_count,
+        tab_count: tab.tab_count,
+        observer_errors: observer
+            .observer_errors
+            .iter()
+            .map(|error| format!("{}: {}", error.name, error.message))
+            .collect(),
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn describe_progress(progress: &BenchmarkProgressDiagnostics) -> String {
+    format!(
+        "state={}, running={}, suite={}, test={}, iteration={}, progress={}/{}, runner_running={}, runner_finished_tests={}, runner_marks={}, document_visibility={}, frame_src={}, frame_location={}, frame_ready_state={}, frame_visibility={}, frame_onload_handler={}, todo_app={}, new_todo={}, frame_boot={}, frame_error={}, last_progress_age_ms={:.0}, document_generation={}, document_ready_state={}, windows={}, tabs={}, errors={}",
+        progress.state.as_deref().unwrap_or("unknown"),
+        progress
+            .benchmark_running
+            .map_or_else(|| "unknown".to_owned(), |running| running.to_string()),
+        progress.current_suite.as_deref().unwrap_or("unknown"),
+        progress.current_test.as_deref().unwrap_or("unknown"),
+        progress
+            .current_iteration
+            .map_or_else(|| "unknown".to_owned(), |iteration| iteration.to_string()),
+        progress
+            .completed_tests
+            .map_or_else(|| "unknown".to_owned(), |count| count.to_string()),
+        progress
+            .total_tests
+            .map_or_else(|| "unknown".to_owned(), |count| count.to_string()),
+        progress
+            .runner_is_running
+            .map_or_else(|| "unknown".to_owned(), |running| running.to_string()),
+        progress
+            .runner_finished_test_count
+            .map_or_else(|| "unknown".to_owned(), |count| count.to_string()),
+        if progress.runner_marks.is_empty() {
+            "none".to_owned()
+        } else {
+            progress.runner_marks.join("|")
+        },
+        progress
+            .document_visibility_state
+            .as_deref()
+            .unwrap_or("unknown"),
+        progress.test_frame_src.as_deref().unwrap_or("unknown"),
+        progress.test_frame_location.as_deref().unwrap_or("unknown"),
+        progress
+            .test_frame_ready_state
+            .as_deref()
+            .unwrap_or("unknown"),
+        progress
+            .test_frame_visibility_state
+            .as_deref()
+            .unwrap_or("unknown"),
+        progress.test_frame_onload_handler.map_or_else(
+            || "unknown".to_owned(),
+            |has_handler| has_handler.to_string()
+        ),
+        progress
+            .test_frame_has_todo_app
+            .map_or_else(|| "unknown".to_owned(), |found| found.to_string()),
+        progress
+            .test_frame_has_new_todo
+            .map_or_else(|| "unknown".to_owned(), |found| found.to_string()),
+        progress
+            .test_frame_boot_diagnostics
+            .as_deref()
+            .unwrap_or("unavailable"),
+        progress.test_frame_error.as_deref().unwrap_or("none"),
+        progress.last_progress_age_ms.unwrap_or_default(),
+        progress
+            .document_generation
+            .map_or_else(|| "unknown".to_owned(), |generation| generation.to_string()),
+        progress
+            .document_ready_state
+            .as_deref()
+            .unwrap_or("unknown"),
+        progress
+            .window_count
+            .map_or_else(|| "unknown".to_owned(), |count| count.to_string()),
+        progress
+            .tab_count
+            .map_or_else(|| "unknown".to_owned(), |count| count.to_string()),
+        if progress.observer_errors.is_empty() {
+            "none".to_owned()
+        } else {
+            progress.observer_errors.join(" | ")
+        }
+    )
+}
+
+#[cfg(target_os = "macos")]
+fn with_progress(
+    mut failure: SpeedometerFailure,
+    progress: Option<BenchmarkProgressDiagnostics>,
+) -> SpeedometerFailure {
+    if let Some(progress) = progress {
+        failure.message = format!(
+            "{}; last observed progress: {}",
+            failure.message,
+            describe_progress(&progress)
+        );
+        failure.progress = Some(Box::new(progress));
+    }
+    failure
 }
 
 #[cfg(target_os = "macos")]
@@ -1060,6 +1490,88 @@ fn automation_failure(stage: &str, message: impl Into<String>) -> SpeedometerFai
     SpeedometerFailure {
         stage: stage.to_owned(),
         message: message.into(),
+        progress: None,
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn classify_failure(
+    failure: &SpeedometerFailure,
+    fatal_signal_observed: bool,
+    exit_status_observed: bool,
+) -> String {
+    let kind = if fatal_signal_observed {
+        "BROWSER_CRASHED"
+    } else if exit_status_observed {
+        "BROWSER_EXITED"
+    } else if failure.stage == "cancelled" {
+        "USER_CANCELLED"
+    } else if failure.message.contains("page_unavailable") {
+        "PAGE_UNAVAILABLE"
+    } else if failure.message.to_ascii_lowercase().contains("timeout")
+        || failure.message.to_ascii_lowercase().contains("timed out")
+    {
+        "BENCHMARK_TIMEOUT"
+    } else if failure
+        .message
+        .to_ascii_lowercase()
+        .contains("connection reset")
+        || failure
+            .message
+            .to_ascii_lowercase()
+            .contains("connection lost")
+        || failure
+            .message
+            .to_ascii_lowercase()
+            .contains("cannot connect to photon automation socket")
+        || failure.message.to_ascii_lowercase().contains("websocket")
+            && failure.message.to_ascii_lowercase().contains("closed")
+    {
+        "AUTOMATION_DISCONNECTED"
+    } else if failure.stage == "navigation"
+        || failure.stage == "navigation_failed"
+        || failure.stage == "navigation_replaced"
+    {
+        "NAVIGATION_FAILED"
+    } else if failure.stage == "score_validation" || failure.stage == "score_extraction" {
+        "SCORE_UNAVAILABLE"
+    } else {
+        "BENCHMARK_FAILED"
+    };
+    kind.to_owned()
+}
+
+#[cfg(target_os = "macos")]
+fn connection_state(failure: &SpeedometerFailure) -> String {
+    let message = failure.message.to_ascii_lowercase();
+    if message.contains("connection reset")
+        || message.contains("connection lost")
+        || message.contains("cannot connect to photon automation socket")
+        || message.contains("cannot set protocol timeout")
+        || message.contains("websocket") && message.contains("closed")
+    {
+        "disconnected".to_owned()
+    } else if failure.stage == "automation_connect" {
+        "connection_failed".to_owned()
+    } else {
+        "last_observed_connected_or_unknown".to_owned()
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn last_operation(failure: &SpeedometerFailure) -> String {
+    match failure.stage.as_str() {
+        "automation_connect" => "connect_to_browser_automation".to_owned(),
+        "tab_discovery" => "list_photon_tabs".to_owned(),
+        "tab_status" => "read_photon_tab_status".to_owned(),
+        "navigation" | "navigation_failed" | "navigation_replaced" => {
+            "navigate_to_speedometer".to_owned()
+        }
+        "result_observer" => "install_speedometer_result_observer".to_owned(),
+        "benchmark_start" => "poll_speedometer_start_state".to_owned(),
+        "benchmark_completion" => "poll_speedometer_completion_state".to_owned(),
+        "score_extraction" | "score_validation" => "validate_official_speedometer_score".to_owned(),
+        other => other.to_owned(),
     }
 }
 
@@ -1390,7 +1902,7 @@ fn render_html(report: &SpeedometerReport) -> String {
             escape_html(&browser.automation_method)
         );
         for iteration in &browser.iterations {
-            let status = iteration
+            let mut status = iteration
                 .failure
                 .as_ref()
                 .map(|failure| format!("{}: {}", failure.stage, failure.message))
@@ -1401,6 +1913,9 @@ fn render_html(report: &SpeedometerReport) -> String {
                         "not completed".to_owned()
                     }
                 });
+            if let Some(kind) = iteration.diagnostics.failure_kind.as_deref() {
+                status = format!("{kind}: {status}");
+            }
             let cleanup = if iteration.cleanup.browser_closed
                 && iteration.cleanup.profile_removed
                 && iteration.cleanup.automation_resources_removed
@@ -1735,6 +2250,41 @@ mod tests {
         assert_eq!(stats.unwrap().median, 11.0);
     }
 
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn observer_state_is_rejected_after_document_or_navigation_replacement() {
+        let expected_url = "https://browserbench.org/Speedometer3.1/?startAutomatically";
+        assert!(same_speedometer_document(
+            7,
+            expected_url,
+            Some(7),
+            Some("https://browserbench.org/Speedometer3.1/#running")
+        ));
+        assert!(!same_speedometer_document(
+            7,
+            expected_url,
+            Some(8),
+            Some("https://browserbench.org/Speedometer3.1/")
+        ));
+        assert!(!same_speedometer_document(
+            7,
+            expected_url,
+            Some(7),
+            Some("https://browserbench.org/Speedometer3.1-copy/")
+        ));
+        assert!(!same_speedometer_document(7, expected_url, None, None));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn clean_browser_exit_during_a_failed_run_is_not_success() {
+        let failure = automation_failure(
+            "tab_status",
+            "Photon automation socket disappeared before benchmark completion",
+        );
+        assert_eq!(classify_failure(&failure, false, true), "BROWSER_EXITED");
+    }
+
     #[test]
     fn html_report_escapes_browser_metadata_and_marks_higher_is_better() {
         let iteration = |iteration, warmup, score| SpeedometerIteration {
@@ -1749,6 +2299,7 @@ mod tests {
             completion_verified: true,
             warnings: Vec::new(),
             failure: None,
+            diagnostics: IterationDiagnostics::default(),
             cleanup: CleanupStatus {
                 browser_closed: true,
                 profile_removed: true,

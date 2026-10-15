@@ -562,26 +562,81 @@ Speedometer 3.1 page and reads the benchmark's official score without accepting
 caller-supplied JavaScript. Other discovered browsers are reported unsupported
 for this workload.
 
-**Live support is not yet verified.** Chrome entered Speedometer's running
-state, then its managed process exited before a score was available. I stopped
-Velocity through its cancellation handler after observing that exit, so that
-report records cancellation and no score. Helium's CDP connection reset while
-waiting for the benchmark to start. Photon reports
-`page_unavailable` at result observation: its current automation status can
-show the Speedometer title while the embedder has no active document page.
-Velocity saves each failure without a score and cleans up the managed profile
-and automation resources. Do not treat any browser as end-to-end supported
-for Speedometer until a completed live run is verified. These smoke runs used
-the pinned local source, not a modified suite.
+**Live validation (2026-10-14):** Chrome completed three measured runs after
+one excluded warm-up on the official hosted page. Measured scores were
+59.985, 60.026, and 59.726 (median 59.985, mean 59.912, sample standard
+deviation 0.162); all completion and cleanup checks passed. Helium completed a
+separate hosted smoke run with a verified score of 57.056 and successful
+cleanup. Earlier one-run smoke scores differed, so these runs are not treated
+as a cross-browser comparison. Hosted runs do not expose a pinned source
+commit. The original Chrome exit and Helium CDP reset were not reproduced, and
+the old `/tmp` reports were unavailable, so their original causes remain
+unknown. After the local-server fixes below, Chrome completed a one-run check
+against the pinned source at `60.720958330347536`; the earlier CDP disconnect
+was not reproduced.
+
+**Photon pinned-source validation (2026-10-15):** The observer's original
+`page_unavailable` failure came from a native bridge pointer-cast bug: the
+restricted observer treated a returned `ViewHandle` as a `Photon::View`. The
+bridge now unwraps the handle correctly. `get_tab_status` exposes the actual
+embedder `on_load_finish` state, and Velocity waits for it and checks tab crash
+state before installing the observer.
+
+A separate confirmed engine assertion was in viewport updates: WebContent
+unconditionally treated the page's top-level traversable as local, although a
+valid page may have a remote top-level traversable. PageClient now calls a
+LibWeb helper that updates viewport size only when the page has a local
+traversable. The `TestPageViewport` regression covers both local and remote
+top-level cases; it passed in the release engine build.
+
+The first benchmark-run failure was in Velocity's local source server. Accepted
+connections inherited the listener's nonblocking mode, so large fixture
+responses could stop with `WouldBlock`; accepted streams are now switched to
+blocking mode, and a regression test verifies the complete 700,000-byte body.
+The next failure was independently reproduced in the official
+`Perf-Dashboard` suite: its frame navigates to
+`resources/perf.webkit.org/public/v3/`, but the server returned `404 not found`
+because it did not map nested directory URLs to `index.html`. The handler now
+serves a directory index after canonicalizing and checking that it remains
+inside the pinned source root. A focused regression test requests this exact
+nested URL. The suite waited for its `#app-is-ready` element, which could not
+exist in the plain-text 404 document. This was a Velocity source-serving bug,
+not a confirmed JavaScript engine stall; the earlier TodoMVC tests were seen
+progressing in the successful run.
+
+Photon completed the full, unmodified pinned Speedometer 3.1 source at commit
+`1386415be8fef2f6b6bbdbe1828872471c5d802a` in the repository's installed
+Photon app bundle. The first verified score was `12.438724688400566` (10
+official internal iterations, completion verified, no failed suites). A
+separate warm-up plus three measured runs scored `12.557977802910989`,
+`12.028336377298244`, and `11.805356945193214` (median `12.028336377298244`,
+mean `12.130557041800815`, sample standard deviation `0.3865828980393081`,
+coefficient of variation `3.186851986328229%`). All four executions completed
+all ten official internal iterations and cleaned up the app, profile, and
+automation resources. The first run's JSON and HTML are under
+`/tmp/velocity-speedometer-phase9-2-nested-index-fix/`; the repeatability
+reports are under `/tmp/velocity-speedometer-phase9-2-photon-repeatability/`.
+
+For local source-server diagnosis, set `VELOCITY_SPEEDOMETER_HTTP_TRACE=1`;
+the trace records at most 64 request paths/statuses/body sizes/write results.
+For Photon lifecycle diagnosis, set
+`PHOTON_AUTOMATION_LIFECYCLE_TRACE=1`; that trace is also bounded. Both are
+opt-in and are disabled in ordinary sessions. Failure reports preserve the
+last observed benchmark state, cleanup reason, managed PID/session identity,
+process count, and observed exit code/signal. Raw stdout/stderr is not retained
+because browser helper processes inherit those streams and may emit host
+paths or personal profile metadata. Process output is never used as a score
+source.
 
 Each run writes unique JSON and standalone offline HTML reports under
 `tools/velocity/results/` by default; `--output` changes the destination. JSON
 keeps browser metadata, source/version, environment, configuration, execution
 order, warm-up and measured iterations, official per-iteration scores,
-failures, cleanup status, and summary statistics. Reports never include the
-session authentication token. Missing or invalid scores remain unavailable and
-failed runs are excluded from statistics. The compare command requires matching
-source mode/version, run configuration, OS, and architecture; it reuses the
+failures, managed-process diagnostics, cleanup status, and summary statistics.
+Reports never include the session authentication token. Missing or invalid
+scores remain unavailable and failed runs are excluded from statistics. The
+compare command requires matching source mode/version, run configuration, OS,
+and architecture; it reuses the
 existing nonzero-on-regression exit convention.
 
 Speedometer is a CPU responsiveness workload. It does not produce Velocity

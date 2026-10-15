@@ -116,8 +116,20 @@ impl Drop for PhotonWebView {
 }
 
 impl PhotonWebView {
-    pub(in crate::platform) fn probe_speedometer_result(&mut self) -> bool {
-        self.session.install_speedometer_result_observer()
+    pub(in crate::platform) fn probe_speedometer_result(
+        &mut self,
+        expected_document_generation: u64,
+    ) -> bool {
+        self.session
+            .install_speedometer_result_observer(expected_document_generation)
+    }
+
+    pub(in crate::platform) fn has_completed_document_load(&self) -> bool {
+        self.session.has_completed_document_load()
+    }
+
+    pub(in crate::platform) fn document_generation(&self) -> u64 {
+        self.session.document_generation()
     }
 
     pub(in crate::platform) fn registered_engine_processes(

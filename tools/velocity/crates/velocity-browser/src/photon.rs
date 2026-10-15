@@ -35,7 +35,25 @@ pub struct PhotonTab {
     pub title: Option<String>,
     pub active: bool,
     pub loading: Option<bool>,
+    #[serde(default)]
+    pub navigation_state: Option<String>,
+    #[serde(default)]
+    pub error_state: Option<String>,
     pub document_ready: Option<bool>,
+    #[serde(default)]
+    pub engine_load_finished: Option<bool>,
+    #[serde(default)]
+    pub document_generation: Option<u64>,
+    #[serde(default)]
+    pub window_count: Option<usize>,
+    #[serde(default)]
+    pub tab_count: Option<usize>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct PhotonObserverError {
+    pub name: String,
+    pub message: String,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -45,6 +63,54 @@ pub struct PhotonSpeedometerResult {
     pub score: Option<f64>,
     #[serde(default)]
     pub internal_scores: Vec<f64>,
+    #[serde(default)]
+    pub current_suite: Option<String>,
+    #[serde(default)]
+    pub current_test: Option<String>,
+    #[serde(default)]
+    pub current_iteration: Option<usize>,
+    #[serde(default)]
+    pub completed_tests: Option<usize>,
+    #[serde(default)]
+    pub total_tests: Option<usize>,
+    #[serde(default)]
+    pub runner_is_running: Option<bool>,
+    #[serde(default)]
+    pub runner_finished_test_count: Option<usize>,
+    #[serde(default)]
+    pub runner_marks: Vec<String>,
+    #[serde(default)]
+    pub document_visibility_state: Option<String>,
+    #[serde(default)]
+    pub test_frame_src: Option<String>,
+    #[serde(default)]
+    pub test_frame_location: Option<String>,
+    #[serde(default)]
+    pub test_frame_ready_state: Option<String>,
+    #[serde(default)]
+    pub test_frame_visibility_state: Option<String>,
+    #[serde(default)]
+    pub test_frame_has_todo_app: Option<bool>,
+    #[serde(default)]
+    pub test_frame_has_new_todo: Option<bool>,
+    #[serde(default)]
+    pub test_frame_boot_diagnostics: Option<String>,
+    #[serde(default)]
+    pub test_frame_onload_handler: Option<bool>,
+    #[serde(default)]
+    pub test_frame_error: Option<String>,
+    #[serde(default)]
+    pub benchmark_running: Option<bool>,
+    #[serde(default)]
+    pub document_generation: Option<u64>,
+    #[serde(default)]
+    pub document_url: Option<String>,
+    #[serde(default)]
+    pub document_ready_state: Option<String>,
+    #[serde(default)]
+    pub last_progress_at_ms: Option<f64>,
+    #[serde(default)]
+    pub observer_errors: Vec<PhotonObserverError>,
     #[serde(default)]
     pub viewport_warning: bool,
     pub error: Option<String>,
@@ -341,6 +407,7 @@ impl PhotonAutomationClient {
     pub fn install_speedometer_result_observer(
         &mut self,
         tab_id: u64,
+        document_generation: u64,
         timeout: Duration,
     ) -> Result<(), PhotonAutomationError> {
         if !self.supports("probe_speedometer_result") {
@@ -349,11 +416,20 @@ impl PhotonAutomationClient {
                     .to_owned(),
             ));
         }
-        self.call(
+        let result = self.call(
             "probe_speedometer_result",
-            Some(json!({"tab_id": tab_id})),
+            Some(json!({
+                "tab_id": tab_id,
+                "document_generation": document_generation
+            })),
             timeout,
         )?;
+        if result.get("document_generation").and_then(Value::as_u64) != Some(document_generation) {
+            return Err(PhotonAutomationError(
+                "Photon installed the Speedometer observer for a different document generation"
+                    .to_owned(),
+            ));
+        }
         Ok(())
     }
 
@@ -423,9 +499,14 @@ impl PhotonAutomationClient {
             )));
         }
         if response.request_id.as_deref() != Some(&request_id) {
-            return Err(PhotonAutomationError(
-                "Photon response request ID did not match the request".to_owned(),
-            ));
+            let error_detail = response.error.as_ref().map_or_else(String::new, |error| {
+                let message = error.message.chars().take(256).collect::<String>();
+                format!("; uncorrelated Photon error {}: {message}", error.code)
+            });
+            return Err(PhotonAutomationError(format!(
+                "Photon response request ID did not match the request (expected {request_id}, received {}){error_detail}",
+                response.request_id.as_deref().unwrap_or("<missing>"),
+            )));
         }
         if !response.ok {
             let error = response.error.ok_or_else(|| {
@@ -543,7 +624,9 @@ fn read_private_token(path: &Path) -> Result<String, PhotonAutomationError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{PhotonAutomationClient, ProcessStartTime, parse_speedometer_result_title};
+    use super::{
+        PhotonAutomationClient, PhotonTab, ProcessStartTime, parse_speedometer_result_title,
+    };
     use serde_json::{Value, json};
     use std::{
         fs,
@@ -710,6 +793,47 @@ mod tests {
     }
 
     #[test]
+    fn preserves_bounded_protocol_error_for_uncorrelated_rejection() {
+        let directory = private_temp_directory();
+        let socket_path = directory.join("automation.sock");
+        let token_path = directory.join("token");
+        fs::write(&token_path, format!("{}\n", "e".repeat(64))).unwrap();
+        fs::set_permissions(&token_path, fs::Permissions::from_mode(0o600)).unwrap();
+        let listener = UnixListener::bind(&socket_path).unwrap();
+        fs::set_permissions(&socket_path, fs::Permissions::from_mode(0o600)).unwrap();
+        let worker = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut line = String::new();
+            BufReader::new(stream.try_clone().unwrap())
+                .read_line(&mut line)
+                .unwrap();
+            let response = json!({
+                "protocol_version": 1,
+                "request_id": null,
+                "ok": false,
+                "error": { "code": "malformed_request", "message": "could not read request" }
+            });
+            serde_json::to_writer(&mut stream, &response).unwrap();
+            stream.write_all(b"\n").unwrap();
+        });
+        let error = PhotonAutomationClient {
+            socket_path,
+            token: "e".repeat(64),
+            request_id: 0,
+            window_id: 0,
+            application_version: String::new(),
+            capabilities: Default::default(),
+        }
+        .call("ping", None, Duration::from_secs(1))
+        .unwrap_err();
+        worker.join().unwrap();
+        assert!(error.to_string().contains("request ID did not match"));
+        assert!(error.to_string().contains("malformed_request"));
+        assert!(error.to_string().contains("could not read request"));
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
     fn speedometer_title_parser_accepts_only_structured_observer_payloads() {
         assert!(parse_speedometer_result_title(None).unwrap().is_none());
         let status = parse_speedometer_result_title(Some(
@@ -721,6 +845,81 @@ mod tests {
         assert_eq!(status.score, Some(12.5));
         assert_eq!(status.internal_scores, vec![12.0, 13.0]);
         assert!(status.viewport_warning);
+        let running = parse_speedometer_result_title(Some(
+            "VelocitySpeedometer3.1:{\"state\":\"running\",\"version\":\"3.1\",\"document_generation\":4,\"current_suite\":\"TodoMVC-JavaScript-ES5\",\"current_test\":\"Adding100Items\",\"current_iteration\":10,\"completed_tests\":522,\"total_tests\":580,\"benchmark_running\":true,\"document_visibility_state\":\"hidden\"}",
+        ))
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            running.current_suite.as_deref(),
+            Some("TodoMVC-JavaScript-ES5")
+        );
+        assert_eq!(running.document_generation, Some(4));
+        assert_eq!(running.current_test.as_deref(), Some("Adding100Items"));
+        assert_eq!(running.current_iteration, Some(10));
+        assert_eq!(running.completed_tests, Some(522));
+        assert_eq!(running.benchmark_running, Some(true));
+        assert_eq!(running.document_visibility_state.as_deref(), Some("hidden"));
+        let frame = parse_speedometer_result_title(Some(concat!(
+            "VelocitySpeedometer3.1:{\"state\":\"running\",\"version\":\"3.1\",",
+            "\"runner_is_running\":true,\"runner_finished_test_count\":3,",
+            "\"runner_marks\":[\"suite-TodoMVC-JavaScript-ES5-prepare-start\"],",
+            "\"document_visibility_state\":\"visible\",",
+            "\"test_frame_src\":\"resources/todomvc/web-components/index.html\",",
+            "\"test_frame_location\":\"http://127.0.0.1:8080/resources/todomvc/web-components/index.html\",",
+            "\"test_frame_ready_state\":\"complete\",\"test_frame_visibility_state\":\"visible\",",
+            "\"test_frame_has_todo_app\":true,\"test_frame_has_new_todo\":false,",
+            "\"test_frame_boot_diagnostics\":\"body=1;inputs=1;class=0;selector=false;scripts=app.bundle.js:loaded=true\",",
+            "\"test_frame_onload_handler\":true}"
+        )))
+        .unwrap()
+        .unwrap();
+        assert_eq!(frame.test_frame_ready_state.as_deref(), Some("complete"));
+        assert_eq!(frame.runner_finished_test_count, Some(3));
+        assert_eq!(frame.runner_marks.len(), 1);
+        assert_eq!(frame.test_frame_has_todo_app, Some(true));
+        assert_eq!(
+            frame.test_frame_boot_diagnostics.as_deref(),
+            Some("body=1;inputs=1;class=0;selector=false;scripts=app.bundle.js:loaded=true")
+        );
+        assert_eq!(frame.test_frame_onload_handler, Some(true));
         assert!(parse_speedometer_result_title(Some("VelocitySpeedometer3.1:not-json")).is_err());
+    }
+
+    #[test]
+    fn tab_status_reads_engine_load_state_and_accepts_older_responses() {
+        let loaded: PhotonTab = serde_json::from_value(json!({
+            "tab_id": 7,
+            "window_id": 3,
+            "url": "https://browserbench.org/Speedometer3.1/",
+            "title": "Speedometer 3.1",
+            "active": true,
+            "loading": false,
+            "navigation_state": "idle",
+            "error_state": null,
+            "document_ready": null,
+            "engine_load_finished": true,
+            "document_generation": 4,
+            "window_count": 1,
+            "tab_count": 1
+        }))
+        .unwrap();
+        assert_eq!(loaded.engine_load_finished, Some(true));
+        assert_eq!(loaded.document_generation, Some(4));
+        assert_eq!(loaded.window_count, Some(1));
+        assert_eq!(loaded.tab_count, Some(1));
+        assert_eq!(loaded.navigation_state.as_deref(), Some("idle"));
+        assert_eq!(loaded.error_state, None);
+
+        let older: PhotonTab = serde_json::from_value(json!({
+            "tab_id": 7,
+            "window_id": 3,
+            "active": true,
+            "loading": false,
+            "document_ready": null
+        }))
+        .unwrap();
+        assert_eq!(older.engine_load_finished, None);
+        assert_eq!(older.document_generation, None);
     }
 }

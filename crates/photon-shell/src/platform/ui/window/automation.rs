@@ -82,14 +82,34 @@ enum Command {
     GetVersion,
     ListWindows,
     ListProcesses,
-    ListTabs { window_id: Option<u64> },
-    NewTab { window_id: u64, url: String },
-    CloseTab { tab_id: u64 },
-    ActivateTab { tab_id: u64 },
-    Navigate { tab_id: u64, url: String },
-    Reload { tab_id: u64 },
-    GetTabStatus { tab_id: u64 },
-    ProbeSpeedometerResult { tab_id: u64 },
+    ListTabs {
+        window_id: Option<u64>,
+    },
+    NewTab {
+        window_id: u64,
+        url: String,
+    },
+    CloseTab {
+        tab_id: u64,
+    },
+    ActivateTab {
+        tab_id: u64,
+    },
+    Navigate {
+        tab_id: u64,
+        url: String,
+    },
+    Reload {
+        tab_id: u64,
+    },
+    GetTabStatus {
+        tab_id: u64,
+    },
+    ProbeSpeedometerResult {
+        tab_id: u64,
+        #[serde(default)]
+        document_generation: Option<u64>,
+    },
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -134,15 +154,10 @@ pub(super) fn install(launch: AutomationLaunch, cx: &mut App) -> Result<(), Stri
     cx.spawn(async move |cx| {
         let mut receiver = receiver;
         while let Some(pending) = receiver.next().await {
+            let request_id = pending.request.request_id.clone();
             let response = update_app(cx, |cx| dispatch(pending.request, cx))
                 .await
-                .unwrap_or_else(|| {
-                    failure(
-                        None,
-                        "application_unavailable",
-                        "Photon's UI event loop is shutting down".to_owned(),
-                    )
-                });
+                .unwrap_or_else(|| application_unavailable(request_id));
             let _ = pending.reply.send(response);
         }
     })
@@ -251,8 +266,9 @@ fn handle_connection(
     token: &str,
     sender: &mut futures::channel::mpsc::Sender<PendingRequest>,
 ) {
-    let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
-    let _ = stream.set_write_timeout(Some(Duration::from_secs(2)));
+    if configure_connection_stream(&stream).is_err() {
+        return;
+    }
     let mut bytes = Vec::with_capacity(1024);
     let read = BufReader::new(&mut stream)
         .take((MAX_REQUEST_BYTES + 1) as u64)
@@ -270,13 +286,13 @@ fn handle_connection(
             return;
         }
         Ok(0) => return,
-        Err(_) => {
+        Err(error) => {
             write_response(
                 &mut stream,
                 failure(
                     None,
                     "malformed_request",
-                    "could not read request".to_owned(),
+                    format!("could not read request ({:?})", error.kind()),
                 ),
             );
             return;
@@ -313,6 +329,15 @@ fn handle_connection(
         )
     });
     write_response(&mut stream, response);
+}
+
+fn configure_connection_stream(stream: &UnixStream) -> std::io::Result<()> {
+    // On macOS, accepted sockets inherit the listener's nonblocking mode.
+    // The listener stays nonblocking for its accept loop, but each request
+    // stream must block while reading the client's complete line.
+    stream.set_nonblocking(false)?;
+    stream.set_read_timeout(Some(Duration::from_secs(2)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(2)))
 }
 
 fn decode_authenticated_request(bytes: &[u8], token: &str) -> Result<Request, Box<Response>> {
@@ -365,6 +390,14 @@ fn write_response(stream: &mut UnixStream, response: Response) {
         let _ = stream.write_all(&bytes);
         let _ = stream.write_all(b"\n");
     }
+}
+
+fn application_unavailable(request_id: String) -> Response {
+    failure(
+        Some(request_id),
+        "application_unavailable",
+        "Photon's UI event loop was unavailable while processing the request".to_owned(),
+    )
 }
 
 fn read_token(path: &Path) -> Result<String, String> {
@@ -494,7 +527,10 @@ fn dispatch(request: Request, cx: &mut App) -> Response {
         Command::Navigate { tab_id, url } => navigate(tab_id, &url, &request_id, cx),
         Command::Reload { tab_id } => reload(tab_id, cx),
         Command::GetTabStatus { tab_id } => tab_status(tab_id, cx),
-        Command::ProbeSpeedometerResult { tab_id } => probe_speedometer_result(tab_id, cx),
+        Command::ProbeSpeedometerResult {
+            tab_id,
+            document_generation,
+        } => probe_speedometer_result(tab_id, document_generation, cx),
     };
     match result {
         Ok(value) => Response {
@@ -599,6 +635,7 @@ fn list_processes(cx: &App) -> DispatchResult {
 fn list_tabs(window_id: Option<u64>, cx: &App) -> DispatchResult {
     let mut tabs = Vec::new();
     let handles = browser_windows(cx);
+    let window_count = handles.len();
     let window_exists = handles
         .iter()
         .any(|handle| Some(handle.window_id().as_u64()) == window_id);
@@ -620,6 +657,8 @@ fn list_tabs(window_id: Option<u64>, cx: &App) -> DispatchResult {
                     index,
                     tab,
                     browser.active_tab == Some(index),
+                    window_count,
+                    browser.tabs.len(),
                     cx,
                 )
             })
@@ -640,9 +679,11 @@ fn tab_value(
     index: usize,
     tab: &super::content::BrowserTab,
     active: bool,
+    window_count: usize,
+    tab_count: usize,
     cx: &App,
 ) -> Value {
-    let (url, title, loading, error_state) = tab
+    let (url, title, loading, error_state, engine_load_finished, document_generation) = tab
         .content
         .webview()
         .map(|webview| {
@@ -657,9 +698,20 @@ fn tab_value(
                 Some(view.state.title.clone()),
                 Some(view.state.loading),
                 error_state,
+                Some(view.has_completed_document_load()),
+                Some(view.document_generation()),
             )
         })
-        .unwrap_or_else(|| (tab.content.page_address(), None, Some(false), None));
+        .unwrap_or_else(|| {
+            (
+                tab.content.page_address(),
+                None,
+                Some(false),
+                None,
+                None,
+                None,
+            )
+        });
     json!({
         "tab_id": tab.id,
         "window_id": window_id,
@@ -670,14 +722,23 @@ fn tab_value(
         "navigation_state": if loading == Some(true) { "loading" } else { "idle" },
         "error_state": error_state,
         "document_ready": Value::Null,
+        "engine_load_finished": engine_load_finished,
+        "document_generation": document_generation,
+        "engine_load_readiness_source": "Photon embedder on_load_finish callback",
         "readiness_source": "Velocity run-and-tab fixture beacon",
+        "window_count": window_count,
+        "tab_count": tab_count,
         "position": index
     })
 }
 
-fn probe_speedometer_result(tab_id: u64, cx: &mut App) -> DispatchResult {
+fn probe_speedometer_result(
+    tab_id: u64,
+    requested_generation: Option<u64>,
+    cx: &mut App,
+) -> DispatchResult {
     let (handle, index) = find_tab(tab_id, cx)?;
-    handle
+    let document_generation = handle
         .update(cx, |browser, _window, cx| {
             let Some(webview) = browser.tabs[index].content.webview() else {
                 return Err(("tab_unavailable", "tab has no WebView yet".to_owned()));
@@ -690,17 +751,34 @@ fn probe_speedometer_result(tab_id: u64, cx: &mut App) -> DispatchResult {
                     "the read-only Speedometer observer is restricted to the official Speedometer 3.1 page or a loopback Speedometer 3.1 source".to_owned(),
                 ));
             }
-            let installed = webview.update(cx, |view, _cx| view.probe_speedometer_result());
+            let document_generation = webview.update(cx, |view, _cx| view.document_generation());
+            if requested_generation.is_some_and(|generation| generation != document_generation) {
+                return Err((
+                    "navigation_replaced",
+                    format!(
+                        "Speedometer document generation changed (expected {}, current {})",
+                        requested_generation.unwrap_or_default(),
+                        document_generation
+                    ),
+                ));
+            }
+            let installed = webview.update(cx, |view, _cx| {
+                view.probe_speedometer_result(document_generation)
+            });
             if !installed {
                 return Err((
                     "page_unavailable",
-                    "the benchmark document does not have an active engine page yet".to_owned(),
+                    format!(
+                        "Speedometer document generation {document_generation} is no longer loaded"
+                    ),
                 ));
             }
-            Ok::<(), (&'static str, String)>(())
+            Ok::<u64, (&'static str, String)>(document_generation)
         })
         .map_err(|error| ("window_unavailable", error.to_string()))??;
-    Ok(json!({"tab_id": tab_id, "observer": "speedometer_3_1", "state": "installed"}))
+    Ok(
+        json!({"tab_id": tab_id, "observer": "speedometer_3_1", "state": "installed", "document_generation": document_generation}),
+    )
 }
 
 fn is_speedometer_url(url: &str) -> bool {
@@ -820,6 +898,8 @@ fn tab_status(tab_id: u64, cx: &App) -> DispatchResult {
         browser.active_tab == Some(index),
         cx,
     ))
+        browser_windows(cx).len(),
+        browser.tabs.len(),
 }
 
 fn find_window(
@@ -914,12 +994,41 @@ mod speedometer_url_tests {
 #[cfg(test)]
 mod tests {
     use super::{
-        Command, PROTOCOL_VERSION, constant_time_equal, decode_authenticated_request, failure,
-        validate_url,
+        Command, PROTOCOL_VERSION, application_unavailable, configure_connection_stream,
+        constant_time_equal, decode_authenticated_request, failure, validate_url,
+    };
+    use std::{
+        os::fd::AsRawFd,
+        os::unix::net::{UnixListener, UnixStream},
     };
 
     #[test]
     fn url_validation_allows_only_blank_and_http_urls() {
+    #[test]
+    fn accepted_automation_streams_are_blocking_before_request_reads() {
+        let socket_path = std::env::temp_dir().join(format!(
+            "photon-automation-test-{}-{}.sock",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let listener = UnixListener::bind(&socket_path).unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let _client = UnixStream::connect(&socket_path).unwrap();
+        let (server, _) = listener.accept().unwrap();
+
+        configure_connection_stream(&server).unwrap();
+        let flags = unsafe { libc::fcntl(server.as_raw_fd(), libc::F_GETFL) };
+        assert_ne!(flags, -1);
+        assert_eq!(flags & libc::O_NONBLOCK, 0);
+
+        drop(server);
+        drop(listener);
+        std::fs::remove_file(socket_path).unwrap();
+    }
+
         assert!(validate_url("about:blank").is_ok());
         assert!(validate_url("http://127.0.0.1:1234/simple").is_ok());
         assert!(validate_url("https://example.test/path").is_ok());
@@ -964,6 +1073,14 @@ mod tests {
 
     #[test]
     fn protocol_rejects_malformed_oversized_unauthorized_and_old_requests() {
+    #[test]
+    fn unavailable_application_response_keeps_request_correlation() {
+        let response =
+            serde_json::to_value(application_unavailable("request-29".to_owned())).unwrap();
+        assert_eq!(response["request_id"], "request-29");
+        assert_eq!(response["error"]["code"], "application_unavailable");
+    }
+
         assert_eq!(
             decode_authenticated_request(b"{bad json", &"a".repeat(64))
                 .err()

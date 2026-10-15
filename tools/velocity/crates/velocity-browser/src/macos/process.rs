@@ -1,9 +1,10 @@
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     ffi::OsString,
     fs, io,
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
+    sync::{Arc, Mutex},
     thread,
     time::{Duration, Instant},
 };
@@ -18,6 +19,14 @@ const STARTUP_CHECK_INTERVAL: Duration = Duration::from_millis(50);
 const STARTUP_CHECKS: usize = 6;
 const GRACEFUL_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(5);
 const FORCE_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(3);
+#[derive(Clone, Debug, Default)]
+pub struct ManagedProcessDiagnostics {
+    pub session_process_count: usize,
+    pub exit_status_observed: bool,
+    pub exit_code: Option<i32>,
+    pub exit_signal: Option<i32>,
+    pub fatal_signal_observed: bool,
+}
 
 /// macOS process launcher and owner for Velocity-created browser sessions.
 #[derive(Clone)]
@@ -27,6 +36,7 @@ pub struct MacOSProcessDriver {
     retain_profile: bool,
     chromium_devtools: bool,
     photon_automation: Option<(PathBuf, String)>,
+    captured_children: Arc<Mutex<BTreeMap<u32, Child>>>,
 }
 
 impl std::fmt::Debug for MacOSProcessDriver {
@@ -37,6 +47,14 @@ impl std::fmt::Debug for MacOSProcessDriver {
             .field("profile_override", &self.profile_override)
             .field("retain_profile", &self.retain_profile)
             .field("chromium_devtools", &self.chromium_devtools)
+            .field(
+                "captured_child_count",
+                &self
+                    .captured_children
+                    .lock()
+                    .map(|children| children.len())
+                    .unwrap_or_default(),
+            )
             .field(
                 "photon_automation",
                 &self.photon_automation.as_ref().map(|(path, _)| path),
@@ -53,6 +71,7 @@ impl MacOSProcessDriver {
             retain_profile: false,
             chromium_devtools: false,
             photon_automation: None,
+            captured_children: Arc::new(Mutex::new(BTreeMap::new())),
         }
     }
 
@@ -76,6 +95,42 @@ impl MacOSProcessDriver {
     pub fn with_photon_automation(mut self, socket_path: PathBuf, token: String) -> Self {
         self.photon_automation = Some((socket_path, token));
         self
+    }
+
+    /// Returns bounded diagnostics for this exact Velocity-launched process
+    /// and its private session. No arguments or unrelated process output enter
+    /// this snapshot.
+    pub fn diagnostics(
+        &self,
+        identity: &ProcessIdentity,
+    ) -> Result<ManagedProcessDiagnostics, ProcessError> {
+        let session_process_count = session_processes(identity.session_id)?.len();
+        let mut diagnostics = ManagedProcessDiagnostics {
+            session_process_count,
+            ..ManagedProcessDiagnostics::default()
+        };
+        let mut children = self.captured_children.lock().map_err(|_| {
+            ProcessError("managed process diagnostics lock was poisoned".to_owned())
+        })?;
+        let Some(child) = children.get_mut(&identity.session_id) else {
+            return Ok(diagnostics);
+        };
+        if let Some(status) = child
+            .try_wait()
+            .map_err(|error| ProcessError(format!("cannot inspect browser exit status: {error}")))?
+        {
+            use std::os::unix::process::ExitStatusExt;
+            diagnostics.exit_status_observed = true;
+            diagnostics.exit_code = status.code();
+            diagnostics.exit_signal = status.signal();
+            diagnostics.fatal_signal_observed = diagnostics.exit_signal.is_some_and(|signal| {
+                matches!(
+                    signal,
+                    libc::SIGABRT | libc::SIGBUS | libc::SIGILL | libc::SIGSEGV | libc::SIGTRAP
+                )
+            });
+        }
+        Ok(diagnostics)
     }
 }
 
@@ -151,31 +206,37 @@ impl ProcessDriver for MacOSProcessDriver {
     }
 
     fn cleanup(&self, session_id: &str, identity: &ProcessIdentity) -> Result<(), ProcessError> {
-        let Some(profile_path) = identity.profile_path.as_deref() else {
-            return Ok(());
+        let result = if let Some(profile_path) = identity.profile_path.as_deref() {
+            let session_profile = self.profile_root.join(session_id);
+            let benchmark_profile = self
+                .profile_override
+                .as_deref()
+                .is_some_and(|override_path| override_path == profile_path);
+            if profile_path != session_profile && !benchmark_profile {
+                Err(ProcessError(format!(
+                    "refusing to remove profile outside the Velocity profile directory: {}",
+                    profile_path.display()
+                )))
+            } else if benchmark_profile && self.retain_profile {
+                Ok(())
+            } else {
+                match fs::remove_dir_all(profile_path) {
+                    Ok(()) => Ok(()),
+                    Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+                    Err(error) => Err(ProcessError(format!(
+                        "cannot remove managed browser profile {}: {error}",
+                        profile_path.display()
+                    ))),
+                }
+            }
+        } else {
+            Ok(())
         };
-        let session_profile = self.profile_root.join(session_id);
-        let benchmark_profile = self
-            .profile_override
-            .as_deref()
-            .is_some_and(|override_path| override_path == profile_path);
-        if profile_path != session_profile && !benchmark_profile {
-            return Err(ProcessError(format!(
-                "refusing to remove profile outside the Velocity profile directory: {}",
-                profile_path.display()
-            )));
-        }
-        if benchmark_profile && self.retain_profile {
-            return Ok(());
-        }
-        match fs::remove_dir_all(profile_path) {
-            Ok(()) => Ok(()),
-            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-            Err(error) => Err(ProcessError(format!(
-                "cannot remove managed browser profile {}: {error}",
-                profile_path.display()
-            ))),
-        }
+        self.captured_children
+            .lock()
+            .map_err(|_| ProcessError("managed child registry lock was poisoned".to_owned()))?
+            .remove(&identity.session_id);
+        result
     }
 }
 
@@ -203,7 +264,7 @@ impl MacOSProcessDriver {
         command
             .stdin(Stdio::null())
             .stdout(Stdio::null())
-            .stderr(Stdio::null());
+            .stderr(Stdio::inherit());
 
         use std::os::unix::process::CommandExt;
         // A new session gives this launch a private process group. Its children
@@ -236,14 +297,23 @@ impl MacOSProcessDriver {
         });
 
         match self.identify_started_process(&mut child, &installation.executable_path) {
-            Ok((pid, started_at)) => Ok(ProcessIdentity {
-                pid,
-                session_id: pid,
-                started_at,
-                start_time: process_start_time(pid),
-                executable_path: installation.executable_path.clone(),
-                profile_path,
-            }),
+            Ok((pid, started_at)) => {
+                let identity = ProcessIdentity {
+                    pid,
+                    session_id: pid,
+                    started_at,
+                    start_time: process_start_time(pid),
+                    executable_path: installation.executable_path.clone(),
+                    profile_path,
+                };
+                self.captured_children
+                    .lock()
+                    .map_err(|_| {
+                        ProcessError("managed child registry lock was poisoned".to_owned())
+                    })?
+                    .insert(pid, child);
+                Ok(identity)
+            }
             Err(error) => {
                 let _ = child.kill();
                 let _ = child.wait();
@@ -471,15 +541,14 @@ impl MacOSProcessDriver {
     ) -> Result<(u32, String), ProcessError> {
         let pid = child.id();
         for _ in 0..STARTUP_CHECKS {
-            if child
-                .try_wait()
-                .map_err(|error| ProcessError(format!("cannot inspect launched process: {error}")))?
-                .is_some()
-            {
+            if let Some(exit) = child.try_wait().map_err(|error| {
+                ProcessError(format!("cannot inspect launched process: {error}"))
+            })? {
                 self.cleanup_unrecorded_session(pid)?;
-                return Err(ProcessError(
-                    "browser exited or handed the launch to another instance before Velocity could verify ownership; that instance was left untouched".to_owned(),
-                ));
+                return Err(ProcessError(format!(
+                    "browser exited or handed the launch to another instance before Velocity could verify ownership ({}); that instance was left untouched",
+                    format_exit_status(exit)
+                )));
             }
             if let Some(row) = process_row(pid)? {
                 if row.session_id != pid || row.process_group != pid {
@@ -571,6 +640,11 @@ impl MacOSProcessDriver {
             let _ = fs::remove_dir_all(profile_path);
         }
     }
+}
+
+fn format_exit_status(status: std::process::ExitStatus) -> String {
+    use std::os::unix::process::ExitStatusExt;
+    format!("code={:?}, signal={:?}", status.code(), status.signal())
 }
 
 #[derive(Debug)]

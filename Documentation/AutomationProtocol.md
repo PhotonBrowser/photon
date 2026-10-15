@@ -81,13 +81,14 @@ Errors use a stable code and explanatory message:
 | `get_version` | — | Application/protocol versions and supported commands |
 | `list_windows` | — | Stable window IDs and current tab counts |
 | `list_processes` | — | Read-only active process snapshot from `WebView::ProcessManager` and the macOS `ProcessReaper` |
-| `list_tabs` | optional `window_id` | Tab/window IDs, URL, active/loading state, and readiness availability |
+| `list_tabs` | optional `window_id` | Tab/window IDs, URL, active/loading/error state, engine load-finished state, and document generation |
 | `new_tab` | `window_id`, `url` | The ID of a real Photon tab |
 | `close_tab` | `tab_id` | Accepted closing state, using ordinary tab lifecycle logic |
 | `activate_tab` | `tab_id` | Activates an existing tab |
 | `navigate` | `tab_id`, `url` | Navigation request ID and requested state |
 | `reload` | `tab_id` | Reloads the current page through Photon's navigation command |
-| `get_tab_status` | `tab_id` | Current URL, loading state, and crash status |
+| `get_tab_status` | `tab_id` | Current URL, loading/error state, crash status, engine load-finished state, document generation, and window/tab counts |
+| `probe_speedometer_result` | `tab_id`, `document_generation` | Installs the restricted read-only observer for the expected document generation |
 
 `list_processes` returns active records in the actual
 `WebView::ProcessManager` registry, plus macOS's separate `ProcessReaper`
@@ -142,10 +143,13 @@ remain stable for the lifetime of the corresponding UI object. They are not
 GPUI entity pointers. All application state changes are dispatched onto the
 GPUI event loop; the socket worker only validates frames and transfers bounded
 requests. Navigation acknowledgement means the existing navigation command
-was accepted, not that loading finished. Photon currently does not expose a
-reliable document-ready event through the shell protocol, so
-`document_ready` is `null`. Velocity verifies page readiness with its local
-fixture's run-and-tab-specific HTTP beacon after the document `load` event.
+was accepted, not that loading finished. `document_ready` remains `null`;
+`engine_load_finished` separately reports the WebView's `on_load_finish`
+callback and is not a substitute for application-specific readiness. Velocity
+also verifies its local fixtures with a run-and-tab-specific HTTP beacon after
+the document `load` event. The `document_generation` identifies the loaded
+document for observer requests and lets the caller reject state from a replaced
+navigation.
 
 ## Velocity integration
 
@@ -171,8 +175,10 @@ launching a separate Photon executable with the explicit socket argument.
 ## Restricted Speedometer result observer
 
 Automation protocol v1 additionally advertises `probe_speedometer_result` in
-Photon builds that implement it. The read-only command takes `{ "tab_id": N }`
-and installs a fixed observer in that tab. It accepts only the official
+Photon builds that implement it. The read-only command takes
+`{ "tab_id": N, "document_generation": G }` and installs a fixed observer in
+that tab only if the current document generation still matches. It accepts
+only the official
 `https://browserbench.org/Speedometer3.1/` page or a `127.0.0.1` URL under
 `/Speedometer3.1/`. It does not accept JavaScript from the caller and cannot
 change benchmark suites, iteration counts, preferences, or browser state beyond
@@ -182,7 +188,7 @@ The observer watches Speedometer's official running/summary document state and
 publishes a structured JSON payload in that isolated tab's document title:
 
 ```json
-{"state":"running","version":"3.1"}
+{"state":"running","version":"3.1","current_suite":"TodoMVC-JavaScript-ES5"}
 ```
 
 or, after the official benchmark finishes:
@@ -195,10 +201,22 @@ The values above are illustrative. Invalid official summaries use
 `{"state":"failed","version":"3.1","error":"..."}`. Velocity reads the
 title through `list_tabs`/`get_tab_status`, validates the version and finite
 score, and never treats the observer command acknowledgement as completion.
+While running, the observer reads Speedometer's own progress attributes and
+performance marks to identify the current suite and test. It also reports the
+document generation and visibility, the current test-frame URL/readiness/
+visibility, bounded parent/frame exceptions, and time since official progress.
+These fields are read-only diagnostics and do not change the benchmark workload
+or score.
 The observer is installed only after Photon has received the document's
-load-finished callback. If the engine has no active document page, the command
+load-finished callback. `get_tab_status` exposes this as
+`engine_load_finished`, sourced from the embedder's actual `on_load_finish`
+callback. Velocity waits for that signal and checks `error_state` before asking
+to install the observer. If the engine has no active document page, the command
 returns a `page_unavailable` error instead of invoking the JavaScript path.
 Viewport warnings are included in observer payloads when the page reports
 Speedometer's minimum viewport warning.
+For authenticated automation runs, setting
+`PHOTON_AUTOMATION_LIFECYCLE_TRACE=1` emits at most 64 app/window lifecycle
+events to standard error. Normal Photon sessions do not enable this trace.
 The observer is available only in an authenticated, explicitly enabled,
 isolated automation session. No credential or score is sent to Photon logs.

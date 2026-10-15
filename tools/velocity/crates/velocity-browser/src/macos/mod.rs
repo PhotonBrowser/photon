@@ -7,7 +7,7 @@ mod window;
 use std::path::PathBuf;
 
 pub use discovery::{BrowserDiscoveryError, MacOSBrowserDiscovery};
-pub use process::MacOSProcessDriver;
+pub use process::{MacOSProcessDriver, ManagedProcessDiagnostics};
 pub use resource::MacOSResourceCollector;
 pub use window::MacOSWindowObserver;
 

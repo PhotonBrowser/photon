@@ -178,7 +178,9 @@ void photon_view_release_native_frame(void* view, uint64_t backing_id,
 bool photon_view_set_native_metal_presentation(void* view, bool enabled);
 #endif
 void photon_view_navigate(void* view, char const* url);
-bool photon_view_install_speedometer_result_observer(void* view);
+bool photon_view_has_completed_document_load(void* view);
+uint64_t photon_view_document_generation(void* view);
+bool photon_view_install_speedometer_result_observer(void* view, uint64_t expected_document_generation);
 void photon_view_reload(void* view);
 void photon_view_stop_loading(void* view);
 void photon_view_go_back(void* view);

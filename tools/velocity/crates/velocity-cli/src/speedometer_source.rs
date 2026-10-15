@@ -20,6 +20,7 @@ const ARCHIVE_SHA256: &str = "cfefa818d7789ed2f2b9f3f1bf608cc35e4e8241489eef4704
 const ARCHIVE_URL: &str = "https://codeload.github.com/WebKit/Speedometer/tar.gz/1386415be8fef2f6b6bbdbe1828872471c5d802a";
 const MAX_ARCHIVE_BYTES: u64 = 50 * 1024 * 1024;
 const MAX_REQUEST_BYTES: usize = 8 * 1024;
+const MAX_HTTP_TRACE_REQUESTS: usize = 64;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BenchmarkSourceKind {
@@ -289,12 +290,17 @@ impl LocalSpeedometerServer {
         let stop = Arc::new(AtomicBool::new(false));
         let worker_stop = Arc::clone(&stop);
         let worker_root = root.clone();
+        let trace_requests = std::env::var_os("VELOCITY_SPEEDOMETER_HTTP_TRACE").is_some();
         let worker = thread::Builder::new()
             .name("velocity-speedometer-http".to_owned())
             .spawn(move || {
+                let mut trace = HttpRequestTrace {
+                    enabled: trace_requests,
+                    recorded: 0,
+                };
                 while !worker_stop.load(Ordering::Relaxed) {
                     match listener.accept() {
-                        Ok((stream, _)) => serve_request(stream, &worker_root),
+                        Ok((stream, _)) => serve_request(stream, &worker_root, &mut trace),
                         Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                             thread::sleep(Duration::from_millis(10));
                         }
@@ -332,7 +338,16 @@ impl Drop for LocalSpeedometerServer {
     }
 }
 
-fn serve_request(mut stream: TcpStream, root: &Path) {
+struct HttpRequestTrace {
+    enabled: bool,
+    recorded: usize,
+}
+
+fn serve_request(mut stream: TcpStream, root: &Path, trace: &mut HttpRequestTrace) {
+    if let Err(error) = stream.set_nonblocking(false) {
+        trace_response(trace, "<accepted-stream>", 0, 0, Err(error.kind()));
+        return;
+    }
     let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
     let mut request = Vec::with_capacity(1024);
     let mut byte = [0_u8; 1];
@@ -345,31 +360,58 @@ fn serve_request(mut stream: TcpStream, root: &Path) {
                     break;
                 }
             }
-            Err(_) => return,
+            Err(error) => {
+                trace_response(trace, "<request-read>", 0, 0, Err(error.kind()));
+                return;
+            }
         }
     }
     if request.len() >= MAX_REQUEST_BYTES {
-        let _ = write_response(&mut stream, 431, "text/plain", b"request too large");
+        write_traced_response(
+            &mut stream,
+            trace,
+            "<request-too-large>",
+            431,
+            "text/plain",
+            b"request too large",
+        );
         return;
     }
     let request = String::from_utf8_lossy(&request);
     let Some(line) = request.lines().next() else {
+        trace_response(trace, "<empty-request>", 0, 0, Ok(()));
         return;
     };
     let mut parts = line.split_whitespace();
     let Some(method) = parts.next() else {
+        trace_response(trace, "<malformed-request>", 0, 0, Ok(()));
         return;
     };
     let Some(target) = parts.next() else {
+        trace_response(trace, "<malformed-request>", 0, 0, Ok(()));
         return;
     };
+    let request_path = target.split(['?', '#']).next().unwrap_or_default();
     if !matches!(method, "GET" | "HEAD") {
-        let _ = write_response(&mut stream, 405, "text/plain", b"method not allowed");
+        write_traced_response(
+            &mut stream,
+            trace,
+            request_path,
+            405,
+            "text/plain",
+            b"method not allowed",
+        );
         return;
     }
-    let path = target.split(['?', '#']).next().unwrap_or_default();
-    let Some(relative) = path.strip_prefix("/Speedometer3.1/") else {
-        let _ = write_response(&mut stream, 404, "text/plain", b"not found");
+    let Some(relative) = request_path.strip_prefix("/Speedometer3.1/") else {
+        write_traced_response(
+            &mut stream,
+            trace,
+            request_path,
+            404,
+            "text/plain",
+            b"not found",
+        );
         return;
     };
     let relative = if relative.is_empty() {
@@ -382,28 +424,106 @@ fn serve_request(mut stream: TcpStream, root: &Path) {
         .any(|component| !matches!(component, Component::Normal(_)))
         || relative.to_string_lossy().contains('%')
     {
-        let _ = write_response(&mut stream, 400, "text/plain", b"invalid path");
+        write_traced_response(
+            &mut stream,
+            trace,
+            request_path,
+            400,
+            "text/plain",
+            b"invalid path",
+        );
         return;
     }
     let path = root.join(relative);
-    let Ok(path) = fs::canonicalize(path) else {
-        let _ = write_response(&mut stream, 404, "text/plain", b"not found");
+    let Ok(mut path) = fs::canonicalize(path) else {
+        write_traced_response(
+            &mut stream,
+            trace,
+            request_path,
+            404,
+            "text/plain",
+            b"not found",
+        );
         return;
     };
+    if path.is_dir() {
+        path.push("index.html");
+        let Ok(index_path) = fs::canonicalize(path) else {
+            write_traced_response(
+                &mut stream,
+                trace,
+                request_path,
+                404,
+                "text/plain",
+                b"not found",
+            );
+            return;
+        };
+        path = index_path;
+    }
     if !path.starts_with(root) || !path.is_file() {
-        let _ = write_response(&mut stream, 404, "text/plain", b"not found");
+        write_traced_response(
+            &mut stream,
+            trace,
+            request_path,
+            404,
+            "text/plain",
+            b"not found",
+        );
         return;
     }
     match fs::read(&path) {
         Ok(contents) => {
             let content_type = content_type(&path);
             let body = if method == "HEAD" { &[][..] } else { &contents };
-            let _ = write_response(&mut stream, 200, content_type, body);
+            write_traced_response(&mut stream, trace, request_path, 200, content_type, body);
         }
         Err(_) => {
-            let _ = write_response(&mut stream, 500, "text/plain", b"cannot read asset");
+            write_traced_response(
+                &mut stream,
+                trace,
+                request_path,
+                500,
+                "text/plain",
+                b"cannot read asset",
+            );
         }
     }
+}
+
+fn write_traced_response(
+    stream: &mut TcpStream,
+    trace: &mut HttpRequestTrace,
+    path: &str,
+    status: u16,
+    content_type: &str,
+    body: &[u8],
+) {
+    let result = write_response(stream, status, content_type, body);
+    trace_response(
+        trace,
+        path,
+        status,
+        body.len(),
+        result.map_err(|error| error.kind()),
+    );
+}
+
+fn trace_response(
+    trace: &mut HttpRequestTrace,
+    path: &str,
+    status: u16,
+    bytes: usize,
+    result: Result<(), std::io::ErrorKind>,
+) {
+    if !trace.enabled || trace.recorded >= MAX_HTTP_TRACE_REQUESTS {
+        return;
+    }
+    trace.recorded += 1;
+    let write_result = result.map_or_else(|error| error.to_string(), |_| "ok".to_owned());
+    eprintln!(
+        "[VelocitySpeedometerHttp] {path} status={status} bytes={bytes} write={write_result}"
+    );
 }
 
 fn content_type(path: &Path) -> &'static str {
@@ -497,7 +617,7 @@ mod tests {
     }
 
     #[test]
-    fn local_server_serves_only_the_pinned_benchmark_tree_and_shuts_down() {
+    fn local_server_sends_a_complete_large_response_and_shuts_down() {
         let root = std::env::temp_dir().join(format!(
             "velocity-speedometer-server-test-{}-{}",
             std::process::id(),
@@ -507,7 +627,14 @@ mod tests {
                 .as_nanos()
         ));
         fs::create_dir_all(root.join("resources")).unwrap();
-        fs::write(root.join("index.html"), "official entry").unwrap();
+        fs::create_dir_all(root.join("resources/perf.webkit.org/public/v3")).unwrap();
+        let expected_body = vec![b'a'; 700_000];
+        fs::write(root.join("index.html"), &expected_body).unwrap();
+        fs::write(
+            root.join("resources/perf.webkit.org/public/v3/index.html"),
+            "dashboard index",
+        )
+        .unwrap();
         fs::write(root.join("resources/main.mjs"), "main").unwrap();
         fs::write(root.join("resources/tests.mjs"), "tests").unwrap();
         fs::write(
@@ -537,7 +664,47 @@ mod tests {
         })
         .unwrap();
         assert!(response.starts_with("HTTP/1.1 200 OK"));
-        assert!(response.contains("official entry"));
+        let (headers, body) = response.split_once("\r\n\r\n").unwrap();
+        assert!(headers.contains("Content-Length: 700000"));
+        assert_eq!(body.as_bytes(), expected_body);
+
+        let dashboard_response = TcpStream::connect(
+            server
+                .url()
+                .trim_start_matches("http://")
+                .split('/')
+                .next()
+                .unwrap(),
+        )
+        .and_then(|mut stream| {
+            stream.write_all(
+                b"GET /Speedometer3.1/resources/perf.webkit.org/public/v3/ HTTP/1.1\r\nHost: localhost\r\n\r\n",
+            )?;
+            let mut response = String::new();
+            stream.read_to_string(&mut response)?;
+            Ok(response)
+        })
+        .unwrap();
+        assert!(dashboard_response.starts_with("HTTP/1.1 200 OK"));
+        assert!(dashboard_response.ends_with("dashboard index"));
+
+        let invalid_path_response = TcpStream::connect(
+            server
+                .url()
+                .trim_start_matches("http://")
+                .split('/')
+                .next()
+                .unwrap(),
+        )
+        .and_then(|mut stream| {
+            stream
+                .write_all(b"GET /outside-the-pinned-tree HTTP/1.1\r\nHost: localhost\r\n\r\n")?;
+            let mut response = String::new();
+            stream.read_to_string(&mut response)?;
+            Ok(response)
+        })
+        .unwrap();
+        assert!(invalid_path_response.starts_with("HTTP/1.1 404 Not Found"));
         drop(server);
         fs::remove_dir_all(root).unwrap();
     }

@@ -361,9 +361,19 @@ extern "C" void photon_view_navigate(void* view, char const* url)
         static_cast<ViewHandle*>(view)->view->navigate(url);
 }
 
-extern "C" bool photon_view_install_speedometer_result_observer(void* view)
+extern "C" bool photon_view_has_completed_document_load(void* view)
 {
-    return view && static_cast<Photon::View*>(view)->install_speedometer_result_observer();
+    return view && static_cast<ViewHandle*>(view)->view->has_completed_document_load();
+}
+
+extern "C" uint64_t photon_view_document_generation(void* view)
+{
+    return view ? static_cast<ViewHandle*>(view)->view->document_generation() : 0;
+}
+
+extern "C" bool photon_view_install_speedometer_result_observer(void* view, uint64_t expected_document_generation)
+{
+    return view && static_cast<ViewHandle*>(view)->view->install_speedometer_result_observer(expected_document_generation);
 }
 
 extern "C" void photon_view_reload(void* view)
