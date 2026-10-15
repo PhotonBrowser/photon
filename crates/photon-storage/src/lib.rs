@@ -13,3 +13,4 @@ mod profile;
 
 pub use favicons::FaviconPixels;
 pub use profile::{DataUsage, Profile, ProfileWriteTicket};
+mod migrations;

@@ -12,7 +12,7 @@ use super::favicons::{self, FaviconPixels};
 use super::{atomic, history_file};
 
 const HISTORY_FILE: &str = "History.json";
-const SETTINGS_FILE: &str = "config.json";
+const SETTINGS_FILE: &str = "config.toml";
 const SESSION_FILE: &str = "Session.json";
 const FAVICONS_DIR: &str = "Favicons";
 const ENGINE_DIR: &str = "Engine";
@@ -86,8 +86,25 @@ impl ProfileWrites {
 }
 
 impl Profile {
-    /// Opens the profile at `root`, creating its folders as needed.
+    /// Opens the profile at `root`, applying migrations before returning it.
     pub fn open(root: impl Into<PathBuf>) -> io::Result<Self> {
+        Self::open_with_settings_path(root, None)
+    }
+
+    fn open_with_settings_path(
+        root: impl Into<PathBuf>,
+        settings_path: Option<PathBuf>,
+    ) -> io::Result<Self> {
+        let mut profile = Self::create(root)?;
+        if let Some(settings_path) = settings_path {
+            profile.settings_path = settings_path;
+        }
+        super::migrations::run(&profile)?;
+        profile.ensure_settings()?;
+        Ok(profile)
+    }
+
+    fn create(root: impl Into<PathBuf>) -> io::Result<Self> {
         let root = root.into();
         let profile = Self {
             settings_path: root.join(SETTINGS_FILE),
@@ -104,21 +121,20 @@ impl Profile {
     pub fn open_default() -> io::Result<Self> {
         let isolated_profile =
             std::env::var_os("PHOTON_PROFILE_DIR").is_some_and(|root| !root.is_empty());
-        let mut profile = Self::open(Self::default_root()?)?;
+        let root = Self::default_root()?;
         // Managed automation sessions must not read or write the user's
         // global Photon settings file.
-        if !isolated_profile {
-            profile.settings_path = Self::default_settings_path()?;
+        let settings_path = (!isolated_profile)
+            .then(Self::default_settings_path)
+            .transpose()?;
+        Self::open_with_settings_path(root, settings_path)
+    }
+
+    fn ensure_settings(&self) -> io::Result<()> {
+        if self.settings_path.exists() {
+            return Ok(());
         }
-        if !profile.settings_path.exists() {
-            let legacy_settings = profile.root.join("Settings.json");
-            if let Ok(bytes) = fs::read(legacy_settings) {
-                atomic::write(&profile.settings_path, &bytes)?;
-            } else {
-                profile.save_settings(&BrowserSettings::default())?;
-            }
-        }
-        Ok(profile)
+        self.save_settings(&BrowserSettings::default())
     }
 
     fn default_settings_path() -> io::Result<PathBuf> {
@@ -227,40 +243,29 @@ impl Profile {
         let Ok(bytes) = fs::read(&self.settings_path) else {
             return BrowserSettings::default();
         };
-        let Ok(mut document) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        let Ok(source) = std::str::from_utf8(&bytes) else {
             self.keep_unreadable_settings(&bytes);
             return BrowserSettings::default();
         };
-        let saved_workspace = document
-            .as_object_mut()
-            .and_then(|settings| settings.remove("workspace"))
-            .filter(|workspace| {
-                workspace.as_object().is_some_and(|workspace| {
-                    workspace.contains_key("default_preset_id") && workspace.contains_key("presets")
-                })
-            });
-        let mut settings = match serde_json::from_value::<BrowserSettings>(document.clone()) {
-            Ok(settings) => settings,
-            Err(_) => {
-                self.keep_unreadable_settings(&bytes);
-                readable_settings(document)
-            }
+        let Ok(document) = toml::from_str::<toml::Value>(source) else {
+            self.keep_unreadable_settings(&bytes);
+            return BrowserSettings::default();
         };
-        settings.workspace = saved_workspace
-            .and_then(|workspace| serde_json::from_value::<WorkspaceSettings>(workspace).ok())
-            .filter(WorkspaceSettings::is_valid)
-            .unwrap_or_else(|| WorkspaceSettings::for_tab_layout(settings.tab_layout));
-        settings.spaces.validate_layout_overrides();
+
+        let (settings, partially_unreadable) = decode_toml_settings(document);
+        if partially_unreadable {
+            self.keep_unreadable_settings(&bytes);
+        }
         settings
     }
 
     /// Keeps a settings file that could not be read in full beside the
     /// profile, as the next save replaces it with what could be read.
-    fn keep_unreadable_settings(&self, bytes: &[u8]) {
+    pub(super) fn keep_unreadable_settings(&self, bytes: &[u8]) {
         let seconds = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |elapsed| elapsed.as_secs());
-        let backup = self.root.join(format!("config.unreadable-{seconds}.json"));
+        let backup = self.root.join(format!("config.unreadable-{seconds}.bak"));
         let _ = atomic::write(&backup, bytes);
     }
 
@@ -283,9 +288,9 @@ impl Profile {
         settings: &BrowserSettings,
     ) -> io::Result<bool> {
         self.write_snapshot(ticket, SnapshotKind::Settings, || {
-            let bytes = serde_json::to_vec_pretty(settings)
+            let contents = toml::to_string_pretty(settings)
                 .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-            atomic::write(&self.settings_path, &bytes)
+            atomic::write(&self.settings_path, contents.as_bytes())
         })
     }
 
@@ -439,21 +444,43 @@ fn folder_size(path: &Path) -> u64 {
         .sum()
 }
 
-/// The settings in `document` that can be read, each other preference at its
-/// default, when the document as a whole cannot be, as when a newer build
-/// saved a value this one does not know.
-fn readable_settings(document: serde_json::Value) -> BrowserSettings {
-    let serde_json::Value::Object(fields) = document else {
+fn decode_toml_settings(mut document: toml::Value) -> (BrowserSettings, bool) {
+    let saved_workspace = document
+        .as_table_mut()
+        .and_then(|settings| settings.remove("workspace"))
+        .filter(|workspace| {
+            workspace.as_table().is_some_and(|workspace| {
+                workspace.contains_key("default_preset_id") && workspace.contains_key("presets")
+            })
+        });
+    let parsed = document.clone().try_into::<BrowserSettings>();
+    let partially_unreadable = parsed.is_err();
+    let mut settings = parsed.unwrap_or_else(|_| readable_toml_settings(document));
+    settings.workspace = saved_workspace
+        .and_then(|workspace| workspace.try_into::<WorkspaceSettings>().ok())
+        .filter(WorkspaceSettings::is_valid)
+        .unwrap_or_else(|| WorkspaceSettings::for_tab_layout(settings.tab_layout));
+    settings.spaces.validate_layout_overrides();
+    (settings, partially_unreadable)
+}
+
+/// Keeps readable settings and defaults only invalid fields when a newer
+/// build writes a value this build does not understand.
+fn readable_toml_settings(document: toml::Value) -> BrowserSettings {
+    let toml::Value::Table(fields) = document else {
         return BrowserSettings::default();
     };
     let readable = fields
         .into_iter()
         .filter(|(key, value)| {
-            let single = serde_json::Map::from_iter([(key.clone(), value.clone())]);
-            serde_json::from_value::<BrowserSettings>(serde_json::Value::Object(single)).is_ok()
+            let single =
+                toml::Value::Table(toml::map::Map::from_iter([(key.clone(), value.clone())]));
+            single.try_into::<BrowserSettings>().is_ok()
         })
         .collect();
-    serde_json::from_value(serde_json::Value::Object(readable)).unwrap_or_default()
+    toml::Value::Table(readable)
+        .try_into::<BrowserSettings>()
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -465,10 +492,20 @@ mod tests {
 
     impl TemporaryProfile {
         fn new(name: &str) -> Self {
+            let root = Self::root(name);
+            Self(Profile::open(root).expect("profile opens"))
+        }
+
+        fn unmigrated(name: &str) -> Self {
+            let root = Self::root(name);
+            Self(Profile::create(root).expect("profile creates"))
+        }
+
+        fn root(name: &str) -> PathBuf {
             let root = std::env::temp_dir()
                 .join(format!("photon-storage-test-{name}-{}", std::process::id()));
             let _ = fs::remove_dir_all(&root);
-            Self(Profile::open(root).expect("profile opens"))
+            root
         }
     }
 
@@ -484,6 +521,24 @@ mod tests {
             height: 1,
             pixels: vec![1, 2, 3, 4, 5, 6, 7, 8],
         }
+    }
+
+    fn migrate_legacy_json(profile: &TemporaryProfile, contents: &[u8]) {
+        let legacy_path = profile.0.root().join("config.json");
+        fs::write(&legacy_path, contents).expect("writes legacy settings");
+        crate::migrations::run(&profile.0).expect("migrates legacy settings");
+        assert!(!legacy_path.exists());
+        assert!(profile.0.settings_path().exists());
+        let backup_prefix = "config.json.migrated-";
+        assert!(
+            fs::read_dir(profile.0.root())
+                .unwrap()
+                .filter_map(Result::ok)
+                .any(|entry| entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(backup_prefix))
+        );
     }
 
     #[test]
@@ -502,7 +557,7 @@ mod tests {
         let profile = TemporaryProfile::new("lenient");
         std::fs::write(
             profile.0.root().join(SETTINGS_FILE),
-            r#"{"show_full_address": true, "theme": "from-a-newer-build"}"#,
+            "show_full_address = true\ntheme = \"from-a-newer-build\"\n",
         )
         .unwrap();
         let settings = profile.0.load_settings();
@@ -568,7 +623,76 @@ mod tests {
                 .set_layout_override(space_id, &photon_core::WorkspaceLayout::vertical())
         );
         profile.0.save_settings(&settings).expect("saves");
+        assert_eq!(profile.0.settings_path().extension().unwrap(), "toml");
+        assert!(
+            fs::read_to_string(profile.0.settings_path())
+                .unwrap()
+                .contains("theme = \"dark\"")
+        );
         assert_eq!(profile.0.load_settings(), settings);
+    }
+
+    #[test]
+    fn opening_a_profile_migrates_older_settings_automatically() {
+        let root = TemporaryProfile::root("automatic-legacy-migration");
+        fs::create_dir_all(&root).expect("creates profile folder");
+        fs::write(root.join("Settings.json"), br#"{"theme":"dark"}"#).expect("writes old settings");
+
+        let profile = Profile::open(&root).expect("opens and migrates profile");
+
+        assert_eq!(profile.load_settings().theme, photon_core::ThemeMode::Dark);
+        assert!(profile.settings_path().exists());
+        assert!(!root.join("Settings.json").exists());
+        assert!(
+            fs::read_dir(&root)
+                .unwrap()
+                .filter_map(Result::ok)
+                .any(|entry| entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("Settings.json.migrated-"))
+        );
+        let reopened = Profile::open(&root).expect("reopens migrated profile");
+        assert_eq!(reopened.load_settings().theme, photon_core::ThemeMode::Dark);
+        let backup_count = fs::read_dir(&root)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("Settings.json.migrated-")
+            })
+            .count();
+        assert_eq!(backup_count, 1);
+        fs::remove_dir_all(root).expect("removes test profile");
+    }
+
+    #[test]
+    fn opening_a_profile_migrates_settings_next_to_its_profile() {
+        let base = TemporaryProfile::root("external-settings-migration");
+        let root = base.join("Default");
+        let settings_path = base.join("config.toml");
+        let legacy_path = base.join("config.json");
+        fs::create_dir_all(&base).expect("creates settings folder");
+        fs::write(&legacy_path, br#"{"theme":"dark"}"#).expect("writes old settings");
+
+        let profile = Profile::open_with_settings_path(&root, Some(settings_path.clone()))
+            .expect("opens and migrates profile");
+
+        assert_eq!(profile.load_settings().theme, photon_core::ThemeMode::Dark);
+        assert!(settings_path.exists());
+        assert!(!legacy_path.exists());
+        assert!(
+            fs::read_dir(&base)
+                .unwrap()
+                .filter_map(Result::ok)
+                .any(|entry| entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("config.json.migrated-"))
+        );
+        fs::remove_dir_all(base).expect("removes test profile");
     }
 
     #[test]
@@ -692,12 +816,8 @@ mod tests {
 
     #[test]
     fn migrates_a_legacy_vertical_layout_to_its_matching_preset() {
-        let profile = TemporaryProfile::new("legacy-vertical-layout");
-        fs::write(
-            profile.0.root().join(SETTINGS_FILE),
-            br#"{"theme":"dark","tab_layout":"vertical"}"#,
-        )
-        .expect("writes legacy settings");
+        let profile = TemporaryProfile::unmigrated("legacy-vertical-layout");
+        migrate_legacy_json(&profile, br#"{"theme":"dark","tab_layout":"vertical"}"#);
 
         let settings = profile.0.load_settings();
         assert_eq!(settings.theme, photon_core::ThemeMode::Dark);
@@ -715,9 +835,9 @@ mod tests {
 
     #[test]
     fn retains_legacy_workspace_presets_for_shell_expansion() {
-        let profile = TemporaryProfile::new("legacy-workspace-presets");
-        fs::write(
-            profile.0.root().join(SETTINGS_FILE),
+        let profile = TemporaryProfile::unmigrated("legacy-workspace-presets");
+        migrate_legacy_json(
+            &profile,
             br#"{
                 "tab_layout":"vertical",
                 "workspace":{
@@ -736,8 +856,7 @@ mod tests {
                     ]
                 }
             }"#,
-        )
-        .expect("writes the older workspace shape");
+        );
 
         let settings = profile.0.load_settings();
         assert_eq!(
@@ -759,12 +878,11 @@ mod tests {
 
     #[test]
     fn invalid_workspace_data_falls_back_without_losing_other_settings() {
-        let profile = TemporaryProfile::new("invalid-workspace");
-        fs::write(
-            profile.0.root().join(SETTINGS_FILE),
+        let profile = TemporaryProfile::unmigrated("invalid-workspace");
+        migrate_legacy_json(
+            &profile,
             br#"{"theme":"dark","tab_layout":"vertical","workspace":{"default_preset_id":"missing","presets":[]}}"#,
-        )
-        .expect("writes settings");
+        );
 
         let settings = profile.0.load_settings();
         assert_eq!(settings.theme, photon_core::ThemeMode::Dark);
@@ -776,12 +894,11 @@ mod tests {
 
     #[test]
     fn incomplete_workspace_data_migrates_the_legacy_layout() {
-        let profile = TemporaryProfile::new("incomplete-workspace");
-        fs::write(
-            profile.0.root().join(SETTINGS_FILE),
+        let profile = TemporaryProfile::unmigrated("incomplete-workspace");
+        migrate_legacy_json(
+            &profile,
             br#"{"theme":"dark","tab_layout":"vertical","workspace":{"presets":[]}}"#,
-        )
-        .expect("writes settings");
+        );
 
         let settings = profile.0.load_settings();
         assert_eq!(settings.theme, photon_core::ThemeMode::Dark);

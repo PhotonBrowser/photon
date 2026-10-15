@@ -1,19 +1,22 @@
 # Profile, settings, history and branding
 
-## The profile
+## Profile data and settings
 
 [`photon-storage`](../crates/photon-storage/src/lib.rs) owns the profile: one
 folder holding everything Photon keeps between launches.
 
-| In the profile | What it is |
+| File or folder | What it is |
 | --- | --- |
-| `Settings.json` | The browser settings |
+| `config.toml` | The browser settings |
 | `History.json` | Visited pages and past searches, versioned |
+| `Session.json` | Windows and tabs restored at launch |
 | `Favicons/` | The last icon each visited page showed |
 | `Engine/` | The Engine's cookies, site storage and cache |
 
 The default profile is in the platform's application data folder, under the
 brand's folder name (`~/Library/Application Support/Photon/Default` on macOS).
+By default, `config.toml` is in the platform's configuration folder; when
+`PHOTON_PROFILE_DIR` selects an isolated profile, settings are stored there.
 `PHOTON_PROFILE_DIR` chooses another folder, and `PHOTON_TEMPORARY_PROFILE`
 runs a throwaway session that saves nothing.
 
@@ -33,24 +36,27 @@ unused tabs close. `animations` configures all shell entrances, exits and
 sidebar tweens: enable or disable motion, set quick, standard and gentle
 durations, scale slide, blur and icon growth effects, and tune native traffic
 light fade-in and fade-out durations, plus the loading spinner's delay and
-cadence. For example, add this object to `Settings.json` in the profile
-directory:
+cadence. For example, add this section to `config.toml`:
 
-```json
-"animations": {
-  "enabled": true,
-  "quick_duration_ms": 120,
-  "standard_duration_ms": 200,
-  "gentle_duration_ms": 320,
-  "effect_strength_percent": 100,
-  "traffic_light_fade_in_ms": 320,
-  "traffic_light_fade_out_ms": 320,
-  "loading_spinner_delay_ms": 150,
-  "spinner_step_interval_ms": 80
-}
+```toml
+[animations]
+enabled = true
+quick_duration_ms = 120
+standard_duration_ms = 200
+gentle_duration_ms = 320
+effect_strength_percent = 100
+traffic_light_fade_in_ms = 320
+traffic_light_fade_out_ms = 320
+loading_spinner_delay_ms = 150
+spinner_step_interval_ms = 80
 ```
 
 Fields have serde defaults, so a profile saved by an older build still loads.
+When a profile opens, `photon-storage` runs pending migrations in order and
+records the completed version in `.photon-profile-version`. The first migration
+converts old `config.json` or `Settings.json` settings to TOML and keeps the
+source as a timestamped backup. Future profile migrations are added as the next
+ordered step. History and session data remain JSON files.
 Profile-wide favourites from older settings migrate into the active space.
 `reset_preferences` returns everything to its default but the shortcuts and
 spaces, whose favourites and pinned tabs stay while their colours and
