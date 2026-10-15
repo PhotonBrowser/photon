@@ -54,6 +54,12 @@ pub(super) mod distance {
 
 const PRESS_SCALE: f32 = 0.97;
 const PRESS_SPRING: SpringConfig = SpringConfig::new(480.0, 44.0, 1.0);
+pub(super) const CONTROL_THUMB_HELD_STRETCH_X: f32 = 1.2;
+/// Maximum track extension as a fraction of thumb width, leaving room for the
+/// held thumb extension inside the slider's half-thumb end inset.
+pub(super) const SLIDER_EDGE_STRETCH_MAX: f32 = 0.3;
+pub(super) const SLIDER_EDGE_STRETCH_SPEED_THRESHOLD: f32 = 700.0;
+pub(super) const SLIDER_EDGE_STRETCH_SPEED_RANGE: f32 = 1_500.0;
 
 /// The blur radius an element sharpens from as it comes into focus, in pixels.
 const FOCUS_BLUR: f32 = 6.0;
@@ -476,9 +482,47 @@ impl<E: Styled + IntoElement + 'static> AnimateIn for E {}
 
 /// Adds a small, eased scale response while a pointer or touch press is active.
 pub(super) fn pressable<E: StatefulInteractiveElement + Styled>(element: E) -> E {
-    element
-        .transitions(|transitions| transitions.scale(Motion::spring(PRESS_SPRING)))
-        .active(|style| style.scale(PRESS_SCALE))
+    scale_transition(element).active(|style| style.scale(PRESS_SCALE))
+}
+
+/// Adds the shared spring used by controls that scale while pressed.
+pub(super) fn scale_transition<E: StatefulInteractiveElement + Styled>(element: E) -> E {
+    element.transitions(|transitions| transitions.scale(Motion::spring(PRESS_SPRING)))
+}
+
+fn control_stretch_motion(settings: &AnimationSettings) -> Motion {
+    Curve::EaseOut.motion(Speed::Quick.duration(settings))
+}
+
+/// Applies the same bounded easing to track stretch and its directional offset.
+pub(super) fn control_scale_transition<E: StatefulInteractiveElement + Styled>(
+    element: E,
+    tracking: bool,
+    settings: &AnimationSettings,
+) -> E {
+    let motion = if tracking {
+        Motion::new(Duration::ZERO)
+    } else {
+        control_stretch_motion(settings)
+    };
+    element.transitions(|transitions| transitions.scale(motion.clone()).left(motion))
+}
+
+/// Moves a control between states with the same bounded easing used by its thumb.
+pub(super) fn control_left_transition<E: StatefulInteractiveElement + Styled>(
+    element: E,
+    settings: &AnimationSettings,
+) -> E {
+    element.transitions(|transitions| transitions.left(control_stretch_motion(settings)))
+}
+
+/// Animates a reusable thumb's width and offset with the same bounded easing.
+pub(super) fn control_thumb_transition<E: StatefulInteractiveElement + Styled>(
+    element: E,
+    settings: &AnimationSettings,
+) -> E {
+    let motion = control_stretch_motion(settings);
+    element.transitions(|transitions| transitions.w(motion.clone()).left(motion))
 }
 
 /// Keeps a value on screen while it animates out after its owner drops it.

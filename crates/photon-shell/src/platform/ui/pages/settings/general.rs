@@ -53,7 +53,7 @@ fn config_file(palette: ThemeColors, cx: &App) -> impl IntoElement {
         .gap(px(metrics::MENU_ITEM_GAP))
         .child(group(palette).child(control_row("Configuration", control)))
         .child(secondary_text(
-            "Edit browser preferences in config.json.",
+            "Edit browser preferences in config.toml.",
             palette,
         ))
 }

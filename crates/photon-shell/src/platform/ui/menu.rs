@@ -14,6 +14,8 @@ use super::{metrics, theme::ThemeColors};
 use super::ClickHandler;
 use super::controls::FocusRing;
 use super::controls::OwnsClicks;
+use std::cell::Cell;
+use std::rc::Rc;
 
 /// How menus open and close.
 pub(super) const MENU_MOTION: Entrance = Entrance::popover();
@@ -106,10 +108,24 @@ pub(super) fn menu_switch(
     on_toggle: ClickHandler,
     palette: ThemeColors,
 ) -> impl IntoElement {
+    let on_toggle = Rc::new(on_toggle);
+    let row_toggle = on_toggle.clone();
+    let dragged = Rc::new(Cell::new(false));
+    let row_dragged_on_down = dragged.clone();
+    let row_dragged_on_click = dragged.clone();
     menu_item(id, label, tab_index, Role::MenuItemCheckBox, palette)
         .aria_toggled(toggled(on))
-        .child(switch(id, on, palette))
-        .on_click(on_toggle)
+        .child(switch(id, on, palette, None, on_toggle, dragged))
+        .on_mouse_down_all(move |event, phase, _, _, _| {
+            if phase == gpui::DispatchPhase::Capture && event.button == gpui::MouseButton::Left {
+                row_dragged_on_down.set(false);
+            }
+        })
+        .on_click(move |event, window, cx| {
+            if !row_dragged_on_click.replace(false) {
+                row_toggle(event, window, cx);
+            }
+        })
 }
 
 /// A small heading over the rows or control that follow it.

@@ -1,13 +1,17 @@
 //! Settings rows for Photon's own pages: a label with a switch or checkbox,
 //! the whole row clickable.
 
-use gpui::{ElementId, Role, SharedString, Stateful, prelude::*, px, rgb, rgba};
+use gpui::{
+    ElementId, Role, SharedString, Stateful, StatefulInteractiveElement, prelude::*, px, rgb, rgba,
+};
 
 use super::super::controls::FocusRing;
 use super::super::controls::{OwnsClicks, Pressable};
 use super::super::controls::{check_mark, switch, toggled};
 use super::super::layout::h_stack;
 use super::super::{ClickHandler, metrics, theme::ThemeColors};
+use std::cell::Cell;
+use std::rc::Rc;
 
 /// A labelled on/off switch.
 pub(super) fn switch_row(
@@ -17,7 +21,40 @@ pub(super) fn switch_row(
     palette: ThemeColors,
     on_toggle: ClickHandler,
 ) -> impl IntoElement {
-    row(id, label, Role::Switch, on, palette, on_toggle).child(switch(id, on, palette))
+    let on_toggle = Rc::new(on_toggle);
+    let row_toggle = on_toggle.clone();
+    let dragged = Rc::new(Cell::new(false));
+    let row_dragged_on_down = dragged.clone();
+    let row_dragged_on_click = dragged.clone();
+    h_stack()
+        .id(ElementId::Name(format!("{id}-row").into()))
+        .items_center()
+        .justify_between()
+        .gap(px(metrics::INTERNAL_PAGE_GROUP_GAP))
+        .w_full()
+        .h(px(metrics::SETTINGS_ROW_HEIGHT))
+        .px(px(metrics::MENU_ITEM_HORIZONTAL_PADDING))
+        .rounded(px(metrics::CONTROL_RADIUS))
+        .text_size(px(metrics::INTERNAL_PAGE_BODY_SIZE))
+        .text_color(rgb(palette.text_primary))
+        .owns_clicks()
+        .on_mouse_down_all(move |event, phase, _, _, _| {
+            if phase == gpui::DispatchPhase::Capture && event.button == gpui::MouseButton::Left {
+                row_dragged_on_down.set(false);
+            }
+        })
+        .on_click(move |event, window, cx| {
+            if !row_dragged_on_click.replace(false) {
+                row_toggle(event, window, cx);
+            }
+        })
+        .child(
+            gpui::div()
+                .id(ElementId::Name(format!("{id}-label").into()))
+                .aria_hidden()
+                .child(label),
+        )
+        .child(switch(id, on, palette, Some(label), on_toggle, dragged))
 }
 
 /// A label with a control that is not part of the row, such as a button.
