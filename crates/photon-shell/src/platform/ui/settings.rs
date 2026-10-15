@@ -34,17 +34,26 @@ pub(super) struct Settings {
 
 impl Global for Settings {}
 
-/// Loads the settings saved in `profile` and keeps them saved there.
-pub(in crate::platform) fn load_settings(profile: Option<Profile>, cx: &mut App) {
-    let mut settings = profile
-        .as_ref()
-        .map(Profile::load_settings)
-        .unwrap_or_default();
+/// Installs settings already loaded off the application thread and keeps them
+/// saved in `profile`.
+pub(in crate::platform) fn load_settings(
+    profile: Option<Profile>,
+    mut settings: BrowserSettings,
+    cx: &mut App,
+) {
     if settings.migrate_legacy_favourites()
         && let Some(profile) = &profile
-        && let Err(error) = profile.save_settings(&settings)
     {
-        trace(format_args!("saving migrated favourites: {error}"));
+        let profile = profile.clone();
+        let settings = settings.clone();
+        let ticket = profile.begin_settings_write();
+        cx.background_executor()
+            .spawn(async move {
+                if let Err(error) = profile.save_settings_if_current(ticket, &settings) {
+                    trace(format_args!("saving migrated favourites: {error}"));
+                }
+            })
+            .detach();
     }
     // A search engine this build does not know falls back to the default.
     if SearchEngines::builtin()

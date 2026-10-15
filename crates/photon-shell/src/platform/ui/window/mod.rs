@@ -51,6 +51,7 @@ use super::super::window_observer::WindowObserver;
 use super::super::window_settings;
 use super::command_bar::CommandBar;
 use super::find_bar::FindBar;
+use super::history::BrowsingHistory;
 use super::js_dialog::DialogHost;
 use super::motion::Presence;
 use super::omnibox::{Omnibox, OmniboxEvent};
@@ -78,6 +79,8 @@ struct BrowserWindow {
     /// The New Tab page shown while the window has no tabs.
     empty_page: Option<TabContent>,
     _empty_page_subscription: Option<Subscription>,
+    /// Rebuilds tab and favourite icons after an asynchronous disk load.
+    _history_subscription: Subscription,
     /// The sidebar, cached so Engine frames repaint only the page.
     chrome: Entity<BrowserChrome>,
     /// Menus and dialogs over the window, cached for the same reason.
@@ -461,6 +464,7 @@ fn open_browser_window_at(
                     this.follow_space(window, cx);
                     this.settings_changed(window, cx);
                 });
+            let history_subscription = cx.observe_global::<BrowsingHistory>(|_, cx| cx.notify());
             let browser = cx.entity().downgrade();
             let chrome = cx.new(|_| BrowserChrome {
                 browser: browser.clone(),
@@ -503,6 +507,7 @@ fn open_browser_window_at(
                 tab_subscriptions: Vec::new(),
                 empty_page: None,
                 _empty_page_subscription: None,
+                _history_subscription: history_subscription,
                 chrome,
                 overlays,
                 sidebar: SidebarState::new(cx),

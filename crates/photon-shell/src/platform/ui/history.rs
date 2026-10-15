@@ -29,18 +29,22 @@ pub(super) struct BrowsingHistory {
     profile: Option<Profile>,
     /// Icons by page address. `None` records that the page has no saved icon.
     favicons: HashMap<String, Option<Favicon>>,
+    /// Loads keyed by page address, so a redraw shares an in-flight read.
+    favicon_loads: HashMap<String, u64>,
+    next_favicon_load: u64,
     /// The pending save.
     save: Option<Task<()>>,
 }
 
 impl Global for BrowsingHistory {}
 
-/// Loads the history saved in `profile` and keeps it saved there.
-pub(in crate::platform) fn load_browsing_history(profile: Option<Profile>, cx: &mut App) {
-    let history = profile
-        .as_ref()
-        .map(Profile::load_history)
-        .unwrap_or_default();
+/// Installs history already loaded off the application thread and keeps it
+/// saved in `profile`.
+pub(in crate::platform) fn load_browsing_history(
+    profile: Option<Profile>,
+    history: History,
+    cx: &mut App,
+) {
     cx.set_global(BrowsingHistory {
         history,
         profile,
@@ -98,29 +102,44 @@ impl BrowsingHistory {
             .spawn(async move { profile.map(|profile| profile.data_usage()) })
     }
 
-    /// The icon `url` showed when last visited, loading it from the profile
-    /// the first time it is asked for.
+    /// The icon `url` showed when last visited, loading it from the profile in
+    /// the background the first time it is asked for.
     pub(super) fn favicon(url: &str, cx: &mut App) -> Option<Favicon> {
-        // Drawing asks for icons every frame; answer from memory without
-        // touching the global once an icon has been looked up.
-        if let Some(known) = cx
-            .try_global::<Self>()
-            .and_then(|browsing| browsing.favicons.get(url))
-        {
-            return known.clone();
-        }
-        Self::update(cx, |browsing, _| {
+        let (cached, request) = Self::update(cx, |browsing, _| {
             if let Some(favicon) = browsing.favicons.get(url) {
-                return favicon.clone();
+                return (favicon.clone(), None);
             }
-            let favicon = browsing
-                .profile
-                .as_ref()
-                .and_then(|profile| profile.load_favicon(url))
-                .and_then(Favicon::from_pixels);
-            browsing.favicons.insert(url.to_owned(), favicon.clone());
-            favicon
-        })
+            let Some(profile) = browsing.profile.clone() else {
+                browsing.favicons.insert(url.to_owned(), None);
+                return (None, None);
+            };
+            let Some(request_id) = browsing.reserve_favicon_load(url) else {
+                return (None, None);
+            };
+            (None, Some((profile, request_id)))
+        });
+        if let Some((profile, request_id)) = request {
+            let url = url.to_owned();
+            let read_url = url.clone();
+            let read = cx
+                .background_executor()
+                .spawn(async move { profile.load_favicon(&read_url) });
+            let app = cx.to_async();
+            app.spawn(async move |cx| {
+                let favicon = read.await.and_then(Favicon::from_pixels);
+                update_app(cx, move |cx| {
+                    if !cx.has_global::<Self>() {
+                        return;
+                    }
+                    cx.update_global::<Self, _>(|browsing, _| {
+                        Self::complete_favicon_load(Some(browsing), &url, request_id, favicon);
+                    });
+                })
+                .await;
+            })
+            .detach();
+        }
+        cached
     }
 
     pub(super) fn record_visit(url: &str, title: &str, cx: &mut App) {
@@ -144,6 +163,7 @@ impl BrowsingHistory {
     /// Keeps `url`'s icon, saving it when it differs from the one kept.
     pub(super) fn set_favicon(url: &str, favicon: &Favicon, cx: &mut App) {
         Self::update(cx, |browsing, cx| {
+            browsing.favicon_loads.remove(url);
             let known = browsing.favicons.get(url).and_then(Option::as_ref);
             if known.is_some_and(|known| known.key == favicon.key) {
                 return;
@@ -167,7 +187,10 @@ impl BrowsingHistory {
 
     /// Forgets a visited page and its icon.
     pub(super) fn remove_page(url: &str, cx: &mut App) {
-        Self::update(cx, |browsing, _| browsing.favicons.remove(url));
+        Self::update(cx, |browsing, _| {
+            browsing.favicons.remove(url);
+            browsing.favicon_loads.remove(url);
+        });
         Self::change(cx, |history| {
             history.remove_page(url);
             true
@@ -197,7 +220,10 @@ impl BrowsingHistory {
             true
         });
         if request.history {
-            Self::update(cx, |browsing, _| browsing.favicons.clear());
+            Self::update(cx, |browsing, _| {
+                browsing.favicons.clear();
+                browsing.favicon_loads.clear();
+            });
             Self::prune_favicons(cx);
         }
         let app = cx.to_async();
@@ -258,6 +284,33 @@ impl BrowsingHistory {
         let ticket = profile.begin_history_write();
         Some((profile, self.history.clone(), ticket))
     }
+
+    fn reserve_favicon_load(&mut self, url: &str) -> Option<u64> {
+        if self.favicon_loads.contains_key(url) {
+            return None;
+        }
+        self.next_favicon_load = self.next_favicon_load.wrapping_add(1);
+        let request_id = self.next_favicon_load;
+        self.favicon_loads.insert(url.to_owned(), request_id);
+        Some(request_id)
+    }
+
+    fn complete_favicon_load(
+        owner: Option<&mut Self>,
+        url: &str,
+        request_id: u64,
+        favicon: Option<Favicon>,
+    ) -> bool {
+        let Some(owner) = owner else {
+            return false;
+        };
+        if owner.favicon_loads.get(url) != Some(&request_id) {
+            return false;
+        }
+        owner.favicon_loads.remove(url);
+        owner.favicons.insert(url.to_owned(), favicon);
+        true
+    }
 }
 
 fn write_history(profile: &Profile, history: &History, ticket: ProfileWriteTicket) {
@@ -271,4 +324,68 @@ fn now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_secs())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BrowsingHistory;
+
+    #[test]
+    fn favicon_loads_coalesce_by_url() {
+        let mut history = BrowsingHistory::default();
+
+        let request = history
+            .reserve_favicon_load("https://example.com/")
+            .expect("reserves first load");
+
+        assert_eq!(history.reserve_favicon_load("https://example.com/"), None);
+        assert_eq!(history.favicon_loads.len(), 1);
+        assert_eq!(
+            history.favicon_loads.get("https://example.com/"),
+            Some(&request)
+        );
+    }
+
+    #[test]
+    fn stale_or_closed_favicon_loads_are_ignored() {
+        let mut history = BrowsingHistory::default();
+        let url = "https://example.com/";
+        let stale_request = history.reserve_favicon_load(url).expect("reserves load");
+        history.favicon_loads.remove(url);
+        let current_request = history
+            .reserve_favicon_load(url)
+            .expect("reserves replacement");
+
+        assert!(!BrowsingHistory::complete_favicon_load(
+            Some(&mut history),
+            url,
+            stale_request,
+            None,
+        ));
+        assert!(history.favicon_loads.contains_key(url));
+        assert!(!BrowsingHistory::complete_favicon_load(
+            None,
+            url,
+            current_request,
+            None,
+        ));
+        assert!(history.favicon_loads.contains_key(url));
+    }
+
+    #[test]
+    fn favicon_load_completion_caches_missing_and_failed_results() {
+        let mut history = BrowsingHistory::default();
+        let url = "https://example.com/";
+        let request = history.reserve_favicon_load(url).expect("reserves load");
+
+        assert!(BrowsingHistory::complete_favicon_load(
+            Some(&mut history),
+            url,
+            request,
+            None,
+        ));
+        assert!(history.favicon_loads.is_empty());
+        assert!(history.favicons.contains_key(url));
+        assert!(matches!(history.favicons.get(url), Some(None)));
+    }
 }

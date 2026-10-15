@@ -1640,6 +1640,16 @@ mod tests {
     }
 
     #[test]
+    fn missing_or_unreadable_icons_are_ignored() {
+        let profile = TemporaryProfile::new("missing-or-unreadable-favicon");
+        assert_eq!(profile.0.load_favicon("https://missing.example/"), None);
+
+        let path = favicons::path(&profile.0.favicons_dir(), "https://unreadable.example/");
+        fs::create_dir_all(&path).expect("creates an unreadable icon path");
+        assert_eq!(profile.0.load_favicon("https://unreadable.example/"), None);
+    }
+
+    #[test]
     fn clears_history_and_reports_usage() {
         let profile = TemporaryProfile::new("clear");
         let mut history = History::default();

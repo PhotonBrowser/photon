@@ -3,11 +3,11 @@
 use gpui::{App, QuitMode};
 use gpui_elements::editable_text::actions::{DEFAULT_INPUT_CONTEXT, default_bindings};
 use gpui_platform::application;
+use photon_core::{BrowserSettings, History, Session};
 use photon_shortcuts::{NewWindow, browser_shortcuts};
 use std::rc::Rc;
 use std::time::Duration;
 
-#[cfg(not(feature = "ui-only"))]
 use super::super::super::app_update::update_app;
 use super::super::super::engine::EngineRuntime;
 use super::super::history::load_browsing_history;
@@ -23,6 +23,13 @@ use super::session::load_session;
 use super::session::restore_session;
 use super::{BrowserWindow, BrowserWindowRegistry, open_browser_window};
 use photon_storage::Profile;
+
+struct LoadedProfileState {
+    profile: Option<Profile>,
+    settings: BrowserSettings,
+    history: History,
+    session: Session,
+}
 
 pub fn run() {
     let automation_launch = match AutomationLaunch::from_process_arguments() {
@@ -55,102 +62,149 @@ pub fn run() {
         // Keep browser actions and their default bindings in the shortcuts crate.
         cx.bind_keys(browser_shortcuts());
         crate::platform::motion_observer::follow(cx);
-        let profile = open_profile();
-        load_settings(profile.clone(), cx);
-        #[cfg(feature = "ui-only")]
-        let runtime = Rc::new(EngineRuntime::without_engine());
-        #[cfg(not(feature = "ui-only"))]
-        let runtime = Rc::new(
-            EngineRuntime::create(
-                profile
-                    .as_ref()
-                    .map(|profile| profile.engine_dir())
-                    .as_deref(),
-            )
-            .unwrap_or_else(|error| panic!("could not start Photon Engine: {error:#}")),
-        );
-        follow_settings(&runtime, cx);
-        #[cfg(feature = "ui-only")]
-        load_session(None, cx);
-        #[cfg(not(feature = "ui-only"))]
-        let saved_session = load_session(profile.clone(), cx);
-        load_browsing_history(profile, cx);
-        #[cfg(not(feature = "ui-only"))]
-        announce_service_restarts(&runtime, cx);
         quit_after_env_timeout(cx);
         crate::platform::app_menus::install_app_menus(cx);
-        let new_window_runtime = runtime.clone();
-        cx.on_action(move |_: &NewWindow, cx| {
-            cx.activate(true);
-            if let Err(error) =
-                open_browser_window(new_window_runtime.clone(), launch_address(), false, cx)
-            {
-                crate::platform::trace(format_args!("new window: {error:#}"));
-            }
-        });
-        cx.on_action(|item: &RunMenuCommand, cx| {
-            let command = item.clone();
-            let Some(window) = cx
-                .active_window()
-                .and_then(|window| window.downcast::<BrowserWindow>())
-            else {
-                return;
-            };
-            // Native menu actions are validated independently of the focused
-            // view, then dispatched through the app. Defer window access until
-            // that dispatch has released its current window update.
-            cx.defer(move |cx| {
-                window
-                    .update(cx, |browser, window, cx| {
-                        browser.run_menu_command(&command, window, cx);
-                    })
-                    .ok();
-            });
-        });
-        cx.on_action(|item: &ActivatePageMenuItem, cx| {
-            let item = item.clone();
-            let Some(window) = cx
-                .active_window()
-                .and_then(|window| window.downcast::<BrowserWindow>())
-            else {
-                return;
-            };
-            cx.defer(move |cx| {
-                window
-                    .update(cx, |browser, _, cx| {
-                        browser.activate_page_menu_item(&item, cx);
-                    })
-                    .ok();
-            });
-        });
         install_form_controls(cx);
-        #[cfg(not(feature = "ui-only"))]
-        open_received_urls(opened_urls, runtime.clone(), cx);
-        cx.activate(true);
-        #[cfg(feature = "ui-only")]
-        open_browser_window(
-            runtime,
-            Some(photon_core::internal_page_url("newtab")),
-            false,
-            cx,
-        )
-        .expect("open UI-only Photon window");
-        #[cfg(not(feature = "ui-only"))]
-        {
-            // An address to open starts afresh; otherwise last time's windows
-            // come back, or a new one opens.
-            let address = initial_address();
-            if address.is_some() || !restore_session(&saved_session, &runtime, cx) {
-                open_browser_window(runtime, address, true, cx)
-                    .expect("open GPUI-CE Photon window");
-            }
-        }
-        if let Some(launch) = automation_launch {
-            super::automation::install(launch, cx).unwrap_or_else(|error| {
-                panic!("could not start Photon automation server: {error}")
-            });
-        }
+        let profile_state = cx
+            .background_executor()
+            .spawn(async move { load_profile_state() });
+        cx.spawn(async move |cx| {
+            let loaded = profile_state.await;
+            let _ = update_app(cx, move |cx| {
+                let LoadedProfileState {
+                    profile,
+                    settings,
+                    history,
+                    session,
+                } = loaded;
+                load_settings(profile.clone(), settings, cx);
+                load_browsing_history(profile.clone(), history, cx);
+                #[cfg(feature = "ui-only")]
+                let _ = load_session(None, session, cx);
+                #[cfg(not(feature = "ui-only"))]
+                let saved_session = load_session(profile.clone(), session, cx);
+
+                #[cfg(feature = "ui-only")]
+                let runtime = Rc::new(EngineRuntime::without_engine());
+                #[cfg(not(feature = "ui-only"))]
+                let runtime = Rc::new(
+                    EngineRuntime::create(
+                        profile
+                            .as_ref()
+                            .map(|profile| profile.engine_dir())
+                            .as_deref(),
+                    )
+                    .unwrap_or_else(|error| panic!("could not start Photon Engine: {error:#}")),
+                );
+                follow_settings(&runtime, cx);
+                #[cfg(not(feature = "ui-only"))]
+                announce_service_restarts(&runtime, cx);
+
+                let new_window_runtime = runtime.clone();
+                cx.on_action(move |_: &NewWindow, cx| {
+                    cx.activate(true);
+                    if let Err(error) =
+                        open_browser_window(new_window_runtime.clone(), launch_address(), false, cx)
+                    {
+                        crate::platform::trace(format_args!("new window: {error:#}"));
+                    }
+                });
+                cx.on_action(|item: &RunMenuCommand, cx| {
+                    let command = item.clone();
+                    let Some(window) = cx
+                        .active_window()
+                        .and_then(|window| window.downcast::<BrowserWindow>())
+                    else {
+                        return;
+                    };
+                    // Native menu actions are validated independently of the focused
+                    // view, then dispatched through the app. Defer window access until
+                    // that dispatch has released its current window update.
+                    cx.defer(move |cx| {
+                        window
+                            .update(cx, |browser, window, cx| {
+                                browser.run_menu_command(&command, window, cx);
+                            })
+                            .ok();
+                    });
+                });
+                cx.on_action(|item: &ActivatePageMenuItem, cx| {
+                    let item = item.clone();
+                    let Some(window) = cx
+                        .active_window()
+                        .and_then(|window| window.downcast::<BrowserWindow>())
+                    else {
+                        return;
+                    };
+                    cx.defer(move |cx| {
+                        window
+                            .update(cx, |browser, _, cx| {
+                                browser.activate_page_menu_item(&item, cx);
+                            })
+                            .ok();
+                    });
+                });
+
+                #[cfg(not(feature = "ui-only"))]
+                open_received_urls(opened_urls, runtime.clone(), cx);
+                cx.activate(true);
+                #[cfg(feature = "ui-only")]
+                open_browser_window(
+                    runtime,
+                    Some(photon_core::internal_page_url("newtab")),
+                    false,
+                    cx,
+                )
+                .expect("open UI-only Photon window");
+                #[cfg(not(feature = "ui-only"))]
+                {
+                    // An address to open starts afresh; otherwise last time's windows
+                    // come back, or a new one opens.
+                    let address = initial_address();
+                    if address.is_some() || !restore_session(&saved_session, &runtime, cx) {
+                        open_browser_window(runtime, address, true, cx)
+                            .expect("open GPUI-CE Photon window");
+                    }
+                }
+                if let Some(launch) = automation_launch {
+                    super::automation::install(launch, cx).unwrap_or_else(|error| {
+                        panic!("could not start Photon automation server: {error}")
+                    });
+                }
+            })
+            .await;
+        })
+        .detach();
     });
+}
+
+fn load_profile_state() -> LoadedProfileState {
+    let profile = open_profile();
+    let settings = profile
+        .as_ref()
+        .map(Profile::load_settings)
+        .unwrap_or_default();
+    let history = profile
+        .as_ref()
+        .map(Profile::load_history)
+        .unwrap_or_default();
+    #[cfg(not(feature = "ui-only"))]
+    let session = if settings.restore_session {
+        profile
+            .as_ref()
+            .map(Profile::load_session)
+            .unwrap_or_default()
+    } else {
+        Session::default()
+    };
+    #[cfg(feature = "ui-only")]
+    let session = Session::default();
+    LoadedProfileState {
+        profile,
+        settings,
+        history,
+        session,
+    }
 }
 
 /// Applies the settings that belong to the whole app, now and whenever they

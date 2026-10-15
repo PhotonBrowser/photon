@@ -98,6 +98,7 @@ pub(super) struct Omnibox {
     /// The next edit removes text, so it is not completed again.
     deleting: bool,
     _input_subscriptions: [Subscription; 3],
+    _history_subscription: Subscription,
     _page_subscriptions: Vec<Subscription>,
 }
 
@@ -125,6 +126,8 @@ impl Omnibox {
                 }
             }),
         ];
+        let history_subscription =
+            cx.observe_global::<BrowsingHistory>(|this, cx| this.text_changed(cx));
         let mut omnibox = Self {
             input,
             webview: None,
@@ -140,6 +143,7 @@ impl Omnibox {
             filled: None,
             deleting: false,
             _input_subscriptions: input_subscriptions,
+            _history_subscription: history_subscription,
             _page_subscriptions: Vec::new(),
         };
         omnibox.set_content(None, None, window, cx);

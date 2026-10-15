@@ -57,6 +57,7 @@ pub(super) struct CommandBar {
     /// The row Enter chooses.
     selected: usize,
     _input_subscriptions: [Subscription; 2],
+    _history_subscription: Subscription,
 }
 
 impl CommandBar {
@@ -74,6 +75,8 @@ impl CommandBar {
             }),
             cx.observe(&input, |_, _, cx| cx.notify()),
         ];
+        let history_subscription =
+            cx.observe_global::<BrowsingHistory>(|this, cx| this.update_results(cx));
         window.focus(&input.focus_handle(cx), cx);
         let mut bar = Self {
             input,
@@ -82,6 +85,7 @@ impl CommandBar {
             results: Vec::new(),
             selected: 0,
             _input_subscriptions: input_subscriptions,
+            _history_subscription: history_subscription,
         };
         bar.update_results(cx);
         bar

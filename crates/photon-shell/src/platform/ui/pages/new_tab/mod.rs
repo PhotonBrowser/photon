@@ -50,6 +50,7 @@ pub(in super::super) struct NewTabPage {
     /// Keeps the closed form drawn while it fades away.
     adding_presence: Presence<ShortcutForm>,
     _settings_observer: Subscription,
+    _history_observer: Subscription,
 }
 
 impl NewTabPage {
@@ -64,6 +65,7 @@ impl NewTabPage {
             adding_presence: Presence::default(),
             // Follow changes made here, in settings, or in another window.
             _settings_observer: cx.observe_global::<Settings>(|_, cx| cx.notify()),
+            _history_observer: cx.observe_global::<BrowsingHistory>(|_, cx| cx.notify()),
         }
     }
 

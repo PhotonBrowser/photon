@@ -17,10 +17,10 @@ use std::time::Duration;
 
 #[cfg(not(feature = "ui-only"))]
 use super::super::super::engine::EngineRuntime;
+#[cfg(not(feature = "ui-only"))]
 use super::super::super::trace;
 #[cfg(not(feature = "ui-only"))]
 use super::super::pages::find_page;
-use super::super::settings::Settings;
 use super::BrowserWindow;
 use super::command_bar::tab_summary;
 #[cfg(not(feature = "ui-only"))]
@@ -92,14 +92,8 @@ fn write_session(profile: &Profile, session: &Session, ticket: ProfileWriteTicke
     }
 }
 
-/// Keeps the session in `profile`, and returns the one saved last time when
-/// the settings ask for it to be reopened.
-pub(super) fn load_session(profile: Option<Profile>, cx: &mut App) -> Session {
-    let saved = profile
-        .as_ref()
-        .filter(|_| Settings::get(cx).restore_session)
-        .map(Profile::load_session)
-        .unwrap_or_default();
+/// Installs the session already loaded off the application thread.
+pub(super) fn load_session(profile: Option<Profile>, saved: Session, cx: &mut App) -> Session {
     cx.set_global(BrowsingSession {
         profile,
         ..BrowsingSession::default()
