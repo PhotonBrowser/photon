@@ -37,6 +37,7 @@ What the Photon shell does today and what comes next. Engine performance work is
 - [x] Page favicons from the Engine, a globe for pages without one, the brand logo for new tabs, and a symbol for each of the browser's own pages
 - [x] Icons scale in once when a new icon appears
 - [x] Reopen closed tabs (last 25 per window)
+- [x] Restore open windows and tabs from the profile at launch, with a Settings toggle
 - [x] Peek, as in Arc: Shift-click a link to preview it over the page, then close it (Escape or a click outside) or keep it as a tab without reloading
 - [x] Middle-click to close, drag to reorder, and a right-click menu: reload, duplicate, close, close others, close to the right
 
@@ -111,11 +112,18 @@ See the [customization architecture and delivery plan](Customization.md).
 
 ## Later
 
+- [ ] Add native ad and tracker blocking with per-site controls and element hiding; request filtering must use an explicit Photon Engine API, with bounded rule compilation and updates
+- [ ] Add private windows backed by isolated, ephemeral Engine profiles; private browsing data must not be written into the regular profile
+- [ ] Add a native bookmark manager with folders, search, and links kept separate from pinned tabs and favourites
 - [ ] History page
-- [ ] Bookmarks
-- [ ] Downloads
-- [ ] File upload pickers and permission prompts
+- [ ] Import bookmarks and browsing history from supported browsers, with category selection, preview, validation, and duplicate handling
+- [ ] Add a download manager with native destination selection, progress, cancellation, and safe filename handling
+- [ ] Add file upload pickers and permission prompts through explicit Engine and native APIs
 - [ ] Hover link status
-- [ ] Session restore
-- [ ] Private windows
 - [ ] Full-screen pages and video
+- [ ] Add user-owned Markdown notes linked to the current page, with external file edits reflected in Photon
+- [ ] Add opt-in, local-only time reports and focus sessions; count active browsing from state transitions and exclude private windows
+
+### Deferred product directions
+
+A full agent Work environment and Chrome extension compatibility are not current roadmap commitments. Any future agent workflow should keep progress and results visible and require approval for state-changing actions. Extension support needs a dedicated security review and explicit Photon Engine APIs; Zephium's Tauri and system-WebView integration is not directly portable.
