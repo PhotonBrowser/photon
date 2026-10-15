@@ -5,6 +5,8 @@ use std::collections::HashSet;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 
 use super::favicons::{self, FaviconPixels};
 use super::{atomic, history_file};
@@ -39,6 +41,48 @@ impl DataUsage {
 pub struct Profile {
     root: PathBuf,
     settings_path: PathBuf,
+    writes: Arc<ProfileWrites>,
+}
+
+/// Identifies a replaceable profile snapshot when it is scheduled for saving.
+/// A newer ticket makes an older queued snapshot safe to skip.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ProfileWriteTicket {
+    kind: SnapshotKind,
+    generation: u64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SnapshotKind {
+    Settings,
+    History,
+    Session,
+}
+
+#[derive(Debug, Default)]
+struct ProfileWrites {
+    settings_generation: AtomicU64,
+    history_generation: AtomicU64,
+    session_generation: AtomicU64,
+    serial: Mutex<()>,
+}
+
+impl ProfileWrites {
+    fn reserve(&self, kind: SnapshotKind) -> ProfileWriteTicket {
+        let generation = self
+            .generation(kind)
+            .fetch_add(1, Ordering::AcqRel)
+            .wrapping_add(1);
+        ProfileWriteTicket { kind, generation }
+    }
+
+    fn generation(&self, kind: SnapshotKind) -> &AtomicU64 {
+        match kind {
+            SnapshotKind::Settings => &self.settings_generation,
+            SnapshotKind::History => &self.history_generation,
+            SnapshotKind::Session => &self.session_generation,
+        }
+    }
 }
 
 impl Profile {
@@ -48,6 +92,7 @@ impl Profile {
         let profile = Self {
             settings_path: root.join(SETTINGS_FILE),
             root,
+            writes: Arc::new(ProfileWrites::default()),
         };
         fs::create_dir_all(profile.favicons_dir())?;
         fs::create_dir_all(profile.engine_dir())?;
@@ -150,10 +195,29 @@ impl Profile {
     }
 
     pub fn save_history(&self, history: &History) -> io::Result<()> {
-        atomic::write(
-            &self.root.join(HISTORY_FILE),
-            &history_file::encode(history),
-        )
+        let ticket = self.begin_history_write();
+        self.save_history_if_current(ticket, history).map(|_| ())
+    }
+
+    /// Reserves an ordered position for a history snapshot before dispatching
+    /// its disk write to background work.
+    pub fn begin_history_write(&self) -> ProfileWriteTicket {
+        self.writes.reserve(SnapshotKind::History)
+    }
+
+    /// Saves `history` only when no newer history snapshot has been scheduled.
+    /// Returns `false` when a newer snapshot superseded this one.
+    pub fn save_history_if_current(
+        &self,
+        ticket: ProfileWriteTicket,
+        history: &History,
+    ) -> io::Result<bool> {
+        self.write_snapshot(ticket, SnapshotKind::History, || {
+            atomic::write(
+                &self.root.join(HISTORY_FILE),
+                &history_file::encode(history),
+            )
+        })
     }
 
     /// The saved preferences, or defaults when there are none or they cannot
@@ -201,9 +265,28 @@ impl Profile {
     }
 
     pub fn save_settings(&self, settings: &BrowserSettings) -> io::Result<()> {
-        let bytes = serde_json::to_vec_pretty(settings)
-            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-        atomic::write(&self.settings_path, &bytes)
+        let ticket = self.begin_settings_write();
+        self.save_settings_if_current(ticket, settings).map(|_| ())
+    }
+
+    /// Reserves an ordered position for a settings snapshot before dispatching
+    /// its disk write to background work.
+    pub fn begin_settings_write(&self) -> ProfileWriteTicket {
+        self.writes.reserve(SnapshotKind::Settings)
+    }
+
+    /// Saves `settings` only when no newer settings snapshot has been scheduled.
+    /// Returns `false` when a newer snapshot superseded this one.
+    pub fn save_settings_if_current(
+        &self,
+        ticket: ProfileWriteTicket,
+        settings: &BrowserSettings,
+    ) -> io::Result<bool> {
+        self.write_snapshot(ticket, SnapshotKind::Settings, || {
+            let bytes = serde_json::to_vec_pretty(settings)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+            atomic::write(&self.settings_path, &bytes)
+        })
     }
 
     /// The windows and tabs open when the browser last saved them, or none
@@ -216,9 +299,52 @@ impl Profile {
     }
 
     pub fn save_session(&self, session: &Session) -> io::Result<()> {
-        let bytes = serde_json::to_vec_pretty(session)
-            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-        atomic::write(&self.root.join(SESSION_FILE), &bytes)
+        let ticket = self.begin_session_write();
+        self.save_session_if_current(ticket, session).map(|_| ())
+    }
+
+    /// Reserves an ordered position for a session snapshot before dispatching
+    /// its disk write to background work.
+    pub fn begin_session_write(&self) -> ProfileWriteTicket {
+        self.writes.reserve(SnapshotKind::Session)
+    }
+
+    /// Saves `session` only when no newer session snapshot has been scheduled.
+    /// Returns `false` when a newer snapshot superseded this one.
+    pub fn save_session_if_current(
+        &self,
+        ticket: ProfileWriteTicket,
+        session: &Session,
+    ) -> io::Result<bool> {
+        self.write_snapshot(ticket, SnapshotKind::Session, || {
+            let bytes = serde_json::to_vec_pretty(session)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+            atomic::write(&self.root.join(SESSION_FILE), &bytes)
+        })
+    }
+
+    fn write_snapshot(
+        &self,
+        ticket: ProfileWriteTicket,
+        kind: SnapshotKind,
+        write: impl FnOnce() -> io::Result<()>,
+    ) -> io::Result<bool> {
+        if ticket.kind != kind {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "profile write ticket has the wrong kind",
+            ));
+        }
+        let _serial = self
+            .writes
+            .serial
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if self.writes.generation(kind).load(Ordering::Acquire) != ticket.generation {
+            return Ok(false);
+        }
+        write()?;
+        Ok(true)
     }
 
     pub fn load_favicon(&self, url: &str) -> Option<FaviconPixels> {
@@ -231,6 +357,11 @@ impl Profile {
         if !favicon.is_storable() {
             return Ok(());
         }
+        let _serial = self
+            .writes
+            .serial
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         atomic::write(
             &favicons::path(&self.favicons_dir(), url),
             &favicon.encode(),
@@ -239,6 +370,15 @@ impl Profile {
 
     /// Removes the icons of pages no longer in `history`.
     pub fn prune_favicons(&self, history: &History) -> io::Result<()> {
+        let _serial = self
+            .writes
+            .serial
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        self.prune_favicons_unlocked(history)
+    }
+
+    fn prune_favicons_unlocked(&self, history: &History) -> io::Result<()> {
         let directory = self.favicons_dir();
         let kept: HashSet<PathBuf> = history
             .pages()
@@ -429,6 +569,125 @@ mod tests {
         );
         profile.0.save_settings(&settings).expect("saves");
         assert_eq!(profile.0.load_settings(), settings);
+    }
+
+    #[test]
+    fn older_profile_snapshots_cannot_overwrite_newer_saves() {
+        let temporary = TemporaryProfile::new("latest-snapshots");
+        let profile = temporary.0.clone();
+        let clone = profile.clone();
+
+        let older_settings_ticket = profile.begin_settings_write();
+        let newer_settings_ticket = clone.begin_settings_write();
+        let older_settings = BrowserSettings {
+            theme: photon_core::ThemeMode::Light,
+            ..BrowserSettings::default()
+        };
+        let newer_settings = BrowserSettings {
+            theme: photon_core::ThemeMode::Dark,
+            ..BrowserSettings::default()
+        };
+        assert!(
+            clone
+                .save_settings_if_current(newer_settings_ticket, &newer_settings)
+                .expect("saves current settings")
+        );
+        assert!(
+            !profile
+                .save_settings_if_current(older_settings_ticket, &older_settings)
+                .expect("skips stale settings")
+        );
+        assert_eq!(profile.load_settings(), newer_settings);
+
+        let mut older_history = History::default();
+        older_history.record_visit("https://old.example/", "Old", 1);
+        let mut newer_history = History::default();
+        newer_history.record_visit("https://new.example/", "New", 2);
+        let older_history_ticket = profile.begin_history_write();
+        let newer_history_ticket = clone.begin_history_write();
+        assert!(
+            clone
+                .save_history_if_current(newer_history_ticket, &newer_history)
+                .expect("saves current history")
+        );
+        assert!(
+            !profile
+                .save_history_if_current(older_history_ticket, &older_history)
+                .expect("skips stale history")
+        );
+        assert_eq!(profile.load_history(), newer_history);
+
+        let older_session = Session {
+            windows: vec![photon_core::WindowSession {
+                tabs: vec![photon_core::SessionTab {
+                    url: "https://old.example/".to_owned(),
+                    title: "Old".to_owned(),
+                    space: 1,
+                }],
+                active: Some(0),
+            }],
+        };
+        let newer_session = Session {
+            windows: vec![photon_core::WindowSession {
+                tabs: vec![photon_core::SessionTab {
+                    url: "https://new.example/".to_owned(),
+                    title: "New".to_owned(),
+                    space: 1,
+                }],
+                active: Some(0),
+            }],
+        };
+        let older_session_ticket = profile.begin_session_write();
+        let newer_session_ticket = clone.begin_session_write();
+        assert!(
+            clone
+                .save_session_if_current(newer_session_ticket, &newer_session)
+                .expect("saves current session")
+        );
+        assert!(
+            !profile
+                .save_session_if_current(older_session_ticket, &older_session)
+                .expect("skips stale session")
+        );
+        assert_eq!(profile.load_session(), newer_session);
+    }
+
+    #[test]
+    fn overlapping_history_saves_leave_the_newest_reserved_snapshot() {
+        let temporary = TemporaryProfile::new("overlapping-history-saves");
+        let profile = temporary.0.clone();
+        let older_profile = profile.clone();
+        let newer_profile = profile.clone();
+        let older_ticket = older_profile.begin_history_write();
+        let newer_ticket = newer_profile.begin_history_write();
+        let mut older_history = History::default();
+        older_history.record_visit("https://old.example/", "Old", 1);
+        let mut newer_history = History::default();
+        newer_history.record_visit("https://new.example/", "New", 2);
+        let expected_history = newer_history.clone();
+        let start = Arc::new(std::sync::Barrier::new(3));
+
+        let old_start = start.clone();
+        let old_save = std::thread::spawn(move || {
+            old_start.wait();
+            older_profile.save_history_if_current(older_ticket, &older_history)
+        });
+        let new_start = start.clone();
+        let new_save = std::thread::spawn(move || {
+            new_start.wait();
+            newer_profile.save_history_if_current(newer_ticket, &newer_history)
+        });
+
+        start.wait();
+        old_save
+            .join()
+            .expect("older save thread completes")
+            .expect("older save succeeds or is superseded");
+        new_save
+            .join()
+            .expect("newer save thread completes")
+            .expect("newer save succeeds or is superseded");
+        assert_eq!(profile.load_history(), expected_history);
     }
 
     #[test]

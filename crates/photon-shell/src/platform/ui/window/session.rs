@@ -8,7 +8,7 @@
 
 use gpui::{App, BorrowAppContext, Context, Global, Task, Window};
 use photon_core::{Session, SessionTab, WindowSession};
-use photon_storage::Profile;
+use photon_storage::{Profile, ProfileWriteTicket};
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -46,8 +46,10 @@ impl BrowsingSession {
         }
     }
 
-    fn snapshot(&self) -> Option<(Profile, Session)> {
-        Some((self.profile.clone()?, self.session()))
+    fn snapshot(&self) -> Option<(Profile, Session, ProfileWriteTicket)> {
+        let profile = self.profile.clone()?;
+        let ticket = profile.begin_session_write();
+        Some((profile, self.session(), ticket))
     }
 
     /// Saves the session a moment from now, unless a save is waiting.
@@ -67,18 +69,18 @@ impl BrowsingSession {
             .flatten();
             // Clearing `save` above dropped this task's handle, which
             // cancels it at its next await, so the write runs detached.
-            if let Some((profile, session)) = save {
+            if let Some((profile, session, ticket)) = save {
                 cx.background_executor()
-                    .spawn(async move { write_session(&profile, &session) })
+                    .spawn(async move { write_session(&profile, &session, ticket) })
                     .detach();
             }
         }));
     }
 }
 
-fn write_session(profile: &Profile, session: &Session) {
-    if let Err(error) = profile.save_session(session) {
-        trace(format_args!("saving session: {error}"));
+fn write_session(profile: &Profile, session: &Session, ticket: ProfileWriteTicket) {
+    if let Err(error) = profile.save_session_if_current(ticket, session) {
+        eprintln!("failed to save session: {error}");
     }
 }
 
@@ -100,8 +102,8 @@ pub(super) fn load_session(profile: Option<Profile>, cx: &mut App) -> Session {
             session.snapshot()
         });
         async move {
-            if let Some((profile, session)) = save {
-                write_session(&profile, &session);
+            if let Some((profile, session, ticket)) = save {
+                write_session(&profile, &session, ticket);
             }
         }
     })

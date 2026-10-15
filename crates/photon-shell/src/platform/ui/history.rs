@@ -8,7 +8,7 @@
 use gpui::{App, BorrowAppContext, Global, Task};
 use photon_core::{ClearBrowsingData, History, HistoryEntry, Suggestions};
 use photon_omnibox::SearchEngines;
-use photon_storage::{DataUsage, Profile};
+use photon_storage::{DataUsage, Profile, ProfileWriteTicket};
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -49,11 +49,11 @@ pub(in crate::platform) fn load_browsing_history(profile: Option<Profile>, cx: &
     cx.on_app_quit(|cx| {
         let save = BrowsingHistory::update(cx, |browsing, _| {
             browsing.save = None;
-            browsing.snapshot()
+            browsing.snapshot_for_write()
         });
         async move {
-            if let Some((profile, history)) = save {
-                write_history(&profile, &history);
+            if let Some((profile, history, ticket)) = save {
+                write_history(&profile, &history, ticket);
             }
         }
     })
@@ -218,16 +218,16 @@ impl BrowsingHistory {
                     let save = update_app(cx, |cx| {
                         cx.update_global::<Self, _>(|browsing, _| {
                             browsing.save = None;
-                            browsing.snapshot()
+                            browsing.snapshot_for_write()
                         })
                     })
                     .await
                     .flatten();
                     // Clearing `save` above dropped this task's handle, which
                     // cancels it at its next await, so the write runs detached.
-                    if let Some((profile, history)) = save {
+                    if let Some((profile, history, ticket)) = save {
                         cx.background_executor()
-                            .spawn(async move { write_history(&profile, &history) })
+                            .spawn(async move { write_history(&profile, &history, ticket) })
                             .detach();
                     }
                 }));
@@ -252,11 +252,17 @@ impl BrowsingHistory {
     fn snapshot(&self) -> Option<(Profile, History)> {
         Some((self.profile.clone()?, self.history.clone()))
     }
+
+    fn snapshot_for_write(&self) -> Option<(Profile, History, ProfileWriteTicket)> {
+        let profile = self.profile.clone()?;
+        let ticket = profile.begin_history_write();
+        Some((profile, self.history.clone(), ticket))
+    }
 }
 
-fn write_history(profile: &Profile, history: &History) {
-    if let Err(error) = profile.save_history(history) {
-        trace(format_args!("saving history: {error}"));
+fn write_history(profile: &Profile, history: &History, ticket: ProfileWriteTicket) {
+    if let Err(error) = profile.save_history_if_current(ticket, history) {
+        eprintln!("failed to save history: {error}");
     }
 }
 

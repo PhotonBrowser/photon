@@ -8,10 +8,9 @@
 use gpui::{App, BorrowAppContext, Global, Task, WindowAppearance};
 use photon_core::{BrowserSettings, ThemeMode};
 use photon_omnibox::SearchEngines;
-use photon_storage::Profile;
+use photon_storage::{Profile, ProfileWriteTicket};
 use std::cell::OnceCell;
 use std::rc::Rc;
-use std::sync::Mutex;
 use std::time::Duration;
 
 use super::super::app_update::update_app;
@@ -21,9 +20,6 @@ use super::workspace_layout::WorkspaceLayout;
 /// How long after a change the settings are saved, so a burst of changes,
 /// as while dragging the sidebar's edge, saves once.
 const SAVE_DELAY: Duration = Duration::from_millis(500);
-
-/// Keeps saves in the order they were made.
-static WRITING: Mutex<()> = Mutex::new(());
 
 /// The settings, and where they are saved; `None` keeps them in memory only.
 pub(super) struct Settings {
@@ -69,8 +65,8 @@ pub(in crate::platform) fn load_settings(profile: Option<Profile>, cx: &mut App)
             store.snapshot()
         });
         async move {
-            if let Some((profile, settings)) = save {
-                write_settings(&profile, &settings);
+            if let Some((profile, settings, ticket)) = save {
+                write_settings(&profile, &settings, ticket);
             }
         }
     })
@@ -120,9 +116,9 @@ impl Settings {
             .flatten();
             // Clearing `save` above dropped this task's handle, which
             // cancels it at its next await, so the write runs detached.
-            if let Some((profile, settings)) = save {
+            if let Some((profile, settings, ticket)) = save {
                 cx.background_executor()
-                    .spawn(async move { write_settings(&profile, &settings) })
+                    .spawn(async move { write_settings(&profile, &settings, ticket) })
                     .detach();
             }
         }));
@@ -140,8 +136,10 @@ impl Settings {
             .clone()
     }
 
-    fn snapshot(&self) -> Option<(Profile, BrowserSettings)> {
-        Some((self.profile.clone()?, self.settings.clone()))
+    fn snapshot(&self) -> Option<(Profile, BrowserSettings, ProfileWriteTicket)> {
+        let profile = self.profile.clone()?;
+        let ticket = profile.begin_settings_write();
+        Some((profile, self.settings.clone(), ticket))
     }
 
     /// The search engines, with the chosen one as the default.
@@ -166,11 +164,8 @@ impl Settings {
     }
 }
 
-fn write_settings(profile: &Profile, settings: &BrowserSettings) {
-    let _writing = WRITING
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    if let Err(error) = profile.save_settings(settings) {
-        trace(format_args!("saving settings: {error}"));
+fn write_settings(profile: &Profile, settings: &BrowserSettings, ticket: ProfileWriteTicket) {
+    if let Err(error) = profile.save_settings_if_current(ticket, settings) {
+        eprintln!("failed to save settings: {error}");
     }
 }

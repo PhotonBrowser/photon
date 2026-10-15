@@ -12,4 +12,4 @@ mod history_file;
 mod profile;
 
 pub use favicons::FaviconPixels;
-pub use profile::{DataUsage, Profile};
+pub use profile::{DataUsage, Profile, ProfileWriteTicket};
