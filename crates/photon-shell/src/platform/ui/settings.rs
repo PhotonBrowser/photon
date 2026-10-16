@@ -13,6 +13,7 @@ use photon_omnibox::SearchEngines;
 use photon_storage::{Profile, ProfileWriteTicket};
 use std::cell::OnceCell;
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use super::super::app_update::update_app;
@@ -31,6 +32,8 @@ const CONFIG_RELOAD_MINIMUM_DURATION: Duration = Duration::from_millis(250);
 /// How long the completed config reload chip remains visible.
 const CONFIG_RELOAD_NOTICE_DURATION: Duration = Duration::from_secs(3);
 
+type UiSettingsRevision = Arc<Mutex<Option<u64>>>;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum ConfigReloadNotice {
     Reloading,
@@ -46,6 +49,8 @@ pub(super) struct Settings {
     save: Option<Task<()>>,
     /// Watches the profile config for edits made outside Photon.
     _reload: Option<Task<()>>,
+    /// The latest config revision written by settings controls in Photon.
+    ui_settings_revision: UiSettingsRevision,
     config_reload_notice: Option<ConfigReloadNotice>,
     /// The workspace layout the settings resolve to, worked out on first
     /// use after each change, as drawing asks for it many times a frame.
@@ -62,26 +67,35 @@ pub(in crate::platform) fn load_settings(
     revision: Option<u64>,
     cx: &mut App,
 ) {
-    settings = normalize_settings(profile.as_ref(), settings, cx);
+    let ui_settings_revision = Arc::new(Mutex::new(None));
+    settings = normalize_settings(profile.as_ref(), settings, ui_settings_revision.clone(), cx);
     let reload = profile
         .clone()
-        .map(|profile| watch_settings(profile, revision, cx));
+        .map(|profile| watch_settings(profile, revision, ui_settings_revision.clone(), cx));
     cx.set_global(Settings {
         settings,
         profile,
         save: None,
         _reload: reload,
+        ui_settings_revision: ui_settings_revision.clone(),
         config_reload_notice: None,
         layout: OnceCell::new(),
     });
     cx.on_app_quit(|cx| {
         let save = cx.update_global::<Settings, _>(|store, _| {
             store.save = None;
-            store.snapshot()
+            store.snapshot().map(|(profile, settings, ticket)| {
+                (
+                    profile,
+                    settings,
+                    ticket,
+                    store.ui_settings_revision.clone(),
+                )
+            })
         });
         async move {
-            if let Some((profile, settings, ticket)) = save {
-                write_settings(&profile, &settings, ticket);
+            if let Some((profile, settings, ticket, ui_settings_revision)) = save {
+                write_settings(&profile, &settings, ticket, &ui_settings_revision);
             }
         }
     })
@@ -91,6 +105,7 @@ pub(in crate::platform) fn load_settings(
 fn normalize_settings(
     profile: Option<&Profile>,
     mut settings: BrowserSettings,
+    ui_settings_revision: UiSettingsRevision,
     cx: &mut App,
 ) -> BrowserSettings {
     if settings.migrate_legacy_favourites()
@@ -101,8 +116,10 @@ fn normalize_settings(
         let ticket = profile.begin_settings_write();
         cx.background_executor()
             .spawn(async move {
-                if let Err(error) = profile.save_settings_if_current(ticket, &settings) {
-                    trace(format_args!("saving migrated favourites: {error}"));
+                match profile.save_settings_if_current(ticket, &settings) {
+                    Ok(true) => remember_ui_settings_revision(&profile, &ui_settings_revision),
+                    Ok(false) => {}
+                    Err(error) => trace(format_args!("saving migrated favourites: {error}")),
                 }
             })
             .detach();
@@ -117,7 +134,12 @@ fn normalize_settings(
     settings
 }
 
-fn watch_settings(profile: Profile, mut revision: Option<u64>, cx: &mut App) -> Task<()> {
+fn watch_settings(
+    profile: Profile,
+    mut revision: Option<u64>,
+    ui_settings_revision: UiSettingsRevision,
+    cx: &mut App,
+) -> Task<()> {
     cx.spawn(async move |cx| {
         loop {
             cx.background_executor().timer(CONFIG_RELOAD_INTERVAL).await;
@@ -140,6 +162,22 @@ fn watch_settings(profile: Profile, mut revision: Option<u64>, cx: &mut App) -> 
                 .spawn(async move { profile_to_check.settings_revision().ok() })
                 .await;
             if confirmed != Some(candidate) {
+                continue;
+            }
+
+            let is_ui_settings_write = {
+                let mut ui_revision = ui_settings_revision
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                if *ui_revision == Some(candidate) {
+                    *ui_revision = None;
+                    true
+                } else {
+                    false
+                }
+            };
+            if is_ui_settings_write {
+                revision = Some(candidate);
                 continue;
             }
 
@@ -201,7 +239,8 @@ impl Settings {
     }
 
     fn apply_reload(profile: &Profile, settings: BrowserSettings, cx: &mut App) {
-        let settings = normalize_settings(Some(profile), settings, cx);
+        let ui_settings_revision = cx.global::<Self>().ui_settings_revision.clone();
+        let settings = normalize_settings(Some(profile), settings, ui_settings_revision, cx);
         cx.update_global::<Self, _>(|store, _| {
             // A file reload supersedes any unsaved in-memory changes and their
             // pending write; the profile write ticket was already invalidated.
@@ -280,16 +319,25 @@ impl Settings {
             let save = update_app(cx, |cx| {
                 cx.update_global::<Self, _>(|store, _| {
                     store.save = None;
-                    store.snapshot()
+                    store.snapshot().map(|(profile, settings, ticket)| {
+                        (
+                            profile,
+                            settings,
+                            ticket,
+                            store.ui_settings_revision.clone(),
+                        )
+                    })
                 })
             })
             .await
             .flatten();
             // Clearing `save` above dropped this task's handle, which
             // cancels it at its next await, so the write runs detached.
-            if let Some((profile, settings, ticket)) = save {
+            if let Some((profile, settings, ticket, ui_settings_revision)) = save {
                 cx.background_executor()
-                    .spawn(async move { write_settings(&profile, &settings, ticket) })
+                    .spawn(async move {
+                        write_settings(&profile, &settings, ticket, &ui_settings_revision)
+                    })
                     .detach();
             }
         }));
@@ -335,8 +383,23 @@ impl Settings {
     }
 }
 
-fn write_settings(profile: &Profile, settings: &BrowserSettings, ticket: ProfileWriteTicket) {
-    if let Err(error) = profile.save_settings_if_current(ticket, settings) {
-        eprintln!("failed to save settings: {error}");
+fn write_settings(
+    profile: &Profile,
+    settings: &BrowserSettings,
+    ticket: ProfileWriteTicket,
+    ui_settings_revision: &UiSettingsRevision,
+) {
+    match profile.save_settings_if_current(ticket, settings) {
+        Ok(true) => remember_ui_settings_revision(profile, ui_settings_revision),
+        Ok(false) => {}
+        Err(error) => eprintln!("failed to save settings: {error}"),
+    }
+}
+
+fn remember_ui_settings_revision(profile: &Profile, ui_settings_revision: &UiSettingsRevision) {
+    if let Ok(revision) = profile.settings_revision() {
+        *ui_settings_revision
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(revision);
     }
 }
