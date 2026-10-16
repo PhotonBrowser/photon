@@ -748,3 +748,135 @@ CPU or memory monitoring samples, and it does not replace the idle/page/tab
 resource workloads. Browser versions, OS scheduling, thermal state, power
 settings, and foreground activity can affect results. Follow the official
 Speedometer instructions and keep the machine otherwise idle for comparisons.
+
+## JetStream 3.0
+
+Velocity runs the complete, unmodified official BrowserBench JetStream 3.0
+suite in isolated, headed browser sessions. The benchmark version and source
+are pinned to WebKit/JetStream commit
+`06785cf861ac44855f168cbbe829278c2802e6de`. Setup verifies the downloaded
+archive against SHA-256
+`0361851eb2ddeb003e06be74239c3f7ce437c64e774a29ba446faaed9ab16fa9` before
+extracting it. The cache is stored under
+`~/Library/Caches/Velocity/jetstream/`, outside browser profiles.
+
+Prepare the pinned source and run Chrome:
+
+```sh
+cargo run --manifest-path tools/velocity/Cargo.toml -p velocity-cli -- \
+  setup jetstream
+cargo run --manifest-path tools/velocity/Cargo.toml -p velocity-cli -- \
+  bench jetstream --browser chrome --runs 5 --warmup 1
+```
+
+Photon, Chrome, and Helium can be selected by their discovered ID or number.
+Velocity runs browsers sequentially, reuses the official Start Test control,
+uses the complete default workload set and parameters, and verifies all
+workloads finished before accepting the score. The `--benchmark-source local`
+mode is the default and serves the verified pinned files from a loopback-only
+server. `--benchmark-source official` uses the versioned page at
+`https://browserbench.org/JetStream3.0/index.html` and requires network access.
+Hosted reports record the official version but have no immutable source commit;
+Velocity therefore rejects them for statistical baseline comparisons.
+Chromium pages are brought to the foreground before start and reactivated at a
+bounded rate if the document becomes hidden, avoiding background-tab timer
+throttling during the workload.
+
+```sh
+cargo run --manifest-path tools/velocity/Cargo.toml -p velocity-cli -- \
+  bench jetstream --browsers photon,chrome,helium \
+  --runs 5 --warmup 1 --randomize
+cargo run --manifest-path tools/velocity/Cargo.toml -p velocity-cli -- \
+  bench jetstream --browser photon --benchmark-source official \
+  --runs 1 --warmup 0
+```
+
+JetStream scores are higher-is-better and are distinct from Speedometer scores.
+Velocity stores the official score shown by the completed result page, the
+individual official workload scores, and completion evidence. It does not
+recalculate JetStream's geometric mean. Warm-up scores are kept in reports but
+excluded from measured statistics. Summaries include median, mean, min, max,
+sample standard deviation, and coefficient of variation. Successful reports
+are automatically imported into persistent history; use `--no-record-history`
+to disable this for a run.
+
+Name a historical result as a baseline, list JetStream history, and compare
+two local pinned-source reports:
+
+```sh
+velocity baseline set --name photon-jetstream-initial \
+  --from results/photon-jetstream.json --browser photon
+velocity history list --browser photon --benchmark jetstream
+velocity history report --browser photon --benchmark jetstream
+velocity compare jetstream --baseline photon-jetstream-initial \
+  --current results/photon-jetstream-new.json --threshold 5
+```
+
+Comparison requires matching JetStream source revision, version, workload
+configuration, execution mode, OS, architecture, and comparable recorded
+hardware. Each side needs at least five valid measured scores. Velocity reuses
+the history comparison's median permutation test; crossing the percentage
+threshold alone does not establish a regression. With a p-value below 0.05, a
+score decrease beyond the configured threshold is reported as a regression;
+otherwise the result is improvement, within-threshold, inconclusive, or
+incompatible. This test has limited power for small samples and should not be
+read as a universal guarantee of statistical significance.
+
+JSON and standalone offline HTML reports retain the source revision and hash,
+browser metadata, environment, run order and randomization seed, per-run and
+per-workload scores, failures, process diagnostics, cleanup state, and summary
+statistics. Raw reports remain available through the normal Velocity history
+archive. Unknown executable build revisions stay unknown; a repository
+revision is not assumed to identify the built browser.
+
+Photon automation uses two authenticated, fixed JetStream 3.0 operations. The
+read-only observer is tied to the active document generation and extracts
+bounded state from JetStream's own UI. The start operation can only activate
+JetStream's own default Start Test control on the official page or the pinned
+loopback route; it accepts no caller-provided JavaScript. Chrome and Helium use
+the same fixed-state and official-control checks over CDP. Chrome and Helium
+both completed all 77 JetStream 3.0 workloads from the pinned local source on
+this machine. Chrome's successful three-run set scored 447.45, 453.72, and
+463.69 (median 453.72, mean 454.95, sample standard deviation 8.19). A separate
+Helium run scored 457.71. One-run smoke results also completed on Chrome at
+424.11 and 457.14. These measurements are local validation results, not a
+cross-machine target or a basis for comparing different browser versions.
+
+For a fresh Photon development build, run `./photon run` once to register the
+development app's presentation service before using Velocity. Until registered,
+Photon automation returns a structured service-not-registered failure.
+
+Photon's hosted diagnostic run reached 7 of 77 workloads, then the official
+`transformersjs-bert-wasm` workload failed while compiling the pinned
+ONNX Runtime WebAssembly binary (`ort-wasm-simd-threaded.wasm`, SHA-256
+`f061472c6e77d6d50d079aacdc0ff9b63fee287ddd2cbf46cf62438d3891de2b`). The
+file served by the official hosted URL has the same hash as the pinned local
+source. The module imports `a.a` as shared memory. At byte offset 2779 its limits
+flags are `0x03` (has maximum and shared), with minimum 256 and maximum 65536
+pages. `LibWasm::Limits::parse()` rejects the shared bit and returns
+`InvalidTag`, which becomes the reported
+`CompileError: A parsed tag did not make sense in context`. The engine also
+does not preserve sharedness in `Wasm::Limits`, and its WebAssembly instance
+wrapper still marks exported memories as non-shared. This is an incomplete
+WebAssembly threads/shared-memory implementation, not an observer or score
+extraction failure.
+
+The minimal diagnostic module is 19 bytes:
+
+```text
+00 61 73 6d 01 00 00 00 02 09 01 01 61 01 61 02 03 00 01
+```
+
+It contains only an import of shared memory `a.a` with limits flags `0x03`,
+minimum 0 and maximum 1. Node accepts it (`WebAssembly.validate()` is true and
+compilation succeeds). A direct Photon run against the same local test page
+reported `WebAssembly.validate() === false` and the same `CompileError`. The
+official 11 MB ONNX module likewise passes Node validation. Accepting the flag
+alone would be unsafe because sharedness is not carried through the Wasm memory
+type and instance model; completing this workload requires that engine support,
+which is outside Velocity's scope. No official JetStream workloads were
+changed or skipped, and Velocity correctly rejects the incomplete run.
+
+A separate Photon run against the local loopback benchmark copy failed during
+initial resource prefetch with connection failures; that transport issue has
+not yet been isolated. Photon therefore does not yet complete JetStream 3.0.

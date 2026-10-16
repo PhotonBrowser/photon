@@ -10,6 +10,8 @@ mod comparison_statistics;
 mod fixture_server;
 mod history;
 mod history_cli;
+mod jetstream_cli;
+mod jetstream_source;
 mod monitor_cli;
 mod resource_benchmark_cli;
 #[cfg(target_os = "macos")]
@@ -92,9 +94,10 @@ fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
                 }
                 Some("idle" | "page" | "tabs") => resource_benchmark_cli::run(arguments)?,
                 Some("speedometer") => speedometer_cli::run(arguments.into_iter().skip(1))?,
+                Some("jetstream") => jetstream_cli::run(arguments.into_iter().skip(1))?,
                 Some(other) => {
                     return Err(format!(
-                        "unknown benchmark '{other}'; available benchmarks: startup, idle, page, tabs, speedometer"
+                        "unknown benchmark '{other}'; available benchmarks: startup, idle, page, tabs, speedometer, jetstream"
                     ));
                 }
             }
@@ -103,6 +106,8 @@ fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
             let arguments = arguments.collect::<Vec<_>>();
             if arguments.first().map(String::as_str) == Some("speedometer") {
                 speedometer_cli::run_compare(arguments.into_iter().skip(1))?;
+            } else if arguments.first().map(String::as_str) == Some("jetstream") {
+                jetstream_cli::run_compare(arguments.into_iter().skip(1))?;
             } else {
                 comparison_cli::run(arguments)?;
             }
@@ -112,13 +117,20 @@ fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
         "setup" => {
             let benchmark = required_argument(&mut arguments, "benchmark")?;
             require_no_more(arguments)?;
-            if benchmark != "speedometer" {
-                return Err(format!(
-                    "unknown setup target '{benchmark}'; available target: speedometer"
-                ));
-            }
-            let path = speedometer_source::setup_speedometer_source()?;
-            println!("Prepared official Speedometer 3.1 at {}", path.display());
+            let path = match benchmark.as_str() {
+                "speedometer" => speedometer_source::setup_speedometer_source()?,
+                "jetstream" => jetstream_source::setup_jetstream_source()?,
+                _ => {
+                    return Err(format!(
+                        "unknown setup target '{benchmark}'; available targets: speedometer, jetstream"
+                    ));
+                }
+            };
+            let name = match benchmark.as_str() {
+                "speedometer" => "Speedometer 3.1",
+                _ => "JetStream 3.0",
+            };
+            println!("Prepared official {name} at {}", path.display());
         }
         "monitor" => {
             monitor_cli::run(arguments.collect::<Vec<_>>())?;
@@ -354,7 +366,7 @@ fn lifecycle_error_message(error: LifecycleError) -> String {
 
 fn print_help() {
     terminal::print_markdown(&format!(
-        "# {FRAMEWORK_NAME} {}\n\n## Usage\n\n`velocity <command>`\n\n## Commands\n\n- `list` — List browsers with numbered selectors\n- `inspect [browser|number]` — Show browser metadata; prompts if omitted\n- `launch [browser|number] [--url URL]` — Launch a browser; prompts if omitted\n- `close <browser|installation-id|session-id>` — Close a managed instance\n- `bench startup` — Run startup benchmarks and comparisons; prompts if no target is given\n- `bench idle|page|tabs` — Run automated resource benchmarks; prompts if no target is given\n- `bench speedometer` — Run official Speedometer 3.1\n- `compare startup` — Check a report against a baseline\n- `compare speedometer` — Compare Speedometer scores against a baseline\n- `setup speedometer` — Prepare the pinned local benchmark source\n- `monitor [browser|number] [--duration SECONDS] [--interval MILLISECONDS]` — Diagnose managed browser resource usage; prompts if omitted\n- `help` — Print this help message\n\nUse the number shown by `velocity list` anywhere a browser ID is accepted (for example, `--browser 2`). Interactive benchmark prompts accept comma-separated numbers or `all`.\n\n## Options\n\n- `-h, --help` — Print help\n- `-V, --version` — Print version",
+        "# {FRAMEWORK_NAME} {}\n\n## Usage\n\n`velocity <command>`\n\n## Commands\n\n- `list` — List browsers with numbered selectors\n- `inspect [browser|number]` — Show browser metadata; prompts if omitted\n- `launch [browser|number] [--url URL]` — Launch a browser; prompts if omitted\n- `close <browser|installation-id|session-id>` — Close a managed instance\n- `bench startup` — Run startup benchmarks and comparisons; prompts if no target is given\n- `bench idle|page|tabs` — Run automated resource benchmarks; prompts if no target is given\n- `bench speedometer` — Run official Speedometer 3.1\n- `bench jetstream` — Run official JetStream 3.0\n- `compare startup` — Check a report against a baseline\n- `compare speedometer` — Compare Speedometer scores against a baseline\n- `compare jetstream` — Compare JetStream scores against a baseline\n- `history import|list|show|report|export` — Store and inspect benchmark history\n- `baseline set|list|show|delete` — Manage named result baselines\n- `setup speedometer` — Prepare the pinned local benchmark source\n- `setup jetstream` — Prepare the pinned local benchmark source\n- `monitor [browser|number] [--duration SECONDS] [--interval MILLISECONDS]` — Diagnose managed browser resource usage; prompts if omitted\n- `help` — Print this help message\n\nUse the number shown by `velocity list` anywhere a browser ID is accepted (for example, `--browser 2`). Interactive benchmark prompts accept comma-separated numbers or `all`.\n\n## Options\n\n- `-h, --help` — Print help\n- `-V, --version` — Print version",
         env!("CARGO_PKG_VERSION")
     ));
 }

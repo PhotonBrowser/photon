@@ -4,7 +4,7 @@ use crate::{AutomationProtocol, BrowserAutomationAdapter};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     fs,
     io::{BufRead, BufReader, Read, Write},
     os::unix::{
@@ -116,6 +116,33 @@ pub struct PhotonSpeedometerResult {
     pub error: Option<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct PhotonJetStreamResult {
+    pub state: String,
+    #[serde(default)]
+    pub initialized: bool,
+    #[serde(default)]
+    pub started: bool,
+    #[serde(default)]
+    pub completed: bool,
+    #[serde(default)]
+    pub failed: bool,
+    pub official_score: Option<f64>,
+    #[serde(default)]
+    pub completed_workloads: usize,
+    #[serde(default)]
+    pub total_workloads: usize,
+    pub current_workload: Option<String>,
+    #[serde(default)]
+    pub status_text: String,
+    #[serde(default)]
+    pub errors: Vec<String>,
+    #[serde(default)]
+    pub subtest_scores: BTreeMap<String, f64>,
+    pub document_generation: Option<u64>,
+    pub document_url: Option<String>,
+}
+
 pub fn parse_speedometer_result_title(
     title: Option<&str>,
 ) -> Result<Option<PhotonSpeedometerResult>, PhotonAutomationError> {
@@ -126,6 +153,17 @@ pub fn parse_speedometer_result_title(
     serde_json::from_str(payload).map(Some).map_err(|error| {
         PhotonAutomationError(format!("invalid Photon Speedometer status: {error}"))
     })
+}
+
+pub fn parse_jetstream_result_title(
+    title: Option<&str>,
+) -> Result<Option<PhotonJetStreamResult>, PhotonAutomationError> {
+    let Some(payload) = title.and_then(|title| title.strip_prefix("VelocityJetStream3.0:")) else {
+        return Ok(None);
+    };
+    serde_json::from_str(payload)
+        .map(Some)
+        .map_err(|error| PhotonAutomationError(format!("invalid Photon JetStream status: {error}")))
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -433,6 +471,65 @@ impl PhotonAutomationClient {
         Ok(())
     }
 
+    pub fn install_jetstream_result_observer(
+        &mut self,
+        tab_id: u64,
+        document_generation: u64,
+        timeout: Duration,
+    ) -> Result<(), PhotonAutomationError> {
+        if !self.supports("probe_jetstream_result") {
+            return Err(PhotonAutomationError(
+                "Photon does not advertise its restricted JetStream 3.0 result observer".to_owned(),
+            ));
+        }
+        let result = self.call(
+            "probe_jetstream_result",
+            Some(json!({
+                "tab_id": tab_id,
+                "document_generation": document_generation
+            })),
+            timeout,
+        )?;
+        if result.get("document_generation").and_then(Value::as_u64) != Some(document_generation) {
+            return Err(PhotonAutomationError(
+                "Photon installed the JetStream observer for a different document generation"
+                    .to_owned(),
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn request_jetstream_start(
+        &mut self,
+        tab_id: u64,
+        document_generation: u64,
+        timeout: Duration,
+    ) -> Result<(), PhotonAutomationError> {
+        if !self.supports("request_jetstream_start") {
+            return Err(PhotonAutomationError(
+                "Photon does not advertise the restricted JetStream start control".to_owned(),
+            ));
+        }
+        let result = self.call(
+            "request_jetstream_start",
+            Some(json!({
+                "tab_id": tab_id,
+                "document_generation": document_generation
+            })),
+            timeout,
+        )?;
+        if result.get("requested").and_then(Value::as_bool) != Some(true)
+            || result.get("document_generation").and_then(Value::as_u64)
+                != Some(document_generation)
+        {
+            return Err(PhotonAutomationError(
+                "Photon did not confirm the JetStream start request for the current document"
+                    .to_owned(),
+            ));
+        }
+        Ok(())
+    }
+
     fn call(
         &mut self,
         command: &str,
@@ -625,7 +722,8 @@ fn read_private_token(path: &Path) -> Result<String, PhotonAutomationError> {
 #[cfg(test)]
 mod tests {
     use super::{
-        PhotonAutomationClient, PhotonTab, ProcessStartTime, parse_speedometer_result_title,
+        PhotonAutomationClient, PhotonTab, ProcessStartTime, parse_jetstream_result_title,
+        parse_speedometer_result_title,
     };
     use serde_json::{Value, json};
     use std::{
@@ -884,6 +982,26 @@ mod tests {
         );
         assert_eq!(frame.test_frame_onload_handler, Some(true));
         assert!(parse_speedometer_result_title(Some("VelocitySpeedometer3.1:not-json")).is_err());
+    }
+
+    #[test]
+    fn jetstream_title_parser_accepts_bounded_structured_state() {
+        assert!(parse_jetstream_result_title(None).unwrap().is_none());
+        let status = parse_jetstream_result_title(Some(concat!(
+            "VelocityJetStream3.0:{\"state\":\"complete\",\"initialized\":true,",
+            "\"started\":true,\"completed\":true,\"failed\":false,",
+            "\"official_score\":71.23,\"completed_workloads\":77,\"total_workloads\":77,",
+            "\"subtest_scores\":{\"acorn-wtb\":12.5},\"errors\":[],",
+            "\"document_generation\":9,\"document_url\":\"http://127.0.0.1:1234/JetStream3.0/index.html\"}"
+        )))
+        .unwrap()
+        .unwrap();
+        assert!(status.completed);
+        assert_eq!(status.official_score, Some(71.23));
+        assert_eq!(status.total_workloads, 77);
+        assert_eq!(status.document_generation, Some(9));
+        assert_eq!(status.subtest_scores.get("acorn-wtb"), Some(&12.5));
+        assert!(parse_jetstream_result_title(Some("VelocityJetStream3.0:bad-json")).is_err());
     }
 
     #[test]

@@ -20,6 +20,33 @@ pub struct SpeedometerPageStatus {
     pub viewport_warning: bool,
 }
 
+/// State published by the fixed JetStream 3.0 page observer.
+#[derive(Clone, Debug, PartialEq)]
+pub struct JetStreamPageStatus {
+    pub url: String,
+    pub document_ready: bool,
+    pub document_visibility_state: Option<String>,
+    pub initialized: bool,
+    pub started: bool,
+    pub completed: bool,
+    pub failed: bool,
+    pub status_text: String,
+    pub official_score: Option<f64>,
+    pub completed_workloads: usize,
+    pub total_workloads: usize,
+    pub current_workload: Option<String>,
+    pub errors: Vec<String>,
+    pub subtest_scores: BTreeMap<String, f64>,
+}
+
+impl JetStreamPageStatus {
+    pub fn ready(&self) -> bool {
+        self.document_ready
+            && self.document_visibility_state.as_deref() == Some("visible")
+            && self.initialized
+    }
+}
+
 impl SpeedometerPageStatus {
     pub fn started(&self) -> bool {
         self.document_ready && self.section.as_deref() == Some("running")
@@ -42,6 +69,7 @@ pub struct ChromiumDevTools {
     next_id: u64,
     page_targets: BTreeSet<String>,
     target_sessions: BTreeMap<String, String>,
+    page_diagnostics: Vec<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -113,6 +141,7 @@ impl ChromiumDevTools {
             next_id: 1,
             page_targets: BTreeSet::new(),
             target_sessions: BTreeMap::new(),
+            page_diagnostics: Vec::new(),
         })
     }
 
@@ -186,12 +215,101 @@ impl ChromiumDevTools {
             let response: Value = serde_json::from_str(&response)
                 .map_err(|error| AutomationError(format!("invalid CDP response: {error}")))?;
             if response.get("id").and_then(Value::as_u64) != Some(id) {
+                self.capture_page_diagnostic(&response);
                 continue;
             }
             if let Some(error) = response.get("error") {
                 return Err(AutomationError(format!("CDP {method} failed: {error}")));
             }
             return Ok(response.get("result").cloned().unwrap_or(Value::Null));
+        }
+    }
+
+    /// Returns a bounded set of page errors observed on the managed target.
+    /// Request query strings and bodies are never captured.
+    pub fn page_diagnostics(&self) -> &[String] {
+        &self.page_diagnostics
+    }
+
+    fn capture_page_diagnostic(&mut self, event: &Value) {
+        const MAX_EVENTS: usize = 16;
+        const MAX_MESSAGE_CHARS: usize = 384;
+        if self.page_diagnostics.len() >= MAX_EVENTS {
+            return;
+        }
+        let Some(method) = event.get("method").and_then(Value::as_str) else {
+            return;
+        };
+        let params = event.get("params").unwrap_or(&Value::Null);
+        let message = match method {
+            "Runtime.exceptionThrown" => {
+                let details = params.get("exceptionDetails").unwrap_or(&Value::Null);
+                let text = details
+                    .get("exception")
+                    .and_then(|exception| exception.get("description"))
+                    .and_then(Value::as_str)
+                    .or_else(|| details.get("text").and_then(Value::as_str))
+                    .unwrap_or("uncaught JavaScript exception");
+                Some(format!("JavaScript exception: {text}"))
+            }
+            "Runtime.consoleAPICalled"
+                if params.get("type").and_then(Value::as_str) == Some("error") =>
+            {
+                let text = params
+                    .get("args")
+                    .and_then(Value::as_array)
+                    .map(|args| {
+                        args.iter()
+                            .filter_map(|arg| {
+                                arg.get("value")
+                                    .and_then(Value::as_str)
+                                    .or_else(|| arg.get("description").and_then(Value::as_str))
+                            })
+                            .take(3)
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    })
+                    .unwrap_or_default();
+                (!text.is_empty()).then(|| format!("JavaScript console error: {text}"))
+            }
+            "Log.entryAdded"
+                if params
+                    .get("entry")
+                    .and_then(|entry| entry.get("level"))
+                    .and_then(Value::as_str)
+                    == Some("error") =>
+            {
+                params
+                    .get("entry")
+                    .and_then(|entry| entry.get("text"))
+                    .and_then(Value::as_str)
+                    .map(|text| format!("Browser log error: {text}"))
+            }
+            "Network.loadingFailed" => params
+                .get("errorText")
+                .and_then(Value::as_str)
+                .map(|text| format!("Resource load failed: {text}")),
+            "Network.responseReceived" => {
+                let response = params.get("response").unwrap_or(&Value::Null);
+                let status = response.get("status").and_then(Value::as_u64).unwrap_or(0);
+                (status >= 400).then(|| {
+                    let url = response
+                        .get("url")
+                        .and_then(Value::as_str)
+                        .unwrap_or("unknown resource")
+                        .split(['?', '#'])
+                        .next()
+                        .unwrap_or("unknown resource");
+                    format!("Resource returned HTTP {status}: {url}")
+                })
+            }
+            _ => None,
+        };
+        if let Some(message) = message {
+            let bounded = message.chars().take(MAX_MESSAGE_CHARS).collect::<String>();
+            if !self.page_diagnostics.contains(&bounded) {
+                self.page_diagnostics.push(bounded);
+            }
         }
     }
 
@@ -230,6 +348,9 @@ impl ChromiumDevTools {
             .and_then(Value::as_str)
             .ok_or_else(|| AutomationError("CDP did not return a target session ID".to_owned()))?
             .to_owned();
+        self.command("Runtime.enable", json!({}), Some(&session_id))?;
+        self.command("Log.enable", json!({}), Some(&session_id))?;
+        self.command("Network.enable", json!({}), Some(&session_id))?;
         self.command("Page.enable", json!({}), Some(&session_id))?;
         self.command("Page.navigate", json!({ "url": url }), Some(&session_id))?;
         Ok(session_id)
@@ -372,6 +493,221 @@ impl ChromiumDevTools {
         )
     }
 
+    /// Reads the fixed, read-only JetStream 3.0 status expression. Callers
+    /// cannot supply JavaScript through this API.
+    pub fn jetstream_status(
+        &mut self,
+        target_id: &str,
+    ) -> Result<JetStreamPageStatus, AutomationError> {
+        let session_id = self
+            .target_sessions
+            .get(target_id)
+            .cloned()
+            .ok_or_else(|| {
+                AutomationError(format!(
+                    "CDP has no verified target session for JetStream page {target_id}"
+                ))
+            })?;
+        let result = self.command(
+            "Runtime.evaluate",
+            json!({
+                "expression": JETSTREAM_STATUS_EXPRESSION,
+                "returnByValue": true,
+                "awaitPromise": false
+            }),
+            Some(&session_id),
+        )?;
+        if let Some(exception) = result.get("exceptionDetails") {
+            return Err(AutomationError(format!(
+                "JetStream status evaluation failed: {exception}"
+            )));
+        }
+        let value = result
+            .get("result")
+            .and_then(|remote| remote.get("value"))
+            .ok_or_else(|| {
+                AutomationError("JetStream status response had no by-value result".to_owned())
+            })?;
+        parse_jetstream_status(value)
+    }
+
+    /// Brings the verified benchmark page to the foreground before execution.
+    pub fn bring_page_to_front(&mut self, target_id: &str) -> Result<(), AutomationError> {
+        let session_id = self
+            .target_sessions
+            .get(target_id)
+            .cloned()
+            .ok_or_else(|| {
+                AutomationError(format!(
+                    "CDP has no verified target session for JetStream page {target_id}"
+                ))
+            })?;
+        self.command("Page.bringToFront", json!({}), Some(&session_id))?;
+        Ok(())
+    }
+
+    /// Activates JetStream's own Start Test control on the verified benchmark
+    /// document without accepting JavaScript from the CLI caller.
+    pub fn start_jetstream(&mut self, target_id: &str) -> Result<(), AutomationError> {
+        let session_id = self
+            .target_sessions
+            .get(target_id)
+            .cloned()
+            .ok_or_else(|| {
+                AutomationError(format!(
+                    "CDP has no verified target session for JetStream page {target_id}"
+                ))
+            })?;
+        let result = self.command(
+            "Runtime.evaluate",
+            json!({
+                "expression": JETSTREAM_START_EXPRESSION,
+                "returnByValue": true,
+                "awaitPromise": false
+            }),
+            Some(&session_id),
+        )?;
+        if let Some(exception) = result.get("exceptionDetails") {
+            return Err(AutomationError(format!(
+                "JetStream start request failed: {exception}"
+            )));
+        }
+        let value = result
+            .get("result")
+            .and_then(|remote| remote.get("value"))
+            .and_then(Value::as_object)
+            .ok_or_else(|| {
+                AutomationError("JetStream start response had no structured result".to_owned())
+            })?;
+        if value.get("started").and_then(Value::as_bool) == Some(true) {
+            return Ok(());
+        }
+        let reason = value
+            .get("error")
+            .and_then(Value::as_str)
+            .unwrap_or("the official Start Test control was unavailable");
+        Err(AutomationError(format!(
+            "JetStream did not start through its official control: {reason}"
+        )))
+    }
+
+    pub fn wait_for_jetstream_ready(
+        &mut self,
+        target_id: &str,
+        expected_url: &str,
+        timeout: Duration,
+        cancelled: impl FnMut() -> bool,
+    ) -> Result<JetStreamPageStatus, AutomationError> {
+        self.wait_for_jetstream_condition(
+            target_id,
+            expected_url,
+            timeout,
+            "initialization",
+            cancelled,
+            |status| status.ready(),
+        )
+    }
+
+    pub fn wait_for_jetstream_started(
+        &mut self,
+        target_id: &str,
+        expected_url: &str,
+        timeout: Duration,
+        cancelled: impl FnMut() -> bool,
+    ) -> Result<JetStreamPageStatus, AutomationError> {
+        self.wait_for_jetstream_condition(
+            target_id,
+            expected_url,
+            timeout,
+            "start",
+            cancelled,
+            |status| status.started || status.completed,
+        )
+    }
+
+    pub fn wait_for_jetstream_completed(
+        &mut self,
+        target_id: &str,
+        expected_url: &str,
+        timeout: Duration,
+        cancelled: impl FnMut() -> bool,
+    ) -> Result<JetStreamPageStatus, AutomationError> {
+        self.wait_for_jetstream_condition(
+            target_id,
+            expected_url,
+            timeout,
+            "completion",
+            cancelled,
+            |status| status.completed,
+        )
+    }
+
+    fn wait_for_jetstream_condition(
+        &mut self,
+        target_id: &str,
+        expected_url: &str,
+        timeout: Duration,
+        phase: &str,
+        mut cancelled: impl FnMut() -> bool,
+        condition: impl Fn(&JetStreamPageStatus) -> bool,
+    ) -> Result<JetStreamPageStatus, AutomationError> {
+        let deadline = Instant::now() + timeout;
+        let mut last_error = None;
+        while Instant::now() < deadline {
+            if cancelled() {
+                return Err(AutomationError(format!(
+                    "JetStream automation was cancelled during {phase}"
+                )));
+            }
+            match self.jetstream_status(target_id) {
+                Ok(status) => {
+                    if !same_document_url(&status.url, expected_url) {
+                        last_error = Some(format!(
+                            "controlled page navigated away from expected JetStream document: {}",
+                            status.url
+                        ));
+                    } else if status.failed {
+                        let detail = status
+                            .errors
+                            .first()
+                            .map(String::as_str)
+                            .unwrap_or(status.status_text.as_str());
+                        return Err(AutomationError(format!(
+                            "JetStream reported a page or workload failure during {phase}: {detail}"
+                        )));
+                    } else if condition(&status) {
+                        return Ok(status);
+                    } else {
+                        last_error = Some(format!(
+                            "state={}, initialized={}, running={}, completed={}/{}, current={}",
+                            status.status_text,
+                            status.initialized,
+                            status.started,
+                            status.completed_workloads,
+                            status.total_workloads,
+                            status.current_workload.as_deref().unwrap_or("none")
+                        ));
+                    }
+                }
+                Err(error) => {
+                    let message = error.to_string();
+                    if is_transport_disconnect(&message) {
+                        return Err(AutomationError(format!(
+                            "JetStream automation connection was lost during {phase}: {message}"
+                        )));
+                    }
+                    last_error = Some(message);
+                }
+            }
+            thread::sleep(Duration::from_millis(250));
+        }
+        Err(AutomationError(format!(
+            "JetStream did not reach verified {phase} state within {:.1} seconds ({})",
+            timeout.as_secs_f64(),
+            last_error.unwrap_or_else(|| "page remained in its loading state".to_owned())
+        )))
+    }
+
     fn wait_for_speedometer_condition(
         &mut self,
         target_id: &str,
@@ -465,6 +801,78 @@ const SPEEDOMETER_STATUS_EXPRESSION: &str = r##"(() => {
     };
 })()"##;
 
+const JETSTREAM_STATUS_EXPRESSION: &str = r##"(() => {
+    const driver = globalThis.JetStream;
+    const status = document.querySelector("#status");
+    const summary = document.querySelector("#result-summary");
+    const scoreText = summary?.querySelector(".score")?.textContent?.trim() || "";
+    const score = Number(scoreText);
+    const workloads = Array.isArray(driver?.benchmarks) ? driver.benchmarks : [];
+    const completed = workloads.filter(benchmark =>
+        document.getElementById(`benchmark-${benchmark.name}`)?.classList.contains("benchmark-done")
+    ).length;
+    const errors = Array.isArray(driver?.errors)
+        ? driver.errors.slice(0, 8).map(error => String(error?.error || error).slice(0, 192))
+        : [];
+    const runningNode = workloads.find(benchmark =>
+        document.getElementById(`benchmark-${benchmark.name}`)?.classList.contains("benchmark-running")
+    );
+    const failed = globalThis.allIsGood === false
+        || status?.classList.contains("error") === true
+        || document.querySelector(".benchmark-error") !== null
+        || errors.length > 0;
+    const finished = driver?.isDone === true
+        && summary?.classList.contains("done") === true
+        && workloads.length > 0
+        && completed === workloads.length
+        && Number.isFinite(score)
+        && score > 0;
+    const statusText = String(status?.innerText || status?.textContent || "").trim().slice(0, 512);
+    const subtestScores = {};
+    for (const benchmark of workloads) {
+        const value = benchmark?.score;
+        if (typeof benchmark?.name === "string" && Number.isFinite(value) && value > 0)
+            subtestScores[benchmark.name] = value;
+    }
+    return {
+        url: location.href,
+        document_ready: document.readyState === "complete",
+        document_visibility_state: document.visibilityState,
+        initialized: driver?.isReady === true && globalThis.allIsGood !== false,
+        started: statusText.includes("Running") || !!runningNode || finished,
+        completed: finished,
+        failed,
+        status_text: statusText,
+        official_score: Number.isFinite(score) && score > 0 ? score : null,
+        completed_workloads: completed,
+        total_workloads: workloads.length,
+        current_workload: runningNode?.name || null,
+        errors,
+        subtest_scores: subtestScores,
+    };
+})()"##;
+
+const JETSTREAM_START_EXPRESSION: &str = r##"(() => {
+    const path = location.pathname;
+    const officialHost = location.protocol === "https:" && location.hostname === "browserbench.org";
+    const loopbackHost = location.protocol === "http:" && location.hostname === "127.0.0.1";
+    const validPath = path === "/JetStream3.0" || path === "/JetStream3.0/" || path === "/JetStream3.0/index.html";
+    if (!(officialHost || loopbackHost) || !validPath)
+        return { started: false, error: "page is outside the official JetStream 3.0 route" };
+    if (location.search.length)
+        return { started: false, error: "JetStream URL contains non-default parameters" };
+    const driver = globalThis.JetStream;
+    const status = document.querySelector("#status");
+    if (driver?.isReady !== true)
+        return { started: false, error: "JetStream has not completed initialization" };
+    if (driver.isDone)
+        return { started: false, error: "JetStream has already completed" };
+    if (!status || typeof status.onclick !== "function" || !status.querySelector("a.button"))
+        return { started: false, error: "official Start Test control is unavailable" };
+    status.click();
+    return { started: true };
+})()"##;
+
 fn parse_speedometer_status(value: &Value) -> Result<SpeedometerPageStatus, AutomationError> {
     let url = value
         .get("url")
@@ -501,6 +909,109 @@ fn parse_speedometer_status(value: &Value) -> Result<SpeedometerPageStatus, Auto
             .and_then(Value::as_bool)
             .unwrap_or(false),
     })
+}
+
+fn parse_jetstream_status(value: &Value) -> Result<JetStreamPageStatus, AutomationError> {
+    let url = value
+        .get("url")
+        .and_then(Value::as_str)
+        .ok_or_else(|| AutomationError("JetStream status omitted the page URL".to_owned()))?
+        .to_owned();
+    let errors: Vec<String> = value
+        .get("errors")
+        .and_then(Value::as_array)
+        .map(|errors| {
+            errors
+                .iter()
+                .filter_map(Value::as_str)
+                .take(8)
+                .map(|error| error.chars().take(192).collect())
+                .collect()
+        })
+        .unwrap_or_default();
+    let subtest_scores = value
+        .get("subtest_scores")
+        .and_then(Value::as_object)
+        .map(|scores| {
+            scores
+                .iter()
+                .filter_map(|(name, score)| {
+                    score
+                        .as_f64()
+                        .filter(|score| score.is_finite() && *score > 0.0)
+                        .map(|score| (name.clone(), score))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let official_score = value
+        .get("official_score")
+        .and_then(Value::as_f64)
+        .filter(|score| score.is_finite() && *score > 0.0);
+    let completed_workloads = value
+        .get("completed_workloads")
+        .and_then(Value::as_u64)
+        .unwrap_or_default() as usize;
+    let total_workloads = value
+        .get("total_workloads")
+        .and_then(Value::as_u64)
+        .unwrap_or_default() as usize;
+    let failed = value
+        .get("failed")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+        || !errors.is_empty();
+    let completed = value
+        .get("completed")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+        && total_workloads > 0
+        && completed_workloads == total_workloads
+        && official_score.is_some()
+        && !failed;
+    Ok(JetStreamPageStatus {
+        url,
+        document_ready: value
+            .get("document_ready")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        document_visibility_state: value
+            .get("document_visibility_state")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+        initialized: value
+            .get("initialized")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        started: value
+            .get("started")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        completed,
+        failed,
+        status_text: value
+            .get("status_text")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .chars()
+            .take(512)
+            .collect(),
+        official_score,
+        completed_workloads,
+        total_workloads,
+        current_workload: value
+            .get("current_workload")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+        errors,
+        subtest_scores,
+    })
+}
+
+fn same_document_url(actual: &str, expected: &str) -> bool {
+    let actual = actual.split(['?', '#']).next().unwrap_or_default();
+    let expected = expected.split(['?', '#']).next().unwrap_or_default();
+    actual.trim_end_matches('/') == expected.trim_end_matches('/')
 }
 
 impl BrowserAutomationAdapter for ChromiumDevTools {
@@ -592,6 +1103,89 @@ mod tests {
     fn rejects_speedometer_status_without_a_page_url() {
         let error = parse_speedometer_status(&json!({"section": "summary"})).unwrap_err();
         assert!(error.to_string().contains("omitted the page URL"));
+    }
+
+    #[test]
+    fn parses_jetstream_completion_and_official_subtest_scores() {
+        let status = parse_jetstream_status(&json!({
+            "url": "http://127.0.0.1:43123/JetStream3.0/index.html?startAutomatically",
+            "document_ready": true,
+            "document_visibility_state": "visible",
+            "initialized": true,
+            "started": true,
+            "completed": true,
+            "failed": false,
+            "status_text": "",
+            "official_score": 71.23,
+            "completed_workloads": 77,
+            "total_workloads": 77,
+            "current_workload": null,
+            "errors": [],
+            "subtest_scores": {"acorn-wtb": 12.5, "bad": null},
+        }))
+        .unwrap();
+
+        assert!(status.ready());
+        assert!(status.started);
+        assert!(status.completed);
+        assert!(!status.failed);
+        assert_eq!(status.official_score, Some(71.23));
+        assert_eq!(status.completed_workloads, 77);
+        assert_eq!(status.total_workloads, 77);
+        assert_eq!(status.subtest_scores.get("acorn-wtb"), Some(&12.5));
+    }
+
+    #[test]
+    fn jetstream_readiness_requires_a_visible_document() {
+        let hidden = parse_jetstream_status(&json!({
+            "url": "http://127.0.0.1:43123/JetStream3.0/index.html",
+            "document_ready": true,
+            "document_visibility_state": "hidden",
+            "initialized": true,
+        }))
+        .unwrap();
+
+        assert!(!hidden.ready());
+        assert_eq!(hidden.document_visibility_state.as_deref(), Some("hidden"));
+    }
+
+    #[test]
+    fn jetstream_status_bounds_errors_and_rejects_unusable_score_values() {
+        let status = parse_jetstream_status(&json!({
+            "url": "https://browserbench.org/JetStream3.0/index.html",
+            "initialized": false,
+            "failed": true,
+            "errors": ["x".repeat(500)],
+            "subtest_scores": {"invalid": -1, "nan": null},
+        }))
+        .unwrap();
+        assert!(status.failed);
+        assert_eq!(status.errors[0].len(), 192);
+        assert!(status.subtest_scores.is_empty());
+        assert_eq!(status.official_score, None);
+    }
+
+    #[test]
+    fn jetstream_completion_requires_the_complete_official_workload_set() {
+        let incomplete = parse_jetstream_status(&json!({
+            "url": "https://browserbench.org/JetStream3.0/index.html",
+            "completed": true,
+            "failed": false,
+            "official_score": 71.23,
+            "completed_workloads": 76,
+            "total_workloads": 77,
+        }))
+        .unwrap();
+        assert!(!incomplete.completed);
+
+        assert!(same_document_url(
+            "https://browserbench.org/JetStream3.0/index.html?startAutomatically",
+            "https://browserbench.org/JetStream3.0/index.html"
+        ));
+        assert!(!same_document_url(
+            "https://browserbench.org/JetStream3.0/index.html",
+            "https://example.com/JetStream3.0/index.html"
+        ));
     }
 
     #[test]
