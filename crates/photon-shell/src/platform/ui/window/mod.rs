@@ -327,6 +327,7 @@ impl BrowserWindow {
         }
         self.omnibox.update(cx, |_, cx| cx.notify());
         self.wake_tab_sleep_scheduler();
+        self.animate_spinner(cx);
         cx.notify();
     }
 

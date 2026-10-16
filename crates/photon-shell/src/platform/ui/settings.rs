@@ -13,7 +13,7 @@ use photon_omnibox::SearchEngines;
 use photon_storage::{Profile, ProfileWriteTicket};
 use std::cell::OnceCell;
 use std::rc::Rc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use super::super::app_update::update_app;
 use super::super::trace;
@@ -26,6 +26,17 @@ const SAVE_DELAY: Duration = Duration::from_millis(500);
 const CONFIG_RELOAD_INTERVAL: Duration = Duration::from_millis(200);
 /// Wait for an editor's write to settle before parsing its file.
 const CONFIG_RELOAD_SETTLE: Duration = Duration::from_millis(100);
+/// Keep the loading chip visible long enough to read on fast reloads.
+const CONFIG_RELOAD_MINIMUM_DURATION: Duration = Duration::from_millis(250);
+/// How long the completed config reload chip remains visible.
+const CONFIG_RELOAD_NOTICE_DURATION: Duration = Duration::from_secs(3);
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum ConfigReloadNotice {
+    Reloading,
+    Reloaded(Instant),
+    Failed(Instant),
+}
 
 /// The settings, and where they are saved; `None` keeps them in memory only.
 pub(super) struct Settings {
@@ -35,6 +46,7 @@ pub(super) struct Settings {
     save: Option<Task<()>>,
     /// Watches the profile config for edits made outside Photon.
     _reload: Option<Task<()>>,
+    config_reload_notice: Option<ConfigReloadNotice>,
     /// The workspace layout the settings resolve to, worked out on first
     /// use after each change, as drawing asks for it many times a frame.
     layout: OnceCell<Rc<WorkspaceLayout>>,
@@ -59,6 +71,7 @@ pub(in crate::platform) fn load_settings(
         profile,
         save: None,
         _reload: reload,
+        config_reload_notice: None,
         layout: OnceCell::new(),
     });
     cx.on_app_quit(|cx| {
@@ -143,6 +156,7 @@ fn watch_settings(profile: Profile, mut revision: Option<u64>, cx: &mut App) -> 
             {
                 break;
             }
+            let reloading_started = Instant::now();
             let profile_to_reload = profile.clone();
             match cx
                 .background_executor()
@@ -151,6 +165,11 @@ fn watch_settings(profile: Profile, mut revision: Option<u64>, cx: &mut App) -> 
             {
                 Ok((settings, loaded_revision)) => {
                     revision = Some(loaded_revision);
+                    let remaining =
+                        CONFIG_RELOAD_MINIMUM_DURATION.saturating_sub(reloading_started.elapsed());
+                    if !remaining.is_zero() {
+                        cx.background_executor().timer(remaining).await;
+                    }
                     let profile = profile.clone();
                     if update_app(cx, move |cx| {
                         Settings::apply_reload(&profile, settings, cx);
@@ -161,7 +180,12 @@ fn watch_settings(profile: Profile, mut revision: Option<u64>, cx: &mut App) -> 
                         break;
                     }
                 }
-                Err(error) => trace(format_args!("reloading config.toml: {error}")),
+                Err(error) => {
+                    trace(format_args!("reloading config.toml: {error}"));
+                    if update_app(cx, Settings::fail_reload).await.is_none() {
+                        break;
+                    }
+                }
             }
         }
     })
@@ -170,7 +194,10 @@ fn watch_settings(profile: Profile, mut revision: Option<u64>, cx: &mut App) -> 
 impl Settings {
     fn prepare_reload(profile: &Profile, cx: &mut App) {
         profile.begin_settings_write();
-        cx.update_global::<Self, _>(|store, _| store.save = None);
+        cx.update_global::<Self, _>(|store, _| {
+            store.save = None;
+            store.config_reload_notice = Some(ConfigReloadNotice::Reloading);
+        });
     }
 
     fn apply_reload(profile: &Profile, settings: BrowserSettings, cx: &mut App) {
@@ -183,7 +210,22 @@ impl Settings {
                 store.settings = settings;
                 store.layout = OnceCell::new();
             }
+            store.config_reload_notice = Some(ConfigReloadNotice::Reloaded(Instant::now()));
         });
+    }
+
+    fn fail_reload(cx: &mut App) {
+        cx.update_global::<Self, _>(|store, _| {
+            store.config_reload_notice = Some(ConfigReloadNotice::Failed(Instant::now()));
+        });
+    }
+
+    pub(super) fn config_reload_notice(cx: &App) -> Option<ConfigReloadNotice> {
+        cx.global::<Self>().config_reload_notice
+    }
+
+    pub(super) fn config_reload_notice_duration() -> Duration {
+        CONFIG_RELOAD_NOTICE_DURATION
     }
 
     /// The reusable motion framework's view of the saved and system settings.

@@ -5,7 +5,7 @@ use photon_core::BrowserCommand;
 use std::time::{Duration, Instant};
 
 use super::super::super::engine::ZoomStep;
-use super::super::settings::Settings;
+use super::super::settings::{ConfigReloadNotice, Settings};
 use super::super::status_chip::{CHIP_MOTION, ChipIcon, status_chip};
 use super::super::theme::ThemeColors;
 use super::super::{ClickHandler, CrashNotice};
@@ -114,6 +114,35 @@ impl BrowserWindow {
                 action: (percent != 100).then_some(NoticeAction::ResetZoom),
             })
         });
+        let config_notice = Settings::config_reload_notice(cx)
+            .map(|notice| match notice {
+                ConfigReloadNotice::Reloading => Notice {
+                    id: "config-reloading",
+                    icon: ChipIcon::Working(step),
+                    message: SharedString::new_static("Reloading config..."),
+                    expires_at: None,
+                    action: None,
+                },
+                ConfigReloadNotice::Reloaded(at) => Notice {
+                    id: "config-reloaded",
+                    icon: ChipIcon::Done,
+                    message: SharedString::new_static("Reloaded!"),
+                    expires_at: Some(at + Settings::config_reload_notice_duration()),
+                    action: None,
+                },
+                ConfigReloadNotice::Failed(at) => Notice {
+                    id: "config-reload-failed",
+                    icon: ChipIcon::Problem,
+                    message: SharedString::new_static("Couldn't reload config"),
+                    expires_at: Some(at + Settings::config_reload_notice_duration()),
+                    action: None,
+                },
+            })
+            .filter(|notice| {
+                !notice
+                    .expires_at
+                    .is_some_and(|deadline| Instant::now() >= deadline)
+            });
         let notice = match self.engine_notice {
             Some(EngineNotice::Restarting) => Notice {
                 id: "engine-restarting",
@@ -129,6 +158,7 @@ impl BrowserWindow {
                 expires_at: Some(at + RECOVERED_NOTICE_DURATION),
                 action: None,
             },
+            None if config_notice.is_some() => config_notice?,
             None if webview
                 .as_ref()
                 .is_some_and(|view| view.read(cx).page_unresponsive) =>
