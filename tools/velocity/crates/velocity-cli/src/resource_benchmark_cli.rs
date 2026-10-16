@@ -33,6 +33,7 @@ struct Options {
     target: TargetSelection,
     config: ResourceBenchmarkConfig,
     output_directory: PathBuf,
+    record_history: bool,
 }
 
 pub fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
@@ -72,6 +73,7 @@ fn parse_options(
     let mut config = ResourceBenchmarkConfig::defaults(workload);
     let mut output_directory = default_output_directory();
     let mut seen = BTreeSet::new();
+    let mut record_history = true;
     while let Some(option) = arguments.next() {
         if !seen.insert(option.clone()) {
             return Err(format!("{option} may be specified only once"));
@@ -121,6 +123,8 @@ fn parse_options(
             "--output" => {
                 output_directory = PathBuf::from(required_value(&mut arguments, &option)?)
             }
+            "--record-history" => record_history = true,
+            "--no-record-history" => record_history = false,
             other => {
                 return Err(format!(
                     "unknown {workload_name_option} option '{other}'",
@@ -137,6 +141,9 @@ fn parse_options(
                 .to_owned(),
         );
     }
+    if seen.contains("--record-history") && seen.contains("--no-record-history") {
+        return Err("choose only one of --record-history and --no-record-history".to_owned());
+    }
     let target = match (browser, browsers, all) {
         (Some(browser), None, false) => TargetSelection::One(browser),
         (None, Some(browsers), false) => TargetSelection::Many(browsers),
@@ -150,6 +157,7 @@ fn parse_options(
         target,
         config,
         output_directory,
+        record_history,
     })
 }
 
@@ -466,6 +474,13 @@ fn run_resource_benchmark(options: Options) -> Result<(), String> {
     let (json_path, html_path) = write_reports(&options.output_directory, &run_id, &report)?;
     println!("\nSaved JSON: {}", display_path(&json_path));
     println!("Saved HTML: {}", display_path(&html_path));
+    if options.record_history
+        && report.iterations.iter().any(|iteration| {
+            !iteration.warmup && iteration.resource.is_some() && iteration.failure.is_none()
+        })
+    {
+        super::history_cli::record_after_success(&json_path);
+    }
     drop(fixture_server);
     if report
         .iterations
@@ -1654,6 +1669,26 @@ mod tests {
         assert_eq!(options.config.navigation_timeout_ms, 30_000);
         assert_eq!(options.config.readiness_timeout_ms, 30_000);
         assert_eq!(options.config.fixture, Some(FixtureKind::Dynamic));
+        assert!(options.record_history);
+        let without_history = parse_options(
+            ResourceWorkload::Page,
+            args(&["--browser", "chrome", "--no-record-history"]).into_iter(),
+        )
+        .unwrap();
+        assert!(!without_history.record_history);
+        assert!(
+            parse_options(
+                ResourceWorkload::Page,
+                args(&[
+                    "--browser",
+                    "chrome",
+                    "--record-history",
+                    "--no-record-history"
+                ])
+                .into_iter(),
+            )
+            .is_err()
+        );
     }
 
     #[test]

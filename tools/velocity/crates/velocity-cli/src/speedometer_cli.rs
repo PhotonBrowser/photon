@@ -26,6 +26,45 @@ const MAX_RUNS: usize = 100;
 const MAX_WARMUPS: usize = 20;
 const MIN_COMPARISON_RUNS: usize = 3;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ScoreChangeStatus {
+    Regression,
+    Improvement,
+    WithinThreshold,
+    Inconclusive,
+}
+
+fn classify_score_change(
+    baseline_median: f64,
+    current_median: f64,
+    threshold_percent: f64,
+    baseline_scores: &[f64],
+    current_scores: &[f64],
+) -> (ScoreChangeStatus, Option<f64>) {
+    if !baseline_median.is_finite()
+        || baseline_median <= 0.0
+        || !current_median.is_finite()
+        || current_median <= 0.0
+        || !threshold_percent.is_finite()
+        || threshold_percent < 0.0
+    {
+        return (ScoreChangeStatus::Inconclusive, None);
+    }
+    let change_percent = (current_median - baseline_median) / baseline_median * 100.0;
+    let p_value =
+        crate::comparison_statistics::median_permutation_p_value(baseline_scores, current_scores);
+    if change_percent.abs() <= threshold_percent {
+        return (ScoreChangeStatus::WithinThreshold, p_value);
+    }
+    match p_value {
+        Some(p_value) if p_value < 0.05 && change_percent < 0.0 => {
+            (ScoreChangeStatus::Regression, Some(p_value))
+        }
+        Some(p_value) if p_value < 0.05 => (ScoreChangeStatus::Improvement, Some(p_value)),
+        _ => (ScoreChangeStatus::Inconclusive, p_value),
+    }
+}
+
 static CANCELLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 #[derive(Clone, Debug)]
@@ -46,6 +85,7 @@ struct Options {
     source: BenchmarkSourceKind,
     headless: bool,
     output_directory: PathBuf,
+    record_history: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -215,6 +255,172 @@ struct SpeedometerReport {
     generated_at_unix_ms: u128,
 }
 
+pub(crate) fn parse_history_report(
+    bytes: &[u8],
+) -> Result<Vec<crate::history::ImportEntry>, String> {
+    let value: serde_json::Value = serde_json::from_slice(bytes)
+        .map_err(|error| format!("invalid Speedometer report JSON: {error}"))?;
+    let schema = value
+        .get("schema_version")
+        .and_then(serde_json::Value::as_u64)
+        .ok_or("Speedometer report has no valid schema_version")?;
+    if schema == 0 || schema > 2 {
+        return Err(format!(
+            "unsupported Speedometer report schema {schema}; supported schemas are 1 and 2"
+        ));
+    }
+    let report: SpeedometerReport = serde_json::from_value(value)
+        .map_err(|error| format!("invalid Speedometer report: {error}"))?;
+    if report.benchmark != "speedometer" || report.benchmark_version != SPEEDOMETER_VERSION {
+        return Err(format!(
+            "history import supports Speedometer {}, found '{}' version '{}'",
+            SPEEDOMETER_VERSION, report.benchmark, report.benchmark_version
+        ));
+    }
+    if report.source.version != report.benchmark_version {
+        return Err("Speedometer source and benchmark versions do not match".to_owned());
+    }
+    if report.configuration.requested_runs == 0
+        || report.configuration.official_internal_iterations != 10
+    {
+        return Err(
+            "Speedometer report has an invalid run count or internal iteration configuration"
+                .to_owned(),
+        );
+    }
+    if report
+        .source
+        .official_commit
+        .as_deref()
+        .is_some_and(|commit| commit != SPEEDOMETER_COMMIT)
+    {
+        return Err(format!(
+            "Speedometer source commit does not match pinned commit {SPEEDOMETER_COMMIT}"
+        ));
+    }
+    if report.generated_at_unix_ms == 0
+        || report.environment.operating_system.trim().is_empty()
+        || report.environment.architecture.trim().is_empty()
+    {
+        return Err(
+            "Speedometer report timestamp or environment metadata is incomplete".to_owned(),
+        );
+    }
+
+    let mut entries = Vec::new();
+    for browser in &report.browsers {
+        if browser.browser.id.trim().is_empty()
+            || browser.browser.installation_id.trim().is_empty()
+            || browser.browser.name.trim().is_empty()
+            || browser.browser.executable_path.as_os_str().is_empty()
+        {
+            return Err("Speedometer browser metadata is incomplete".to_owned());
+        }
+        if browser.iterations.iter().any(|iteration| {
+            !iteration.warmup
+                && iteration.completion_verified
+                && (iteration.failure.is_some()
+                    || !iteration
+                        .score
+                        .is_some_and(|score| score.is_finite() && score > 0.0))
+        }) {
+            return Err(format!(
+                "{} has a completed Speedometer run without a valid official score",
+                browser.browser.name
+            ));
+        }
+        let completed_scores = browser
+            .iterations
+            .iter()
+            .filter(|iteration| {
+                !iteration.warmup && iteration.completion_verified && iteration.failure.is_none()
+            })
+            .filter_map(|iteration| iteration.score)
+            .filter(|score| score.is_finite() && *score > 0.0)
+            .collect::<Vec<_>>();
+        let Some(median_score) = browser.summary.median_score else {
+            continue;
+        };
+        let mean_score = browser.summary.mean_score.ok_or_else(|| {
+            format!(
+                "{} Speedometer summary has no mean score",
+                browser.browser.name
+            )
+        })?;
+        if !median_score.is_finite()
+            || median_score <= 0.0
+            || !mean_score.is_finite()
+            || mean_score <= 0.0
+            || browser.summary.valid_measured_runs == 0
+        {
+            return Err(format!(
+                "{} Speedometer summary contains an invalid score",
+                browser.browser.name
+            ));
+        }
+        if browser.summary.valid_measured_runs != completed_scores.len() {
+            return Err(format!(
+                "{} Speedometer summary count does not match complete measured iterations",
+                browser.browser.name
+            ));
+        }
+        if browser.iterations.iter().any(|iteration| {
+            !iteration.warmup
+                && iteration.completion_verified
+                && iteration
+                    .score
+                    .is_some_and(|score| score.is_finite() && score > 0.0)
+                && (iteration.benchmark_version.as_deref() != Some(SPEEDOMETER_VERSION)
+                    || iteration.official_internal_iteration_scores.len()
+                        != report.configuration.official_internal_iterations
+                    || iteration
+                        .official_internal_iteration_scores
+                        .iter()
+                        .any(|score| !score.is_finite() || *score <= 0.0))
+        }) {
+            return Err(format!(
+                "{} Speedometer run is missing the complete official iteration summary",
+                browser.browser.name
+            ));
+        }
+        let mut warnings = Vec::new();
+        if report.source.official_commit.is_none() {
+            warnings.push("source commit is not recorded; benchmark version is reported as 3.1 but source pin could not be verified".to_owned());
+        }
+        entries.push(crate::history::ImportEntry {
+            benchmark: "speedometer".to_owned(),
+            benchmark_version: Some(report.benchmark_version.clone()),
+            benchmark_schema_version: schema as u32,
+            browser: browser.browser.clone(),
+            timestamp_unix_ms: report.generated_at_unix_ms,
+            operating_system: report.environment.operating_system.clone(),
+            architecture: report.environment.architecture.clone(),
+            hardware: None,
+            benchmark_source: serde_json::to_value(&report.source).ok(),
+            configuration: serde_json::to_value(&report.configuration)
+                .map_err(|error| format!("cannot read Speedometer configuration: {error}"))?,
+            scenario: None,
+            summary: vec![crate::history::HistoryMetric {
+                name: "score".to_owned(),
+                unit: "score".to_owned(),
+                median: median_score,
+                mean: Some(mean_score),
+                standard_deviation: browser.summary.sample_standard_deviation,
+                sample_count: browser.summary.valid_measured_runs,
+                higher_is_better: Some(true),
+            }],
+            comparability: crate::history::ComparabilityMetadata {
+                status: "recorded".to_owned(),
+                warnings,
+            },
+        });
+    }
+    if entries.is_empty() {
+        return Err("Speedometer report contains no complete positive measured score".to_owned());
+    }
+    Ok(entries)
+}
+
 pub fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
     let arguments = arguments.into_iter().collect::<Vec<_>>();
     if arguments
@@ -244,6 +450,7 @@ fn parse_options(arguments: Vec<String>) -> Result<Options, String> {
     let mut source = BenchmarkSourceKind::Official;
     let mut headless = false;
     let mut output_directory = default_output_directory();
+    let mut record_history = true;
     let mut seen = BTreeSet::new();
     let mut arguments = arguments.into_iter();
     while let Some(option) = arguments.next() {
@@ -271,11 +478,16 @@ fn parse_options(arguments: Vec<String>) -> Result<Options, String> {
                 source = BenchmarkSourceKind::parse(&required_value(&mut arguments, &option)?)?
             }
             "--headless" => headless = true,
+            "--record-history" => record_history = true,
+            "--no-record-history" => record_history = false,
             "--output" => {
                 output_directory = PathBuf::from(required_value(&mut arguments, &option)?)
             }
             other => return Err(format!("unknown Speedometer option '{other}'")),
         }
+    }
+    if seen.contains("--record-history") && seen.contains("--no-record-history") {
+        return Err("choose only one of --record-history and --no-record-history".to_owned());
     }
     if !(1..=MAX_RUNS).contains(&runs) {
         return Err(format!("--runs must be between 1 and {MAX_RUNS}"));
@@ -302,6 +514,7 @@ fn parse_options(arguments: Vec<String>) -> Result<Options, String> {
         source,
         headless,
         output_directory,
+        record_history,
     })
 }
 
@@ -334,7 +547,7 @@ fn default_output_directory() -> PathBuf {
 
 fn print_help() {
     crate::terminal::print_markdown(
-        "## `velocity bench speedometer`\n\n**Usage:** `velocity bench speedometer [--browser <id|number> | --browsers <ids> | --all] [OPTIONS]`\n\nRuns the official Speedometer 3.1 page in fresh, isolated, headed browser sessions. The official benchmark starts itself through its documented `startAutomatically` URL parameter; Velocity reads its own completed score.\n\nOptions: `--runs N` (5), `--warmup N` (1), `--randomize`, `--timeout SECONDS` (600), `--benchmark-source official|local` (official hosted), `--output DIRECTORY`. Local mode uses the checksum-pinned source prepared by `velocity setup speedometer`.\n\nCDP adapters for Chrome and Helium and a restricted Photon observer are implemented. End-to-end support is only established by a completed live run; smoke-test failures remain in reports without scores. Other installations are reported unsupported. Headless mode is not supported.",
+        "## `velocity bench speedometer`\n\n**Usage:** `velocity bench speedometer [--browser <id|number> | --browsers <ids> | --all] [OPTIONS]`\n\nRuns the official Speedometer 3.1 page in fresh, isolated, headed browser sessions. The official benchmark starts itself through its documented `startAutomatically` URL parameter; Velocity reads its own completed score.\n\nOptions: `--runs N` (5), `--warmup N` (1), `--randomize`, `--timeout SECONDS` (600), `--benchmark-source official|local` (official hosted), `--output DIRECTORY`, `--record-history` / `--no-record-history` (history enabled by default). Local mode uses the checksum-pinned source prepared by `velocity setup speedometer`.\n\nCDP adapters for Chrome and Helium and a restricted Photon observer are implemented. End-to-end support is only established by a completed live run; smoke-test failures remain in reports without scores. Other installations are reported unsupported. Headless mode is not supported.",
     );
 }
 
@@ -563,11 +776,6 @@ fn run_benchmark(options: Options) -> Result<(), String> {
     };
 
     print_summary(&report);
-    let (json_path, html_path) = write_reports(&options.output_directory, &run_id, &report)?;
-    println!("\nSaved JSON: {}", display_path(&json_path));
-    println!("Saved HTML: {}", display_path(&html_path));
-    drop(source_server);
-
     let any_success = report
         .browsers
         .iter()
@@ -575,6 +783,14 @@ fn run_benchmark(options: Options) -> Result<(), String> {
         .any(|iteration| {
             !iteration.warmup && iteration.completion_verified && iteration.score.is_some()
         });
+    let (json_path, html_path) = write_reports(&options.output_directory, &run_id, &report)?;
+    println!("\nSaved JSON: {}", display_path(&json_path));
+    println!("Saved HTML: {}", display_path(&html_path));
+    if options.record_history && any_success {
+        crate::history_cli::record_after_success(&json_path);
+    }
+    drop(source_server);
+
     if !any_success && !cancelled {
         return Err(format!(
             "no Speedometer measured run completed; diagnostics were saved to {} and {}",
@@ -2101,10 +2317,10 @@ fn compare(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
     while let Some(option) = arguments.next() {
         match option.as_str() {
             "--baseline" if baseline.is_none() => {
-                baseline = Some(PathBuf::from(required_value(&mut arguments, &option)?));
+                baseline = Some(required_value(&mut arguments, &option)?);
             }
             "--current" if current.is_none() => {
-                current = Some(PathBuf::from(required_value(&mut arguments, &option)?));
+                current = Some(required_value(&mut arguments, &option)?);
             }
             "--threshold" => {
                 let value = required_value(&mut arguments, &option)?;
@@ -2118,8 +2334,34 @@ fn compare(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
             other => return Err(format!("unknown Speedometer comparison option '{other}'")),
         }
     }
-    let baseline_path = baseline.ok_or("compare speedometer requires --baseline <report.json>")?;
-    let current_path = current.ok_or("compare speedometer requires --current <report.json>")?;
+    let storage_directory = crate::history::default_storage_directory();
+    let baseline_selector =
+        baseline.ok_or("compare speedometer requires --baseline <report-or-baseline>")?;
+    let current_selector =
+        current.ok_or("compare speedometer requires --current <report-or-baseline>")?;
+    let baseline_history =
+        crate::history::record_for_selector(&baseline_selector, &storage_directory)?;
+    let current_history =
+        crate::history::record_for_selector(&current_selector, &storage_directory)?;
+    if crate::history::hardware_comparability(baseline_history.as_ref(), current_history.as_ref())
+        == Some(false)
+    {
+        return Err(
+            "Speedometer reports have a known hardware configuration or host identity mismatch and are not comparable"
+                .to_owned(),
+        );
+    }
+    if crate::history::hardware_comparability(baseline_history.as_ref(), current_history.as_ref())
+        .is_none()
+    {
+        println!(
+            "Warning: hardware identity is unavailable; OS and architecture match does not prove both runs used the same machine."
+        );
+    }
+    let baseline_path =
+        crate::history::resolve_report_selector(&baseline_selector, &storage_directory)?;
+    let current_path =
+        crate::history::resolve_report_selector(&current_selector, &storage_directory)?;
     let baseline: SpeedometerReport = read_report(&baseline_path)?;
     let current: SpeedometerReport = read_report(&current_path)?;
     if baseline.benchmark != "speedometer" || current.benchmark != "speedometer" {
@@ -2156,19 +2398,46 @@ fn compare(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
         {
             continue;
         }
+        let baseline_scores = old
+            .iterations
+            .iter()
+            .filter(|iteration| !iteration.warmup && iteration.completion_verified)
+            .filter_map(|iteration| iteration.score)
+            .filter(|score| score.is_finite() && *score > 0.0)
+            .collect::<Vec<_>>();
+        let current_scores = new
+            .iterations
+            .iter()
+            .filter(|iteration| !iteration.warmup && iteration.completion_verified)
+            .filter_map(|iteration| iteration.score)
+            .filter(|score| score.is_finite() && *score > 0.0)
+            .collect::<Vec<_>>();
         let change_percent = (new_median - old_median) / old_median * 100.0;
-        let status = if change_percent < -threshold {
+        let (comparison_status, p_value) = classify_score_change(
+            old_median,
+            new_median,
+            threshold,
+            &baseline_scores,
+            &current_scores,
+        );
+        let status = if comparison_status == ScoreChangeStatus::Regression {
             regressions += 1;
             "REGRESSION"
-        } else if change_percent > threshold {
+        } else if comparison_status == ScoreChangeStatus::Improvement {
             "IMPROVEMENT"
+        } else if comparison_status == ScoreChangeStatus::Inconclusive {
+            "INCONCLUSIVE (threshold crossed; insufficient statistical evidence)"
         } else {
             "within threshold"
         };
         comparisons += 1;
         println!(
-            "{}: baseline {:.3}, current {:.3}, change {:+.2}% — {status}",
-            old.browser.name, old_median, new_median, change_percent
+            "{}: baseline {:.3}, current {:.3}, change {:+.2}%, p={} — {status}",
+            old.browser.name,
+            old_median,
+            new_median,
+            change_percent,
+            p_value.map_or_else(|| "N/A".to_owned(), |p| format!("{p:.3}")),
         );
     }
     if comparisons == 0 {
@@ -2195,7 +2464,7 @@ fn read_report(path: &Path) -> Result<SpeedometerReport, String> {
 
 fn print_compare_help() {
     crate::terminal::print_markdown(
-        "## `velocity compare speedometer`\n\n`velocity compare speedometer --baseline <report.json> --current <report.json> [--threshold PERCENT]`\n\nHigher scores are improvements. A decrease greater than the threshold is reported as a regression. Reports must have matching Speedometer versions and configurations, and at least three valid measured runs.",
+        "## `velocity compare speedometer`\n\n`velocity compare speedometer --baseline <report-or-name> --current <report-or-name> [--threshold PERCENT]`\n\nHigher scores are improvements. A decrease beyond the threshold is a regression only when a two-sided median permutation test has p < 0.05; otherwise it is inconclusive. At least five valid measured runs on each side are needed for statistical classification. Selectors may be JSON report paths, history record IDs, or named baselines. Reports must have matching Speedometer versions and configurations.",
     );
 }
 
@@ -2229,6 +2498,19 @@ mod tests {
         assert_eq!(options.runs, DEFAULT_RUNS);
         assert_eq!(options.warmups, DEFAULT_WARMUPS);
         assert_eq!(options.timeout.as_secs(), DEFAULT_TIMEOUT_SECONDS);
+        assert!(options.record_history);
+        assert!(
+            !parse_options(vec!["--no-record-history".to_owned()])
+                .unwrap()
+                .record_history
+        );
+        assert!(
+            parse_options(vec![
+                "--record-history".to_owned(),
+                "--no-record-history".to_owned()
+            ])
+            .is_err()
+        );
         assert!(parse_options(vec!["--runs".to_owned(), "0".to_owned()]).is_err());
         assert!(parse_options(vec!["--timeout".to_owned(), "10".to_owned()]).is_err());
         assert!(
@@ -2381,5 +2663,104 @@ mod tests {
         assert!(html.contains("run 2 score 11.000"));
         assert!(html.contains("run 3 score 13.000"));
         assert!(!html.contains("run 1 score 99.000"));
+    }
+
+    #[test]
+    fn history_import_accepts_only_complete_pinned_version_scores() {
+        let scores = [12.0, 12.4, 13.6, 12.8, 13.2];
+        let browser = BrowserResult {
+            browser: ReportBrowser {
+                id: "photon".to_owned(),
+                installation_id: "photon-development".to_owned(),
+                name: "Photon".to_owned(),
+                version: Some("0.1.0".to_owned()),
+                executable_path: PathBuf::from("/Applications/Photon.app/Contents/MacOS/Photon"),
+            },
+            engine_family: Some("WebKit".to_owned()),
+            automation_method: "Photon Automation Protocol".to_owned(),
+            iterations: scores
+                .iter()
+                .enumerate()
+                .map(|(index, score)| SpeedometerIteration {
+                    iteration: index + 1,
+                    warmup: false,
+                    started_at_unix_ms: 100 + index as u128,
+                    score: Some(*score),
+                    score_unit: "official Speedometer score".to_owned(),
+                    benchmark_version: Some("3.1".to_owned()),
+                    official_internal_iteration_scores: vec![*score; 10],
+                    execution_duration_ms: Some(1_000.0),
+                    completion_verified: true,
+                    warnings: Vec::new(),
+                    failure: None,
+                    diagnostics: IterationDiagnostics::default(),
+                    cleanup: CleanupStatus {
+                        browser_closed: true,
+                        profile_removed: true,
+                        automation_resources_removed: true,
+                        detail: None,
+                    },
+                })
+                .collect(),
+            summary: BrowserSummary {
+                valid_measured_runs: scores.len(),
+                failed_measured_runs: 0,
+                median_score: Some(12.8),
+                mean_score: Some(12.8),
+                minimum_score: Some(12.0),
+                maximum_score: Some(13.6),
+                sample_standard_deviation: Some(0.64),
+                coefficient_of_variation_percent: Some(5.0),
+            },
+        };
+        let report = SpeedometerReport {
+            schema_version: 2,
+            benchmark: "speedometer".to_owned(),
+            benchmark_version: "3.1".to_owned(),
+            source: SourceMetadata {
+                kind: "official_pinned_local".to_owned(),
+                url: "http://127.0.0.1:9999/Speedometer3.1/".to_owned(),
+                version: "3.1".to_owned(),
+                official_commit: Some(SPEEDOMETER_COMMIT.to_owned()),
+                archive_sha256: Some("fixture".to_owned()),
+            },
+            configuration: BenchmarkConfiguration {
+                requested_runs: scores.len(),
+                warmup_runs: 0,
+                timeout_seconds: 600,
+                browser_mode: "headed".to_owned(),
+                source_kind: "official_pinned_local".to_owned(),
+                official_internal_iterations: 10,
+            },
+            environment: EnvironmentMetadata {
+                operating_system: "macos".to_owned(),
+                architecture: "aarch64".to_owned(),
+            },
+            execution_order: ExecutionOrder {
+                randomized: false,
+                randomization_seed: None,
+                warmup_order_by_round: Vec::new(),
+                measured_order_by_round: Vec::new(),
+            },
+            browsers: vec![browser],
+            comparison: ComparisonAssessment {
+                status: "INCONCLUSIVE".to_owned(),
+                higher_is_better: true,
+                descriptive_ranking_allowed: false,
+                reasons: Vec::new(),
+            },
+            cancelled: false,
+            generated_at_unix_ms: 1792080000000,
+        };
+        let bytes = serde_json::to_vec(&report).unwrap();
+        let entries = parse_history_report(&bytes).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].summary[0].median, 12.8);
+        assert_eq!(entries[0].summary[0].sample_count, 5);
+        assert_eq!(entries[0].benchmark_version.as_deref(), Some("3.1"));
+
+        let mut modified = report;
+        modified.source.official_commit = Some("different-source".to_owned());
+        assert!(parse_history_report(&serde_json::to_vec(&modified).unwrap()).is_err());
     }
 }

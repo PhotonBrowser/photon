@@ -46,13 +46,13 @@ pub fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
                 if baseline.is_some() {
                     return Err("--baseline may be specified only once".to_owned());
                 }
-                baseline = Some(PathBuf::from(required_value(&mut arguments, &option)?));
+                baseline = Some(required_value(&mut arguments, &option)?);
             }
             "--current" => {
                 if current.is_some() {
                     return Err("--current may be specified only once".to_owned());
                 }
-                current = Some(PathBuf::from(required_value(&mut arguments, &option)?));
+                current = Some(required_value(&mut arguments, &option)?);
             }
             "--threshold-percent" | "--threshold" => {
                 let value = required_value(&mut arguments, &option)?;
@@ -79,8 +79,34 @@ pub fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
         }
     }
 
-    let baseline_path = baseline.ok_or("compare startup requires --baseline <report.json>")?;
-    let current_path = current.ok_or("compare startup requires --current <report.json>")?;
+    let storage_directory = crate::history::default_storage_directory();
+    let baseline_selector =
+        baseline.ok_or("compare startup requires --baseline <report-or-baseline>")?;
+    let current_selector =
+        current.ok_or("compare startup requires --current <report-or-baseline>")?;
+    let baseline_history =
+        crate::history::record_for_selector(&baseline_selector, &storage_directory)?;
+    let current_history =
+        crate::history::record_for_selector(&current_selector, &storage_directory)?;
+    if crate::history::hardware_comparability(baseline_history.as_ref(), current_history.as_ref())
+        == Some(false)
+    {
+        return Err(
+            "startup reports have a known hardware configuration or host identity mismatch and are not comparable"
+                .to_owned(),
+        );
+    }
+    if crate::history::hardware_comparability(baseline_history.as_ref(), current_history.as_ref())
+        .is_none()
+    {
+        println!(
+            "Warning: hardware identity is unavailable; OS and architecture match does not prove both runs used the same machine."
+        );
+    }
+    let baseline_path =
+        crate::history::resolve_report_selector(&baseline_selector, &storage_directory)?;
+    let current_path =
+        crate::history::resolve_report_selector(&current_selector, &storage_directory)?;
     let baseline_report = read_report(&baseline_path)?;
     let current_report = read_report(&current_path)?;
     let thresholds = RegressionThresholds {
@@ -141,6 +167,6 @@ fn display_path(path: &Path) -> String {
 
 fn print_help() {
     crate::terminal::print_markdown(
-        "## `velocity compare startup`\n\n**Usage:** `velocity compare startup --baseline <report.json> --current <report.json> [OPTIONS]`\n\n### Options\n\n- `--threshold <n>` or `--threshold-percent <n>` — Relative regression threshold (default: 5%)\n- `--min-absolute-ms <n>` — Minimum absolute change required (default: 1 ms). A regression must exceed both thresholds.\n- `--output <directory>` — HTML report directory (default: `tools/velocity/results`)\n- `-h, --help` — Print this help",
+        "## `velocity compare startup`\n\n**Usage:** `velocity compare startup --baseline <report-or-name> --current <report-or-name> [OPTIONS]`\n\n### Options\n\n- `--threshold <n>` or `--threshold-percent <n>` — Relative regression threshold (default: 5%)\n- `--min-absolute-ms <n>` — Minimum absolute change required (default: 1 ms). A regression must exceed both thresholds and have permutation p < 0.05.\n- `--output <directory>` — HTML report directory (default: `tools/velocity/results`)\n- `-h, --help` — Print this help\n\nSelectors may be JSON report paths, history record IDs, or named baselines. A threshold crossing with insufficient sample evidence is inconclusive.",
     );
 }

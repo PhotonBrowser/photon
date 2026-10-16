@@ -8,6 +8,8 @@ mod comparison;
 mod comparison_cli;
 mod comparison_statistics;
 mod fixture_server;
+mod history;
+mod history_cli;
 mod monitor_cli;
 mod resource_benchmark_cli;
 #[cfg(target_os = "macos")]
@@ -105,6 +107,8 @@ fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
                 comparison_cli::run(arguments)?;
             }
         }
+        "history" => history_cli::run_history(arguments.collect::<Vec<_>>())?,
+        "baseline" => history_cli::run_baseline(arguments.collect::<Vec<_>>())?,
         "setup" => {
             let benchmark = required_argument(&mut arguments, "benchmark")?;
             require_no_more(arguments)?;

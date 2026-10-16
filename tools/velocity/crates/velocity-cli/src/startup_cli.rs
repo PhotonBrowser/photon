@@ -46,6 +46,7 @@ struct StartupOptions {
     config: StartupBenchmarkConfig,
     output_directory: PathBuf,
     randomize: bool,
+    record_history: bool,
 }
 
 #[cfg(target_os = "macos")]
@@ -95,6 +96,8 @@ fn parse_options(mut arguments: impl Iterator<Item = String>) -> Result<StartupO
     let mut timeout_seconds = 30;
     let mut output_directory = None;
     let mut randomize = false;
+    let mut record_history = true;
+    let mut history_record_option_seen = false;
 
     while let Some(option) = arguments.next() {
         match option.as_str() {
@@ -152,6 +155,15 @@ fn parse_options(mut arguments: impl Iterator<Item = String>) -> Result<StartupO
                 }
                 randomize = true;
             }
+            "--record-history" | "--no-record-history" => {
+                if history_record_option_seen {
+                    return Err(
+                        "choose only one of --record-history and --no-record-history".to_owned(),
+                    );
+                }
+                history_record_option_seen = true;
+                record_history = option == "--record-history";
+            }
             other => return Err(format!("unknown startup option '{other}'")),
         }
     }
@@ -174,6 +186,7 @@ fn parse_options(mut arguments: impl Iterator<Item = String>) -> Result<StartupO
         config,
         output_directory: output_directory.unwrap_or_else(default_output_directory),
         randomize,
+        record_history,
     })
 }
 
@@ -403,7 +416,12 @@ fn run_startup(options: StartupOptions) -> Result<(), String> {
             measured_order_by_round: measured_order_by_round.clone(),
         };
         match save_report(&options.output_directory, &report) {
-            Ok(path) => println!("Saved: {}", display_path(&path)),
+            Ok(path) => {
+                println!("Saved: {}", display_path(&path));
+                if options.record_history && report.summary.values().any(Option::is_some) {
+                    super::history_cli::record_after_success(&path);
+                }
+            }
             Err(error) => {
                 eprintln!("Could not save {} report: {error}", report.browser.name);
                 save_errors.push(error);
@@ -651,7 +669,7 @@ fn install_cancellation_handlers(cancellation: CancellationToken) -> Result<(), 
 
 fn print_help() {
     crate::terminal::print_markdown(
-        "## `velocity bench startup`\n\n**Usage:** `velocity bench startup [--browser <id|number> | --browsers <id|number,...> | --all] [OPTIONS]`\n\nIf no target is given in an interactive terminal, Velocity shows a numbered browser picker.\n\n### Options\n\n- `--runs <count>` — Measured iterations per browser (default: 5)\n- `--warmup <count>` — Unmeasured launches before results (default: 0)\n- `--randomize` — Shuffle browser order independently each round\n- `--mode <cold|warm>` — Isolated profile policy (default: cold)\n- `--timeout <seconds>` — Window readiness timeout (default: 30)\n- `--output <directory>` — Result directory (default: `tools/velocity/results`)\n- `-h, --help` — Print this help",
+        "## `velocity bench startup`\n\n**Usage:** `velocity bench startup [--browser <id|number> | --browsers <id|number,...> | --all] [OPTIONS]`\n\nIf no target is given in an interactive terminal, Velocity shows a numbered browser picker.\n\n### Options\n\n- `--runs <count>` — Measured iterations per browser (default: 5)\n- `--warmup <count>` — Unmeasured launches before results (default: 0)\n- `--randomize` — Shuffle browser order independently each round\n- `--mode <cold|warm>` — Isolated profile policy (default: cold)\n- `--timeout <seconds>` — Window readiness timeout (default: 30)\n- `--output <directory>` — Result directory (default: `tools/velocity/results`)\n- `--record-history` / `--no-record-history` — Store successful reports in local history (default: enabled)\n- `-h, --help` — Print this help",
     );
 }
 
@@ -690,6 +708,7 @@ mod tests {
         assert_eq!(options.config.mode, StartupMode::Cold);
         assert_eq!(options.config.runs.iterations(), 5);
         assert_eq!(options.config.timeout.as_secs(), 30);
+        assert!(options.record_history);
     }
 
     #[test]
@@ -708,6 +727,23 @@ mod tests {
     fn rejects_conflicting_selectors_and_zero_runs() {
         assert!(parse_options(args(&["--all", "--browser", "chrome"]).into_iter()).is_err());
         assert!(parse_options(args(&["--browser", "chrome", "--runs", "0"]).into_iter()).is_err());
+        assert!(
+            !parse_options(args(&["--browser", "chrome", "--no-record-history"]).into_iter())
+                .unwrap()
+                .record_history
+        );
+        assert!(
+            parse_options(
+                args(&[
+                    "--browser",
+                    "chrome",
+                    "--record-history",
+                    "--no-record-history"
+                ])
+                .into_iter()
+            )
+            .is_err()
+        );
     }
 
     #[test]

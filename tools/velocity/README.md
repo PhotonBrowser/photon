@@ -167,6 +167,110 @@ actual round order, every measured iteration's raw metric values or unavailable
 reasons, and summary statistics. Version 1 startup reports remain readable as
 regression baselines when their available metadata matches.
 
+## Persistent performance history
+
+Successful startup, resource, and Speedometer runs are recorded automatically
+after Velocity has saved their ordinary JSON reports. History storage errors
+are printed as warnings and do not invalidate a benchmark result. Use
+`--no-record-history` to disable this for one run; `--record-history` is also
+accepted explicitly. The report remains available for later manual import.
+
+On macOS the default store is
+`~/Library/Application Support/Velocity/`; on other systems it uses
+`$XDG_DATA_HOME/velocity/` or `~/.local/share/velocity/`. Set
+`VELOCITY_DATA_DIR` to choose another location for both automatic recording and
+history commands. History and archive files are private to the current user.
+Velocity uses a locked JSON index plus SHA-256-named copies of the original
+reports. Index updates are atomic, concurrent writers are serialized, imports
+are idempotent, and raw reports are never rewritten. `history export` verifies
+the archive hash and refuses to overwrite an existing output file.
+
+Import existing startup, resource, and Speedometer 3.1 reports:
+
+```sh
+velocity history import /path/to/photon-speedometer.json
+velocity history import /path/to/photon-startup.json --label before-window-change
+velocity history import /path/to/photon-speedometer.json --commit 0123abcd
+velocity history list --browser photon
+velocity history list --browser photon --benchmark speedometer
+velocity history show <record-id>
+velocity history export <record-id> --output /tmp/original-report.json
+```
+
+Import accepts startup report schemas 1–2, resource schemas through 3, and
+Speedometer schemas 1–2 for the pinned 3.1 source. Unsupported future schemas,
+malformed reports, missing required browser/environment metadata, summaries
+without matching raw startup measurements, unverified Speedometer completion,
+and non-finite or non-positive Speedometer scores are rejected. Resource
+imports preserve their measurement methodology, workload configuration,
+scenario, attribution/coverage assessment, and warnings. Failed-only resource
+or Speedometer reports are not added to history. Reimporting identical bytes
+returns the existing record IDs instead of adding copies.
+
+Name an immutable record as a baseline. A multi-browser report needs
+`--browser` to select one result; replacing an existing name requires
+`--replace`:
+
+```sh
+velocity baseline set --name photon-initial \
+  --from /path/to/photon-speedometer.json --browser photon
+velocity baseline list
+velocity baseline show photon-initial
+velocity baseline delete photon-initial
+```
+
+Deleting a baseline only removes its name. The history record and archived raw
+report remain. Baselines and current selectors may be JSON paths, history record
+IDs, or baseline names, so reports can be compared without copying their data:
+
+```sh
+velocity compare speedometer --baseline photon-initial \
+  --current /path/to/photon-speedometer-new.json --threshold 5
+velocity compare startup --baseline photon-startup-old \
+  --current photon-startup-new --threshold 5 --min-absolute-ms 10
+velocity history report --browser photon --benchmark speedometer \
+  --baseline photon-initial
+```
+
+Comparisons keep the existing benchmark configuration and environment checks.
+Speedometer requires the same pinned benchmark version, run configuration,
+browser installation, OS, and architecture. Startup retains its isolated
+profile, mode, timeout, readiness, run-count, and absolute/relative threshold
+checks. A known hardware model, CPU model, core-count, or host-identity mismatch
+makes the comparison incompatible. Missing metadata is treated as unknown and
+called out; OS and architecture alone do not prove that runs used the same
+machine. A hash of the platform machine ID
+is stored for automatic runs to group results from the same host; Velocity
+never stores the raw machine ID. Imported historical reports generally lack
+that fingerprint.
+
+Regression classification separates threshold changes from statistical
+evidence. Startup and Speedometer compare per-run medians with a two-sided
+permutation test. A threshold-crossing change is called a regression or
+improvement only when `p < 0.05`; otherwise it is inconclusive. Five valid raw
+samples per side are needed for that classification. Comparisons with fewer
+samples can show the numeric change, but a threshold crossing is not reported
+as statistically established. Startup still requires its existing relative
+and absolute millisecond floors. Resource history is recorded and charted, but
+Velocity does not rank resource results across incompatible configurations or
+incomplete attribution/coverage.
+
+`history report` creates standalone HTML with inline SVG and no network assets.
+It shows medians, sample variation, environment, build labels, and changes from
+an optional baseline. Versions and configurations are separated. Trend lines
+are drawn only when the same hashed host identity is available on each record;
+older imports without it remain unconnected. Red markers mean a configured
+threshold was crossed, not that the permutation test proved significance.
+
+History metadata never treats the current repository commit as the browser
+executable's build revision. The checkout revision and branch observed at
+import time are shown separately; executable build revision/type/timestamp
+remain unknown unless reliable report metadata supplies them. `--label` and
+`--commit` attach user-provided metadata; a user-supplied commit is visibly
+identified as unverified. Browser version and executable path come from the
+original benchmark report. Hardware not present in an imported report remains
+unknown rather than being inferred from the machine used for a later import.
+
 ## Resource benchmarks
 
 Velocity can measure idle browser resources, a controlled local page, and
