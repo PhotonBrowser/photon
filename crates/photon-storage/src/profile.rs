@@ -4,7 +4,9 @@ use photon_core::{
     BrowserSettings, ClearBrowsingData, History, MAX_FAVOURITES, Session, WorkspaceSettings,
 };
 use std::collections::HashSet;
+use std::collections::hash_map::DefaultHasher;
 use std::fs;
+use std::hash::{Hash, Hasher};
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -284,34 +286,58 @@ impl Profile {
     /// be read. Unknown fields are ignored so older builds can open newer
     /// profiles safely.
     pub fn load_settings(&self) -> BrowserSettings {
+        self.load_settings_with_revision().0
+    }
+
+    /// Loads settings and a fingerprint of the exact file contents read.
+    /// Damaged settings keep the startup behavior of falling back to defaults
+    /// and preserving the source beside the profile.
+    pub fn load_settings_with_revision(&self) -> (BrowserSettings, Option<u64>) {
         let bytes = match read_limited(&self.settings_path, MAX_SETTINGS_FILE_BYTES) {
             Ok(Some(bytes)) => bytes,
-            Ok(None) | Err(_) => return BrowserSettings::default(),
+            Ok(None) | Err(_) => return (BrowserSettings::default(), None),
         };
-        let Ok(source) = std::str::from_utf8(&bytes) else {
-            self.keep_unreadable_settings(&bytes);
-            return BrowserSettings::default();
+        let revision = Some(settings_revision(&bytes));
+        let (settings, partially_unreadable) = match decode_settings(&bytes) {
+            Ok(settings) => settings,
+            Err(_) => {
+                self.keep_unreadable_settings(&bytes);
+                return (BrowserSettings::default(), revision);
+            }
         };
-        let Ok(document) = toml::from_str::<toml::Value>(source) else {
-            self.keep_unreadable_settings(&bytes);
-            return BrowserSettings::default();
-        };
-        if !valid_settings_document(&document) {
-            self.keep_unreadable_settings(&bytes);
-            return BrowserSettings::default();
-        }
-
-        let (mut settings, partially_unreadable) = decode_toml_settings(document);
-        settings.sidebar.width = settings.sidebar.width();
-        settings.new_tab.shortcut_count = settings.new_tab.shortcut_limit();
-        if !valid_settings_state(&settings) {
-            self.keep_unreadable_settings(&bytes);
-            return BrowserSettings::default();
-        }
         if partially_unreadable {
             self.keep_unreadable_settings(&bytes);
         }
-        settings
+        (settings, revision)
+    }
+
+    /// Fingerprints the current settings file without decoding it.
+    pub fn settings_revision(&self) -> io::Result<u64> {
+        let bytes =
+            read_limited(&self.settings_path, MAX_SETTINGS_FILE_BYTES)?.ok_or_else(|| {
+                io::Error::new(io::ErrorKind::NotFound, "settings file does not exist")
+            })?;
+        Ok(settings_revision(&bytes))
+    }
+
+    /// Loads a manually edited settings file. This reserves a newer write
+    /// ticket first so an older delayed save cannot overwrite the edit.
+    pub fn reload_settings(&self) -> io::Result<(BrowserSettings, u64)> {
+        let _serial = self
+            .writes
+            .serial
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        self.writes.reserve(SnapshotKind::Settings);
+        let bytes =
+            read_limited(&self.settings_path, MAX_SETTINGS_FILE_BYTES)?.ok_or_else(|| {
+                io::Error::new(io::ErrorKind::NotFound, "settings file does not exist")
+            })?;
+        let (settings, partially_unreadable) = decode_settings(&bytes)?;
+        if partially_unreadable {
+            eprintln!("Photon config.toml contains settings this build could not read");
+        }
+        Ok((settings, settings_revision(&bytes)))
     }
 
     /// Keeps a settings file that could not be read in full beside the
@@ -639,6 +665,36 @@ fn read_limited(path: &Path, limit: usize) -> io::Result<Option<Vec<u8>>> {
         ));
     }
     Ok(Some(bytes))
+}
+
+fn decode_settings(bytes: &[u8]) -> io::Result<(BrowserSettings, bool)> {
+    let source = std::str::from_utf8(bytes)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    let document = toml::from_str::<toml::Value>(source)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    if !valid_settings_document(&document) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "settings exceed a profile data limit",
+        ));
+    }
+
+    let (mut settings, partially_unreadable) = decode_toml_settings(document);
+    settings.sidebar.width = settings.sidebar.width();
+    settings.new_tab.shortcut_count = settings.new_tab.shortcut_limit();
+    if !valid_settings_state(&settings) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "settings contain an invalid value",
+        ));
+    }
+    Ok((settings, partially_unreadable))
+}
+
+fn settings_revision(bytes: &[u8]) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    bytes.hash(&mut hasher);
+    hasher.finish()
 }
 
 fn valid_settings_document(document: &toml::Value) -> bool {
@@ -1291,6 +1347,43 @@ mod tests {
                 .contains("theme = \"dark\"")
         );
         assert_eq!(profile.0.load_settings(), settings);
+    }
+
+    #[test]
+    fn reloads_edited_settings_and_supersedes_pending_saves() {
+        let profile = TemporaryProfile::new("reload-settings");
+        let stale_ticket = profile.0.begin_settings_write();
+        let stale_settings = BrowserSettings {
+            theme: photon_core::ThemeMode::Light,
+            ..BrowserSettings::default()
+        };
+        fs::write(profile.0.settings_path(), "theme = \"dark\"\n")
+            .expect("writes an external settings edit");
+
+        let (settings, revision) = profile.0.reload_settings().expect("reloads settings");
+        assert_eq!(settings.theme, photon_core::ThemeMode::Dark);
+        assert_eq!(Some(revision), profile.0.settings_revision().ok());
+        assert!(
+            !profile
+                .0
+                .save_settings_if_current(stale_ticket, &stale_settings)
+                .expect("skips the save queued before the reload")
+        );
+        assert_eq!(profile.0.load_settings(), settings);
+    }
+
+    #[test]
+    fn invalid_live_settings_edits_are_left_for_the_next_reload() {
+        let profile = TemporaryProfile::new("invalid-live-settings");
+        let contents = "theme = [\n";
+        fs::write(profile.0.settings_path(), contents).expect("writes malformed settings");
+
+        assert!(profile.0.reload_settings().is_err());
+        assert_eq!(
+            fs::read_to_string(profile.0.settings_path()).unwrap(),
+            contents
+        );
+        assert_eq!(profile.0.load_settings(), BrowserSettings::default());
     }
 
     #[test]

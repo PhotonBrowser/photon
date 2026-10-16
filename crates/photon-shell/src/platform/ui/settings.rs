@@ -4,6 +4,7 @@
 //! [`Settings::update`], which notifies everything observing the `Settings`
 //! global, so every window follows a change. Changes are saved a moment
 //! after they happen, off the main thread, and once more when the app quits.
+//! Edits to the profile's config file are picked up while the app is running.
 
 use gpui::{App, BorrowAppContext, Global, Task, WindowAppearance};
 use gpui_motion::{MotionConfig, MotionTimings};
@@ -21,6 +22,10 @@ use super::workspace_layout::WorkspaceLayout;
 /// How long after a change the settings are saved, so a burst of changes,
 /// as while dragging the sidebar's edge, saves once.
 const SAVE_DELAY: Duration = Duration::from_millis(500);
+/// How often the profile config is checked for edits made outside Photon.
+const CONFIG_RELOAD_INTERVAL: Duration = Duration::from_millis(200);
+/// Wait for an editor's write to settle before parsing its file.
+const CONFIG_RELOAD_SETTLE: Duration = Duration::from_millis(100);
 
 /// The settings, and where they are saved; `None` keeps them in memory only.
 pub(super) struct Settings {
@@ -28,6 +33,8 @@ pub(super) struct Settings {
     profile: Option<Profile>,
     /// The pending save.
     save: Option<Task<()>>,
+    /// Watches the profile config for edits made outside Photon.
+    _reload: Option<Task<()>>,
     /// The workspace layout the settings resolve to, worked out on first
     /// use after each change, as drawing asks for it many times a frame.
     layout: OnceCell<Rc<WorkspaceLayout>>,
@@ -40,10 +47,41 @@ impl Global for Settings {}
 pub(in crate::platform) fn load_settings(
     profile: Option<Profile>,
     mut settings: BrowserSettings,
+    revision: Option<u64>,
     cx: &mut App,
 ) {
+    settings = normalize_settings(profile.as_ref(), settings, cx);
+    let reload = profile
+        .clone()
+        .map(|profile| watch_settings(profile, revision, cx));
+    cx.set_global(Settings {
+        settings,
+        profile,
+        save: None,
+        _reload: reload,
+        layout: OnceCell::new(),
+    });
+    cx.on_app_quit(|cx| {
+        let save = cx.update_global::<Settings, _>(|store, _| {
+            store.save = None;
+            store.snapshot()
+        });
+        async move {
+            if let Some((profile, settings, ticket)) = save {
+                write_settings(&profile, &settings, ticket);
+            }
+        }
+    })
+    .detach();
+}
+
+fn normalize_settings(
+    profile: Option<&Profile>,
+    mut settings: BrowserSettings,
+    cx: &mut App,
+) -> BrowserSettings {
     if settings.migrate_legacy_favourites()
-        && let Some(profile) = &profile
+        && let Some(profile) = profile
     {
         let profile = profile.clone();
         let settings = settings.clone();
@@ -63,27 +101,91 @@ pub(in crate::platform) fn load_settings(
     {
         settings.default_search_engine = BrowserSettings::default().default_search_engine;
     }
-    cx.set_global(Settings {
-        settings,
-        profile,
-        save: None,
-        layout: OnceCell::new(),
-    });
-    cx.on_app_quit(|cx| {
-        let save = cx.update_global::<Settings, _>(|store, _| {
-            store.save = None;
-            store.snapshot()
-        });
-        async move {
-            if let Some((profile, settings, ticket)) = save {
-                write_settings(&profile, &settings, ticket);
+    settings
+}
+
+fn watch_settings(profile: Profile, mut revision: Option<u64>, cx: &mut App) -> Task<()> {
+    cx.spawn(async move |cx| {
+        loop {
+            cx.background_executor().timer(CONFIG_RELOAD_INTERVAL).await;
+            let profile_to_check = profile.clone();
+            let Some(candidate) = cx
+                .background_executor()
+                .spawn(async move { profile_to_check.settings_revision().ok() })
+                .await
+            else {
+                continue;
+            };
+            if revision == Some(candidate) {
+                continue;
+            }
+
+            cx.background_executor().timer(CONFIG_RELOAD_SETTLE).await;
+            let profile_to_check = profile.clone();
+            let confirmed = cx
+                .background_executor()
+                .spawn(async move { profile_to_check.settings_revision().ok() })
+                .await;
+            if confirmed != Some(candidate) {
+                continue;
+            }
+
+            // Remember invalid edits too, and retry only after the file changes
+            // again. This keeps an in-progress or malformed edit from replacing
+            // the last settings that were loaded successfully.
+            revision = Some(candidate);
+            let profile_to_prepare = profile.clone();
+            if update_app(cx, move |cx| {
+                Settings::prepare_reload(&profile_to_prepare, cx);
+            })
+            .await
+            .is_none()
+            {
+                break;
+            }
+            let profile_to_reload = profile.clone();
+            match cx
+                .background_executor()
+                .spawn(async move { profile_to_reload.reload_settings() })
+                .await
+            {
+                Ok((settings, loaded_revision)) => {
+                    revision = Some(loaded_revision);
+                    let profile = profile.clone();
+                    if update_app(cx, move |cx| {
+                        Settings::apply_reload(&profile, settings, cx);
+                    })
+                    .await
+                    .is_none()
+                    {
+                        break;
+                    }
+                }
+                Err(error) => trace(format_args!("reloading config.toml: {error}")),
             }
         }
     })
-    .detach();
 }
 
 impl Settings {
+    fn prepare_reload(profile: &Profile, cx: &mut App) {
+        profile.begin_settings_write();
+        cx.update_global::<Self, _>(|store, _| store.save = None);
+    }
+
+    fn apply_reload(profile: &Profile, settings: BrowserSettings, cx: &mut App) {
+        let settings = normalize_settings(Some(profile), settings, cx);
+        cx.update_global::<Self, _>(|store, _| {
+            // A file reload supersedes any unsaved in-memory changes and their
+            // pending write; the profile write ticket was already invalidated.
+            store.save = None;
+            if store.settings != settings {
+                store.settings = settings;
+                store.layout = OnceCell::new();
+            }
+        });
+    }
+
     /// The reusable motion framework's view of the saved and system settings.
     pub(super) fn motion(cx: &App) -> MotionConfig {
         let settings = Self::get(cx).animations;

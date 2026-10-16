@@ -189,7 +189,7 @@ impl SidebarState {
     fn follow_docked(&mut self, cx: &App) {
         let docked = self.docked();
         self.shown
-            .animate_to(progress(docked), Speed::Gentle, &Settings::motion(cx));
+            .animate_to(progress(docked), Speed::Standard, &Settings::motion(cx));
         if !docked {
             self.revealed = false;
             self.reveal.jump_to(0.0);

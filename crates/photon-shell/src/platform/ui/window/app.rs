@@ -27,6 +27,7 @@ use photon_storage::Profile;
 struct LoadedProfileState {
     profile: Option<Profile>,
     settings: BrowserSettings,
+    settings_revision: Option<u64>,
     history: History,
     session: Session,
 }
@@ -74,10 +75,11 @@ pub fn run() {
                 let LoadedProfileState {
                     profile,
                     settings,
+                    settings_revision,
                     history,
                     session,
                 } = loaded;
-                load_settings(profile.clone(), settings, cx);
+                load_settings(profile.clone(), settings, settings_revision, cx);
                 load_browsing_history(profile.clone(), history, cx);
                 #[cfg(feature = "ui-only")]
                 let _ = load_session(None, session, cx);
@@ -180,9 +182,9 @@ pub fn run() {
 
 fn load_profile_state() -> LoadedProfileState {
     let profile = open_profile();
-    let settings = profile
+    let (settings, settings_revision) = profile
         .as_ref()
-        .map(Profile::load_settings)
+        .map(Profile::load_settings_with_revision)
         .unwrap_or_default();
     let history = profile
         .as_ref()
@@ -202,6 +204,7 @@ fn load_profile_state() -> LoadedProfileState {
     LoadedProfileState {
         profile,
         settings,
+        settings_revision,
         history,
         session,
     }
