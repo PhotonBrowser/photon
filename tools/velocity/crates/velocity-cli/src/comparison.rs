@@ -17,6 +17,7 @@ pub enum RegressionStatus {
     Regression,
     WithinThreshold,
     Improvement,
+    Inconclusive,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -32,6 +33,7 @@ pub struct RegressionRow {
     pub current: MetricSummary,
     pub change_percent: f64,
     pub change_ms: f64,
+    pub permutation_p_value: Option<f64>,
     pub status: RegressionStatus,
 }
 
@@ -107,34 +109,60 @@ pub fn compare_startup_reports(
     let rows = StartupMetric::ALL
         .into_iter()
         .filter_map(|metric| {
-            let baseline = baseline.summary.get(&metric).copied().flatten()?;
-            let current = current.summary.get(&metric).copied().flatten()?;
-            if baseline.sample_count < MIN_REGRESSION_SAMPLES
-                || current.sample_count < MIN_REGRESSION_SAMPLES
-                || baseline.median_ms <= 0.0
+            let baseline_summary = baseline.summary.get(&metric).copied().flatten()?;
+            let current_summary = current.summary.get(&metric).copied().flatten()?;
+            if baseline_summary.sample_count < MIN_REGRESSION_SAMPLES
+                || current_summary.sample_count < MIN_REGRESSION_SAMPLES
+                || baseline_summary.median_ms <= 0.0
             {
                 return None;
             }
-            let change_ms = current.median_ms - baseline.median_ms;
-            let change_percent =
-                (current.median_ms - baseline.median_ms) / baseline.median_ms * 100.0;
-            let status = if change_percent > thresholds.relative_percent
-                && change_ms > thresholds.absolute_ms
-            {
-                RegressionStatus::Regression
-            } else if change_percent < -thresholds.relative_percent
-                && change_ms < -thresholds.absolute_ms
-            {
-                RegressionStatus::Improvement
+            let change_ms = current_summary.median_ms - baseline_summary.median_ms;
+            let change_percent = (current_summary.median_ms - baseline_summary.median_ms)
+                / baseline_summary.median_ms
+                * 100.0;
+            let samples = |report: &StartupBenchmarkReport| {
+                report
+                    .iterations
+                    .iter()
+                    .flat_map(|iteration| &iteration.metrics)
+                    .filter(|value| {
+                        value.definition.name == metric.name()
+                            && value.definition.unit == velocity_core::MetricUnit::Milliseconds
+                            && value.value.is_finite()
+                    })
+                    .map(|value| value.value)
+                    .collect::<Vec<_>>()
+            };
+            let permutation_p_value = crate::comparison_statistics::median_permutation_p_value(
+                &samples(baseline),
+                &samples(current),
+            );
+            let crosses_regression =
+                change_percent > thresholds.relative_percent && change_ms > thresholds.absolute_ms;
+            let crosses_improvement = change_percent < -thresholds.relative_percent
+                && change_ms < -thresholds.absolute_ms;
+            let status = if crosses_regression || crosses_improvement {
+                match permutation_p_value {
+                    Some(p_value) if p_value < 0.05 => {
+                        if crosses_regression {
+                            RegressionStatus::Regression
+                        } else {
+                            RegressionStatus::Improvement
+                        }
+                    }
+                    _ => RegressionStatus::Inconclusive,
+                }
             } else {
                 RegressionStatus::WithinThreshold
             };
             Some(RegressionRow {
                 metric,
-                baseline,
-                current,
+                baseline: baseline_summary,
+                current: current_summary,
                 change_percent,
                 change_ms,
+                permutation_p_value,
                 status,
             })
         })
@@ -254,6 +282,8 @@ pub fn print_regression_comparison(
                 format!("{:+.2} ms", row.change_ms),
                 row.baseline.sample_count.to_string(),
                 row.current.sample_count.to_string(),
+                row.permutation_p_value
+                    .map_or_else(|| "N/A".to_owned(), |p| format!("{p:.3}")),
                 status_label(row.status).to_owned(),
             ]
         })
@@ -267,13 +297,14 @@ pub fn print_regression_comparison(
             "Δ ms",
             "N baseline",
             "N current",
+            "p (permutation)",
             "Status",
         ],
         table_rows,
-        &[1, 2, 3, 4, 5, 6],
+        &[1, 2, 3, 4, 5, 6, 7],
     );
     print_markdown(&format!(
-        "**Regression thresholds:** more than {:.1}% slower and more than {:.2} ms absolute change.\n\nMetrics with fewer than {MIN_REGRESSION_SAMPLES} valid samples in either report are excluded.",
+        "**Regression thresholds:** more than {:.1}% slower and more than {:.2} ms absolute change. A threshold crossing is called a regression or improvement only when a two-sided median permutation test has p < 0.05. At least five raw samples per report are required for that test; smaller comparisons are inconclusive. Metrics with fewer than {MIN_REGRESSION_SAMPLES} valid samples in either report are excluded.",
         thresholds.relative_percent, thresholds.absolute_ms
     ));
     rows.iter()
@@ -355,21 +386,22 @@ fn render_regression_html(
         escape_html(baseline.browser.version.as_deref().unwrap_or("unknown")),
     ));
     html.push_str(&format!(
-        "<p>Baseline: <code>{}</code><br>Current: <code>{}</code><br>Regression requires both more than {:.1}% and more than {:.2} ms slower<br>Metrics require at least {MIN_REGRESSION_SAMPLES} valid samples in each report.</p>",
+        "<p>Baseline: <code>{}</code><br>Current: <code>{}</code><br>Regression requires more than {:.1}% and {:.2} ms slower plus a two-sided median permutation p-value below 0.05.<br>Metrics require at least {MIN_REGRESSION_SAMPLES} valid samples; five raw samples per report are needed for statistical classification. A threshold crossing with insufficient evidence is inconclusive.</p>",
         escape_html(&baseline_path.display().to_string()),
         escape_html(&current_path.display().to_string()),
         thresholds.relative_percent,
         thresholds.absolute_ms,
     ));
-    html.push_str("<table><thead><tr><th>Metric</th><th>Baseline median</th><th>Current median</th><th>Change</th><th>Change (ms)</th><th>Status</th><th>Baseline samples</th><th>Current samples</th></tr></thead><tbody>");
+    html.push_str("<table><thead><tr><th>Metric</th><th>Baseline median</th><th>Current median</th><th>Change</th><th>Change (ms)</th><th>p (permutation)</th><th>Status</th><th>Baseline samples</th><th>Current samples</th></tr></thead><tbody>");
     for row in rows {
         html.push_str(&format!(
-            "<tr><td>{}</td><td>{:.1} ms</td><td>{:.1} ms</td><td>{:+.1}%</td><td>{:+.2} ms</td><td>{}</td><td>{}</td><td>{}</td></tr>",
+            "<tr><td>{}</td><td>{:.1} ms</td><td>{:.1} ms</td><td>{:+.1}%</td><td>{:+.2} ms</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
             row.metric.name(),
             row.baseline.median_ms,
             row.current.median_ms,
             row.change_percent,
             row.change_ms,
+            row.permutation_p_value.map_or_else(|| "N/A".to_owned(), |p| format!("{p:.3}")),
             status_label(row.status),
             row.baseline.sample_count,
             row.current.sample_count,
@@ -425,6 +457,7 @@ fn status_label(status: RegressionStatus) -> &'static str {
         RegressionStatus::Regression => "REGRESSION",
         RegressionStatus::WithinThreshold => "within threshold",
         RegressionStatus::Improvement => "improvement",
+        RegressionStatus::Inconclusive => "inconclusive",
     }
 }
 
@@ -439,21 +472,35 @@ fn escape_html(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::BTreeMap, path::PathBuf};
+    use std::{collections::BTreeMap, num::NonZeroUsize, path::PathBuf};
 
-    use velocity_core::{MetricSummary, ReportBrowser, RunOrderMetadata, StartupMode};
+    use velocity_browser::BrowserId;
+    use velocity_core::{
+        BenchmarkId, BenchmarkResult, MetricSummary, ReportBrowser, RunOrderMetadata, StartupMode,
+    };
+    use velocity_metrics::MetricValue;
 
     use super::*;
 
     fn report(median_ms: f64) -> StartupBenchmarkReport {
+        let raw_values = (0..5)
+            .map(|index| median_ms + (index as f64 - 2.0) * median_ms.abs() * 0.01)
+            .collect::<Vec<_>>();
+        let mean_ms = raw_values.iter().sum::<f64>() / raw_values.len() as f64;
+        let standard_deviation_ms = (raw_values
+            .iter()
+            .map(|value| (value - mean_ms).powi(2))
+            .sum::<f64>()
+            / (raw_values.len() - 1) as f64)
+            .sqrt();
         let summary = MetricSummary {
-            sample_count: 3,
+            sample_count: raw_values.len(),
             median_ms,
-            mean_ms: median_ms,
-            minimum_ms: median_ms,
-            maximum_ms: median_ms,
-            standard_deviation_ms: Some(0.0),
-            coefficient_of_variation_percent: Some(0.0),
+            mean_ms,
+            minimum_ms: raw_values[0],
+            maximum_ms: raw_values[4],
+            standard_deviation_ms: Some(standard_deviation_ms),
+            coefficient_of_variation_percent: Some(standard_deviation_ms / mean_ms * 100.0),
         };
         StartupBenchmarkReport {
             schema_version: 2,
@@ -476,7 +523,21 @@ mod tests {
             profile_strategy: "private-test-profile".to_owned(),
             os_file_cache_cold: false,
             window_ready_condition: "verified window".to_owned(),
-            iterations: Vec::new(),
+            iterations: raw_values
+                .into_iter()
+                .enumerate()
+                .map(|(index, value)| BenchmarkResult {
+                    benchmark_id: BenchmarkId("startup".to_owned()),
+                    browser_id: BrowserId::new("photon").unwrap(),
+                    iteration: NonZeroUsize::new(index + 1).unwrap(),
+                    metrics: vec![MetricValue {
+                        definition: StartupMetric::WindowReady.definition(),
+                        value,
+                    }],
+                    unavailable_metrics: Vec::new(),
+                    failures: Vec::new(),
+                })
+                .collect(),
             warmup_iterations: Vec::new(),
             run_order: RunOrderMetadata::default(),
             run_failures: Vec::new(),
@@ -562,5 +623,28 @@ mod tests {
             compare(100.0, 95.0, 0.0, 10.0),
             RegressionStatus::WithinThreshold
         );
+    }
+
+    #[test]
+    fn threshold_crossing_without_five_samples_is_inconclusive() {
+        let mut baseline = report(100.0);
+        baseline.iterations.truncate(3);
+        baseline
+            .summary
+            .get_mut(&StartupMetric::WindowReady)
+            .and_then(Option::as_mut)
+            .unwrap()
+            .sample_count = 3;
+        let row = compare_startup_reports(
+            &baseline,
+            &report(120.0),
+            RegressionThresholds {
+                relative_percent: 5.0,
+                absolute_ms: 1.0,
+            },
+        )
+        .unwrap()[0];
+        assert_eq!(row.status, RegressionStatus::Inconclusive);
+        assert_eq!(row.permutation_p_value, None);
     }
 }

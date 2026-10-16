@@ -6,6 +6,7 @@ use velocity_core::FRAMEWORK_NAME;
 mod browser_selection;
 mod comparison;
 mod comparison_cli;
+mod comparison_statistics;
 mod fixture_server;
 mod monitor_cli;
 mod resource_benchmark_cli;
