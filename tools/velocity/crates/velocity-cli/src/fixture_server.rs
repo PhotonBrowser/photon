@@ -188,6 +188,9 @@ impl Drop for FixtureServer {
 }
 
 fn handle_request(mut stream: TcpStream, state: &Mutex<FixtureState>) {
+    if stream.set_nonblocking(false).is_err() {
+        return;
+    }
     let _ = stream.set_read_timeout(Some(Duration::from_secs(1)));
     let mut request = Vec::with_capacity(1024);
     let mut buffer = [0_u8; 1024];
@@ -340,23 +343,33 @@ mod tests {
         let server = FixtureServer::start().unwrap();
         let url = server.url(FixtureKind::Simple, "unit-run", 0, 25, 100);
         let mut stream = TcpStream::connect(server.address).unwrap();
-        write!(
-            stream,
+        let request = format!(
             "GET {} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
             url.strip_prefix(&format!("http://{}", server.address))
                 .unwrap()
-        )
-        .unwrap();
+        );
+        stream
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        stream.write_all(request.as_bytes()).unwrap();
         let mut response = String::new();
         stream.read_to_string(&mut response).unwrap();
-        assert!(response.starts_with("HTTP/1.1 200"));
+        assert!(
+            response.starts_with("HTTP/1.1 200"),
+            "unexpected fixture response: {response:?}"
+        );
         assert!(response.contains("window.__velocityReady=true"));
         assert!(response.contains("Velocity simple fixture"));
         server
             .wait_for_navigation_with_cancel("unit-run", &[0], Duration::from_millis(20), || false)
             .unwrap();
         let mut beacon = TcpStream::connect(server.address).unwrap();
-        write!(beacon, "GET /__velocity/ready?run=unit-run&tab=0 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").unwrap();
+        beacon
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        beacon
+            .write_all(b"GET /__velocity/ready?run=unit-run&tab=0 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+            .unwrap();
         let mut response = String::new();
         beacon.read_to_string(&mut response).unwrap();
         assert!(response.starts_with("HTTP/1.1 204"));
