@@ -305,6 +305,14 @@ pub(super) mod embedder {
             view: *mut c_void,
             expected_document_generation: u64,
         ) -> bool;
+        pub fn photon_view_install_jetstream_result_observer(
+            view: *mut c_void,
+            expected_document_generation: u64,
+        ) -> bool;
+        pub fn photon_view_request_jetstream_start(
+            view: *mut c_void,
+            expected_document_generation: u64,
+        ) -> bool;
         pub fn photon_view_reload(view: *mut c_void);
         pub fn photon_view_stop_loading(view: *mut c_void);
         pub fn photon_view_go_back(view: *mut c_void);

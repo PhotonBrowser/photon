@@ -376,6 +376,16 @@ extern "C" bool photon_view_install_speedometer_result_observer(void* view, uint
     return view && static_cast<ViewHandle*>(view)->view->install_speedometer_result_observer(expected_document_generation);
 }
 
+extern "C" bool photon_view_install_jetstream_result_observer(void* view, uint64_t expected_document_generation)
+{
+    return view && static_cast<ViewHandle*>(view)->view->install_jetstream_result_observer(expected_document_generation);
+}
+
+extern "C" bool photon_view_request_jetstream_start(void* view, uint64_t expected_document_generation)
+{
+    return view && static_cast<ViewHandle*>(view)->view->request_jetstream_start(expected_document_generation);
+}
+
 extern "C" void photon_view_reload(void* view)
 {
     if (view)

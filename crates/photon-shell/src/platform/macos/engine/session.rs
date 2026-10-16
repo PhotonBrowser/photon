@@ -241,6 +241,27 @@ impl EngineSession {
         }
     }
 
+    pub(in crate::platform) fn install_jetstream_result_observer(
+        &mut self,
+        expected_document_generation: u64,
+    ) -> bool {
+        unsafe {
+            embedder::photon_view_install_jetstream_result_observer(
+                self.view,
+                expected_document_generation,
+            )
+        }
+    }
+
+    pub(in crate::platform) fn request_jetstream_start(
+        &mut self,
+        expected_document_generation: u64,
+    ) -> bool {
+        unsafe {
+            embedder::photon_view_request_jetstream_start(self.view, expected_document_generation)
+        }
+    }
+
     pub(in crate::platform) fn execute(&mut self, command: BrowserCommand) -> anyhow::Result<()> {
         match command {
             BrowserCommand::Navigate(url) => {

@@ -75,7 +75,7 @@ struct Request {
     command: Command,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(tag = "command", content = "params", rename_all = "snake_case")]
 enum Command {
     Ping,
@@ -106,6 +106,18 @@ enum Command {
         tab_id: u64,
     },
     ProbeSpeedometerResult {
+        tab_id: u64,
+        #[serde(default)]
+        document_generation: Option<u64>,
+    },
+    #[serde(rename = "probe_jetstream_result")]
+    ProbeJetStreamResult {
+        tab_id: u64,
+        #[serde(default)]
+        document_generation: Option<u64>,
+    },
+    #[serde(rename = "request_jetstream_start")]
+    RequestJetStreamStart {
         tab_id: u64,
         #[serde(default)]
         document_generation: Option<u64>,
@@ -516,7 +528,7 @@ fn dispatch(request: Request, cx: &mut App) -> Response {
         Command::GetVersion => Ok(json!({
             "application_version": env!("CARGO_PKG_VERSION"),
             "protocol_version": PROTOCOL_VERSION,
-            "capabilities": ["ping", "get_version", "list_windows", "list_processes", "list_tabs", "new_tab", "close_tab", "activate_tab", "navigate", "reload", "get_tab_status", "probe_speedometer_result"]
+            "capabilities": ["ping", "get_version", "list_windows", "list_processes", "list_tabs", "new_tab", "close_tab", "activate_tab", "navigate", "reload", "get_tab_status", "probe_speedometer_result", "probe_jetstream_result", "request_jetstream_start"]
         })),
         Command::ListWindows => Ok(list_windows(cx)),
         Command::ListProcesses => list_processes(cx),
@@ -531,6 +543,14 @@ fn dispatch(request: Request, cx: &mut App) -> Response {
             tab_id,
             document_generation,
         } => probe_speedometer_result(tab_id, document_generation, cx),
+        Command::ProbeJetStreamResult {
+            tab_id,
+            document_generation,
+        } => probe_jetstream_result(tab_id, document_generation, cx),
+        Command::RequestJetStreamStart {
+            tab_id,
+            document_generation,
+        } => request_jetstream_start(tab_id, document_generation, cx),
     };
     match result {
         Ok(value) => Response {
@@ -803,6 +823,128 @@ fn is_speedometer_url(url: &str) -> bool {
     expected_path && (official || loopback)
 }
 
+fn probe_jetstream_result(
+    tab_id: u64,
+    requested_generation: Option<u64>,
+    cx: &mut App,
+) -> DispatchResult {
+    let (handle, index) = find_tab(tab_id, cx)?;
+    let document_generation = handle
+        .update(cx, |browser, _window, cx| {
+            let Some(webview) = browser.tabs[index].content.webview() else {
+                return Err(("tab_unavailable", "tab has no WebView yet".to_owned()));
+            };
+            let allowed = webview.update(cx, |view, _cx| is_jetstream_url(&view.state.url));
+            if !allowed {
+                return Err((
+                    "unsupported_origin",
+                    "the read-only JetStream observer is restricted to the official JetStream 3.0 page or the pinned loopback JetStream source".to_owned(),
+                ));
+            }
+            let document_generation = webview.update(cx, |view, _cx| view.document_generation());
+            if requested_generation.is_some_and(|generation| generation != document_generation) {
+                return Err((
+                    "navigation_replaced",
+                    format!(
+                        "JetStream document generation changed (expected {}, current {})",
+                        requested_generation.unwrap_or_default(),
+                        document_generation
+                    ),
+                ));
+            }
+            let installed = webview.update(cx, |view, _cx| {
+                view.probe_jetstream_result(document_generation)
+            });
+            if !installed {
+                return Err((
+                    "page_unavailable",
+                    format!("JetStream document generation {document_generation} is no longer loaded"),
+                ));
+            }
+            Ok::<u64, (&'static str, String)>(document_generation)
+        })
+        .map_err(|error| ("window_unavailable", error.to_string()))??;
+    Ok(json!({
+        "tab_id": tab_id,
+        "observer": "jetstream_3_0",
+        "state": "installed",
+        "document_generation": document_generation
+    }))
+}
+
+fn is_jetstream_url(url: &str) -> bool {
+    let Some((scheme, remainder)) = url.split_once("://") else {
+        return false;
+    };
+    let Some((authority, path_and_query)) = remainder.split_once('/') else {
+        return false;
+    };
+    let path = format!(
+        "/{}",
+        path_and_query.split(['?', '#']).next().unwrap_or_default()
+    );
+    let expected_path =
+        path == "/JetStream3.0" || path == "/JetStream3.0/" || path.starts_with("/JetStream3.0/");
+    let official =
+        scheme.eq_ignore_ascii_case("https") && authority.eq_ignore_ascii_case("browserbench.org");
+    let loopback = scheme.eq_ignore_ascii_case("http")
+        && authority
+            .strip_prefix("127.0.0.1:")
+            .and_then(|port| port.parse::<u16>().ok())
+            .is_some_and(|port| port != 0);
+    expected_path && (official || loopback)
+}
+
+fn request_jetstream_start(
+    tab_id: u64,
+    requested_generation: Option<u64>,
+    cx: &mut App,
+) -> DispatchResult {
+    let (handle, index) = find_tab(tab_id, cx)?;
+    let document_generation = handle
+        .update(cx, |browser, _window, cx| {
+            let Some(webview) = browser.tabs[index].content.webview() else {
+                return Err(("tab_unavailable", "tab has no WebView yet".to_owned()));
+            };
+            let allowed = webview.update(cx, |view, _cx| is_jetstream_url(&view.state.url));
+            if !allowed {
+                return Err((
+                    "unsupported_origin",
+                    "the restricted JetStream start command is limited to the official 3.0 page or the pinned loopback JetStream source".to_owned(),
+                ));
+            }
+            let document_generation = webview.update(cx, |view, _cx| view.document_generation());
+            if requested_generation.is_some_and(|generation| generation != document_generation) {
+                return Err((
+                    "navigation_replaced",
+                    format!(
+                        "JetStream document generation changed (expected {}, current {})",
+                        requested_generation.unwrap_or_default(),
+                        document_generation
+                    ),
+                ));
+            }
+            let requested = webview.update(cx, |view, _cx| {
+                view.request_jetstream_start(document_generation)
+            });
+            if !requested {
+                return Err((
+                    "page_unavailable",
+                    "Photon could not request the official JetStream start control on the loaded document".to_owned(),
+                ));
+            }
+            Ok::<u64, (&'static str, String)>(document_generation)
+        })
+        .map_err(|error| ("window_unavailable", error.to_string()))??;
+    Ok(json!({
+        "tab_id": tab_id,
+        "observer": "jetstream_3_0",
+        "state": "start_requested",
+        "requested": true,
+        "document_generation": document_generation
+    }))
+}
+
 fn new_tab(window_id: u64, url: &str, cx: &mut App) -> DispatchResult {
     validate_url(url)?;
     let handle = find_window(window_id, cx)?;
@@ -994,6 +1136,30 @@ mod speedometer_url_tests {
 }
 
 #[cfg(test)]
+mod jetstream_url_tests {
+    use super::is_jetstream_url;
+
+    #[test]
+    fn jetstream_probe_is_limited_to_official_or_pinned_loopback_paths() {
+        assert!(is_jetstream_url(
+            "https://browserbench.org/JetStream3.0/index.html?startAutomatically"
+        ));
+        assert!(is_jetstream_url(
+            "http://127.0.0.1:49152/JetStream3.0/index.html?startAutomatically"
+        ));
+        assert!(!is_jetstream_url("https://example.com/JetStream3.0/"));
+        assert!(!is_jetstream_url("http://browserbench.org/JetStream3.0/"));
+        assert!(!is_jetstream_url("https://browserbench.org/JetStream/"));
+        assert!(!is_jetstream_url(
+            "https://user@browserbench.org/JetStream3.0/"
+        ));
+        assert!(!is_jetstream_url(
+            "http://127.0.0.1:49152/unrelated/index.html"
+        ));
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::{
         Command, PROTOCOL_VERSION, application_unavailable, configure_connection_stream,
@@ -1071,6 +1237,39 @@ mod tests {
         );
         let response = serde_json::to_value(response).unwrap();
         assert_eq!(response["request_id"], "test-17");
+    }
+
+    #[test]
+    fn protocol_decodes_jetstream_command_names_without_splitting_the_benchmark_name() {
+        let token = "a".repeat(64);
+        for (command, expected) in [
+            (
+                "probe_jetstream_result",
+                Command::ProbeJetStreamResult {
+                    tab_id: 7,
+                    document_generation: Some(11),
+                },
+            ),
+            (
+                "request_jetstream_start",
+                Command::RequestJetStreamStart {
+                    tab_id: 7,
+                    document_generation: Some(11),
+                },
+            ),
+        ] {
+            let request = serde_json::json!({
+                "protocol_version": PROTOCOL_VERSION,
+                "request_id": "jetstream-1",
+                "authentication": token,
+                "command": command,
+                "params": {"tab_id": 7, "document_generation": 11}
+            });
+            let decoded =
+                decode_authenticated_request(&serde_json::to_vec(&request).unwrap(), &token)
+                    .unwrap();
+            assert_eq!(decoded.command, expected);
+        }
     }
 
     #[test]

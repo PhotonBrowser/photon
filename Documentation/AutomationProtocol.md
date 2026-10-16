@@ -220,3 +220,37 @@ For authenticated automation runs, setting
 events to standard error. Normal Photon sessions do not enable this trace.
 The observer is available only in an authenticated, explicitly enabled,
 isolated automation session. No credential or score is sent to Photon logs.
+
+## Restricted JetStream 3.0 observer and start control
+
+Automation protocol v1 advertises `probe_jetstream_result` and
+`request_jetstream_start` in builds that implement JetStream automation. Both
+commands require the real `tab_id` and current `document_generation`:
+
+```json
+{
+  "protocol_version": 1,
+  "request_id": "23",
+  "authentication": "<session token>",
+  "command": "probe_jetstream_result",
+  "params": { "tab_id": 12, "document_generation": 4 }
+}
+```
+
+The observer is fixed and read-only. It only runs on the official
+`https://browserbench.org/JetStream3.0/` page or the pinned JetStream 3.0
+source under a loopback `127.0.0.1` route. It verifies the requested document
+generation and a completed document load. The result is published as bounded
+structured JSON in the active tab title with initialization, running,
+completed and failed states; workload counts and names; the official UI score;
+per-workload scores; bounded errors; page URL; and document generation. A
+navigation replacement cannot reuse the preceding document's result.
+
+`request_jetstream_start` accepts no script or benchmark parameters. It asks
+the loaded benchmark to activate its own default Start Test control only when
+the observer belongs to the current document, the official page is initialized,
+and the URL has no query parameters. The acknowledgement reports that the
+request was issued; Velocity still waits for the benchmark's observed running
+state and verified full completion. These commands do not add an arbitrary
+JavaScript evaluation API and are available only inside the authenticated
+automation session.
