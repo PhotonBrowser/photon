@@ -21,7 +21,7 @@ pub use curve::{BOUNCY_SPRING, Curve, Speed, ease_in_out_cubic, lerp, mix};
 pub use effects::{Edge, Entrance, MotionDirection, Transition};
 pub use element::{
     AnimateIn, PressSpec, control_left_transition, control_scale_transition,
-    control_thumb_transition, pressable, scale_transition,
+    control_thumb_transition, control_thumb_transition_tracking, pressable, scale_transition,
 };
 pub use presence::Presence;
 pub use spring::{AnimateSpring, SpringSpec};

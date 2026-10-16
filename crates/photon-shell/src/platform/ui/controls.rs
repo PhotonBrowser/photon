@@ -17,8 +17,8 @@ use super::layout::{ControlSurface, Elevated, Elevation, h_stack};
 use super::motion::{AnimateIn, fade};
 use super::motion::{
     CONTROL_THUMB_HELD_STRETCH_X, SLIDER_EDGE_STRETCH_MAX, SLIDER_EDGE_STRETCH_SPEED_RANGE,
-    SLIDER_EDGE_STRETCH_SPEED_THRESHOLD, control_left_transition, control_scale_transition,
-    control_thumb_transition, pressable,
+    SLIDER_EDGE_STRETCH_SPEED_THRESHOLD, control_scale_transition, control_thumb_transition,
+    control_thumb_transition_tracking, pressable,
 };
 use super::{ClickHandler, metrics, theme::ThemeColors};
 use std::cell::Cell;
@@ -53,7 +53,14 @@ impl Render for IntensitySliderDrag {
 #[derive(Clone, Copy)]
 struct SwitchDrag {
     id: &'static str,
-    initial_on: bool,
+}
+
+#[derive(Default)]
+struct SwitchInteraction {
+    down: Option<MouseDownEvent>,
+    start_position: f32,
+    position: Option<f32>,
+    dragging: bool,
 }
 
 struct SwitchDragView;
@@ -682,77 +689,48 @@ impl RenderOnce for Switch {
             dragged,
         } = self;
         let animations = super::settings::Settings::motion(cx);
-        let pressed = window.use_keyed_state(
-            ElementId::Name(format!("{id}-switch-pressed").into()),
+        let interaction = window.use_keyed_state(
+            ElementId::Name(format!("{id}-switch-interaction").into()),
             cx,
-            |_, _| false,
+            |_, _| SwitchInteraction::default(),
         );
-        let drag_side = window.use_keyed_state(
-            ElementId::Name(format!("{id}-switch-drag-side").into()),
-            cx,
-            |_, _| None::<bool>,
-        );
-        let mouse_down = window.use_keyed_state(
-            ElementId::Name(format!("{id}-switch-mouse-down").into()),
-            cx,
-            |_, _| None::<MouseDownEvent>,
-        );
-        let is_pressed = *pressed.read(cx);
-        let drag_preview = *drag_side.read(cx);
-        let visual_on = drag_preview.filter(|side| *side != on).unwrap_or(on);
-        if drag_preview == Some(on) {
-            drag_side.update(cx, |side, cx| {
-                if *side == Some(on) {
-                    *side = None;
-                    cx.notify();
-                }
-            });
-        }
-        let direction = if on { -1.0 } else { 1.0 };
-        let press_start = pressed.clone();
-        let press_end = pressed;
-        let drag_side_press = drag_side.clone();
-        let drag_side_move = drag_side.clone();
-        let drag_side_end = drag_side;
-        let drag_marker_start = dragged.clone();
-        let mouse_down_start = mouse_down.clone();
-        let mouse_down_end = mouse_down;
-        let click_toggle = on_toggle.clone();
-        let click_dragged = dragged.clone();
-        let drag_toggle = on_toggle;
+        let (is_pressed, is_dragging, drag_position) = {
+            let interaction = interaction.read(cx);
+            (
+                interaction.down.is_some(),
+                interaction.dragging,
+                interaction.position,
+            )
+        };
         let travel =
             metrics::SWITCH_WIDTH - metrics::SWITCH_KNOB_WIDTH - 2.0 * metrics::SWITCH_INSET;
         let track_inner_width = metrics::SWITCH_WIDTH - 2.0 * metrics::SWITCH_INSET;
-        let thumb_left = if visual_on { travel } else { 0.0 };
-        let requested_extension = if is_pressed {
-            metrics::SWITCH_KNOB_WIDTH * (CONTROL_THUMB_HELD_STRETCH_X - 1.0)
-        } else {
-            0.0
-        };
-        let extension_space = if direction < 0.0 {
-            thumb_left
-        } else {
-            track_inner_width - (thumb_left + metrics::SWITCH_KNOB_WIDTH)
-        };
-        let knob_extension = requested_extension.min(extension_space.max(0.0));
-        let knob = control_left_transition(
-            div()
-                .id(ElementId::Name(
-                    format!("{id}-switch-thumb-position").into(),
-                ))
-                .absolute()
-                .left(px(thumb_left))
-                .top(px(0.0))
-                .child(StretchThumb {
-                    id: ElementId::Name(format!("{id}-switch-thumb").into()),
-                    width: metrics::SWITCH_KNOB_WIDTH,
-                    height: metrics::SWITCH_KNOB_HEIGHT,
-                    extension: knob_extension,
-                    direction,
-                    color: palette.on_chosen,
-                }),
-            &animations,
-        );
+        let position = drag_position.unwrap_or(if on { travel } else { 0.0 });
+        let progress = (position / travel).clamp(0.0, 1.0);
+        let visual_on = progress >= 0.5;
+        let thumb_width = metrics::SWITCH_KNOB_WIDTH
+            + if is_pressed {
+                metrics::SWITCH_KNOB_HELD_STRETCH
+            } else {
+                0.0
+            };
+        // Keep the held expansion centred where possible, then clamp it so
+        // the capsule only stretches toward the inside edge of the track.
+        let thumb_left = (position - (thumb_width - metrics::SWITCH_KNOB_WIDTH) / 2.0)
+            .clamp(0.0, track_inner_width - thumb_width);
+
+        let thumb = div()
+            .id(ElementId::Name(format!("{id}-switch-thumb").into()))
+            .absolute()
+            .left(px(thumb_left))
+            .top(px(0.0))
+            .w(px(thumb_width))
+            .h(px(metrics::SWITCH_KNOB_HEIGHT))
+            .rounded_full()
+            .bg(rgb(palette.on_chosen))
+            .elevated(Elevation::Low);
+        let thumb = control_thumb_transition_tracking(thumb, is_dragging, &animations);
+
         let track = div()
             .id(ElementId::Name(format!("{id}-switch-track").into()))
             .relative()
@@ -772,15 +750,17 @@ impl RenderOnce for Switch {
             })
             .child(
                 div()
+                    .id(ElementId::Name(format!("{id}-switch-inner").into()))
                     .absolute()
                     .left(px(metrics::SWITCH_INSET))
                     .top(px(metrics::SWITCH_INSET))
                     .w(px(track_inner_width))
                     .h(px(metrics::SWITCH_KNOB_HEIGHT))
                     .overflow_x_hidden()
-                    .child(knob),
+                    .child(thumb),
             )
             .into_any_element();
+
         let mut control = h_stack()
             .id(ElementId::Name(format!("{id}-switch-control").into()))
             .items_center()
@@ -794,85 +774,92 @@ impl RenderOnce for Switch {
                 .tab_index(0)
                 .focus_ring(palette);
         }
+        let interaction_on_down = interaction.clone();
+        let interaction_on_drag = interaction.clone();
+        let interaction_on_move = interaction.clone();
+        let interaction_on_up = interaction;
+        let drag_marker_start = dragged.clone();
+        let click_toggle = on_toggle.clone();
+        let click_dragged = dragged.clone();
+        let drag_toggle = on_toggle;
         control
             .on_mouse_down(MouseButton::Left, move |event, _, cx| {
-                drag_side_press.update(cx, |side, cx| {
-                    if side.is_some() {
-                        *side = None;
-                        cx.notify();
-                    }
-                });
-                press_start.update(cx, |pressed, cx| {
-                    if !*pressed {
-                        *pressed = true;
-                        cx.notify();
-                    }
-                });
-                mouse_down_start.update(cx, |down, cx| {
-                    *down = Some(event.clone());
+                interaction_on_down.update(cx, |interaction, cx| {
+                    *interaction = SwitchInteraction {
+                        down: Some(event.clone()),
+                        start_position: if on { travel } else { 0.0 },
+                        ..SwitchInteraction::default()
+                    };
                     cx.notify();
                 });
             })
-            .on_mouse_up_all(move |event, phase, hitbox, window, cx| {
-                if event.button != MouseButton::Left {
+            .on_mouse_up_all(move |event, phase, _hitbox, window, cx| {
+                if event.button != MouseButton::Left || phase != DispatchPhase::Capture {
                     return;
                 }
-                if phase == DispatchPhase::Capture {
-                    press_end.update(cx, |pressed, cx| {
-                        if *pressed {
-                            *pressed = false;
-                            cx.notify();
-                        }
-                    });
-                } else if phase == DispatchPhase::Bubble {
-                    let drag_initial = cx
-                        .active_drag()
-                        .and_then(|drag| drag.value.downcast_ref::<SwitchDrag>())
-                        .filter(|drag| drag.id == id)
-                        .map(|drag| drag.initial_on);
-                    let committed_side = if let Some(initial_on) = drag_initial {
-                        let midpoint = hitbox.bounds.origin.x + hitbox.bounds.size.width / 2.0;
-                        let target_on = event.position.x >= midpoint;
-                        if target_on != initial_on {
-                            let click_event = ClickEvent::Mouse(MouseClickEvent {
-                                down: mouse_down_end.read(cx).clone().unwrap_or_default(),
+
+                let drag = interaction_on_up.update(cx, |interaction, cx| {
+                    let drag = interaction
+                        .down
+                        .clone()
+                        .filter(|_| interaction.dragging)
+                        .map(|down| (down, interaction.start_position));
+                    if interaction.down.is_some() || interaction.dragging {
+                        *interaction = SwitchInteraction::default();
+                        cx.notify();
+                    }
+                    drag
+                });
+
+                if let Some((down, start_position)) = drag {
+                    let position = (start_position + f32::from(event.position.x)
+                        - f32::from(down.position.x))
+                    .clamp(0.0, travel);
+                    if (position >= travel / 2.0) != on {
+                        drag_toggle(
+                            &ClickEvent::Mouse(MouseClickEvent {
+                                down,
                                 up: event.clone(),
-                            });
-                            drag_toggle(&click_event, window, cx);
-                            Some(target_on)
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    };
-                    drag_side_end.update(cx, |side, cx| {
-                        if *side != committed_side {
-                            *side = committed_side;
-                            cx.notify();
-                        }
-                    });
-                    mouse_down_end.update(cx, |down, cx| {
-                        if down.is_some() {
-                            *down = None;
-                            cx.notify();
-                        }
-                    });
+                            }),
+                            window,
+                            cx,
+                        );
+                    }
                 }
             })
-            .on_drag(SwitchDrag { id, initial_on: on }, move |_, _, _, cx| {
+            .on_drag(SwitchDrag { id }, move |_, _, _, cx| {
                 drag_marker_start.set(true);
+                interaction_on_drag.update(cx, |interaction, cx| {
+                    if !interaction.dragging {
+                        interaction.dragging = true;
+                        cx.notify();
+                    }
+                });
                 cx.new(|_| SwitchDragView)
             })
             .on_drag_move(move |event: &DragMoveEvent<SwitchDrag>, _, cx| {
                 if event.drag(cx).id != id {
                     return;
                 }
-                let midpoint = event.bounds.origin.x + event.bounds.size.width / 2.0;
-                let target_on = event.event.position.x >= midpoint;
-                drag_side_move.update(cx, |side, cx| {
-                    if *side != Some(target_on) {
-                        *side = Some(target_on);
+
+                let (start_x, start_position) = {
+                    let interaction = interaction_on_move.read(cx);
+                    (
+                        interaction
+                            .down
+                            .as_ref()
+                            .map(|down| f32::from(down.position.x)),
+                        interaction.start_position,
+                    )
+                };
+                let Some(start_x) = start_x else {
+                    return;
+                };
+                let position = (start_position + f32::from(event.event.position.x) - start_x)
+                    .clamp(0.0, travel);
+                interaction_on_move.update(cx, |interaction, cx| {
+                    if interaction.position != Some(position) {
+                        interaction.position = Some(position);
                         cx.notify();
                     }
                 });

@@ -5,8 +5,8 @@ use gpui_motion::{PressSpec, pressable as apply_press_effect};
 
 pub(super) use gpui_motion::{
     AnimateIn, AnimateSpring, Curve, Edge, Entrance, MotionConfig, Presence, Speed, SpringSpec,
-    Transition, Tween, TweenCurve, control_left_transition, control_scale_transition,
-    control_thumb_transition, mix,
+    Transition, Tween, TweenCurve, control_scale_transition, control_thumb_transition,
+    control_thumb_transition_tracking, mix,
 };
 
 /// Photon-specific control stretch tuning.

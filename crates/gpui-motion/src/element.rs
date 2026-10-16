@@ -125,6 +125,19 @@ pub fn control_thumb_transition<E: StatefulInteractiveElement + Styled>(
     element: E,
     config: &MotionConfig,
 ) -> E {
-    let motion = control_stretch_motion(config);
+    control_thumb_transition_tracking(element, false, config)
+}
+
+/// Transitions a reusable thumb while keeping tracked pointer movement immediate.
+pub fn control_thumb_transition_tracking<E: StatefulInteractiveElement + Styled>(
+    element: E,
+    tracking: bool,
+    config: &MotionConfig,
+) -> E {
+    let motion = if tracking {
+        Motion::new(Duration::ZERO)
+    } else {
+        control_stretch_motion(config)
+    };
     element.transitions(|transitions| transitions.w(motion.clone()).left(motion))
 }
