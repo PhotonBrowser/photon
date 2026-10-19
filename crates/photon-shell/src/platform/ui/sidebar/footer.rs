@@ -134,7 +134,11 @@ fn space_dot(index: usize, space: SpaceDot, palette: ThemeColors) -> impl IntoEl
                 .rounded_full()
                 .bg(rgb(space.color))
                 .when(!space.active, |dot| {
-                    dot.opacity(metrics::SPACE_DOT_IDLE_OPACITY)
+                    dot.opacity(
+                        crate::platform::theme_config::theme()
+                            .opacity
+                            .space_dot_idle,
+                    )
                 }),
         )
 }

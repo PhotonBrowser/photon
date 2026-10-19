@@ -15,6 +15,13 @@ use velocity_core::FixtureKind;
 const SIMPLE: &str = include_str!("../../../fixtures/simple/index.html");
 const COMPLEX: &str = include_str!("../../../fixtures/complex/index.html");
 const DYNAMIC: &str = include_str!("../../../fixtures/dynamic/index.html");
+const TASK_BACKLOG: &str = include_str!("../../../fixtures/responsiveness/task-backlog.html");
+const GC_PRESSURE: &str = include_str!("../../../fixtures/responsiveness/gc-pressure.html");
+const DOM_STYLE: &str = include_str!("../../../fixtures/responsiveness/dom-style.html");
+const STYLE_INVALIDATION: &str =
+    include_str!("../../../fixtures/responsiveness/style-invalidation.html");
+const LAYOUT_UPDATES: &str = include_str!("../../../fixtures/responsiveness/layout-updates.html");
+const ANIMATION: &str = include_str!("../../../fixtures/responsiveness/animation.html");
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct ReadyKey {
@@ -255,6 +262,15 @@ fn fixture_kind(path: &str) -> Option<FixtureKind> {
         "simple" => Some(FixtureKind::Simple),
         "complex" => Some(FixtureKind::Complex),
         "dynamic" => Some(FixtureKind::Dynamic),
+        "task-backlog" => Some(FixtureKind::TaskBacklog),
+        "gc-pressure" => Some(FixtureKind::GcPressure),
+        "dom-style" => Some(FixtureKind::DomStyle),
+        "style-localized" => Some(FixtureKind::StyleLocalized),
+        "style-descendant" => Some(FixtureKind::StyleDescendant),
+        "style-sibling" => Some(FixtureKind::StyleSibling),
+        "style-relational" => Some(FixtureKind::StyleRelational),
+        "layout-updates" => Some(FixtureKind::LayoutUpdates),
+        "animation" => Some(FixtureKind::Animation),
         _ => None,
     }
 }
@@ -280,6 +296,26 @@ fn render_fixture(
             COMPLEX.replace("<!-- VELOCITY_COMPLEX_CARDS -->", &cards)
         }
         FixtureKind::Dynamic => DYNAMIC.to_owned(),
+        FixtureKind::TaskBacklog => TASK_BACKLOG.to_owned(),
+        FixtureKind::GcPressure => GC_PRESSURE.to_owned(),
+        FixtureKind::DomStyle => DOM_STYLE.to_owned(),
+        FixtureKind::StyleLocalized => {
+            STYLE_INVALIDATION.replace("__VELOCITY_STYLE_SCENARIO__", "localized")
+        }
+        FixtureKind::StyleDescendant => {
+            STYLE_INVALIDATION.replace("__VELOCITY_STYLE_SCENARIO__", "descendant")
+        }
+        FixtureKind::StyleSibling => {
+            STYLE_INVALIDATION.replace("__VELOCITY_STYLE_SCENARIO__", "sibling")
+        }
+        FixtureKind::StyleRelational => {
+            STYLE_INVALIDATION.replace("__VELOCITY_STYLE_SCENARIO__", "relational")
+        }
+        FixtureKind::LayoutUpdates => LAYOUT_UPDATES.to_owned(),
+        FixtureKind::Animation => ANIMATION.replace(
+            "__VELOCITY_ANIMATION_PREROLL_MS__",
+            &velocity_core::ANIMATION_PRE_ROLL_MS.to_string(),
+        ),
     };
     if fixture == FixtureKind::Dynamic {
         let intensity = query.get("intensity").map(String::as_str).unwrap_or("25");
@@ -391,6 +427,110 @@ mod tests {
         );
         assert!(dynamic.contains("Number('50')"));
         assert!(dynamic.contains("Number('250')"));
+    }
+
+    #[test]
+    fn task_backlog_fixture_has_a_fixed_task_count_and_correctness_check() {
+        let fixture = render_fixture(FixtureKind::TaskBacklog, "fixture-run", 2, &parse_query(""));
+        assert!(fixture.contains("const taskCount = 512"));
+        assert!(fixture.contains("setTimeout(() =>"));
+        assert!(fixture.contains("data-processed"));
+        assert!(
+            fixture.contains("root.querySelectorAll(\".item.changed\").length === taskCount / 2")
+        );
+        assert!(fixture.contains("VelocityTaskBacklog:${completed}:${durationMs}:${correct}"));
+        assert!(fixture.contains("encodeURIComponent(query.get(\"run\") || \"\")"));
+        assert!(fixture.contains("/__velocity/ready?run=${encodeURIComponent"));
+    }
+
+    #[test]
+    fn gc_pressure_fixture_has_fixed_allocation_counts_and_releases_retained_graphs() {
+        let fixture = render_fixture(FixtureKind::GcPressure, "gc-run", 3, &parse_query(""));
+        assert!(fixture.contains("const cycles = 32"));
+        assert!(fixture.contains("const recordsPerCycle = 25_000"));
+        assert!(fixture.contains("const expectedRecords = cycles * recordsPerCycle"));
+        assert!(fixture.contains("retainedGraph.length = 0"));
+        assert!(fixture.contains("setTimeout(() => {"));
+        assert!(fixture.contains("VelocityGCPressure:"));
+        assert!(!fixture.contains("gc()"));
+        assert!(fixture.contains("run=gc-run&tab=3"));
+    }
+
+    #[test]
+    fn dom_style_fixture_has_fixed_tree_and_exercises_selector_kinds() {
+        let fixture = render_fixture(FixtureKind::DomStyle, "style-run", 4, &parse_query(""));
+        assert!(fixture.contains("const branchCount = 16"));
+        assert!(fixture.contains("const itemsPerBranch = 32"));
+        assert!(fixture.contains("const mutationCount = 1024"));
+        assert!(fixture.contains(".branch:has(input:checked)"));
+        assert!(fixture.contains(".item.changed + .item"));
+        assert!(fixture.contains("input:checked ~ .item.changed"));
+        assert!(fixture.contains("VelocityDOMStyle:"));
+        assert!(fixture.contains("run=style-run&tab=4"));
+    }
+
+    #[test]
+    fn targeted_style_fixtures_select_one_dependency_family_and_keep_correctness_checks() {
+        for (fixture_kind, scenario, selector) in [
+            (FixtureKind::StyleLocalized, "localized", ".isolated.active"),
+            (
+                FixtureKind::StyleDescendant,
+                "descendant",
+                ".branch.active .item .leaf",
+            ),
+            (
+                FixtureKind::StyleSibling,
+                "sibling",
+                ".item.sibling-active + .item",
+            ),
+            (
+                FixtureKind::StyleRelational,
+                "relational",
+                ".branch:has(.selected) .target",
+            ),
+        ] {
+            let fixture = render_fixture(fixture_kind, "style-run", 7, &parse_query(""));
+            assert!(fixture.contains(&format!("const scenario = \"{scenario}\"")));
+            assert!(fixture.contains(selector));
+            assert!(fixture.contains("const mutationCount = 1024"));
+            assert!(fixture.contains("const styleReadInterval = 65"));
+            assert!(fixture.contains("(operation + 1) % styleReadInterval === 0"));
+            assert!(fixture.contains("VelocityStyleInvalidation:"));
+            assert!(!fixture.contains("__VELOCITY_STYLE_SCENARIO__"));
+        }
+    }
+
+    #[test]
+    fn layout_updates_fixture_has_fixed_flow_and_absolute_geometry_work() {
+        let fixture = render_fixture(
+            FixtureKind::LayoutUpdates,
+            "layout-run",
+            5,
+            &parse_query(""),
+        );
+        assert!(fixture.contains("const normalFlowCount = 256"));
+        assert!(fixture.contains("const absoluteCount = 128"));
+        assert!(fixture.contains("const updateCount = 512"));
+        assert!(fixture.contains("getBoundingClientRect()"));
+        assert!(fixture.contains("VelocityLayoutUpdates:"));
+        assert!(fixture.contains("run=layout-run&tab=5"));
+    }
+
+    #[test]
+    fn animation_fixture_has_five_deterministic_phases_and_completion_metrics() {
+        let fixture = render_fixture(FixtureKind::Animation, "animation-run", 6, &parse_query(""));
+        assert!(fixture.contains("transform-run"));
+        assert!(fixture.contains("opacity-run"));
+        assert!(fixture.contains("requestAnimationFrame(frame)"));
+        assert!(fixture.contains("const PHASE_COUNT = 5"));
+        assert!(fixture.contains("const PRE_ROLL_MS = 900"));
+        assert!(fixture.contains(
+            "allocationChecksum += temporary[callbackCount % temporary.length].values[1]"
+        ));
+        assert!(fixture.contains("box.style.transform = `translateX("));
+        assert!(!fixture.contains("__VELOCITY_ANIMATION_PREROLL_MS__"));
+        assert!(fixture.contains("VelocityAnimation"));
+        assert!(fixture.contains("run=animation-run&tab=6"));
     }
 
     #[test]

@@ -147,31 +147,6 @@ pub(in crate::platform) fn options(cx: &App) -> WindowOptions {
     options
 }
 
-/// Builds normal browser window options at a known screen position.
-pub(in crate::platform) fn options_at(
-    cx: &App,
-    origin: gpui::Point<gpui::Pixels>,
-) -> WindowOptions {
-    let bounds = Bounds {
-        origin,
-        size: size(
-            px(window_config::INITIAL_WIDTH),
-            px(window_config::INITIAL_HEIGHT),
-        ),
-    };
-    let mut options = options_for_size(
-        cx,
-        window_config::INITIAL_WIDTH,
-        window_config::INITIAL_HEIGHT,
-    );
-    options.window_min_size = Some(size(
-        px(window_config::MIN_WIDTH),
-        px(window_config::MIN_HEIGHT),
-    ));
-    options.window_bounds = Some(WindowBounds::Windowed(bounds));
-    options
-}
-
 pub(in crate::platform) fn popup_options(
     cx: &App,
     width: Option<i32>,

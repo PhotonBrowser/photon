@@ -8,8 +8,8 @@
 mod rows;
 
 use gpui::{
-    Context, Entity, EventEmitter, FocusHandle, Focusable, MouseButton, Render, Subscription,
-    Window, div, prelude::*, px, relative, rgb, rgba,
+    Context, Entity, EventEmitter, FocusHandle, Focusable, Render, Subscription, Window, div,
+    prelude::*, px, relative, rgb, rgba,
 };
 use gpui_elements::editable_text::{
     EditableTextState, StringStorage, TextChanged,
@@ -58,6 +58,7 @@ pub(super) struct CommandBar {
     selected: usize,
     _input_subscriptions: [Subscription; 2],
     _history_subscription: Subscription,
+    _keystroke_subscription: Subscription,
 }
 
 impl CommandBar {
@@ -77,6 +78,31 @@ impl CommandBar {
         ];
         let history_subscription =
             cx.observe_global::<BrowsingHistory>(|this, cx| this.update_results(cx));
+        let window_id = window.window_handle().window_id().as_u64();
+        let this = cx.entity().downgrade();
+        let keystroke_subscription = cx.intercept_keystrokes(move |event, window, cx| {
+            if window.window_handle().window_id().as_u64() != window_id {
+                return;
+            }
+
+            this.update(cx, |this, cx| {
+                if !this.input.focus_handle(cx).is_focused(window)
+                    || event.keystroke.modifiers.modified()
+                {
+                    return;
+                }
+
+                let handled = match event.keystroke.key.as_str() {
+                    "up" => this.move_selection(false, cx),
+                    "down" => this.move_selection(true, cx),
+                    _ => false,
+                };
+                if handled {
+                    cx.stop_propagation();
+                }
+            })
+            .ok();
+        });
         window.focus(&input.focus_handle(cx), cx);
         let mut bar = Self {
             input,
@@ -86,6 +112,7 @@ impl CommandBar {
             selected: 0,
             _input_subscriptions: input_subscriptions,
             _history_subscription: history_subscription,
+            _keystroke_subscription: keystroke_subscription,
         };
         bar.update_results(cx);
         bar
@@ -112,6 +139,22 @@ impl CommandBar {
         self.results = command_bar_results(&query, &tabs, &self.commands, suggestions);
         self.selected = 0;
         cx.notify();
+    }
+
+    /// Refreshes the commands offered by the owning browser window.
+    pub(super) fn update_commands(&mut self, commands: Vec<Command>, cx: &mut Context<Self>) {
+        if self.commands == commands {
+            return;
+        }
+
+        let selected = self.results.get(self.selected).cloned();
+        self.commands = commands;
+        self.update_results(cx);
+        if let Some(selected) = selected
+            && let Some(index) = self.results.iter().position(|result| *result == selected)
+        {
+            self.selected = index;
+        }
     }
 
     /// Carries out the row at `index`.
@@ -156,13 +199,36 @@ impl CommandBar {
     }
 
     fn select_previous(&mut self, _: &NavUp, _: &mut Window, cx: &mut Context<Self>) {
-        self.selected = self.selected.saturating_sub(1);
-        cx.notify();
+        if !self.move_selection(false, cx) {
+            cx.propagate();
+        } else {
+            cx.stop_propagation();
+        }
     }
 
     fn select_next(&mut self, _: &NavDown, _: &mut Window, cx: &mut Context<Self>) {
-        self.selected = (self.selected + 1).min(self.results.len().saturating_sub(1));
-        cx.notify();
+        if !self.move_selection(true, cx) {
+            cx.propagate();
+        } else {
+            cx.stop_propagation();
+        }
+    }
+
+    fn move_selection(&mut self, next: bool, cx: &mut Context<Self>) -> bool {
+        if self.results.is_empty() {
+            return false;
+        }
+
+        let selected = if next {
+            (self.selected + 1).min(self.results.len() - 1)
+        } else {
+            self.selected.saturating_sub(1)
+        };
+        if selected != self.selected {
+            self.selected = selected;
+            cx.notify();
+        }
+        true
     }
 
     fn select(&mut self, index: usize, cx: &mut Context<Self>) {
@@ -226,7 +292,8 @@ impl Render for CommandBar {
             .absolute()
             .top_0()
             .w_full()
-            .rounded(px(metrics::COMMAND_BAR_RADIUS))
+            .rounded_t(px(metrics::command_bar_top_radius()))
+            .rounded_b(px(metrics::command_bar_bottom_radius()))
             .border_1()
             .border_color(rgba(palette.menu_border))
             .raised(palette)
@@ -234,6 +301,7 @@ impl Render for CommandBar {
             .text_color(rgb(palette.text_primary))
             .elevated(Elevation::High)
             .occlude()
+            .on_mouse_down_out(cx.listener(|_, _, _, cx| cx.emit(CommandBarEvent::Dismiss)))
             .owns_clicks()
             .capture_action(cx.listener(Self::submit))
             .capture_action(cx.listener(Self::dismiss))
@@ -258,10 +326,6 @@ impl Render for CommandBar {
             .items_center()
             .px(px(metrics::PAGE_INSET))
             .occlude()
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|_, _, _, cx| cx.emit(CommandBarEvent::Dismiss)),
-            )
             .child(
                 div()
                     .flex_shrink_0()

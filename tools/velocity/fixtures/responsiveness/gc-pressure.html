@@ -1,0 +1,61 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Velocity GC pressure fixture</title>
+<body>
+<main>
+  <p>Deterministic allocation and release workload.</p>
+  <div id="nodes"></div>
+</main>
+<script>
+(() => {
+  const cycles = 32;
+  const recordsPerCycle = 25_000;
+  const expectedRecords = cycles * recordsPerCycle;
+  const root = document.querySelector("#nodes");
+
+  window.addEventListener("load", () => {
+    // Give Velocity time to enable diagnostics after observing fixture readiness.
+    setTimeout(() => {
+      const startedAt = performance.now();
+      const retainedGraph = [];
+      let allocatedRecords = 0;
+
+      for (let cycle = 0; cycle < cycles; ++cycle) {
+        const temporaryGraph = [];
+        for (let index = 0; index < recordsPerCycle; ++index) {
+          const recordIndex = cycle * recordsPerCycle + index;
+          const record = {
+            id: recordIndex,
+            child: { value: recordIndex ^ cycle },
+            values: [recordIndex, cycle, recordIndex & 255]
+          };
+          temporaryGraph.push(record);
+          if (recordIndex % 128 === 0)
+            retainedGraph.push(record);
+          ++allocatedRecords;
+        }
+
+        for (let index = 0; index < 16; ++index) {
+          const node = document.createElement("div");
+          node.textContent = `${cycle}:${index}`;
+          root.append(node);
+        }
+        root.replaceChildren();
+      }
+
+      const correctnessBeforeRelease = allocatedRecords === expectedRecords
+        && retainedGraph.length === Math.ceil(expectedRecords / 128)
+        && root.childElementCount === 0;
+      retainedGraph.length = 0;
+      const durationMs = performance.now() - startedAt;
+
+      // Allow normal incremental sweeping to run. No GC API is called.
+      setTimeout(() => {
+        const correct = correctnessBeforeRelease && retainedGraph.length === 0;
+        document.title = `VelocityGCPressure:${allocatedRecords}:${durationMs.toFixed(3)}:${correct}`;
+      }, 1200);
+    }, 900);
+  }, { once: true });
+})();
+</script>
+</body>

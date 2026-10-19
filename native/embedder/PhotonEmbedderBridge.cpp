@@ -319,6 +319,38 @@ extern "C" void photon_view_set_performance_monitor_enabled(void* view,
         static_cast<ViewHandle*>(view)->view->set_performance_monitor_enabled(enabled);
 }
 
+extern "C" void photon_view_set_residency_monitor_enabled(void* view,
+    bool enabled)
+{
+    if (view)
+        static_cast<ViewHandle*>(view)->view->set_residency_monitor_enabled(enabled);
+}
+
+extern "C" bool photon_view_set_task_queue_diagnostics_enabled(void* view,
+    bool enabled)
+{
+    return view && static_cast<ViewHandle*>(view)->view->set_task_queue_diagnostics_enabled(enabled);
+}
+
+extern "C" size_t photon_view_copy_task_queue_diagnostics(void* view,
+    char* output, size_t capacity)
+{
+    if (!view)
+        return 0;
+    return static_cast<ViewHandle*>(view)->view->copy_task_queue_diagnostics(output, capacity);
+}
+
+extern "C" void photon_view_release_hidden_memory(void* view)
+{
+    if (view)
+        static_cast<ViewHandle*>(view)->view->release_hidden_memory();
+}
+
+extern "C" bool photon_view_needs_beforeunload_check(void* view)
+{
+    return view && static_cast<ViewHandle*>(view)->view->needs_beforeunload_check();
+}
+
 extern "C" void photon_view_set_visible(void* view, bool visible)
 {
     if (view)
@@ -544,6 +576,12 @@ photon_runtime_set_system_reduced_motion_preference(void* runtime,
     if (runtime)
         static_cast<RuntimeHandle*>(runtime)
             ->runtime->set_system_reduced_motion_preference(reduce_motion);
+}
+
+extern "C" void photon_runtime_set_memory_pressure(void* runtime, bool pressured)
+{
+    if (runtime)
+        static_cast<RuntimeHandle*>(runtime)->runtime->set_memory_pressure(pressured);
 }
 
 extern "C" void photon_runtime_set_elastic_scroll_enabled(void* runtime,

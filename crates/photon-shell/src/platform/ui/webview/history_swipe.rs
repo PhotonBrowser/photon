@@ -1,8 +1,8 @@
 //! Native trackpad history-swipe capture for one tab.
 
-use gpui::HapticFeedbackStyle;
 use gpui::{AnyElement, Context, ScrollWheelEvent, TouchPhase, div, prelude::*, px, rgba};
 use photon_core::BrowserCommand;
+use photon_haptics::Feedback;
 use std::time::Instant;
 
 use super::super::icons::{back_icon, forward_icon};
@@ -339,7 +339,7 @@ impl PhotonWebView {
         if armed != self.history_swipe.armed {
             self.history_swipe.armed = armed;
             if armed {
-                cx.play_haptic_feedback(HapticFeedbackStyle::Alignment);
+                photon_haptics::play(cx, Feedback::Alignment);
             }
         }
     }

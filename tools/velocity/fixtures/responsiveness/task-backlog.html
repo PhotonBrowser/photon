@@ -1,0 +1,49 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Velocity task backlog fixture</title>
+<style>
+  body { font: 16px system-ui; }
+  #items { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; }
+  .item { min-height: 8px; background: #789; }
+  .item.changed { background: #c84; }
+</style>
+<main>
+  <p>Deterministic timer task backlog workload.</p>
+  <div id="items"></div>
+</main>
+<script>
+(() => {
+  const taskCount = 512;
+  const root = document.querySelector("#items");
+  for (let index = 0; index < taskCount; ++index) {
+    const item = document.createElement("div");
+    item.className = "item";
+    item.dataset.index = String(index);
+    root.append(item);
+  }
+
+  window.addEventListener("load", () => {
+    window.__velocityReady = true;
+    const query = new URLSearchParams(location.search);
+    fetch(`/__velocity/ready?run=${encodeURIComponent(query.get("run") || "")}&tab=${encodeURIComponent(query.get("tab") || "")}`, { cache: "no-store" }).catch(() => {});
+    // Keep setup outside the measured queue, giving Velocity time to start diagnostics.
+    setTimeout(() => {
+      const startedAt = performance.now();
+      let completed = 0;
+      for (let index = 0; index < taskCount; ++index) {
+        setTimeout(() => {
+          const item = root.children[index];
+          item.classList.toggle("changed", index % 2 === 0);
+          item.setAttribute("data-processed", "true");
+          if (++completed === taskCount) {
+            const durationMs = (performance.now() - startedAt).toFixed(3);
+            const correct = root.querySelectorAll('[data-processed="true"]').length === taskCount
+              && root.querySelectorAll(".item.changed").length === taskCount / 2;
+            document.title = `VelocityTaskBacklog:${completed}:${durationMs}:${correct}`;
+          }
+        }, 0);
+      }
+    }, 900);
+  }, { once: true });
+})();
+</script>

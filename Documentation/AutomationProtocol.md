@@ -1,8 +1,8 @@
 # Photon Automation Protocol v1
 
 Photon has an optional, local automation interface for isolated testing and
-Velocity resource workloads. It is not enabled in normal browser sessions and
-is not a remote debugging service.
+Velocity resource and responsiveness workloads. It is not enabled in normal
+browser sessions and is not a remote debugging service.
 
 ## Enable an isolated session
 
@@ -81,7 +81,7 @@ Errors use a stable code and explanatory message:
 | `get_version` | — | Application/protocol versions and supported commands |
 | `list_windows` | — | Stable window IDs and current tab counts |
 | `list_processes` | — | Read-only active process snapshot from `WebView::ProcessManager` and the macOS `ProcessReaper` |
-| `list_tabs` | optional `window_id` | Tab/window IDs, URL, active/loading/error state, engine load-finished state, and document generation |
+| `list_tabs` | optional `window_id` | Tab/window IDs, URL, active/loading/error state, sleeping state, latest memory estimates, engine load-finished state, and document generation |
 | `new_tab` | `window_id`, `url` | The ID of a real Photon tab |
 | `close_tab` | `tab_id` | Accepted closing state, using ordinary tab lifecycle logic |
 | `activate_tab` | `tab_id` | Activates an existing tab and requests foreground activation of its native app/window |
@@ -89,6 +89,44 @@ Errors use a stable code and explanatory message:
 | `reload` | `tab_id` | Reloads the current page through Photon's navigation command |
 | `get_tab_status` | `tab_id` | Current URL, loading/error state, crash status, engine load-finished state, document generation, and window/tab counts |
 | `probe_speedometer_result` | `tab_id`, `document_generation` | Installs the restricted read-only observer for the expected document generation |
+| `performance_start` | `tab_id` | Starts bounded task-queue diagnostics for the WebContent processes hosting this tab |
+| `performance_snapshot` | `tab_id` | Returns the current task-queue diagnostics, using process scope |
+| `performance_stop` | `tab_id` | Returns a final snapshot and disables task-queue diagnostics for this tab's processes |
+| `set_memory_pressure` | `level`: `system`, `normal`, `warning`, or `critical` | Test-only pressure injection for the isolated Photon process; returns the effective level |
+
+Photon advertises `performance_diagnostics_v1` only when the diagnostics
+operations are available. The operations require the same per-session token
+authentication as every other command. Their output has `schema_version: 1`,
+is limited by the 64 KiB protocol response bound, and contains no page text,
+DOM content, URLs, or JavaScript values. The command accepts only a tab ID; it
+does not evaluate caller-provided code or inject input.
+
+Photon advertises `memory_pressure_test_v1` for isolated automation sessions.
+`set_memory_pressure` overrides the observed pressure level for that Photon
+process and wakes its pressure cleanup path immediately. `system` removes the
+override and resumes reading the operating system. Critical pressure can discard
+eligible hidden test tabs, so use this command only in a disposable automation
+profile. `list_tabs` reports each tab's sleeping state and latest available
+process-memory and managed-heap estimates for the scenario's assertions.
+
+`performance_start` resets and enables a fixed-size ring containing the most
+recent 1,024 dispatched task samples in each relevant WebContent process.
+`performance_snapshot` does not reset the ring. `performance_stop` snapshots
+before disabling. Closing a tab or its WebView also releases its diagnostics
+ownership. The result reports queue wait and task wall duration in milliseconds,
+queue depth in tasks, retained and overwritten sample counts, and grouped task
+sources (`user_interaction`, `timer`, `dom_manipulation`, `networking`,
+`rendering`, `posted_message`, `idle`, and `other`). Percentiles use nearest
+rank over retained samples. Queue depth is sampled in constant time; runnable
+backlog is unavailable and explicitly null because calculating it would scan
+queues a second time.
+
+The scope is `webcontent_process`, not tab. A WebContent process may host
+multiple documents, and the response marks whether it is shared with other
+Photon views. If a tab spans multiple WebContent processes, Photon returns one
+row per process and Velocity does not merge process percentiles into a single
+distribution. The metrics use the process-local monotonic clock; no cross-process
+durations are calculated.
 
 `list_processes` returns active records in the actual
 `WebView::ProcessManager` registry, plus macOS's separate `ProcessReaper`

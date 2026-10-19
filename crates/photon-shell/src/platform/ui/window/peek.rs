@@ -136,7 +136,7 @@ impl BrowserWindow {
         let card = div()
             .flex_1()
             .min_h_0()
-            .rounded(px(metrics::PAGE_RADIUS))
+            .rounded(px(metrics::peek_card_radius()))
             .overflow_hidden()
             .border_1()
             .border_color(rgba(palette.menu_border))

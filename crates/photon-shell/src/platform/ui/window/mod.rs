@@ -60,7 +60,6 @@ use super::settings::Settings;
 use super::shortcuts_dialog::ShortcutsDialog;
 use super::tabs::{RevealedIcon, TabDragAxis, TabIcon};
 use super::theme::{ThemeColors, palette};
-use super::workspace_layout::WorkspaceLayout;
 use alerts::{EngineNotice, NoticeExpiry};
 use content::{BrowserTab, TabContent, create_webview};
 use peek::PeekState;
@@ -94,8 +93,9 @@ struct BrowserWindow {
     _archive_task: Task<()>,
     /// Wakes the deadline scheduler when settings or tabs change.
     tab_sleep_waker: sleeping::TabSleepWaker,
-    /// Sleeps inactive pages at their deadlines without periodic polling.
+    /// Sleeps inactive pages and checks for system memory pressure.
     _tab_sleep_task: Task<()>,
+    _memory_pressure_monitor: sleeping::MemoryPressureMonitor,
     tab_sleep_mode: TabSleepMode,
     active_tab: Option<usize>,
     /// The active tab drag, its measured geometry, and the temporary motion.
@@ -190,7 +190,7 @@ impl BrowserWindow {
             return;
         }
         let state = MenuBarState {
-            has_sidebar: WorkspaceLayout::current(cx).has_sidebar(),
+            commands: self.command_availability(cx),
             sidebar_icons: self.sidebar.docked() && self.sidebar.collapsed(),
             zen: self.sidebar.zen(),
             loading: self
@@ -233,7 +233,6 @@ enum TabDragPhase {
     Reordering,
     DraggingOverFavourites,
     OutsideTarget,
-    Detaching,
     CrossWindowTargeting,
     Completing,
     Cancelled,
@@ -414,24 +413,6 @@ fn open_browser_window(
     restore_pinned_tabs: bool,
     cx: &mut App,
 ) -> anyhow::Result<WindowHandle<BrowserWindow>> {
-    open_browser_window_at(
-        runtime,
-        startup_address,
-        restore_pinned_tabs,
-        None,
-        None,
-        cx,
-    )
-}
-
-fn open_browser_window_at(
-    runtime: Rc<EngineRuntime>,
-    startup_address: Option<String>,
-    restore_pinned_tabs: bool,
-    origin: Option<Point<Pixels>>,
-    display_id: Option<gpui::DisplayId>,
-    cx: &mut App,
-) -> anyhow::Result<WindowHandle<BrowserWindow>> {
     // A page's address opens that page; any other address a web page.
     let startup_page = startup_address.as_deref().and_then(find_page);
     let initial_webview = startup_address
@@ -439,10 +420,7 @@ fn open_browser_window_at(
         .filter(|_| startup_page.is_none())
         .and_then(|address| create_webview(cx, runtime.clone(), address));
     let animations = Settings::get(cx).animations;
-    let options = origin.map_or_else(
-        || window_settings::options(cx),
-        |origin| window_settings::options_at(cx, origin).display_id(display_id),
-    );
+    let options = window_settings::options(cx);
     let handle = cx.open_window(options, move |window, cx| {
         window_settings::configure_native_controls(window, &animations);
         window.set_window_title(photon_brand::NAME);
@@ -497,6 +475,8 @@ fn open_browser_window_at(
             let registry_window_id = window.window_handle().window_id().as_u64();
             let (tab_sleep_waker, tab_sleep_task) =
                 BrowserWindow::sleep_inactive_tabs_regularly(window, cx);
+            let memory_pressure_monitor =
+                sleeping::MemoryPressureMonitor::new(tab_sleep_waker.clone());
             let mut browser = BrowserWindow {
                 tabs: Vec::new(),
                 tab_subscriptions: Vec::new(),
@@ -511,6 +491,7 @@ fn open_browser_window_at(
                 _archive_task: BrowserWindow::archive_unused_tabs_regularly(window, cx),
                 tab_sleep_waker,
                 _tab_sleep_task: tab_sleep_task,
+                _memory_pressure_monitor: memory_pressure_monitor,
                 tab_sleep_mode: Settings::get(cx).tab_sleep_mode,
                 active_tab: None,
                 tab_drag_layout: None,

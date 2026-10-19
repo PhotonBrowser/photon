@@ -94,6 +94,43 @@ impl Command {
     }
 }
 
+/// Browser state that determines which commands are useful right now.
+///
+/// The shell supplies these capabilities from its current window and layout;
+/// the command bar and its owner use the same rules to filter and revalidate
+/// command selections.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct CommandAvailability {
+    pub has_page: bool,
+    pub has_closed_tabs: bool,
+    pub has_sidebar: bool,
+    pub shows_spaces: bool,
+    pub has_next_space: bool,
+    pub has_previous_space: bool,
+}
+
+impl CommandAvailability {
+    /// Whether `command` can run with these capabilities.
+    pub fn allows(self, command: Command) -> bool {
+        match command {
+            Command::ReloadPage | Command::FindInPage | Command::CopyAddress => self.has_page,
+            Command::ReopenClosedTab => self.has_closed_tabs,
+            Command::ToggleSidebar | Command::ToggleSidebarIcons => self.has_sidebar,
+            Command::NewSpace => self.shows_spaces,
+            Command::NextSpace => self.shows_spaces && self.has_next_space,
+            Command::PreviousSpace => self.shows_spaces && self.has_previous_space,
+            _ => true,
+        }
+    }
+
+    /// Available commands in their normal command bar order.
+    pub fn commands(self) -> impl Iterator<Item = Command> {
+        Command::ALL
+            .into_iter()
+            .filter(move |command| self.allows(*command))
+    }
+}
+
 /// An open tab the command bar can switch to.
 #[derive(Clone, Copy, Debug)]
 pub struct OpenTab<'a> {
@@ -231,6 +268,48 @@ mod tests {
     fn offers_only_the_given_commands() {
         let results = command_bar_results("sidebar", &TABS, &[Command::NewTab], Vec::new());
         assert!(results.is_empty());
+    }
+
+    #[test]
+    fn command_availability_updates_rows_while_the_bar_is_open() {
+        let mut availability = CommandAvailability {
+            has_page: true,
+            has_closed_tabs: true,
+            has_sidebar: true,
+            shows_spaces: true,
+            has_next_space: true,
+            has_previous_space: true,
+        };
+        let query = "reload";
+
+        let results = command_bar_results(
+            query,
+            &[],
+            &availability.commands().collect::<Vec<_>>(),
+            Vec::new(),
+        );
+        assert!(results.iter().any(|result| matches!(
+            result,
+            CommandBarResult::Run {
+                command: Command::ReloadPage,
+                ..
+            }
+        )));
+
+        availability.has_page = false;
+        let results = command_bar_results(
+            query,
+            &[],
+            &availability.commands().collect::<Vec<_>>(),
+            Vec::new(),
+        );
+        assert!(!results.iter().any(|result| matches!(
+            result,
+            CommandBarResult::Run {
+                command: Command::ReloadPage,
+                ..
+            }
+        )));
     }
 
     #[test]

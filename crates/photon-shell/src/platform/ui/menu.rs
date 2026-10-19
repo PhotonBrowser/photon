@@ -2,7 +2,7 @@
 
 use gpui::{App, ElementId, Role, SharedString, div, prelude::*, px, rgb, rgba};
 
-use super::controls::{switch, toggled};
+use super::controls::{haptic_switch_toggle, switch, toggled};
 use super::icons::check_icon;
 use super::layout::{Elevated, Elevation, Raised};
 use super::layout::{h_stack, v_stack};
@@ -41,7 +41,7 @@ pub(super) fn popover_surface(
         // Rows sit inset from the edges, so their rounded highlight sits
         // inside the rounded surface.
         .p(px(metrics::MENU_PADDING))
-        .rounded(px(metrics::SURFACE_RADIUS))
+        .rounded(px(metrics::menu_surface_radius()))
         .border_1()
         .border_color(rgba(palette.menu_border))
         .raised(palette)
@@ -109,16 +109,28 @@ pub(super) fn menu_switch(
     palette: ThemeColors,
 ) -> impl IntoElement {
     let on_toggle = Rc::new(on_toggle);
-    let row_toggle = on_toggle.clone();
+    let activated = Rc::new(Cell::new(false));
+    let row_toggle = haptic_switch_toggle(on_toggle.clone(), activated.clone());
+    let switch_toggle = row_toggle.clone();
     let dragged = Rc::new(Cell::new(false));
     let row_dragged_on_down = dragged.clone();
     let row_dragged_on_click = dragged.clone();
+    let row_activated_on_down = activated;
     menu_item(id, label, tab_index, Role::MenuItemCheckBox, palette)
         .aria_toggled(toggled(on))
-        .child(switch(id, on, palette, None, on_toggle, dragged))
+        .child(switch(
+            id,
+            on,
+            palette,
+            None,
+            on_toggle,
+            switch_toggle,
+            dragged,
+        ))
         .on_mouse_down_all(move |event, phase, _, _, _| {
             if phase == gpui::DispatchPhase::Capture && event.button == gpui::MouseButton::Left {
                 row_dragged_on_down.set(false);
+                row_activated_on_down.set(false);
             }
         })
         .on_click(move |event, window, cx| {
@@ -158,7 +170,7 @@ fn menu_item(
 ) -> gpui::Stateful<gpui::Div> {
     pressable(menu_row(id, label.into(), role).tab_index(tab_index))
         .focus_ring(palette)
-        .rounded(px(metrics::MENU_ITEM_RADIUS))
+        .rounded(px(metrics::menu_item_radius()))
         .hover(|style| style.bg(rgba(palette.hover_surface)))
 }
 

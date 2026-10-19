@@ -216,12 +216,9 @@ pub(super) fn pin_for(tab: &BrowserTab, cx: &gpui::App) -> Option<Shortcut> {
             title: page.definition.title.to_owned(),
             url: internal_page_url(page.definition.name),
         }),
-        TabContent::Sleeping(sleeping) => {
-            let view = sleeping.webview.read(cx);
-            view.has_page().then(|| Shortcut {
-                title: view.state.title.clone(),
-                url: view.state.url.clone(),
-            })
-        }
+        TabContent::Sleeping(sleeping) => (!sleeping.state.url.is_empty()).then(|| Shortcut {
+            title: sleeping.state.title.clone(),
+            url: sleeping.state.url.clone(),
+        }),
     }
 }

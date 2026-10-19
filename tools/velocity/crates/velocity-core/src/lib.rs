@@ -8,6 +8,8 @@ mod startup;
 pub use startup::*;
 mod resource_benchmark;
 pub use resource_benchmark::*;
+mod responsiveness;
+pub use responsiveness::*;
 
 pub use velocity_browser::{BrowserId, InstallationId};
 pub use velocity_metrics::{MetricDefinition, MetricUnit, MetricValue};

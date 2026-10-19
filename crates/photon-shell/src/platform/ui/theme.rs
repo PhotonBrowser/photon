@@ -1,131 +1,124 @@
 //! Theme selection and semantic shell color tokens.
 //!
-//! Views use these role names instead of choosing colors locally. The base
-//! light and dark palettes come from GPUI-CE; adjust token derivation here when
-//! the shell needs a different role mapping.
+//! Views use these role names instead of choosing colors locally. Values come
+//! from the bundled `theme.toml`; this module resolves them into GPUI colors.
 
 use gpui::{
-    App, Background, ColorExt, Rgba, Window, WindowAppearance, colors::Colors, hsla, hsla_to_rgba,
+    App, Background, ColorExt, Rgba, Window, WindowAppearance, hsla, hsla_to_rgba,
     linear_color_stop, linear_gradient, rgb, rgb_to_hsla, rgba,
 };
-use photon_core::{Transparency, WindowColor};
+use photon_core::{ThemeMode, Transparency, WindowColor};
 use photon_performance::PerformancePalette;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
 use super::settings::Settings;
 
-/// How opaque the window and raised surfaces are, and how much raised
-/// surfaces blur what is behind them, for each transparency setting. Surfaces
-/// on the window are tints over it, so they are exactly as see-through as the
-/// window; menus and dialogs over a busy page are more opaque and frost the
-/// page behind them, so their text stays readable.
-#[derive(Clone, Copy)]
-struct SurfaceOpacity {
-    window: f32,
-    raised: f32,
-    /// The blur radius behind raised surfaces, in pixels.
-    raised_blur: f32,
-}
-
-impl SurfaceOpacity {
-    const fn for_transparency(transparency: Transparency) -> Self {
-        match transparency {
-            Transparency::Off => Self {
-                window: 1.0,
-                raised: 1.0,
-                raised_blur: 0.0,
-            },
-            Transparency::Subtle => Self {
-                window: 0.88,
-                raised: 0.92,
-                raised_blur: 20.0,
-            },
-            Transparency::Clear => Self {
-                // Add enough tint to keep the window surface distinct while
-                // letting the native material adapt to the backdrop.
-                window: 0.46,
-                raised: 0.84,
-                raised_blur: 48.0,
-            },
-        }
-    }
-}
-
-mod opacity {
-    pub(super) const TEXT_SECONDARY: f32 = 0.72;
-    pub(super) const PERFORMANCE_SURFACE: f32 = 0.95;
-    pub(super) const SHORTCUT_ICON_SURFACE: f32 = 0.62;
-    pub(super) const MODAL_BACKDROP: f32 = 0.28;
-    pub(super) const PEEK_BACKDROP: f32 = 0.16;
-    pub(super) const MENU_BORDER: f32 = 0.12;
-    pub(super) const HOVER: f32 = 0.07;
-    /// How much of the text color tints the shared surface.
-    pub(super) const SURFACE_TINT: f32 = 0.06;
-    pub(super) const SELECTED: f32 = 0.12;
-    /// Between the surface and a selected row, for a surface under the pointer.
-    pub(super) const SURFACE_HOVER: f32 = 0.09;
-    pub(super) const ACCENT_HOVER_BLEND: f32 = 0.12;
-    pub(super) const SOFT_ACCENT_BORDER: f32 = 0.48;
-}
-
-/// The direction a window gradient runs, in degrees: from the top left.
-const WINDOW_GRADIENT_ANGLE: f32 = 135.0;
-
-/// GPUI-CE's palettes have no error role, so the shell defines one semantic
-/// error color for each appearance.
-mod error {
-    use gpui::{Rgba, rgb};
-
-    pub(super) fn light() -> Rgba {
-        rgb(0xff3b30)
-    }
-
-    pub(super) fn dark() -> Rgba {
-        rgb(0xff453a)
-    }
-}
-
-/// Link-style blue for addresses, readable on each appearance.
-mod link {
-    use gpui::{Rgba, rgb};
-
-    pub(super) fn light() -> Rgba {
-        rgb(0x1a73e8)
-    }
-
-    pub(super) fn dark() -> Rgba {
-        rgb(0x8ab4f8)
-    }
-}
-
 /// The window colours, as hues, and how they tint each appearance.
 mod window_color {
+    use crate::platform::theme_config;
     use photon_core::WindowColor;
 
     /// A colour's hue, in turns, or `None` for the system grey.
     pub(super) fn hue(color: WindowColor) -> Option<f32> {
-        match color {
-            WindowColor::System => None,
-            WindowColor::Blue => Some(0.6),
-            WindowColor::Purple => Some(0.74),
-            WindowColor::Pink => Some(0.9),
-            WindowColor::Red => Some(0.99),
-            WindowColor::Orange => Some(0.07),
-            WindowColor::Yellow => Some(0.13),
-            WindowColor::Green => Some(0.38),
-            WindowColor::Teal => Some(0.49),
+        let name = match color {
+            WindowColor::System => return None,
+            WindowColor::Blue => "blue",
+            WindowColor::Purple => "purple",
+            WindowColor::Pink => "pink",
+            WindowColor::Red => "red",
+            WindowColor::Orange => "orange",
+            WindowColor::Yellow => "yellow",
+            WindowColor::Green => "green",
+            WindowColor::Teal => "teal",
+        };
+        Some(
+            *theme_config::theme()
+                .window
+                .hues
+                .get(name)
+                .expect("every named window color must have a hue token"),
+        )
+    }
+}
+
+/// One colour used for both the active space's window tint and the shell's
+/// selected controls and links.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub(super) enum AccentColor {
+    Graphite,
+    Blue,
+    Green,
+    Red,
+    Orange,
+    Teal,
+    Purple,
+    Pink,
+}
+
+impl AccentColor {
+    pub(super) const ALL: [Self; 8] = [
+        Self::Graphite,
+        Self::Blue,
+        Self::Green,
+        Self::Red,
+        Self::Orange,
+        Self::Teal,
+        Self::Purple,
+        Self::Pink,
+    ];
+
+    pub(super) fn name(self) -> &'static str {
+        match self {
+            Self::Graphite => "Graphite",
+            Self::Blue => "Blue",
+            Self::Green => "Green",
+            Self::Red => "Red",
+            Self::Orange => "Orange",
+            Self::Teal => "Teal",
+            Self::Purple => "Purple",
+            Self::Pink => "Pink",
         }
     }
 
-    /// How far a gradient turns toward the neighbouring hue, in turns.
-    pub(super) const GRADIENT_TURN: f32 = 0.09;
+    fn key(self) -> &'static str {
+        match self {
+            Self::Graphite => "graphite",
+            Self::Blue => "blue",
+            Self::Green => "green",
+            Self::Red => "red",
+            Self::Orange => "orange",
+            Self::Teal => "teal",
+            Self::Purple => "purple",
+            Self::Pink => "pink",
+        }
+    }
 
-    /// Saturation and lightness of the tint on each appearance, and of the
-    /// swatches that offer it.
-    pub(super) const LIGHT: (f32, f32) = (0.55, 0.87);
-    pub(super) const DARK: (f32, f32) = (0.3, 0.17);
-    pub(super) const SWATCH: (f32, f32) = (0.6, 0.55);
+    pub(super) fn window_color(self) -> WindowColor {
+        match self {
+            Self::Graphite => WindowColor::System,
+            Self::Blue => WindowColor::Blue,
+            Self::Green => WindowColor::Green,
+            Self::Red => WindowColor::Red,
+            Self::Orange => WindowColor::Orange,
+            Self::Teal => WindowColor::Teal,
+            Self::Purple => WindowColor::Purple,
+            Self::Pink => WindowColor::Pink,
+        }
+    }
+
+    pub(super) fn from_window_color(color: WindowColor) -> Self {
+        match color {
+            WindowColor::System => Self::Graphite,
+            WindowColor::Blue => Self::Blue,
+            WindowColor::Purple => Self::Purple,
+            WindowColor::Pink => Self::Pink,
+            WindowColor::Red => Self::Red,
+            WindowColor::Orange | WindowColor::Yellow => Self::Orange,
+            WindowColor::Green => Self::Green,
+            WindowColor::Teal => Self::Teal,
+        }
+    }
 }
 
 /// The colors for `window`, in the appearance, transparency and window
@@ -158,13 +151,64 @@ struct WindowStyle {
     gradient: bool,
 }
 
+#[derive(Clone, Copy)]
+struct BaseColors {
+    background: Rgba,
+    text: Rgba,
+    container: Rgba,
+    selected: Rgba,
+}
+
+/// A palette for a miniature theme preview in Appearance settings.
+pub(super) fn preview_palette(dark: bool, accent: AccentColor) -> ThemeColors {
+    ThemeColors::for_appearance(
+        if dark {
+            WindowAppearance::Dark
+        } else {
+            WindowAppearance::Light
+        },
+        WindowStyle {
+            transparency: Transparency::Off,
+            color: accent.window_color(),
+            gradient: false,
+        },
+    )
+}
+
+/// The Light/System/Dark preview palettes. System shows a light sidebar and a
+/// dark page to make the mixed appearance explicit.
+pub(super) fn theme_preview_palettes(
+    mode: ThemeMode,
+    accent: AccentColor,
+) -> (ThemeColors, ThemeColors) {
+    match mode {
+        ThemeMode::Light => {
+            let light = preview_palette(false, accent);
+            (light, light)
+        }
+        ThemeMode::Dark => {
+            let dark = preview_palette(true, accent);
+            (dark, dark)
+        }
+        ThemeMode::System => (
+            preview_palette(false, accent),
+            preview_palette(true, accent),
+        ),
+    }
+}
+
 /// How `color` looks in the swatch that offers it; the system grey is the
 /// page background.
 pub(super) fn window_color_swatch(color: WindowColor, palette: ThemeColors) -> u32 {
     match window_color::hue(color) {
         Some(hue) => {
-            let (saturation, lightness) = window_color::SWATCH;
-            to_rgb_token(hsla_to_rgba(hsla(hue, saturation, lightness, 1.0)))
+            let window = &crate::platform::theme_config::theme().window;
+            to_rgb_token(hsla_to_rgba(hsla(
+                hue,
+                window.swatch_saturation,
+                window.swatch_lightness,
+                1.0,
+            )))
         }
         None => palette.page_background,
     }
@@ -233,8 +277,11 @@ impl ThemeColors {
         if self.window_tint == self.window_tint_end {
             return rgba(self.window_tint).into();
         }
+        let angle = crate::platform::theme_config::theme()
+            .window
+            .gradient_angle_degrees;
         linear_gradient(
-            WINDOW_GRADIENT_ANGLE,
+            angle,
             linear_color_stop(rgb_to_hsla(rgba(self.window_tint)), 0.0),
             linear_color_stop(rgb_to_hsla(rgba(self.window_tint_end)), 1.0),
         )
@@ -249,30 +296,49 @@ impl ThemeColors {
         let dark = crate::platform::is_dark_appearance(appearance);
         CACHE.with_borrow_mut(|cache| {
             *cache.entry((dark, style)).or_insert_with(|| {
-                let opacity = SurfaceOpacity::for_transparency(style.transparency);
-                let (colors, error, link) = if dark {
-                    (Colors::dark(), error::dark(), link::dark())
+                let theme = crate::platform::theme_config::theme();
+                let colors = if dark {
+                    &theme.palette.dark
                 } else {
-                    (Colors::light(), error::light(), link::light())
+                    &theme.palette.light
                 };
-                Self::from_gpui(colors, error, link, opacity, style, dark)
+                let colors = BaseColors {
+                    background: color(&colors.background),
+                    text: color(&colors.text),
+                    container: color(&colors.container),
+                    selected: color(&colors.selected),
+                };
+                let error = color(if dark {
+                    &theme.colors.error.dark
+                } else {
+                    &theme.colors.error.light
+                });
+                let surfaces = theme.transparency.for_setting(style.transparency);
+                Self::from_colors(colors, error, surfaces, style, dark)
             })
         })
     }
 
-    fn from_gpui(
-        colors: Colors,
+    fn from_colors(
+        colors: BaseColors,
         error: Rgba,
-        link: Rgba,
-        surfaces: SurfaceOpacity,
+        surfaces: &crate::platform::theme_config::SurfaceOpacity,
         style: WindowStyle,
         dark: bool,
     ) -> Self {
-        let text_secondary = mix_colors(colors.text, colors.background, opacity::TEXT_SECONDARY);
+        let theme = crate::platform::theme_config::theme();
+        let opacity = &theme.opacity;
+        let text_secondary = mix_colors(colors.text, colors.background, opacity.text_secondary);
         let (saturation, lightness) = if dark {
-            window_color::DARK
+            (
+                theme.window.dark_tint_saturation,
+                theme.window.dark_tint_lightness,
+            )
         } else {
-            window_color::LIGHT
+            (
+                theme.window.light_tint_saturation,
+                theme.window.light_tint_lightness,
+            )
         };
         let tint = |hue: f32| -> Rgba {
             hsla_to_rgba(hsla(
@@ -287,12 +353,17 @@ impl ThemeColors {
                 let tint = colors.background.opacity(surfaces.window);
                 (tint, tint)
             }
-            Some(hue) if style.gradient => (tint(hue), tint(hue + window_color::GRADIENT_TURN)),
+            Some(hue) if style.gradient => (tint(hue), tint(hue + theme.window.gradient_turn)),
             Some(hue) => (tint(hue), tint(hue)),
         };
 
-        let menu_border = to_rgba_token(colors.text.opacity(opacity::MENU_BORDER));
-        let accent_adjustment = if dark { colors.text } else { rgb(0x000000) };
+        let menu_border = to_rgba_token(colors.text.opacity(opacity.menu_border));
+        let accent = accent_color(AccentColor::from_window_color(style.color), dark);
+        let accent_adjustment = color(if dark {
+            &theme.colors.accent_hover_background.dark
+        } else {
+            &theme.colors.accent_hover_background.light
+        });
         Self {
             window_tint: to_rgba_token(window_tint),
             window_tint_end: to_rgba_token(window_tint_end),
@@ -302,12 +373,12 @@ impl ThemeColors {
             selection: to_rgba_token(colors.selected),
             field_error_border: to_rgba_token(error),
             error: to_rgb_token(error),
-            error_hover_surface: to_rgba_token(error.opacity(opacity::HOVER * 2.0)),
+            error_hover_surface: to_rgba_token(error.opacity(opacity.error_hover)),
             performance_palette: PerformancePalette {
                 surface: to_rgba_token(
                     colors
                         .container
-                        .opacity(surfaces.raised.min(opacity::PERFORMANCE_SURFACE)),
+                        .opacity(surfaces.raised.min(opacity.performance_surface)),
                 ),
                 text: to_rgb_token(colors.text),
                 secondary_text: to_rgb_token(text_secondary),
@@ -316,7 +387,7 @@ impl ThemeColors {
             // but stay opaque enough to read over a busy page.
             menu_surface: to_rgba_token(colors.container.opacity(surfaces.raised)),
             shortcut_icon_surface: to_rgba_token(
-                colors.container.opacity(opacity::SHORTCUT_ICON_SURFACE),
+                colors.container.opacity(opacity.shortcut_icon_surface),
             ),
             raised_blur: surfaces.raised_blur,
             // A light hairline that separates raised surfaces from what is under
@@ -325,28 +396,79 @@ impl ThemeColors {
             control_border: menu_border,
             // A tint over the window rather than a layer of its own, so stacking
             // it never makes the window less see-through.
-            surface: to_rgba_token(colors.text.opacity(opacity::SURFACE_TINT)),
-            hover_surface: to_rgba_token(colors.text.opacity(opacity::HOVER)),
-            surface_hover: to_rgba_token(colors.text.opacity(opacity::SURFACE_HOVER)),
-            selected_surface: to_rgba_token(colors.text.opacity(opacity::SELECTED)),
-            chosen: to_rgb_token(link),
+            surface: to_rgba_token(colors.text.opacity(opacity.surface_tint)),
+            hover_surface: to_rgba_token(colors.text.opacity(opacity.hover)),
+            surface_hover: to_rgba_token(colors.text.opacity(opacity.surface_hover)),
+            selected_surface: to_rgba_token(colors.text.opacity(opacity.selected)),
+            chosen: to_rgb_token(accent),
             logo_tint: None,
             chosen_hover: to_rgb_token(mix_colors(
-                link,
+                accent,
                 accent_adjustment,
-                1.0 - opacity::ACCENT_HOVER_BLEND,
+                1.0 - opacity.accent_hover_blend,
             )),
-            soft_accent_border: to_rgba_token(link.opacity(opacity::SOFT_ACCENT_BORDER)),
+            soft_accent_border: to_rgba_token(accent.opacity(opacity.soft_accent_border)),
             on_chosen: if dark {
-                to_rgb_token(colors.background)
+                to_rgb_token(color(&theme.colors.chosen_foreground.dark))
             } else {
-                to_rgb_token(rgb(0xffffff))
+                to_rgb_token(color(&theme.colors.chosen_foreground.light))
             },
-            suggestion_address: to_rgb_token(link),
-            modal_backdrop: to_rgba_token(Rgba::new(0.0, 0.0, 0.0, opacity::MODAL_BACKDROP)),
-            peek_backdrop: to_rgba_token(Rgba::new(0.0, 0.0, 0.0, opacity::PEEK_BACKDROP)),
+            suggestion_address: to_rgb_token(accent),
+            modal_backdrop: to_rgba_token(
+                color(if dark {
+                    &theme.colors.modal_backdrop.dark
+                } else {
+                    &theme.colors.modal_backdrop.light
+                })
+                .opacity(opacity.modal_backdrop),
+            ),
+            peek_backdrop: to_rgba_token(
+                color(if dark {
+                    &theme.colors.peek_backdrop.dark
+                } else {
+                    &theme.colors.peek_backdrop.light
+                })
+                .opacity(opacity.peek_backdrop),
+            ),
         }
     }
+}
+
+/// Accent tones stay readable as filled controls in either appearance, while
+/// the swatches use the softer colours shown in Appearance settings.
+fn accent_color(accent: AccentColor, dark: bool) -> Rgba {
+    let accents = &crate::platform::theme_config::theme().colors.accents;
+    let accent = accents
+        .get(accent.key())
+        .expect("every shell accent must have theme tokens");
+    color(if dark { &accent.dark } else { &accent.light })
+}
+
+/// The softer accent tones displayed in the palette picker.
+pub(super) fn accent_swatch(accent: AccentColor) -> u32 {
+    let accents = &crate::platform::theme_config::theme().colors.accents;
+    let accent = accents
+        .get(accent.key())
+        .expect("every shell accent must have theme tokens");
+    to_rgb_token(color(&accent.swatch))
+}
+
+/// Dark ink on the palette's intentionally soft accent swatches.
+pub(super) fn accent_swatch_mark() -> u32 {
+    to_rgb_token(color(
+        &crate::platform::theme_config::theme()
+            .colors
+            .accent_swatch_mark
+            .value,
+    ))
+}
+
+fn color(value: &str) -> Rgba {
+    let hex = value
+        .strip_prefix('#')
+        .expect("theme colors must use #RRGGBB notation");
+    assert_eq!(hex.len(), 6, "theme colors must use #RRGGBB notation");
+    rgb(u32::from_str_radix(hex, 16).expect("theme colors must contain hexadecimal digits"))
 }
 
 fn mix_colors(foreground: Rgba, background: Rgba, foreground_weight: f32) -> Rgba {

@@ -503,6 +503,17 @@ fn primary_metric(record: &HistoryRecord) -> Option<&HistoryMetric> {
         record.metric("score")
     } else if record.benchmark == "startup" {
         record.metric("window_ready_ms")
+    } else if record.benchmark == "responsiveness" {
+        let fixture_duration = match record.scenario.as_deref() {
+            Some("task-backlog") => "task_backlog_duration_ms",
+            Some("dom-style") => "dom_style_duration_ms",
+            Some("layout-updates") => "layout_update_duration_ms",
+            Some("gc-pressure") => "gc_pressure_duration_ms",
+            _ => return record.summary.first(),
+        };
+        record
+            .metric(fixture_duration)
+            .or_else(|| record.summary.first())
     } else {
         record
             .metric("cpu_mean_percent")
@@ -922,6 +933,42 @@ mod tests {
     #[test]
     fn date_formatting_handles_known_utc_timestamp() {
         assert_eq!(format_date(1_792_080_000_000), "2026-10-15");
+    }
+
+    #[test]
+    fn responsiveness_history_list_prefers_fixture_duration() {
+        for (scenario, expected_metric) in [
+            ("task-backlog", "task_backlog_duration_ms"),
+            ("dom-style", "dom_style_duration_ms"),
+            ("layout-updates", "layout_update_duration_ms"),
+            ("gc-pressure", "gc_pressure_duration_ms"),
+        ] {
+            let mut record = history_record("responsive", "v1", 0.0);
+            record.benchmark = "responsiveness".to_owned();
+            record.scenario = Some(scenario.to_owned());
+            record.summary = vec![
+                HistoryMetric {
+                    name: "event_loop_queue_depth_at_enqueue_mean".to_owned(),
+                    unit: "tasks".to_owned(),
+                    median: 1.0,
+                    mean: Some(1.0),
+                    standard_deviation: Some(0.0),
+                    sample_count: 5,
+                    higher_is_better: Some(false),
+                },
+                HistoryMetric {
+                    name: expected_metric.to_owned(),
+                    unit: "milliseconds".to_owned(),
+                    median: 64.0,
+                    mean: Some(64.0),
+                    standard_deviation: Some(1.0),
+                    sample_count: 5,
+                    higher_is_better: Some(false),
+                },
+            ];
+
+            assert_eq!(primary_metric(&record).unwrap().name, expected_metric);
+        }
     }
 
     #[test]

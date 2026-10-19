@@ -1,0 +1,103 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Velocity animation fixture</title>
+<style>
+  body { margin: 0; min-height: 100vh; background: #f4f5f7; }
+  main { display: grid; place-items: center; min-height: 100vh; }
+  #stage { width: 240px; height: 160px; display: grid; place-items: center; }
+  #box { width: 64px; height: 64px; background: #3859d6; border-radius: 12px; }
+  #box.transform-run { animation: translate 900ms linear infinite alternate; }
+  #box.opacity-run { animation: fade 900ms linear infinite alternate; }
+  @keyframes translate {
+    from { transform: translateX(-64px) rotate(0deg); }
+    to { transform: translateX(64px) rotate(180deg); }
+  }
+  @keyframes fade { from { opacity: 1; } to { opacity: 0.2; } }
+</style>
+<body>
+<main>
+  <div id="stage"><div id="box"></div></div>
+</main>
+<script>
+(() => {
+  const PRE_ROLL_MS = __VELOCITY_ANIMATION_PREROLL_MS__;
+  const PHASE_DURATION_MS = 900;
+  const PHASE_COUNT = 5;
+  const box = document.querySelector("#box");
+  const stage = document.querySelector("#stage");
+  const intervals = [];
+  let phase = 0;
+  let phaseStartedAt = null;
+  let activeStartedAt = null;
+  let previousFrameAt = null;
+  let callbackCount = 0;
+  let mutationCount = 0;
+  let allocationChecksum = 0;
+
+  function percentile(values, fraction) {
+    if (values.length === 0) return 0;
+    const sorted = values.slice().sort((left, right) => left - right);
+    return sorted[Math.max(0, Math.ceil(sorted.length * fraction) - 1)];
+  }
+
+  function finish(now) {
+    const duration = now - activeStartedAt;
+    const valid = phase === PHASE_COUNT && callbackCount > 0
+      && mutationCount > 0 && allocationChecksum > 0;
+    document.title = [
+      "VelocityAnimation", PHASE_COUNT, duration.toFixed(3), callbackCount,
+      percentile(intervals, 0.50).toFixed(3),
+      percentile(intervals, 0.95).toFixed(3),
+      percentile(intervals, 0.99).toFixed(3),
+      Math.max(0, ...intervals).toFixed(3), valid,
+    ].join(":");
+  }
+
+  function frame(now) {
+    callbackCount += 1;
+    if (previousFrameAt !== null) intervals.push(now - previousFrameAt);
+    previousFrameAt = now;
+    if (phaseStartedAt === null) phaseStartedAt = now;
+    if (now - phaseStartedAt >= PHASE_DURATION_MS) {
+      box.className = "";
+      box.style.transform = "";
+      box.style.opacity = "";
+      phase += 1;
+      phaseStartedAt = now;
+      if (phase === PHASE_COUNT) {
+        finish(now);
+        return;
+      }
+    }
+
+    const progress = Math.min(1, (now - phaseStartedAt) / PHASE_DURATION_MS);
+    if (phase === 0) {
+      box.className = "transform-run";
+    } else if (phase === 1) {
+      box.className = "opacity-run";
+    } else if (phase === 2) {
+      box.style.transform = `translateX(${Math.round(Math.sin(progress * Math.PI * 2) * 64)}px)`;
+    } else if (phase === 3) {
+      stage.dataset.state = String(mutationCount & 1);
+      box.textContent = String(mutationCount++);
+    } else if (phase === 4) {
+      const temporary = [];
+      for (let index = 0; index < 256; ++index) {
+        temporary.push({ index, values: [index, index + phase, progress], label: `item-${index}` });
+      }
+      allocationChecksum += temporary[callbackCount % temporary.length].values[1];
+      const x = Math.round(Math.sin(progress * Math.PI * 2) * 64);
+      box.style.transform = `translateX(${x}px) rotate(${progress * 360}deg)`;
+    }
+    requestAnimationFrame(frame);
+  }
+
+  window.addEventListener("load", () => {
+    setTimeout(() => {
+      activeStartedAt = performance.now();
+      requestAnimationFrame(frame);
+    }, PRE_ROLL_MS);
+  }, { once: true });
+})();
+</script>
+</body>

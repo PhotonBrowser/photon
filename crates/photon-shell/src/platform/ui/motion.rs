@@ -14,6 +14,11 @@ pub(super) const CONTROL_THUMB_HELD_STRETCH_X: f32 = 1.2;
 pub(super) const SLIDER_EDGE_STRETCH_MAX: f32 = 0.3;
 pub(super) const SLIDER_EDGE_STRETCH_SPEED_THRESHOLD: f32 = 700.0;
 pub(super) const SLIDER_EDGE_STRETCH_SPEED_RANGE: f32 = 1_500.0;
+const ICON_BUTTON_PRESS_SCALE: f32 = 0.92;
+
+fn press_spring() -> SpringConfig {
+    SpringConfig::new(480.0, 44.0, 1.0)
+}
 
 /// Applies Photon's pressed-control scale and spring response.
 pub(super) fn pressable<E: StatefulInteractiveElement + Styled>(element: E) -> E {
@@ -21,7 +26,18 @@ pub(super) fn pressable<E: StatefulInteractiveElement + Styled>(element: E) -> E
         element,
         PressSpec {
             scale: 0.97,
-            spring: SpringConfig::new(480.0, 44.0, 1.0),
+            spring: press_spring(),
+        },
+    )
+}
+
+/// Applies a more visible press response to compact icon controls.
+pub(super) fn icon_pressable<E: StatefulInteractiveElement + Styled>(element: E) -> E {
+    apply_press_effect(
+        element,
+        PressSpec {
+            scale: ICON_BUTTON_PRESS_SCALE,
+            spring: press_spring(),
         },
     )
 }

@@ -96,7 +96,7 @@ impl<E: Styled> Raised for E {}
 /// Gives inputs and secondary controls the same themed surface and outline.
 pub(super) trait ControlSurface: Styled + Sized {
     fn control_surface(self, palette: ThemeColors) -> Self {
-        self.rounded(px(metrics::CONTROL_RADIUS))
+        self.rounded(px(metrics::control_radius()))
             .border_1()
             .border_color(rgba(palette.control_border))
             .bg(rgba(palette.surface))

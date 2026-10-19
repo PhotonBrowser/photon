@@ -63,7 +63,9 @@ pub struct Profile {
 }
 
 /// Identifies a replaceable profile snapshot when it is scheduled for saving.
-/// A newer ticket makes an older queued snapshot safe to skip.
+/// A newer ticket makes an older queued snapshot safe to skip. A caller can
+/// retry the same ticket after an I/O error because saves atomically replace a
+/// complete snapshot instead of appending records.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ProfileWriteTicket {
     kind: SnapshotKind,
@@ -91,10 +93,22 @@ struct ProfileWrites {
 
 impl ProfileWrites {
     fn reserve(&self, kind: SnapshotKind) -> ProfileWriteTicket {
+        let _serial = self
+            .serial
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        self.reserve_locked(kind)
+    }
+
+    /// Reserves a generation while the profile's serialization lock is held.
+    fn reserve_locked(&self, kind: SnapshotKind) -> ProfileWriteTicket {
         let generation = self
             .generation(kind)
-            .fetch_add(1, Ordering::AcqRel)
-            .wrapping_add(1);
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+                current.checked_add(1)
+            })
+            .expect("profile snapshot generation exhausted")
+            + 1;
         ProfileWriteTicket { kind, generation }
     }
 
@@ -328,7 +342,7 @@ impl Profile {
             .serial
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        self.writes.reserve(SnapshotKind::Settings);
+        self.writes.reserve_locked(SnapshotKind::Settings);
         let bytes =
             read_limited(&self.settings_path, MAX_SETTINGS_FILE_BYTES)?.ok_or_else(|| {
                 io::Error::new(io::ErrorKind::NotFound, "settings file does not exist")
@@ -1528,6 +1542,65 @@ mod tests {
                 .expect("skips stale session")
         );
         assert_eq!(profile.load_session(), newer_session);
+    }
+
+    #[test]
+    fn new_reservations_wait_for_an_in_progress_snapshot_write() {
+        let temporary = TemporaryProfile::new("serialized-snapshot-reservation");
+        let profile = temporary.0.clone();
+        let ticket = profile.begin_settings_write();
+        let writer_profile = profile.clone();
+        let (write_started, wait_for_release) = std::sync::mpsc::channel();
+        let (release_write, write_released) = std::sync::mpsc::channel();
+        let writer = std::thread::spawn(move || {
+            writer_profile.write_snapshot(ticket, SnapshotKind::Settings, || {
+                write_started
+                    .send(())
+                    .expect("notifies that the write started");
+                write_released.recv().expect("waits for the test");
+                Ok(())
+            })
+        });
+        wait_for_release
+            .recv()
+            .expect("snapshot write reaches its atomic section");
+
+        let reserving_profile = profile.clone();
+        let (reservation_attempted, wait_for_attempt) = std::sync::mpsc::channel();
+        let (reservation_ready, wait_for_reservation) = std::sync::mpsc::channel();
+        let reserver = std::thread::spawn(move || {
+            reservation_attempted
+                .send(())
+                .expect("notifies before trying to reserve");
+            let ticket = reserving_profile.begin_settings_write();
+            reservation_ready
+                .send(ticket)
+                .expect("returns the new ticket");
+        });
+        wait_for_attempt.recv().expect("reservation thread starts");
+        assert!(wait_for_reservation.try_recv().is_err());
+
+        release_write.send(()).expect("releases the active write");
+        assert!(
+            writer
+                .join()
+                .expect("snapshot write thread completes")
+                .expect("snapshot write succeeds")
+        );
+        let newer_ticket = wait_for_reservation
+            .recv()
+            .expect("reservation follows the active write");
+        reserver.join().expect("reservation thread completes");
+        assert!(
+            !profile
+                .save_settings_if_current(ticket, &BrowserSettings::default())
+                .expect("old ticket is superseded")
+        );
+        assert!(
+            profile
+                .save_settings_if_current(newer_ticket, &BrowserSettings::default())
+                .expect("current ticket remains usable")
+        );
     }
 
     #[test]

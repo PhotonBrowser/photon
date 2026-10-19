@@ -3,7 +3,7 @@
 use gpui::{App, QuitMode};
 use gpui_elements::editable_text::actions::{DEFAULT_INPUT_CONTEXT, default_bindings};
 use gpui_platform::application;
-use photon_core::{BrowserSettings, History, Session};
+use photon_core::{BrowserSettings, Command, History, Session};
 use photon_shortcuts::{NewWindow, browser_shortcuts};
 use std::rc::Rc;
 use std::time::Duration;
@@ -105,7 +105,18 @@ pub fn run() {
                 let new_window_runtime = runtime.clone();
                 cx.on_action(move |_: &NewWindow, cx| {
                     cx.activate(true);
-                    if let Err(error) =
+                    if let Some(window) = cx
+                        .active_window()
+                        .and_then(|window| window.downcast::<BrowserWindow>())
+                    {
+                        cx.defer(move |cx| {
+                            window
+                                .update(cx, |browser, window, cx| {
+                                    browser.execute_command(Command::NewWindow, window, cx);
+                                })
+                                .ok();
+                        });
+                    } else if let Err(error) =
                         open_browser_window(new_window_runtime.clone(), launch_address(), false, cx)
                     {
                         crate::platform::trace(format_args!("new window: {error:#}"));

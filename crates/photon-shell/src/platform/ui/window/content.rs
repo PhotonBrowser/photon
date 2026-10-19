@@ -2,12 +2,13 @@
 //! and how the window follows each.
 
 use gpui::{AnyElement, App, Context, Entity, Subscription, Window, div, prelude::*};
-use photon_core::{BrowserCommand, Shortcut, SpaceId};
+use photon_core::{BrowserCommand, BrowserState, Shortcut, SpaceId};
 use std::rc::Rc;
 use std::time::Instant;
 
 use super::super::super::engine::{EngineRuntime, EngineSession, UiWake};
 use super::super::super::trace;
+use super::super::Favicon;
 use super::super::pages::{InternalPage, NEW_TAB, PageDefinition, PageEvent, find_page};
 use super::super::settings::Settings;
 use super::super::theme::ThemeColors;
@@ -24,7 +25,8 @@ pub(super) enum TabContent {
 
 #[derive(Clone)]
 pub(super) struct SleepingTab {
-    pub(super) webview: Entity<PhotonWebView>,
+    pub(super) state: BrowserState,
+    pub(super) favicon: Option<Favicon>,
 }
 
 impl TabContent {
@@ -32,7 +34,7 @@ impl TabContent {
         match self {
             Self::Page(_) => None,
             Self::Web(webview) => Some(webview.clone()),
-            Self::Sleeping(sleeping) => Some(sleeping.webview.clone()),
+            Self::Sleeping(_) => None,
         }
     }
 
@@ -185,23 +187,38 @@ impl BrowserWindow {
         match content {
             TabContent::Web(webview) => Some(Self::subscribe_to_webview(webview, window, cx)),
             TabContent::Page(page) => Some(Self::subscribe_to_page(page, window, cx)),
-            TabContent::Sleeping(sleeping) => {
-                Some(Self::subscribe_to_webview(&sleeping.webview, window, cx))
-            }
+            TabContent::Sleeping(_) => None,
         }
     }
 
-    /// Makes a hidden page visible again without replacing its live Engine
-    /// session, preserving its DOM, script state, form values, and scroll.
-    pub(super) fn wake_tab(&mut self, index: usize) -> bool {
+    /// Reloads a discarded hidden page when its tab is selected.
+    pub(super) fn wake_tab(
+        &mut self,
+        index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
         let Some(tab) = self.tabs.get(index) else {
             return false;
         };
         let TabContent::Sleeping(sleeping) = &tab.content else {
             return true;
         };
-        let webview = sleeping.webview.clone();
-        self.tabs[index].content = TabContent::Web(webview);
+        let state = sleeping.state.clone();
+        let favicon = sleeping.favicon.clone();
+        let Some(webview) = create_webview(cx, self.runtime.clone(), &state.url) else {
+            return false;
+        };
+        webview.update(cx, |view, _| {
+            view.favicon = favicon;
+            view.requested = Some(Shortcut {
+                title: state.title.clone(),
+                url: state.url.clone(),
+            });
+        });
+        let content = TabContent::Web(webview);
+        self.tab_subscriptions[index] = self.subscribe_to_content(&content, window, cx);
+        self.tabs[index].content = content;
         self.revealed_icons
             .borrow_mut()
             .remove(&self.tabs[index].id);

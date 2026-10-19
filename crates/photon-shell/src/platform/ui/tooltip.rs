@@ -15,7 +15,7 @@ impl Render for LabelTooltip {
         div()
             .px(px(metrics::TOOLTIP_HORIZONTAL_PADDING))
             .py(px(metrics::TOOLTIP_VERTICAL_PADDING))
-            .rounded(px(metrics::TOOLTIP_RADIUS))
+            .rounded(px(metrics::tooltip_radius()))
             .border_1()
             .border_color(rgba(self.palette.menu_border))
             .raised(self.palette)

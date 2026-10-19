@@ -84,6 +84,15 @@ pub enum FixtureKind {
     Simple,
     Complex,
     Dynamic,
+    TaskBacklog,
+    GcPressure,
+    DomStyle,
+    StyleLocalized,
+    StyleDescendant,
+    StyleSibling,
+    StyleRelational,
+    LayoutUpdates,
+    Animation,
 }
 
 impl FixtureKind {
@@ -92,6 +101,15 @@ impl FixtureKind {
             Self::Simple => "simple",
             Self::Complex => "complex",
             Self::Dynamic => "dynamic",
+            Self::TaskBacklog => "task-backlog",
+            Self::GcPressure => "gc-pressure",
+            Self::DomStyle => "dom-style",
+            Self::StyleLocalized => "style-localized",
+            Self::StyleDescendant => "style-descendant",
+            Self::StyleSibling => "style-sibling",
+            Self::StyleRelational => "style-relational",
+            Self::LayoutUpdates => "layout-updates",
+            Self::Animation => "animation",
         }
     }
 }
@@ -272,13 +290,27 @@ pub struct ResourceBenchmarkIteration {
     pub browser: ReportBrowser,
     pub iteration: usize,
     pub warmup: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub diagnostic_pair_id: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub diagnostics_enabled: Option<bool>,
     pub tab_count: Option<usize>,
     pub automation_protocol: Option<String>,
     pub profile_isolation: String,
     pub started_at_unix_ms: u128,
     pub resource: Option<ResourceReport>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub responsiveness: Option<ResponsivenessIterationData>,
     pub failure: Option<ResourceBenchmarkFailure>,
     pub cleanup: CleanupStatus,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct ResponsivenessIterationData {
+    pub workload_duration_ms: f64,
+    pub metrics: serde_json::Value,
+    pub process_resources: Option<velocity_metrics::ResourceReport>,
+    pub process_resource_error: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -1045,11 +1077,14 @@ mod tests {
             browser,
             iteration: 1,
             warmup: false,
+            diagnostic_pair_id: None,
+            diagnostics_enabled: None,
             tab_count: Some(5),
             automation_protocol: None,
             profile_isolation: "fresh isolated profile".to_owned(),
             started_at_unix_ms: 1,
             resource: None,
+            responsiveness: None,
             failure: Some(ResourceBenchmarkFailure {
                 kind: ResourceFailureKind::Unsupported,
                 message: "tab automation not available".to_owned(),
@@ -1162,6 +1197,8 @@ mod tests {
                 browser,
                 iteration: index,
                 warmup: false,
+                diagnostic_pair_id: None,
+                diagnostics_enabled: None,
                 tab_count: None,
                 automation_protocol: None,
                 profile_isolation: "fresh isolated profile".to_owned(),
@@ -1192,6 +1229,7 @@ mod tests {
                         ..ResourceStatistics::default()
                     },
                 }),
+                responsiveness: None,
                 failure: None,
                 cleanup: CleanupStatus {
                     browser_closed: true,
@@ -1204,11 +1242,14 @@ mod tests {
             browser: report_browser(),
             iteration: 4,
             warmup: false,
+            diagnostic_pair_id: None,
+            diagnostics_enabled: None,
             tab_count: None,
             automation_protocol: None,
             profile_isolation: "fresh isolated profile".to_owned(),
             started_at_unix_ms: 4,
             resource: None,
+            responsiveness: None,
             failure: Some(ResourceBenchmarkFailure {
                 kind: ResourceFailureKind::Sampling,
                 message: "managed process exited".to_owned(),
@@ -1443,6 +1484,8 @@ mod tests {
             browser: report_browser(),
             iteration,
             warmup: false,
+            diagnostic_pair_id: None,
+            diagnostics_enabled: None,
             tab_count: Some(tab_count),
             automation_protocol: Some("test".to_owned()),
             profile_isolation: "fresh isolated profile".to_owned(),
@@ -1454,6 +1497,7 @@ mod tests {
                 samples: Vec::new(),
                 statistics,
             }),
+            responsiveness: None,
             failure: None,
             cleanup: CleanupStatus {
                 browser_closed: true,

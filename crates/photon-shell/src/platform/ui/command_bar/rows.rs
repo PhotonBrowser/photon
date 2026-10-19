@@ -7,10 +7,7 @@ use gpui::{
     prelude::*, px, rgb, rgba,
 };
 use photon_core::{Command, CommandBarResult};
-use photon_shortcuts::{
-    CloseTab, FindInPage, NewWindow, NextSpace, OpenSettings, PreviousSpace, Reload,
-    ReopenClosedTab, ShowKeyboardShortcuts, ToggleSidebar, ToggleSidebarIcons, ToggleZenMode,
-};
+use photon_shortcuts::action_for_command;
 use std::rc::Rc;
 
 use super::super::history::BrowsingHistory;
@@ -52,17 +49,13 @@ pub(super) fn result_rows(
                 .px(px(
                     metrics::COMMAND_BAR_FIELD_PADDING - metrics::COMMAND_BAR_ROWS_INSET
                 ))
-                .rounded(px(metrics::MENU_ITEM_RADIUS))
+                .rounded(px(metrics::menu_item_radius()))
                 .text_size(px(metrics::MENU_FONT_SIZE))
                 .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                     cx.stop_propagation();
                     choose(index, window, cx);
                 })
-                .on_hover(move |hovered, window, cx| {
-                    if *hovered {
-                        select(index, window, cx);
-                    }
-                })
+                .on_mouse_move(move |_, window, cx| select(index, window, cx))
                 .child(icon)
                 .child(div().flex_1().min_w_0().truncate().child(label))
                 .child(detail);
@@ -134,7 +127,7 @@ fn row_parts(
             name_matches,
         } => {
             let (text, highlights) = matched_text(command.name(), name_matches);
-            let keys = command_action(*command)
+            let keys = action_for_command(*command)
                 .and_then(|action| action_kbd(action.as_ref(), palette, cx))
                 .map(IntoElement::into_any_element);
             (
@@ -165,23 +158,4 @@ fn command_icon(command: Command, palette: ThemeColors) -> AnyElement {
         Command::OpenSettings => settings_icon(color, size).into_any_element(),
         Command::ShowKeyboardShortcuts => keyboard_icon(color, size).into_any_element(),
     }
-}
-
-/// The action whose shortcut also runs `command`, if it has one.
-fn command_action(command: Command) -> Option<Box<dyn gpui::Action>> {
-    Some(match command {
-        Command::NewWindow => Box::new(NewWindow),
-        Command::ReopenClosedTab => Box::new(ReopenClosedTab),
-        Command::CloseTab => Box::new(CloseTab),
-        Command::ReloadPage => Box::new(Reload),
-        Command::FindInPage => Box::new(FindInPage),
-        Command::ToggleSidebar => Box::new(ToggleSidebar),
-        Command::ToggleSidebarIcons => Box::new(ToggleSidebarIcons),
-        Command::ToggleZenMode => Box::new(ToggleZenMode),
-        Command::NextSpace => Box::new(NextSpace),
-        Command::PreviousSpace => Box::new(PreviousSpace),
-        Command::OpenSettings => Box::new(OpenSettings),
-        Command::ShowKeyboardShortcuts => Box::new(ShowKeyboardShortcuts),
-        Command::NewTab | Command::CopyAddress | Command::NewSpace => return None,
-    })
 }

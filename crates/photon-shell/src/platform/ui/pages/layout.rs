@@ -12,6 +12,7 @@ pub(super) fn scrolling_column(
     id: impl Into<gpui::ElementId>,
     content: impl IntoElement,
     elastic_scroll: bool,
+    max_width: f32,
 ) -> impl IntoElement {
     v_stack()
         .id(id)
@@ -20,12 +21,7 @@ pub(super) fn scrolling_column(
         .overflow_y_scroll()
         .elastic_scroll(elastic_scroll)
         .p(px(metrics::INTERNAL_PAGE_INSET))
-        .child(
-            v_stack()
-                .w_full()
-                .max_w(px(metrics::INTERNAL_PAGE_MAX_WIDTH))
-                .child(content),
-        )
+        .child(v_stack().w_full().max_w(px(max_width)).child(content))
 }
 
 /// A heading with a line of explanation under it.
@@ -56,8 +52,14 @@ pub(super) fn group(palette: ThemeColors) -> gpui::Div {
         .w_full()
         .p(px(metrics::MENU_PADDING))
         .gap(px(metrics::MENU_ITEM_GAP))
-        .rounded(px(metrics::SURFACE_RADIUS))
+        .rounded(px(metrics::surface_radius()))
         .border_1()
         .border_color(rgba(palette.menu_border))
         .bg(rgba(palette.menu_surface))
+}
+
+/// A group that holds a segmented choice control, with corners derived from
+/// the control's inset and border.
+pub(super) fn group_with_choices(palette: ThemeColors) -> gpui::Div {
+    group(palette).rounded(px(metrics::choices_group_radius()))
 }

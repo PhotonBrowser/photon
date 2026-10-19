@@ -119,7 +119,7 @@ impl Render for FindBar {
             .h(px(metrics::FIND_BAR_HEIGHT))
             .pl(px(metrics::FIND_BAR_PADDING))
             .pr(px(metrics::FIND_BAR_TRAILING_PADDING))
-            .rounded(px(metrics::SURFACE_RADIUS))
+            .rounded(px(metrics::surface_radius()))
             .border_1()
             .border_color(rgba(palette.menu_border))
             .raised(palette)

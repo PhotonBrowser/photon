@@ -18,7 +18,7 @@ use std::{
 use velocity_metrics::ProcessStartTime;
 
 const PROTOCOL_VERSION: u32 = 1;
-const MAX_MESSAGE_BYTES: usize = 64 * 1024;
+const MAX_MESSAGE_BYTES: usize = 256 * 1024;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct PhotonWindow {
@@ -530,6 +530,78 @@ impl PhotonAutomationClient {
         Ok(())
     }
 
+    pub fn performance_start(
+        &mut self,
+        tab_id: u64,
+        timeout: Duration,
+    ) -> Result<(), PhotonAutomationError> {
+        if !self.supports("performance_diagnostics_v1") {
+            return Err(PhotonAutomationError(
+                "Photon does not advertise performance diagnostics schema v1".to_owned(),
+            ));
+        }
+        let response = self.call(
+            "performance_start",
+            Some(json!({"tab_id": tab_id})),
+            timeout,
+        )?;
+        validate_task_diagnostics_envelope(&response, tab_id, Some("started"), false)?;
+        Ok(())
+    }
+
+    pub fn performance_snapshot(
+        &mut self,
+        tab_id: u64,
+        timeout: Duration,
+    ) -> Result<Value, PhotonAutomationError> {
+        if !self.supports("performance_diagnostics_v1") {
+            return Err(PhotonAutomationError(
+                "Photon does not advertise performance diagnostics schema v1".to_owned(),
+            ));
+        }
+        let response = self.call(
+            "performance_snapshot",
+            Some(json!({"tab_id": tab_id})),
+            timeout,
+        )?;
+        validate_task_diagnostics_envelope(&response, tab_id, None, true)?;
+        Ok(response)
+    }
+
+    pub fn performance_frame_snapshot(
+        &mut self,
+        tab_id: u64,
+        timeout: Duration,
+    ) -> Result<Value, PhotonAutomationError> {
+        if !self.supports("performance_frame_timing_v1") {
+            return Err(PhotonAutomationError(
+                "Photon does not advertise Metal drawable presentation timing schema v1".to_owned(),
+            ));
+        }
+        let response = self.call(
+            "performance_frame_snapshot",
+            Some(json!({"tab_id": tab_id})),
+            timeout,
+        )?;
+        validate_frame_diagnostics_envelope(&response, tab_id)?;
+        Ok(response)
+    }
+
+    pub fn performance_stop(
+        &mut self,
+        tab_id: u64,
+        timeout: Duration,
+    ) -> Result<Value, PhotonAutomationError> {
+        if !self.supports("performance_diagnostics_v1") {
+            return Err(PhotonAutomationError(
+                "Photon does not advertise performance diagnostics schema v1".to_owned(),
+            ));
+        }
+        let response = self.call("performance_stop", Some(json!({"tab_id": tab_id})), timeout)?;
+        validate_task_diagnostics_envelope(&response, tab_id, Some("stopped"), true)?;
+        Ok(response)
+    }
+
     fn call(
         &mut self,
         command: &str,
@@ -578,7 +650,17 @@ impl PhotonAutomationClient {
             .take((MAX_MESSAGE_BYTES + 1) as u64)
             .read_until(b'\n', &mut response_bytes)
             .map_err(|error| {
-                PhotonAutomationError(format!("cannot read protocol response: {error}"))
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                ) {
+                    PhotonAutomationError(format!(
+                        "timed out after {:.1}s waiting for Photon automation response to '{command}'",
+                        timeout.as_secs_f64()
+                    ))
+                } else {
+                    PhotonAutomationError(format!("cannot read protocol response: {error}"))
+                }
             })?;
         if read == 0 || read > MAX_MESSAGE_BYTES {
             return Err(PhotonAutomationError(
@@ -620,6 +702,66 @@ impl PhotonAutomationClient {
             .result
             .ok_or_else(|| PhotonAutomationError("Photon response omitted its result".to_owned()))
     }
+}
+
+fn validate_task_diagnostics_envelope(
+    response: &Value,
+    tab_id: u64,
+    expected_state: Option<&str>,
+    require_metrics: bool,
+) -> Result<(), PhotonAutomationError> {
+    if response.get("schema_version").and_then(Value::as_u64) != Some(1)
+        || response.get("tab_id").and_then(Value::as_u64) != Some(tab_id)
+    {
+        return Err(PhotonAutomationError(
+            "Photon returned an invalid task diagnostics envelope".to_owned(),
+        ));
+    }
+    if let Some(expected_state) = expected_state
+        && response.get("state").and_then(Value::as_str) != Some(expected_state)
+    {
+        return Err(PhotonAutomationError(format!(
+            "Photon did not confirm task diagnostics state '{expected_state}'"
+        )));
+    }
+    if require_metrics {
+        let metrics = response.get("metrics").ok_or_else(|| {
+            PhotonAutomationError("Photon omitted task diagnostics metrics".to_owned())
+        })?;
+        if metrics.get("schema_version").and_then(Value::as_u64) != Some(1)
+            || metrics.get("scope").and_then(Value::as_str) != Some("webcontent_processes")
+            || !metrics.get("processes").is_some_and(Value::is_array)
+        {
+            return Err(PhotonAutomationError(
+                "Photon returned an unsupported task diagnostics metrics schema".to_owned(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_frame_diagnostics_envelope(
+    response: &Value,
+    tab_id: u64,
+) -> Result<(), PhotonAutomationError> {
+    let metrics = response
+        .get("metrics")
+        .ok_or_else(|| PhotonAutomationError("Photon omitted frame timing metrics".to_owned()))?;
+    if response.get("schema_version").and_then(Value::as_u64) != Some(1)
+        || response.get("tab_id").and_then(Value::as_u64) != Some(tab_id)
+        || metrics.get("schema_version").and_then(Value::as_u64) != Some(1)
+        || metrics.get("scope").and_then(Value::as_str) != Some("photon_tab_engine_surface_frames")
+        || !metrics.get("frames").is_some_and(Value::is_array)
+        || metrics
+            .get("frame_sample_fields")
+            .and_then(Value::as_array)
+            .is_none()
+    {
+        return Err(PhotonAutomationError(
+            "Photon returned an unsupported frame timing diagnostics schema".to_owned(),
+        ));
+    }
+    Ok(())
 }
 
 impl BrowserAutomationAdapter for PhotonAutomationClient {
@@ -853,6 +995,97 @@ mod tests {
                 microseconds: 1,
             })
         );
+        worker.join().unwrap();
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn negotiates_and_calls_task_queue_diagnostics_with_the_fixed_schema() {
+        let directory = private_temp_directory();
+        let socket_path = directory.join("automation.sock");
+        let token_path = directory.join("token");
+        fs::write(&token_path, format!("{}\n", "f".repeat(64))).unwrap();
+        fs::set_permissions(&token_path, fs::Permissions::from_mode(0o600)).unwrap();
+        let listener = UnixListener::bind(&socket_path).unwrap();
+        fs::set_permissions(&socket_path, fs::Permissions::from_mode(0o600)).unwrap();
+        let worker = thread::spawn(move || {
+            for expected_command in [
+                "get_version",
+                "list_windows",
+                "performance_start",
+                "performance_snapshot",
+                "performance_stop",
+                "performance_frame_snapshot",
+            ] {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut line = String::new();
+                BufReader::new(stream.try_clone().unwrap())
+                    .read_line(&mut line)
+                    .unwrap();
+                let request: Value = serde_json::from_str(&line).unwrap();
+                assert_eq!(request["authentication"], "f".repeat(64));
+                assert_eq!(request["command"], expected_command);
+                let result = match expected_command {
+                    "get_version" => json!({
+                        "protocol_version": 1,
+                        "application_version": "test",
+                        "capabilities": ["performance_diagnostics_v1", "performance_frame_timing_v1", "performance_drawable_presentation_events_v1"]
+                    }),
+                    "list_windows" => json!({"windows": [{"window_id": 1, "tab_count": 1}]}),
+                    "performance_start" => json!({
+                        "schema_version": 1,
+                        "tab_id": 9,
+                        "state": "started",
+                        "metrics_scope": "webcontent_process"
+                    }),
+                    "performance_snapshot" | "performance_stop" => json!({
+                        "schema_version": 1,
+                        "tab_id": 9,
+                        "state": if expected_command == "performance_stop" { "stopped" } else { "snapshot" },
+                        "metrics": {
+                            "schema_version": 1,
+                            "scope": "webcontent_processes",
+                            "processes": [{
+                                "process_id": 17,
+                                "scope": "webcontent_process",
+                                "shared_with_other_views": false,
+                                "available": true,
+                                "diagnostics": {"schema_version": 1, "sample_count": 1}
+                            }]
+                        }
+                    }),
+                    "performance_frame_snapshot" => json!({
+                        "schema_version": 1,
+                        "tab_id": 9,
+                        "metrics": {
+                            "schema_version": 1,
+                            "scope": "photon_tab_engine_surface_frames",
+                            "frame_sample_fields": ["generation", "engine_frame_id"],
+                            "frames": []
+                        }
+                    }),
+                    _ => unreachable!(),
+                };
+                reply(&mut stream, &request, result, false);
+            }
+        });
+        let mut client =
+            PhotonAutomationClient::connect(&socket_path, &token_path, Duration::from_secs(1))
+                .unwrap();
+        assert!(client.supports("performance_diagnostics_v1"));
+        assert!(client.supports("performance_drawable_presentation_events_v1"));
+        client.performance_start(9, Duration::from_secs(1)).unwrap();
+        let snapshot = client
+            .performance_snapshot(9, Duration::from_secs(1))
+            .unwrap();
+        assert_eq!(snapshot["metrics"]["schema_version"], 1);
+        assert_eq!(snapshot["metrics"]["processes"][0]["process_id"], 17);
+        let stopped = client.performance_stop(9, Duration::from_secs(1)).unwrap();
+        assert_eq!(stopped["metrics"]["processes"][0]["available"], true);
+        let frames = client
+            .performance_frame_snapshot(9, Duration::from_secs(1))
+            .unwrap();
+        assert_eq!(frames["metrics"]["frames"].as_array().unwrap().len(), 0);
         worker.join().unwrap();
         fs::remove_dir_all(directory).unwrap();
     }

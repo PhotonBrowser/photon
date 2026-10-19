@@ -5,7 +5,6 @@ use image::{Frame, RgbaImage};
 use std::sync::{Arc, OnceLock};
 
 const TEXTURE_SIZE: u32 = 1_024;
-const MAX_NOISE_OPACITY: f32 = 0.16;
 const TEXTURE_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/background-noise.rgba"));
 
 pub(super) fn overlay(intensity: u8) -> impl IntoElement {
@@ -16,7 +15,12 @@ pub(super) fn overlay(intensity: u8) -> impl IntoElement {
         .inset_0()
         .size_full()
         .object_fit(ObjectFit::Cover)
-        .opacity(opacity * MAX_NOISE_OPACITY)
+        .opacity(
+            opacity
+                * crate::platform::theme_config::theme()
+                    .opacity
+                    .background_noise_max,
+        )
 }
 
 fn texture() -> Arc<RenderImage> {

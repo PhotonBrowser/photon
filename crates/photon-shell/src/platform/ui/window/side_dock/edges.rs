@@ -2,11 +2,9 @@
 //! it or snaps it shut, and pointing at the window's outer edge reveals it
 //! while hidden.
 
-use gpui::{
-    AnyElement, App, Context, DragMoveEvent, HapticFeedbackStyle, Render, Window, div, prelude::*,
-    px,
-};
+use gpui::{AnyElement, App, Context, DragMoveEvent, Render, Window, div, prelude::*, px};
 use photon_core::{DockRegion, SidebarResize};
+use photon_haptics::Feedback;
 use std::time::Duration;
 
 use super::super::super::controls::OwnsClicks;
@@ -92,7 +90,7 @@ impl BrowserWindow {
         }
         // Snapping between hidden, icons and labels taps the trackpad.
         if (self.sidebar.docked(), self.sidebar.collapsed()) != before {
-            cx.play_haptic_feedback(HapticFeedbackStyle::Alignment);
+            photon_haptics::play(cx, Feedback::Alignment);
         }
     }
 

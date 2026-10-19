@@ -3,6 +3,7 @@
 use futures::StreamExt;
 use gpui::{App, BorrowAppContext, Global, WindowHandle};
 use photon_core::BrowserCommand;
+use photon_tab_sleep::MemoryPressure;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
@@ -28,7 +29,7 @@ use crate::platform::app_update::update_app;
 
 const PROTOCOL_VERSION: u32 = 1;
 const MAX_REQUEST_BYTES: usize = 64 * 1024;
-const MAX_RESPONSE_BYTES: usize = 64 * 1024;
+const MAX_RESPONSE_BYTES: usize = 256 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const TOKEN_FILE: &str = "token";
 
@@ -121,6 +122,21 @@ enum Command {
         tab_id: u64,
         #[serde(default)]
         document_generation: Option<u64>,
+    },
+    PerformanceStart {
+        tab_id: u64,
+    },
+    PerformanceSnapshot {
+        tab_id: u64,
+    },
+    SetMemoryPressure {
+        level: String,
+    },
+    PerformanceFrameSnapshot {
+        tab_id: u64,
+    },
+    PerformanceStop {
+        tab_id: u64,
     },
 }
 
@@ -396,9 +412,19 @@ fn decode_authenticated_request(bytes: &[u8], token: &str) -> Result<Request, Bo
 }
 
 fn write_response(stream: &mut UnixStream, response: Response) {
-    if let Ok(bytes) = serde_json::to_vec(&response)
-        && bytes.len() <= MAX_RESPONSE_BYTES
-    {
+    let response_id = response.request_id.clone();
+    let bytes = serde_json::to_vec(&response)
+        .ok()
+        .filter(|bytes| bytes.len() <= MAX_RESPONSE_BYTES)
+        .or_else(|| {
+            serde_json::to_vec(&failure(
+                response_id,
+                "response_too_large",
+                "Photon automation response exceeded its bounded size limit".to_owned(),
+            ))
+            .ok()
+        });
+    if let Some(bytes) = bytes {
         let _ = stream.write_all(&bytes);
         let _ = stream.write_all(b"\n");
     }
@@ -528,7 +554,7 @@ fn dispatch(request: Request, cx: &mut App) -> Response {
         Command::GetVersion => Ok(json!({
             "application_version": env!("CARGO_PKG_VERSION"),
             "protocol_version": PROTOCOL_VERSION,
-            "capabilities": ["ping", "get_version", "list_windows", "list_processes", "list_tabs", "new_tab", "close_tab", "activate_tab", "navigate", "reload", "get_tab_status", "probe_speedometer_result", "probe_jetstream_result", "request_jetstream_start"]
+            "capabilities": ["ping", "get_version", "list_windows", "list_processes", "list_tabs", "new_tab", "close_tab", "activate_tab", "navigate", "reload", "get_tab_status", "probe_speedometer_result", "probe_jetstream_result", "request_jetstream_start", "performance_diagnostics_v1", "performance_frame_timing_v1", "performance_drawable_presentation_events_v1", "performance_gpu_sampling_correlation_v1", "memory_pressure_test_v1"]
         })),
         Command::ListWindows => Ok(list_windows(cx)),
         Command::ListProcesses => list_processes(cx),
@@ -551,6 +577,11 @@ fn dispatch(request: Request, cx: &mut App) -> Response {
             tab_id,
             document_generation,
         } => request_jetstream_start(tab_id, document_generation, cx),
+        Command::PerformanceStart { tab_id } => performance_start(tab_id, cx),
+        Command::PerformanceSnapshot { tab_id } => performance_snapshot(tab_id, cx),
+        Command::SetMemoryPressure { level } => set_memory_pressure(&level, cx),
+        Command::PerformanceFrameSnapshot { tab_id } => performance_frame_snapshot(tab_id, cx),
+        Command::PerformanceStop { tab_id } => performance_stop(tab_id, cx),
     };
     match result {
         Ok(value) => Response {
@@ -565,6 +596,28 @@ fn dispatch(request: Request, cx: &mut App) -> Response {
 }
 
 type DispatchResult = Result<Value, (&'static str, String)>;
+
+fn set_memory_pressure(level: &str, cx: &mut App) -> DispatchResult {
+    let pressure = match level {
+        "system" => None,
+        "normal" => Some(MemoryPressure::Normal),
+        "warning" => Some(MemoryPressure::Warning),
+        "critical" => Some(MemoryPressure::Critical),
+        _ => {
+            return Err((
+                "invalid_pressure_level",
+                "memory pressure level must be system, normal, warning, or critical".to_owned(),
+            ));
+        }
+    };
+    super::sleeping::set_test_memory_pressure(pressure, cx);
+    let effective = match super::sleeping::current_memory_pressure(cx) {
+        MemoryPressure::Normal => "normal",
+        MemoryPressure::Warning => "warning",
+        MemoryPressure::Critical => "critical",
+    };
+    Ok(json!({"requested_level": level, "effective_level": effective}))
+}
 
 fn browser_windows(cx: &App) -> Vec<WindowHandle<BrowserWindow>> {
     BrowserWindowRegistry::ordered_handles(cx)
@@ -703,35 +756,58 @@ fn tab_value(
     tab_count: usize,
     cx: &App,
 ) -> Value {
-    let (url, title, loading, error_state, engine_load_finished, document_generation) = tab
-        .content
-        .webview()
-        .map(|webview| {
-            let view = webview.read(cx);
-            let error_state = view.crash_notice.map(|notice| match notice {
-                super::super::CrashNotice::Reloading => "recovering_from_crash",
-                super::super::CrashNotice::Reloaded(_) => "recovered_from_crash",
-                super::super::CrashNotice::KeepsCrashing => "page_crashed",
-            });
-            (
-                Some(view.state.url.clone()),
-                Some(view.state.title.clone()),
-                Some(view.state.loading),
-                error_state,
-                Some(view.has_completed_document_load()),
-                Some(view.document_generation()),
-            )
-        })
-        .unwrap_or_else(|| {
-            (
-                tab.content.page_address(),
-                None,
+    let (url, title, loading, error_state, engine_load_finished, document_generation) =
+        match &tab.content {
+            super::content::TabContent::Sleeping(sleeping) => (
+                Some(sleeping.state.url.clone()),
+                Some(sleeping.state.title.clone()),
                 Some(false),
                 None,
                 None,
                 None,
+            ),
+            _ => tab
+                .content
+                .webview()
+                .map(|webview| {
+                    let view = webview.read(cx);
+                    let error_state = view.crash_notice.map(|notice| match notice {
+                        super::super::CrashNotice::Reloading => "recovering_from_crash",
+                        super::super::CrashNotice::Reloaded(_) => "recovered_from_crash",
+                        super::super::CrashNotice::KeepsCrashing => "page_crashed",
+                    });
+                    (
+                        Some(view.state.url.clone()),
+                        Some(view.state.title.clone()),
+                        Some(view.state.loading),
+                        error_state,
+                        Some(view.has_completed_document_load()),
+                        Some(view.document_generation()),
+                    )
+                })
+                .unwrap_or_else(|| {
+                    (
+                        tab.content.page_address(),
+                        None,
+                        Some(false),
+                        None,
+                        None,
+                        None,
+                    )
+                }),
+        };
+    let sleeping = matches!(&tab.content, super::content::TabContent::Sleeping(_));
+    let (memory_bytes, managed_heap_bytes) = tab
+        .content
+        .webview()
+        .map(|webview| {
+            let view = webview.read(cx);
+            (
+                view.diagnostics.memory_bytes,
+                view.diagnostics.managed_heap_bytes,
             )
-        });
+        })
+        .unwrap_or_default();
     json!({
         "tab_id": tab.id,
         "window_id": window_id,
@@ -741,6 +817,9 @@ fn tab_value(
         "loading": loading,
         "navigation_state": if loading == Some(true) { "loading" } else { "idle" },
         "error_state": error_state,
+        "sleeping": sleeping,
+        "memory_bytes": memory_bytes,
+        "managed_heap_bytes": managed_heap_bytes,
         "document_ready": Value::Null,
         "engine_load_finished": engine_load_finished,
         "document_generation": document_generation,
@@ -1046,6 +1125,96 @@ fn tab_status(tab_id: u64, cx: &App) -> DispatchResult {
     ))
 }
 
+fn performance_start(tab_id: u64, cx: &mut App) -> DispatchResult {
+    let (handle, index) = find_tab(tab_id, cx)?;
+    handle
+        .update(cx, |browser, _window, cx| {
+            let Some(webview) = browser.tabs[index].content.webview() else {
+                return Err(("tab_unavailable", "tab has no Engine WebView".to_owned()));
+            };
+            let mut start_result = None;
+            webview.update(cx, |view, _cx| {
+                start_result = Some(view.start_task_queue_diagnostics());
+            });
+            start_result
+                .ok_or_else(|| ("tab_unavailable", "tab update did not run".to_owned()))?
+                .map_err(|message| ("diagnostics_unavailable", message))?;
+            Ok::<(), (&'static str, String)>(())
+        })
+        .map_err(|error| ("window_unavailable", error.to_string()))??;
+    Ok(
+        json!({"schema_version": 1, "tab_id": tab_id, "state": "started", "metrics_scope": "webcontent_process"}),
+    )
+}
+
+fn performance_snapshot(tab_id: u64, cx: &App) -> DispatchResult {
+    let (handle, index) = find_tab(tab_id, cx)?;
+    let browser = handle
+        .read(cx)
+        .map_err(|error| ("window_unavailable", error.to_string()))?;
+    let Some(webview) = browser.tabs[index].content.webview() else {
+        return Err(("tab_unavailable", "tab has no Engine WebView".to_owned()));
+    };
+    let diagnostics_json = webview
+        .read(cx)
+        .task_queue_diagnostics_json()
+        .map_err(|message| ("diagnostics_unavailable", message))?;
+    let metrics = serde_json::from_str::<Value>(&diagnostics_json).map_err(|error| {
+        (
+            "diagnostics_invalid",
+            format!("invalid Engine diagnostics: {error}"),
+        )
+    })?;
+    Ok(json!({"schema_version": 1, "tab_id": tab_id, "metrics": metrics}))
+}
+
+fn performance_stop(tab_id: u64, cx: &mut App) -> DispatchResult {
+    let (handle, index) = find_tab(tab_id, cx)?;
+    let metrics = handle
+        .update(cx, |browser, _window, cx| {
+            let Some(webview) = browser.tabs[index].content.webview() else {
+                return Err(("tab_unavailable", "tab has no Engine WebView".to_owned()));
+            };
+            let mut stop_result = None;
+            webview.update(cx, |view, _cx| {
+                stop_result = Some(view.stop_task_queue_diagnostics());
+            });
+            let diagnostics_json = stop_result
+                .take()
+                .ok_or_else(|| ("tab_unavailable", "tab update did not run".to_owned()))?
+                .map_err(|message| ("diagnostics_unavailable", message))?;
+            serde_json::from_str::<Value>(&diagnostics_json).map_err(|error| {
+                (
+                    "diagnostics_invalid",
+                    format!("invalid Engine diagnostics: {error}"),
+                )
+            })
+        })
+        .map_err(|error| ("window_unavailable", error.to_string()))??;
+    Ok(json!({"schema_version": 1, "tab_id": tab_id, "state": "stopped", "metrics": metrics}))
+}
+
+fn performance_frame_snapshot(tab_id: u64, cx: &App) -> DispatchResult {
+    let (handle, index) = find_tab(tab_id, cx)?;
+    let browser = handle
+        .read(cx)
+        .map_err(|error| ("window_unavailable", error.to_string()))?;
+    let Some(webview) = browser.tabs[index].content.webview() else {
+        return Err(("tab_unavailable", "tab has no Engine WebView".to_owned()));
+    };
+    let diagnostics_json = webview
+        .read(cx)
+        .frame_timing_diagnostics_json()
+        .map_err(|message| ("diagnostics_unavailable", message))?;
+    let metrics = serde_json::from_str::<Value>(&diagnostics_json).map_err(|error| {
+        (
+            "diagnostics_invalid",
+            format!("invalid Photon frame diagnostics: {error}"),
+        )
+    })?;
+    Ok(json!({"schema_version": 1, "tab_id": tab_id, "metrics": metrics}))
+}
+
 fn find_window(
     window_id: u64,
     cx: &App,
@@ -1162,10 +1331,12 @@ mod jetstream_url_tests {
 #[cfg(test)]
 mod tests {
     use super::{
-        Command, PROTOCOL_VERSION, application_unavailable, configure_connection_stream,
-        constant_time_equal, decode_authenticated_request, failure, validate_url,
+        Command, MAX_RESPONSE_BYTES, PROTOCOL_VERSION, Response, application_unavailable,
+        configure_connection_stream, constant_time_equal, decode_authenticated_request, failure,
+        validate_url, write_response,
     };
     use std::{
+        io::{BufRead, BufReader},
         os::fd::AsRawFd,
         os::unix::net::{UnixListener, UnixStream},
     };
@@ -1193,6 +1364,29 @@ mod tests {
         drop(server);
         drop(listener);
         std::fs::remove_file(socket_path).unwrap();
+    }
+
+    #[test]
+    fn oversized_automation_responses_return_a_bounded_error() {
+        let (mut server, client) = UnixStream::pair().unwrap();
+        let response = Response {
+            protocol_version: PROTOCOL_VERSION,
+            request_id: Some("bounded-response-test".to_owned()),
+            ok: true,
+            result: Some(serde_json::json!({
+                "payload": "x".repeat(MAX_RESPONSE_BYTES + 1)
+            })),
+            error: None,
+        };
+        write_response(&mut server, response);
+
+        let mut line = String::new();
+        BufReader::new(client).read_line(&mut line).unwrap();
+        assert!(line.len() < MAX_RESPONSE_BYTES);
+        let response: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(response["ok"], false);
+        assert_eq!(response["error"]["code"], "response_too_large");
+        assert_eq!(response["request_id"], "bounded-response-test");
     }
 
     #[test]
@@ -1270,6 +1464,51 @@ mod tests {
                     .unwrap();
             assert_eq!(decoded.command, expected);
         }
+    }
+
+    #[test]
+    fn performance_diagnostics_commands_are_authenticated_fixed_operations() {
+        let token = "a".repeat(64);
+        for (command, expected) in [
+            ("performance_start", Command::PerformanceStart { tab_id: 7 }),
+            (
+                "performance_snapshot",
+                Command::PerformanceSnapshot { tab_id: 7 },
+            ),
+            (
+                "performance_frame_snapshot",
+                Command::PerformanceFrameSnapshot { tab_id: 7 },
+            ),
+            ("performance_stop", Command::PerformanceStop { tab_id: 7 }),
+        ] {
+            let request = serde_json::json!({
+                "protocol_version": PROTOCOL_VERSION,
+                "request_id": "performance-1",
+                "authentication": token,
+                "command": command,
+                "params": { "tab_id": 7 }
+            });
+            let bytes = serde_json::to_vec(&request).unwrap();
+            let decoded = decode_authenticated_request(&bytes, &token).unwrap();
+            assert_eq!(decoded.command, expected);
+            let unauthorized = match decode_authenticated_request(&bytes, &"b".repeat(64)) {
+                Err(response) => response,
+                Ok(_) => panic!("performance diagnostics accepted an invalid token"),
+            };
+            assert_eq!(unauthorized.error.unwrap().code, "unauthorized");
+        }
+
+        let arbitrary_code = serde_json::json!({
+            "protocol_version": PROTOCOL_VERSION,
+            "request_id": "performance-2",
+            "authentication": token,
+            "command": "performance_evaluate",
+            "params": { "tab_id": 7, "script": "document.body.remove()" }
+        });
+        assert!(
+            decode_authenticated_request(&serde_json::to_vec(&arbitrary_code).unwrap(), &token)
+                .is_err()
+        );
     }
 
     #[test]

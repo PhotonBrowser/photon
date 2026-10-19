@@ -9,11 +9,15 @@ internals.
 Implemented: macOS browser discovery and managed lifecycle, startup benchmarking,
 round-based comparisons, statistical summaries, baseline regression checks,
 standalone HTML reports, diagnostic resource monitoring, and automated idle,
-local-page, and Chromium multi-tab resource workloads.
+local-page, Chromium multi-tab resource workloads, and Photon task-queue
+responsiveness profiling with statistical baseline comparisons.
 
 Not implemented: navigation-latency benchmarking, JavaScript engine suites,
-rendering, automatic machine calibration, or system cache control. Resource
-workloads are descriptive and do not claim a universal browser ranking.
+style/layout and GC diagnostics, compositor/presentation timing, scrolling,
+automatic machine calibration, or system cache control. Responsiveness task
+queue diagnostics are process-scoped and do not measure native input-to-frame
+latency. Resource workloads are descriptive and do not claim a universal
+browser ranking.
 
 ## Supported browsers
 
@@ -32,7 +36,12 @@ cargo run --manifest-path tools/velocity/Cargo.toml -p velocity-cli -- list
 cargo run --manifest-path tools/velocity/Cargo.toml -p velocity-cli -- bench startup --browser photon
 cargo run --manifest-path tools/velocity/Cargo.toml -p velocity-cli -- bench startup --browsers photon,chrome,firefox --runs 10 --warmup 2 --randomize
 cargo run --manifest-path tools/velocity/Cargo.toml -p velocity-cli -- bench startup --all --runs 5
+cargo run --manifest-path tools/velocity/Cargo.toml -p velocity-cli -- bench responsiveness --browser photon --workload task-backlog --iterations 10 --warmup 1
+cargo run --manifest-path tools/velocity/Cargo.toml -p velocity-cli -- bench responsiveness --browser photon --workload dom-style --iterations 10 --warmup 1
+cargo run --manifest-path tools/velocity/Cargo.toml -p velocity-cli -- bench responsiveness --browser photon --workload layout-updates --iterations 10 --warmup 1
+cargo run --manifest-path tools/velocity/Cargo.toml -p velocity-cli -- bench responsiveness --browser photon --workload gc-pressure --iterations 10 --warmup 1
 cargo run --manifest-path tools/velocity/Cargo.toml -p velocity-cli -- compare startup --baseline tools/velocity/results/photon-before.json --current tools/velocity/results/photon-after.json --threshold-percent 5
+cargo run --manifest-path tools/velocity/Cargo.toml -p velocity-cli -- compare responsiveness --baseline task-queue-before --current tools/velocity/results/responsiveness-after.json --threshold-percent 5
 cargo run --manifest-path tools/velocity/Cargo.toml -p velocity-cli -- monitor photon --duration 10 --interval 100
 ```
 
@@ -372,7 +381,10 @@ Chromium tabs are opened and verified sequentially before the next tab is
 created. This does not expose arbitrary JavaScript evaluation through Photon.
 See
 [`Documentation/AutomationProtocol.md`](../../Documentation/AutomationProtocol.md)
-for the protocol and isolation details.
+for the protocol and isolation details. See
+[`Documentation/Responsiveness.md`](Documentation/Responsiveness.md) for task
+queue diagnostics, the current workload, report semantics, and baseline
+comparison requirements.
 
 ### Resource measurements and reports
 

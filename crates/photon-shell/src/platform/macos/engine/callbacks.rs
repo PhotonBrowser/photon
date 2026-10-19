@@ -311,7 +311,6 @@ pub(super) unsafe extern "C" fn on_engine_new_web_view(
         session,
         popup: request.popup,
         activate: request.activate,
-        needs_confirmation: request.popup && policy == PopupPolicy::Ask,
         width,
         height,
     };

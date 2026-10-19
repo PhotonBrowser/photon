@@ -1,6 +1,5 @@
-//! Choosing a window colour: the colours as swatches, and a switch that
-//! fades a colour into its neighbour. Settings → Appearance and the space
-//! dialog both use it.
+//! Choosing an accent colour for a space, with a switch that fades the tint
+//! into its neighbour as a gradient. The space editor uses it.
 
 use gpui::{App, ElementId, StatefulInteractiveElement, Window, prelude::*, px, rgb, rgba};
 use photon_core::WindowColor;
@@ -8,9 +7,9 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use super::controls::OwnsClicks;
-use super::controls::{Swatch, swatches, switch};
+use super::controls::{Swatch, haptic_switch_toggle, swatches, switch};
 use super::layout::{ControlSurface, h_stack, v_stack};
-use super::{ClickHandler, metrics, theme::ThemeColors, theme::window_color_swatch};
+use super::{ClickHandler, metrics, theme::AccentColor, theme::ThemeColors, theme::accent_swatch};
 
 /// Called with the colour and gradient chosen.
 pub(super) type ColorChange = Rc<dyn Fn(WindowColor, bool, &mut Window, &mut App)>;
@@ -23,15 +22,18 @@ pub(super) fn color_picker(
     palette: ThemeColors,
     on_change: ColorChange,
 ) -> impl IntoElement {
-    let options = WindowColor::ALL
+    let options = AccentColor::ALL
         .into_iter()
         .map(|option| {
+            let window_color = option.window_color();
             let on_change = on_change.clone();
             Swatch {
                 label: option.name().into(),
-                color: window_color_swatch(option, palette),
-                chosen: option == color,
-                on_choose: Box::new(move |_, window, cx| on_change(option, gradient, window, cx)),
+                color: accent_swatch(option),
+                chosen: AccentColor::from_window_color(color) == option,
+                on_choose: Box::new(move |_, window, cx| {
+                    on_change(window_color, gradient, window, cx)
+                }),
             }
         })
         .collect();
@@ -41,10 +43,13 @@ pub(super) fn color_picker(
             Box::new(move |_, window, cx| on_change(color, !gradient, window, cx))
         };
         let toggle = Rc::new(toggle);
-        let row_toggle = toggle.clone();
+        let activated = Rc::new(Cell::new(false));
+        let row_toggle = haptic_switch_toggle(toggle.clone(), activated.clone());
+        let switch_toggle = row_toggle.clone();
         let dragged = Rc::new(Cell::new(false));
         let row_dragged_on_down = dragged.clone();
         let row_dragged_on_click = dragged.clone();
+        let row_activated_on_down = activated;
         h_stack()
             .id((ElementId::from(id), "gradient"))
             .items_center()
@@ -61,6 +66,7 @@ pub(super) fn color_picker(
                 if phase == gpui::DispatchPhase::Capture && event.button == gpui::MouseButton::Left
                 {
                     row_dragged_on_down.set(false);
+                    row_activated_on_down.set(false);
                 }
             })
             .on_click(move |event, window, cx| {
@@ -80,11 +86,12 @@ pub(super) fn color_picker(
                 palette,
                 Some("Gradient"),
                 toggle,
+                switch_toggle,
                 dragged,
             ))
     });
     v_stack()
         .gap(px(metrics::MENU_ITEM_GAP))
-        .child(swatches(id, "Window colour", options, palette))
+        .child(swatches(id, "Accent color", options, palette))
         .children(gradient_switch)
 }

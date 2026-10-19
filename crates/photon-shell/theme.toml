@@ -1,0 +1,150 @@
+# Photon shell theme tokens. Colors use #RRGGBB; measurements are logical px.
+# These values are the source of truth for semantic colors, opacity, and radii.
+
+[palette.light]
+background = "#ffffff"
+text = "#252525"
+container = "#f4f5f5"
+selected = "#aeaeae"
+
+[palette.dark]
+background = "#222222"
+text = "#ffffff"
+container = "#262626"
+selected = "#747474"
+
+[colors.error]
+light = "#ff3b30"
+dark = "#ff453a"
+
+[colors.chosen_foreground]
+light = "#ffffff"
+dark = "#222222"
+
+[colors.accent_hover_background]
+light = "#000000"
+dark = "#ffffff"
+
+[colors.modal_backdrop]
+light = "#000000"
+dark = "#000000"
+
+[colors.peek_backdrop]
+light = "#000000"
+dark = "#000000"
+
+[colors.accent_swatch_mark]
+value = "#252629"
+
+[colors.accents.graphite]
+light = "#5b5d63"
+dark = "#a1a2a6"
+swatch = "#a1a2a6"
+
+[colors.accents.blue]
+light = "#286bc4"
+dark = "#83b8f5"
+swatch = "#7db4f2"
+
+[colors.accents.green]
+light = "#347e5b"
+dark = "#83caa4"
+swatch = "#7bc5a1"
+
+[colors.accents.red]
+light = "#c34250"
+dark = "#f08a94"
+swatch = "#ea8791"
+
+[colors.accents.orange]
+light = "#a76414"
+dark = "#f0b968"
+swatch = "#e9b56c"
+
+[colors.accents.teal]
+light = "#197d78"
+dark = "#6bc7c0"
+swatch = "#68c2bc"
+
+[colors.accents.purple]
+light = "#6d55b5"
+dark = "#b09af0"
+swatch = "#a690eb"
+
+[colors.accents.pink]
+light = "#a44899"
+dark = "#dd98d2"
+swatch = "#d58fcf"
+
+[opacity]
+text_secondary = 0.72
+performance_surface = 0.95
+shortcut_icon_surface = 0.62
+error_hover = 0.14
+disabled_control = 0.4
+tab_drag_source = 0.28
+sleeping_tab = 0.7
+space_dot_idle = 0.7
+background_noise_max = 0.16
+modal_backdrop = 0.28
+peek_backdrop = 0.16
+menu_border = 0.12
+hover = 0.07
+surface_tint = 0.06
+selected = 0.12
+surface_hover = 0.09
+accent_hover_blend = 0.12
+soft_accent_border = 0.48
+
+[transparency.off]
+window = 1.0
+raised = 1.0
+raised_blur = 0.0
+
+[transparency.subtle]
+window = 0.88
+raised = 0.92
+raised_blur = 20.0
+
+[transparency.clear]
+window = 0.46
+raised = 0.84
+raised_blur = 48.0
+
+[window]
+gradient_angle_degrees = 135.0
+gradient_turn = 0.09
+light_tint_saturation = 0.55
+light_tint_lightness = 0.87
+dark_tint_saturation = 0.3
+dark_tint_lightness = 0.17
+swatch_saturation = 0.6
+swatch_lightness = 0.55
+
+[window.hues]
+blue = 0.6
+purple = 0.74
+pink = 0.9
+red = 0.99
+orange = 0.07
+yellow = 0.13
+green = 0.38
+teal = 0.49
+
+[radii]
+control = 7.0
+small_button = 10.0
+keycap = 4.0
+surface = 8.0
+menu_item = 5.0
+tooltip = 7.0
+omnibox = 8.0
+sidebar_omnibox_button = 9.0
+page = 12.0
+theme_accent_panel = 16.0
+checkbox = 4.0
+segment = 5.0
+sidebar_collapsed_item = 8.0
+sidebar_item = 12.0
+sidebar_reveal = 12.0
+command_bar_top = 14.0

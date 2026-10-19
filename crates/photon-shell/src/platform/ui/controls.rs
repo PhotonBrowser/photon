@@ -10,6 +10,7 @@ use gpui::{
     Toggled, Window, div, prelude::*, px, rgb, rgb_to_hsla, rgba,
 };
 use gpui_elements::editable_text::EditableTextElement;
+use photon_haptics::Feedback;
 
 use super::icons::check_icon;
 use super::layout::v_stack;
@@ -24,6 +25,20 @@ use super::{ClickHandler, metrics, theme::ThemeColors};
 use std::cell::Cell;
 use std::rc::Rc;
 use std::time::Instant;
+
+/// Runs a switch activation and haptic at most once for each mouse press.
+pub(super) fn haptic_switch_toggle(
+    on_toggle: Rc<ClickHandler>,
+    activated: Rc<Cell<bool>>,
+) -> Rc<ClickHandler> {
+    Rc::new(Box::new(move |event, window, cx| {
+        if matches!(event, ClickEvent::Mouse(_)) && activated.replace(true) {
+            return;
+        }
+        on_toggle(event, window, cx);
+        photon_haptics::play(cx, Feedback::StateChange);
+    }))
+}
 
 struct IntensitySliderDrag;
 
@@ -60,6 +75,7 @@ struct SwitchInteraction {
     down: Option<MouseDownEvent>,
     start_position: f32,
     position: Option<f32>,
+    feedback_state: Option<bool>,
     dragging: bool,
 }
 
@@ -208,7 +224,7 @@ pub(super) fn choices(
             .justify_center()
             .h(px(metrics::SEGMENT_HEIGHT))
             .px(px(metrics::SEGMENT_HORIZONTAL_PADDING))
-            .rounded(px(metrics::SEGMENT_RADIUS))
+            .rounded(px(metrics::segment_radius()))
             .text_size(px(metrics::BUTTON_FONT_SIZE))
             .owns_clicks()
             .pressable()
@@ -232,6 +248,7 @@ pub(super) fn choices(
         .gap(px(metrics::SEGMENT_GAP))
         .p(px(metrics::SEGMENT_INSET))
         .control_surface(palette)
+        .rounded(px(metrics::choices_radius()))
         .children(options)
 }
 
@@ -656,6 +673,7 @@ pub(super) fn switch(
     palette: ThemeColors,
     label: Option<&'static str>,
     on_toggle: Rc<ClickHandler>,
+    on_activate: Rc<ClickHandler>,
     dragged: Rc<Cell<bool>>,
 ) -> Switch {
     Switch {
@@ -664,6 +682,7 @@ pub(super) fn switch(
         palette,
         label,
         on_toggle,
+        on_activate,
         dragged,
     }
 }
@@ -675,6 +694,7 @@ pub(super) struct Switch {
     palette: ThemeColors,
     label: Option<&'static str>,
     on_toggle: Rc<ClickHandler>,
+    on_activate: Rc<ClickHandler>,
     dragged: Rc<Cell<bool>>,
 }
 
@@ -686,6 +706,7 @@ impl RenderOnce for Switch {
             palette,
             label,
             on_toggle,
+            on_activate,
             dragged,
         } = self;
         let animations = super::settings::Settings::motion(cx);
@@ -779,8 +800,8 @@ impl RenderOnce for Switch {
         let interaction_on_move = interaction.clone();
         let interaction_on_up = interaction;
         let drag_marker_start = dragged.clone();
-        let click_toggle = on_toggle.clone();
-        let click_dragged = dragged.clone();
+        let click_dragged = dragged;
+        let activation_toggle = on_activate;
         let drag_toggle = on_toggle;
         control
             .on_mouse_down(MouseButton::Left, move |event, _, cx| {
@@ -788,6 +809,7 @@ impl RenderOnce for Switch {
                     *interaction = SwitchInteraction {
                         down: Some(event.clone()),
                         start_position: if on { travel } else { 0.0 },
+                        feedback_state: Some(on),
                         ..SwitchInteraction::default()
                     };
                     cx.notify();
@@ -803,7 +825,7 @@ impl RenderOnce for Switch {
                         .down
                         .clone()
                         .filter(|_| interaction.dragging)
-                        .map(|down| (down, interaction.start_position));
+                        .map(|down| (down, interaction.start_position, interaction.feedback_state));
                     if interaction.down.is_some() || interaction.dragging {
                         *interaction = SwitchInteraction::default();
                         cx.notify();
@@ -811,11 +833,15 @@ impl RenderOnce for Switch {
                     drag
                 });
 
-                if let Some((down, start_position)) = drag {
+                if let Some((down, start_position, feedback_state)) = drag {
                     let position = (start_position + f32::from(event.position.x)
                         - f32::from(down.position.x))
                     .clamp(0.0, travel);
-                    if (position >= travel / 2.0) != on {
+                    let next_on = position >= travel / 2.0;
+                    if feedback_state.unwrap_or(on) != next_on {
+                        photon_haptics::play(cx, Feedback::StateChange);
+                    }
+                    if next_on != on {
                         drag_toggle(
                             &ClickEvent::Mouse(MouseClickEvent {
                                 down,
@@ -842,7 +868,7 @@ impl RenderOnce for Switch {
                     return;
                 }
 
-                let (start_x, start_position) = {
+                let (start_x, start_position, feedback_state) = {
                     let interaction = interaction_on_move.read(cx);
                     (
                         interaction
@@ -850,6 +876,7 @@ impl RenderOnce for Switch {
                             .as_ref()
                             .map(|down| f32::from(down.position.x)),
                         interaction.start_position,
+                        interaction.feedback_state,
                     )
                 };
                 let Some(start_x) = start_x else {
@@ -857,16 +884,24 @@ impl RenderOnce for Switch {
                 };
                 let position = (start_position + f32::from(event.event.position.x) - start_x)
                     .clamp(0.0, travel);
+                let next_on = position >= travel / 2.0;
+                let feedback_changed = feedback_state.unwrap_or(on) != next_on;
                 interaction_on_move.update(cx, |interaction, cx| {
-                    if interaction.position != Some(position) {
+                    if interaction.position != Some(position)
+                        || interaction.feedback_state != Some(next_on)
+                    {
                         interaction.position = Some(position);
+                        interaction.feedback_state = Some(next_on);
                         cx.notify();
                     }
                 });
+                if feedback_changed {
+                    photon_haptics::play(cx, Feedback::StateChange);
+                }
             })
             .on_click(move |event, window, cx| {
-                if !click_dragged.get() {
-                    click_toggle(event, window, cx);
+                if !click_dragged.replace(false) {
+                    activation_toggle(event, window, cx);
                 }
                 cx.stop_propagation();
             })
@@ -904,7 +939,7 @@ impl RenderOnce for CheckMark {
             .size(px(metrics::CHECKBOX_SIZE))
             .items_center()
             .justify_center()
-            .rounded(px(metrics::CHECKBOX_RADIUS))
+            .rounded(px(metrics::checkbox_radius()))
             .border_1();
         if !checked {
             return mark.border_color(rgba(palette.control_border));

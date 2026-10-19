@@ -4222,6 +4222,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "photon-haptics"
+version = "0.1.0"
+dependencies = [
+ "gpui-ce",
+]
+
+[[package]]
 name = "photon-omnibox"
 version = "0.1.0"
 dependencies = [
@@ -4262,8 +4269,10 @@ name = "photon-shell"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "block2 0.6.2",
  "cc",
  "core-video",
+ "dispatch2",
  "foreign-types",
  "futures",
  "gpui-ce",
@@ -4279,6 +4288,7 @@ dependencies = [
  "objc",
  "photon-brand",
  "photon-core",
+ "photon-haptics",
  "photon-omnibox",
  "photon-performance",
  "photon-presentation-ipc",
@@ -4288,6 +4298,7 @@ dependencies = [
  "raw-window-handle",
  "serde",
  "serde_json",
+ "toml 0.8.23",
 ]
 
 [[package]]
@@ -4295,6 +4306,7 @@ name = "photon-shortcuts"
 version = "0.1.0"
 dependencies = [
  "gpui-ce",
+ "photon-core",
 ]
 
 [[package]]

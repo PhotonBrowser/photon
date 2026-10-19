@@ -24,12 +24,12 @@ pub(super) struct SuggestionActions {
     pub(super) choose: SuggestionHandler,
     /// Forgets a remembered page or search.
     pub(super) remove: SuggestionHandler,
-    /// Called with the row under the pointer, or `None` when it leaves.
+    /// Called when a row enters or leaves the pointer.
     pub(super) hover: HoverHandler,
 }
 
-/// Called with the row under the pointer, or `None` when it leaves.
-pub(super) type HoverHandler = Rc<dyn Fn(Option<usize>, &mut Window, &mut App)>;
+/// Called when a row enters or leaves the pointer.
+pub(super) type HoverHandler = Rc<dyn Fn(usize, bool, &mut Window, &mut App)>;
 
 /// The rows, with `selected` highlighted as what Enter opens. The selected
 /// or hovered row offers to forget what it remembers.
@@ -52,7 +52,7 @@ pub(super) fn suggestion_rows(
                     cx.stop_propagation();
                     choose(index, window, cx);
                 })
-                .on_hover(move |hovered, window, cx| hover(hovered.then_some(index), window, cx));
+                .on_hover(move |hovered, window, cx| hover(index, *hovered, window, cx));
             let offers_removal = index == selected || hovered == Some(index);
             if suggestion.kind.is_remembered() && offers_removal {
                 let remove = actions.remove.clone();
@@ -138,7 +138,7 @@ fn suggestion_row(
         .px(px(
             metrics::OMNIBOX_HORIZONTAL_PADDING - metrics::OMNIBOX_SUGGESTIONS_INSET
         ))
-        .rounded(px(metrics::MENU_ITEM_RADIUS))
+        .rounded(px(metrics::menu_item_radius()))
         .hover(|style| style.bg(gpui::rgba(palette.hover_surface)))
         .child(suggestion_icon(suggestion, palette, cx))
         .child(

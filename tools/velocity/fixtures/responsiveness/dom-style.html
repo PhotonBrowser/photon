@@ -1,0 +1,89 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Velocity DOM style fixture</title>
+<style>
+  .branch { display: block; }
+  .branch .item[data-state="active"] .leaf { --velocity-descendant: yes; color: rgb(17, 34, 51); }
+  .item.changed + .item .leaf { --velocity-sibling: yes; font-weight: 700; }
+  input:checked ~ .item.changed .leaf { --velocity-state: yes; letter-spacing: 1px; }
+  .branch:has(input:checked) .item .leaf { --velocity-relational: yes; text-decoration: underline; }
+</style>
+<body>
+<main>
+  <p>Fixed nested tree with repeated class, attribute, state and relational-selector mutations.</p>
+  <div id="tree"></div>
+</main>
+<script>
+(() => {
+  const branchCount = 16;
+  const itemsPerBranch = 32;
+  const itemCount = branchCount * itemsPerBranch;
+  const mutationCount = 1024;
+  const tree = document.querySelector("#tree");
+  const branches = [];
+  const inputs = [];
+  const items = [];
+
+  for (let branchIndex = 0; branchIndex < branchCount; ++branchIndex) {
+    const branch = document.createElement("section");
+    branch.className = "branch";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = false;
+    branch.append(input);
+    branches.push(branch);
+    inputs.push(input);
+    for (let itemIndex = 0; itemIndex < itemsPerBranch; ++itemIndex) {
+      const item = document.createElement("div");
+      item.className = "item";
+      item.dataset.state = "inactive";
+      const leaf = document.createElement("span");
+      leaf.className = "leaf";
+      leaf.textContent = `${branchIndex}:${itemIndex}`;
+      item.append(leaf);
+      branch.append(item);
+      items.push(item);
+    }
+    tree.append(branch);
+  }
+
+  window.addEventListener("load", () => {
+    setTimeout(() => {
+      const startedAt = performance.now();
+      for (let operation = 0; operation < mutationCount; ++operation) {
+        const index = operation % itemCount;
+        const item = items[index];
+        item.classList.toggle("changed");
+        item.dataset.state = operation % 2 === 0 ? "active" : "inactive";
+        item.setAttribute("aria-pressed", operation % 2 === 0 ? "true" : "false");
+        const branchIndex = Math.floor(index / itemsPerBranch);
+        inputs[branchIndex].checked = operation % 2 === 0;
+        if (operation % 64 === 0)
+          getComputedStyle(item).color;
+      }
+
+      // Leave known selector matches to make fixture coverage self-checking.
+      const firstItem = items[0];
+      const secondItem = items[1];
+      inputs[0].checked = true;
+      firstItem.classList.add("changed");
+      firstItem.dataset.state = "active";
+      secondItem.classList.remove("changed");
+      const firstLeaf = firstItem.firstElementChild;
+      const secondLeaf = secondItem.firstElementChild;
+      const firstStyle = getComputedStyle(firstLeaf);
+      const secondStyle = getComputedStyle(secondLeaf);
+      const hasSupported = CSS.supports("selector(.branch:has(input:checked))");
+      const correct = items.length === itemCount
+        && hasSupported
+        && firstStyle.getPropertyValue("--velocity-descendant").trim() === "yes"
+        && firstStyle.getPropertyValue("--velocity-state").trim() === "yes"
+        && firstStyle.getPropertyValue("--velocity-relational").trim() === "yes"
+        && secondStyle.getPropertyValue("--velocity-sibling").trim() === "yes";
+      const durationMs = performance.now() - startedAt;
+      document.title = `VelocityDOMStyle:${mutationCount}:${durationMs.toFixed(3)}:${correct}`;
+    }, 900);
+  }, { once: true });
+})();
+</script>
+</body>

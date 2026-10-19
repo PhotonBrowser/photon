@@ -146,7 +146,7 @@ pub struct BrowserSettings {
     pub spaces: Spaces,
     /// Whether unpinned tabs left unused for twelve hours are closed.
     pub archive_tabs: bool,
-    /// How quickly quiet inactive pages are marked as sleeping.
+    /// How quickly quiet inactive page processes are discarded.
     pub tab_sleep_mode: TabSleepMode,
     /// Whether the browser reopens its windows and tabs from last time.
     pub restore_session: bool,

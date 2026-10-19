@@ -1,0 +1,74 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Velocity layout updates fixture</title>
+<style>
+  #flow { width: 720px; }
+  .flow-item { display: block; width: 24px; height: 4px; margin-bottom: 2px; }
+  #positioned { position: relative; width: 720px; height: 620px; }
+  .absolute-item { position: absolute; width: 12px; height: 12px; }
+</style>
+<body>
+<main>
+  <p>Fixed normal-flow and absolutely positioned geometry updates.</p>
+  <div id="flow"></div>
+  <div id="positioned"></div>
+</main>
+<script>
+(() => {
+  const normalFlowCount = 256;
+  const absoluteCount = 128;
+  const updateCount = 512;
+  const flow = document.querySelector("#flow");
+  const positioned = document.querySelector("#positioned");
+  const flowItems = [];
+  const absoluteItems = [];
+
+  for (let index = 0; index < normalFlowCount; ++index) {
+    const item = document.createElement("div");
+    item.className = "flow-item";
+    flow.append(item);
+    flowItems.push(item);
+  }
+  for (let index = 0; index < absoluteCount; ++index) {
+    const item = document.createElement("div");
+    item.className = "absolute-item";
+    positioned.append(item);
+    absoluteItems.push(item);
+  }
+
+  window.addEventListener("load", () => {
+    setTimeout(() => {
+      const startedAt = performance.now();
+      let geometryChecksum = 0;
+      for (let update = 0; update < updateCount; ++update) {
+        if (update % 2 === 0) {
+          const item = flowItems[(update / 2) % normalFlowCount];
+          item.style.width = `${40 + (update % 160)}px`;
+          item.style.marginLeft = `${update % 13}px`;
+          const rect = item.getBoundingClientRect();
+          geometryChecksum += rect.width + rect.left;
+        } else {
+          const item = absoluteItems[(update >> 1) % absoluteCount];
+          item.style.left = `${(update * 7) % 700}px`;
+          item.style.top = `${(update * 11) % 600}px`;
+          const rect = item.getBoundingClientRect();
+          geometryChecksum += rect.width + rect.left + rect.top;
+        }
+      }
+
+      const firstFlow = flowItems[0].getBoundingClientRect();
+      const firstAbsolute = absoluteItems[0].getBoundingClientRect();
+      const correct = flowItems.length === normalFlowCount
+        && absoluteItems.length === absoluteCount
+        && Number.isFinite(geometryChecksum)
+        && geometryChecksum > 0
+        && firstFlow.width >= 40
+        && firstAbsolute.width === 12
+        && firstAbsolute.left >= positioned.getBoundingClientRect().left;
+      const durationMs = performance.now() - startedAt;
+      document.title = `VelocityLayoutUpdates:${updateCount}:${durationMs.toFixed(3)}:${correct}`;
+    }, 900);
+  }, { once: true });
+})();
+</script>
+</body>

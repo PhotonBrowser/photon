@@ -18,7 +18,9 @@ mod tabs;
 mod workspace;
 
 pub use browsing_data::ClearBrowsingData;
-pub use command_bar::{Command, CommandBarResult, OpenTab, command_bar_results};
+pub use command_bar::{
+    Command, CommandAvailability, CommandBarResult, OpenTab, command_bar_results,
+};
 pub use crashes::{CrashResponse, EngineService, PageCrashes};
 pub use dialogs::{DialogKind, DialogReply, DialogRequest, PageDialogs};
 pub use history::{HISTORY_MAX_PAGES, HISTORY_MAX_SEARCHES, History, HistoryEntry, SearchEntry};

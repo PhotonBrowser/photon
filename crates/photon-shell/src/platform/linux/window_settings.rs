@@ -51,19 +51,6 @@ pub(crate) fn options(cx: &App) -> WindowOptions {
     options
 }
 
-pub(crate) fn options_at(cx: &App, origin: gpui::Point<gpui::Pixels>) -> WindowOptions {
-    let bounds = Bounds {
-        origin,
-        size: size(
-            px(window_config::INITIAL_WIDTH),
-            px(window_config::INITIAL_HEIGHT),
-        ),
-    };
-    let mut options = options(cx);
-    options.window_bounds = Some(WindowBounds::Windowed(bounds));
-    options
-}
-
 pub(crate) fn popup_options(cx: &App, width: Option<i32>, height: Option<i32>) -> WindowOptions {
     let width = width
         .map(|width| width as f32)

@@ -130,7 +130,7 @@ fn strip_tab(parts: TabParts, palette: ThemeColors) -> impl IntoElement {
             .justify_center()
             .w(px(metrics::PINNED_TAB_WIDTH))
             .h(px(metrics::TAB_HEIGHT))
-            .rounded(px(metrics::CONTROL_RADIUS));
+            .rounded(px(metrics::control_radius()));
         let tab = if parts.active {
             tab.bg(rgba(palette.selected_surface))
         } else {
@@ -153,7 +153,7 @@ fn strip_tab(parts: TabParts, palette: ThemeColors) -> impl IntoElement {
         .gap(px(metrics::TAB_CLOSE_GAP))
         .h(px(metrics::TAB_HEIGHT))
         .px(px(metrics::TAB_HORIZONTAL_PADDING))
-        .rounded(px(metrics::CONTROL_RADIUS))
+        .rounded(px(metrics::control_radius()))
         .text_size(px(metrics::TAB_FONT_SIZE));
     let tab = if parts.active {
         tab.bg(rgba(palette.selected_surface))
@@ -185,7 +185,7 @@ fn new_tab_button(
         .items_center()
         .justify_center()
         .size(px(metrics::TAB_HEIGHT))
-        .rounded(px(metrics::CONTROL_RADIUS))
+        .rounded(px(metrics::control_radius()))
         .text_color(rgb(palette.text_secondary))
         .hover(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()

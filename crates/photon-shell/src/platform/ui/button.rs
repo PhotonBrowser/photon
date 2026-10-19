@@ -6,6 +6,7 @@ use super::ClickHandler;
 use super::controls::{FocusRing, OwnsClicks, Pressable};
 use super::icons::more_icon;
 use super::layout::{ControlSurface, h_stack};
+use super::motion::icon_pressable;
 use super::{metrics, theme::ThemeColors};
 
 /// A button's size.
@@ -48,14 +49,14 @@ pub(super) fn button(
             metrics::BUTTON_MIN_WIDTH,
             metrics::BUTTON_HORIZONTAL_PADDING,
             metrics::BUTTON_FONT_SIZE,
-            metrics::CONTROL_RADIUS,
+            metrics::control_radius(),
         ),
         ButtonSize::Small => (
             metrics::SMALL_BUTTON_HEIGHT,
             0.0,
             metrics::SMALL_BUTTON_HORIZONTAL_PADDING,
             metrics::SMALL_BUTTON_FONT_SIZE,
-            metrics::SMALL_BUTTON_RADIUS,
+            metrics::small_button_radius(),
         ),
     };
     let primary = kind == ButtonKind::Primary;
@@ -90,7 +91,11 @@ pub(super) fn button(
         ButtonKind::Destructive => button.text_color(rgb(palette.error)),
     };
     if !enabled {
-        return button.opacity(metrics::DISABLED_OPACITY);
+        return button.opacity(
+            crate::platform::theme_config::theme()
+                .opacity
+                .disabled_control,
+        );
     }
     let button = button
         .tab_index(0)
@@ -135,18 +140,21 @@ pub(super) fn icon_button(
         .opacity(if enabled {
             1.0
         } else {
-            metrics::DISABLED_OPACITY
+            crate::platform::theme_config::theme()
+                .opacity
+                .disabled_control
         })
         .child(icon);
     if !enabled {
         return button;
     }
-    button
-        .tab_index(0)
-        .hover(|style| style.bg(rgba(palette.hover_surface)))
-        .owns_clicks()
-        .pressable()
-        .on_click(on_click)
+    icon_pressable(
+        button
+            .tab_index(0)
+            .hover(|style| style.bg(rgba(palette.hover_surface)))
+            .owns_clicks(),
+    )
+    .on_click(on_click)
 }
 
 /// A square toolbar button showing an icon, dimmed and inert while disabled.
@@ -169,17 +177,22 @@ pub(super) fn toolbar_button(
         .items_center()
         .justify_center()
         .size(px(metrics::TOOLBAR_BUTTON_SIZE))
-        .rounded(px(metrics::CONTROL_RADIUS))
+        .rounded(px(metrics::control_radius()))
         .child(icon);
     if !enabled {
-        return button.opacity(metrics::DISABLED_OPACITY);
+        return button.opacity(
+            crate::platform::theme_config::theme()
+                .opacity
+                .disabled_control,
+        );
     }
-    button
-        .tab_index(tab_index)
-        .hover(|style| style.bg(rgba(palette.hover_surface)))
-        .owns_clicks()
-        .pressable()
-        .on_click(on_click)
+    icon_pressable(
+        button
+            .tab_index(tab_index)
+            .hover(|style| style.bg(rgba(palette.hover_surface)))
+            .owns_clicks(),
+    )
+    .on_click(on_click)
 }
 
 /// The button that opens the browser menu.
@@ -189,7 +202,7 @@ pub(super) fn menu_button(
     palette: ThemeColors,
     on_click: ClickHandler,
 ) -> Stateful<Div> {
-    h_stack()
+    let button = h_stack()
         .id(id)
         .role(Role::Button)
         .aria_label("Open browser menu")
@@ -199,13 +212,11 @@ pub(super) fn menu_button(
         .items_center()
         .justify_center()
         .size(px(metrics::TOOLBAR_BUTTON_SIZE))
-        .rounded(px(metrics::CONTROL_RADIUS))
+        .rounded(px(metrics::control_radius()))
         .hover(|style| style.bg(rgba(palette.hover_surface)))
-        .owns_clicks()
-        .pressable()
-        .on_click(on_click)
-        .child(more_icon(
-            palette.text_secondary,
-            metrics::TOOLBAR_ICON_SIZE,
-        ))
+        .owns_clicks();
+    icon_pressable(button).on_click(on_click).child(more_icon(
+        palette.text_secondary,
+        metrics::TOOLBAR_ICON_SIZE,
+    ))
 }

@@ -6,8 +6,10 @@ transparency level, and every view.
 
 ## Colors
 
-[`theme.rs`](../crates/photon-shell/src/platform/ui/theme.rs) defines
-`ThemeColors`, the semantic roles views use. Views get the active set from
+[`theme.toml`](../crates/photon-shell/theme.toml) is the source of color,
+opacity, transparency, window tint, and corner-radius values.
+[`theme.rs`](../crates/photon-shell/src/platform/ui/theme.rs) resolves these
+values into `ThemeColors`, the semantic roles views use. Views get the active set from
 `theme::palette(window, cx)`, which reads the appearance and transparency
 from the [settings](Profile.md), and never choose colors locally.
 
@@ -20,14 +22,15 @@ from the [settings](Profile.md), and never choose colors locally.
 | `chosen`, `on_chosen` | What is chosen or on (a chosen option, a switch that is on, a checked box), and the text drawn on it. Also focus rings and text carets |
 | `menu_surface`, `menu_border` | Raised menus, popovers and dialogs, and the light hairline around raised surfaces and groups |
 | `raised_blur` | How much raised surfaces blur what is behind them |
-| `text_primary`, `text_secondary`, `text_disabled` | Text |
+| `text_primary`, `text_secondary` | Text |
 | `suggestion_address` | Addresses in omnibox suggestions (a link blue) |
 | `selection`, `field_error_border`, `modal_backdrop` | Selected text, an unopenable address, the dim behind a modal |
 
-The base light and dark palettes come from GPUI-CE `Colors`. The shell maps
-them to its roles, with named opacities in the `opacity` group, the link blue
-in `link` and the error red in `error`. Palettes are cached per appearance,
-transparency and window colour, so renders never rebuild them.
+The light and dark base palettes, accent colors, error colors, and the colors
+drawn on accents are in `theme.toml`. Named opacity tokens adjust derived
+roles such as surfaces, borders, secondary text, and hover states. Palettes are
+cached per appearance, transparency, and window color, so renders do not rebuild
+them.
 
 ### Window colour
 
@@ -35,9 +38,9 @@ Each [space](Sidebar.md#spaces) tints the window, as in Arc and Zen: the
 system grey, or blue, purple, pink, red, orange, yellow, green or teal,
 optionally as a gradient into the neighbouring hue from the top left, chosen
 in Settings → Appearance or the space's dialog with the shared
-`color_picker`. Each colour is a hue in
-the `window_color` group of `theme.rs`, toned for light and dark windows and
-as see-through as the transparency setting makes the window. Draw the
+`color_picker`. Hue, tint saturation, and lightness values are in the
+`[window]` section of `theme.toml`; the same values tone swatches and light or
+dark window tints. Draw the
 window's background with `palette.window_background()`, which is the tint or
 the gradient; everything else on the window is a tint over it, so it takes
 the colour too. `window_color_swatch` gives the colour each swatch shows.
@@ -46,13 +49,13 @@ the colour too. `window_color_swatch` gives the colour each swatch shows.
 
 The transparency setting (off, subtle, clear) decides how much of the desktop
 shows through, and how much floating surfaces blur what is behind them, set
-in `SurfaceOpacity`:
+in `[transparency]`:
 
 | Transparency | Window | Menus and dialogs | Blur behind them |
 | --- | --- | --- | --- |
 | Off | solid | solid | none |
 | Subtle (default) | 88% | 92% | 20 px |
-| Clear | 70% | 84% | 32 px |
+| Clear | 46% | 84% | 48 px |
 
 `surface`, `hover_surface` and `selected_surface` are tints of the text color
 over the window, not layers of their own, so everything on the window is
@@ -62,10 +65,11 @@ they are more opaque and frost the page behind them to stay readable.
 ## Dimensions and typography
 
 [`metrics.rs`](../crates/photon-shell/src/platform/ui/metrics.rs) holds shared
-logical-pixel measurements: window geometry, the tab strip, toolbar, sidebar and its tabs, menus, the omnibox (with a larger size in the sidebar)
-and its suggestions, the page frame, chips, controls (segments, switches,
-checkboxes), settings rows and sidebar, and new tab tiles. It also holds type
-sizes, icon sizes and corner radii.
+logical-pixel measurements: window geometry, the tab strip, toolbar, sidebar
+and its tabs, menus, the omnibox (with a larger size in the sidebar) and its
+suggestions, the page frame, chips, controls, settings rows and new tab tiles.
+It also holds type and icon sizes. Corner radii live in the `[radii]` section
+of `theme.toml`.
 
 Add a named token there when a view needs a reusable measurement. Layout
 mechanics such as `flex_1`, `size_full` and `min_w_0` stay in the view.
@@ -186,9 +190,9 @@ switching tabs. Animate only what just changed:
 ## Editing rules
 
 - Use semantic `ThemeColors` roles from `theme::palette`; no color literals in
-  views.
-- Keep opacities named in `theme.rs`, and transparency levels in
-  `SurfaceOpacity`.
+  views. Edit theme values in `theme.toml`, and keep their appearance logic in
+  `theme.rs`.
+- Keep opacity and corner-radius values in `theme.toml`.
 - Put repeated dimensions and type sizes in `metrics.rs`, shadows behind
   `Elevation`, and floating backgrounds behind `raised`.
 - Build menus and popovers from `menu.rs`, and controls from `controls.rs`,

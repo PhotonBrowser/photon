@@ -105,7 +105,7 @@ impl BrowserWindow {
                 .bottom(px(layout.bottom_extent() * chrome_shown + reveal_inset))
                 .w(px(width))
                 .when(over_page, |panel| {
-                    panel.rounded(px(metrics::SIDEBAR_REVEAL_RADIUS))
+                    panel.rounded(px(metrics::sidebar_reveal_radius()))
                 })
                 .overflow_hidden()
                 .occlude()
@@ -376,7 +376,7 @@ fn revealed_surface(palette: ThemeColors) -> Div {
     div()
         .absolute()
         .inset_0()
-        .rounded(px(metrics::SIDEBAR_REVEAL_RADIUS))
+        .rounded(px(metrics::sidebar_reveal_radius()))
         .raised(palette)
         .elevated(Elevation::High)
 }

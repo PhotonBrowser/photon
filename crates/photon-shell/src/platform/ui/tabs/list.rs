@@ -88,7 +88,7 @@ pub(in super::super) fn tab_list(
             } else {
                 metrics::SIDEBAR_TAB_PADDING
             }))
-            .rounded(px(metrics::SIDEBAR_ITEM_RADIUS))
+            .rounded(px(metrics::sidebar_item_radius()))
             .drag_over::<DraggedTab>(move |style, _, _, _| style.bg(rgba(palette.hover_surface)))
             .on_drop(move |dragged: &DraggedTab, window, cx| on_drop(dragged, window, cx))
             .child(
@@ -150,7 +150,7 @@ fn tab_row(parts: TabParts, palette: ThemeColors) -> AnyElement {
         .h(px(metrics::SIDEBAR_TAB_HEIGHT))
         .pl(px(metrics::SIDEBAR_TAB_PADDING))
         .pr(px(metrics::SIDEBAR_PADDING))
-        .rounded(px(metrics::SIDEBAR_ITEM_RADIUS))
+        .rounded(px(metrics::sidebar_item_radius()))
         .text_size(px(metrics::SIDEBAR_FONT_SIZE));
     let row = if parts.active {
         row.bg(rgba(palette.selected_surface))
@@ -215,7 +215,7 @@ fn new_tab_row(
         .tab_index(0)
         .focus_ring(palette)
         .items_center()
-        .rounded(px(metrics::SIDEBAR_ITEM_RADIUS))
+        .rounded(px(metrics::sidebar_item_radius()))
         .text_size(px(metrics::SIDEBAR_FONT_SIZE))
         .text_color(rgb(palette.text_secondary))
         .hover(|style| style.bg(rgba(palette.hover_surface)))

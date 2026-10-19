@@ -49,7 +49,7 @@ impl BrowserWindow {
                 self.insert_page(index + 1, page, window, cx);
             }
             TabContent::Sleeping(sleeping) => {
-                let address = sleeping.webview.read(cx).state.url.clone();
+                let address = sleeping.state.url.clone();
                 self.insert_tab(index + 1, Some(&address), window, cx);
             }
         }

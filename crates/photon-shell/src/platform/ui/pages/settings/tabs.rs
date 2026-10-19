@@ -12,17 +12,17 @@ use super::super::super::settings::Settings;
 use super::super::super::{metrics, theme::ThemeColors};
 use super::super::change;
 use super::super::controls::switch_row;
-use super::super::layout::{group, secondary_text};
+use super::super::layout::{group, group_with_choices, secondary_text};
 
 pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
     let current = Settings::get(cx);
     let close_window = current.close_window_with_last_tab;
     let archive = current.archive_tabs;
     let sleep_mode = current.tab_sleep_mode;
-    let setting = |row, note: SharedString| {
+    let setting = |row, note: SharedString, panel: gpui::Div| {
         v_stack()
             .gap(px(metrics::MENU_ITEM_GAP))
-            .child(group(palette).child(row))
+            .child(panel.child(row))
             .child(secondary_text(note, palette))
     };
     v_stack()
@@ -47,10 +47,11 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
             )
             .into_any_element(),
             match sleep_mode {
-                TabSleepMode::Off => "Keep automatic tab sleeping disabled.".into(),
-                TabSleepMode::Balanced => "After one minute in another tab, stop rendering loaded, silent pages and keep their live state.".into(),
-                TabSleepMode::Maximum => "After five seconds in another tab, stop rendering loaded, silent pages and keep their live state.".into(),
+                TabSleepMode::Off => "Keep inactive pages loaded unless system memory pressure requires a discard. Discarded pages reload when selected.".into(),
+                TabSleepMode::Balanced => "After one minute in another tab, discard its page process. Selecting it reloads the URL; unsaved page state and in-page history are lost.".into(),
+                TabSleepMode::Maximum => "After five seconds in another tab, discard its page process. Selecting it reloads the URL; unsaved page state and in-page history are lost.".into(),
             },
+            group_with_choices(palette),
         ))
         .child(setting(
             switch_row(
@@ -62,6 +63,7 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
             )
             .into_any_element(),
             "When off, closing the last tab leaves the window open without tabs.".into(),
+            group(palette),
         ))
         .child(setting(
             switch_row(
@@ -78,5 +80,6 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
                     .to_owned(),
             }
             .into(),
+            group(palette),
         ))
 }

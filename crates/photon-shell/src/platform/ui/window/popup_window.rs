@@ -19,7 +19,7 @@ use super::super::{
     theme::{ThemeColors, palette},
 };
 use super::content::{create_webview_from_session, follow_appearance};
-use super::popups::popup_confirmation_dialog;
+use super::popups::{RequestedWebViewAction, popup_confirmation_dialog, requested_web_view_action};
 use super::window_settings;
 
 struct PendingPopup {
@@ -115,16 +115,24 @@ impl MinimalPopupWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if request.popup && request.needs_confirmation {
-            let origin = source.read(cx).state.url.clone();
-            let should_focus = self.pending_popups.is_empty();
-            self.pending_popups.push(PendingPopup { request, origin });
-            if should_focus {
-                window.focus(&self.confirmation_focus, cx);
+        match requested_web_view_action(request.popup, self.runtime.popup_policy()) {
+            RequestedWebViewAction::Ask => {
+                let origin = source.read(cx).state.url.clone();
+                let should_focus = self.pending_popups.is_empty();
+                self.pending_popups.push(PendingPopup { request, origin });
+                if should_focus {
+                    window.focus(&self.confirmation_focus, cx);
+                }
+                cx.notify();
             }
-            cx.notify();
-        } else {
-            open_minimal_window(self.runtime.clone(), request, cx);
+            RequestedWebViewAction::OpenTab | RequestedWebViewAction::OpenWindow => {
+                open_minimal_window(self.runtime.clone(), request, cx);
+            }
+            RequestedWebViewAction::Block => {
+                crate::platform::trace(format_args!(
+                    "blocked nested site popup after policy update"
+                ));
+            }
         }
     }
 
@@ -154,7 +162,15 @@ impl MinimalPopupWindow {
     fn allow_pending_popup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if !self.pending_popups.is_empty() {
             let popup = self.pending_popups.remove(0);
-            open_minimal_window(self.runtime.clone(), popup.request, cx);
+            if requested_web_view_action(popup.request.popup, self.runtime.popup_policy())
+                != RequestedWebViewAction::Block
+            {
+                open_minimal_window(self.runtime.clone(), popup.request, cx);
+            } else {
+                crate::platform::trace(format_args!(
+                    "blocked confirmed nested popup after policy update"
+                ));
+            }
         }
         self.refocus_after_popup_decision(window, cx);
     }

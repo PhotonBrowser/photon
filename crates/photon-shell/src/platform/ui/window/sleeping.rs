@@ -1,9 +1,20 @@
-//! Stop rendering inactive Engine views after their sleep deadlines.
+//! Sleep inactive Engine views and release hidden-page memory under pressure.
 
+#[cfg(target_os = "macos")]
+use block2::RcBlock;
+#[cfg(target_os = "macos")]
+use dispatch2::{
+    DispatchObject, DispatchRetained, DispatchSource,
+    dispatch_source_memorypressure_flags_t as MemoryPressureFlags,
+};
 use futures::channel::mpsc::{Sender, channel};
 use futures::future::{Either, select};
 use futures::{FutureExt, StreamExt, pin_mut};
-use gpui::{Context, Task, Window};
+use gpui::{App, Context, Global, Task, Window};
+use photon_tab_sleep::MemoryPressure;
+use std::collections::HashSet;
+#[cfg(target_os = "macos")]
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use crate::platform::app_update::update_app;
@@ -12,8 +23,282 @@ use super::super::super::trace;
 use super::super::settings::Settings;
 use super::BrowserWindow;
 use super::content::{BrowserTab, SleepingTab, TabContent};
+use super::registry::BrowserWindowRegistry;
 
-pub(super) type TabSleepWaker = Sender<()>;
+#[cfg(target_os = "macos")]
+const VM_PRESSURE_LEVEL_WARNING: libc::c_int = 2;
+#[cfg(target_os = "macos")]
+const VM_PRESSURE_LEVEL_CRITICAL: libc::c_int = 4;
+const MEMORY_PRESSURE_RETRY_INTERVAL: Duration = Duration::from_secs(5);
+
+pub(super) type TabSleepWaker = Sender<SleepWake>;
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(super) enum SleepWake {
+    Recheck,
+    MemoryPressure,
+    MemoryPressureRetry,
+    Deadline,
+}
+
+#[cfg(target_os = "macos")]
+pub(super) struct MemoryPressureMonitor(DispatchRetained<DispatchSource>);
+
+#[cfg(not(target_os = "macos"))]
+pub(super) struct MemoryPressureMonitor;
+
+impl MemoryPressureMonitor {
+    pub(super) fn new(waker: TabSleepWaker) -> Self {
+        #[cfg(target_os = "macos")]
+        {
+            let mut waker = waker;
+            // SAFETY: the memory-pressure source uses handle 0 and the documented
+            // normal, warning, and critical event mask.
+            let source = unsafe {
+                DispatchSource::new(
+                    std::ptr::addr_of!(dispatch2::_dispatch_source_type_memorypressure).cast_mut(),
+                    0,
+                    (MemoryPressureFlags::DISPATCH_MEMORYPRESSURE_NORMAL.0
+                        | MemoryPressureFlags::DISPATCH_MEMORYPRESSURE_WARN.0
+                        | MemoryPressureFlags::DISPATCH_MEMORYPRESSURE_CRITICAL.0)
+                        as usize,
+                    None,
+                )
+            };
+            let handler_waker = Mutex::new(waker.clone());
+            let handler = RcBlock::new(move || {
+                let _ = handler_waker
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .try_send(SleepWake::MemoryPressure);
+            });
+            // SAFETY: the source copies the block before activation. The block
+            // holds only the channel sender and never retains the source.
+            unsafe { source.set_event_handler_with_block(RcBlock::as_ptr(&handler)) };
+            source.activate();
+            let _ = waker.try_send(SleepWake::MemoryPressure);
+            Self(source)
+        }
+
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = waker;
+            Self
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl Drop for MemoryPressureMonitor {
+    fn drop(&mut self) {
+        self.0.cancel();
+    }
+}
+
+#[derive(Default)]
+struct MemoryPressureOverride(Option<MemoryPressure>);
+
+impl Global for MemoryPressureOverride {}
+
+/// Returns an injected level for isolated automation sessions, otherwise
+/// reading the operating system's current pressure state.
+pub(super) fn current_memory_pressure(cx: &App) -> MemoryPressure {
+    if cx.has_global::<MemoryPressureOverride>()
+        && let Some(pressure) = cx.global::<MemoryPressureOverride>().0
+    {
+        return pressure;
+    }
+
+    current_os_memory_pressure()
+}
+
+/// Allows the isolated automation harness to exercise pressure cleanup without
+/// creating artificial machine-wide memory pressure.
+pub(super) fn set_test_memory_pressure(
+    pressure: Option<MemoryPressure>,
+    cx: &mut App,
+) -> Option<Instant> {
+    if !cx.has_global::<MemoryPressureOverride>() {
+        cx.set_global(MemoryPressureOverride::default());
+    }
+    cx.global_mut::<MemoryPressureOverride>().0 = pressure;
+
+    let retry_at = relieve_memory_pressure(cx);
+    for handle in BrowserWindowRegistry::ordered_handles(cx) {
+        let Some(window) = handle.downcast::<BrowserWindow>() else {
+            continue;
+        };
+        let _ = window.update(cx, |browser, _, _| browser.wake_tab_sleep_scheduler());
+    }
+    retry_at
+}
+
+/// Reads the kernel's current memory state instead of relying on coalesced
+/// dispatch flags, which can retain a stale warning after pressure subsides.
+#[cfg(target_os = "macos")]
+fn current_os_memory_pressure() -> MemoryPressure {
+    let mut level: libc::c_int = 0;
+    let mut size = std::mem::size_of::<libc::c_int>();
+    // SAFETY: a read-only sysctl into a correctly sized integer.
+    let status = unsafe {
+        sysctlbyname(
+            c"kern.memorystatus_vm_pressure_level".as_ptr(),
+            (&mut level as *mut libc::c_int).cast(),
+            &mut size,
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    if status != 0 {
+        return MemoryPressure::Normal;
+    }
+    match level {
+        VM_PRESSURE_LEVEL_CRITICAL => MemoryPressure::Critical,
+        VM_PRESSURE_LEVEL_WARNING => MemoryPressure::Warning,
+        _ => MemoryPressure::Normal,
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn current_os_memory_pressure() -> MemoryPressure {
+    MemoryPressure::Normal
+}
+
+#[cfg(target_os = "macos")]
+unsafe extern "C" {
+    fn sysctlbyname(
+        name: *const libc::c_char,
+        oldp: *mut libc::c_void,
+        oldlenp: *mut usize,
+        newp: *mut libc::c_void,
+        newlen: usize,
+    ) -> libc::c_int;
+}
+
+#[derive(Default)]
+struct MemoryPressureCycle {
+    pressure: MemoryPressure,
+    cleaned_tabs: HashSet<(u64, u64)>,
+    retry_at: Option<Instant>,
+}
+
+struct PressureCandidate {
+    window_id: u64,
+    tab_id: u64,
+    memory_bytes: u64,
+    last_active: Instant,
+    discardable: bool,
+}
+
+impl Global for MemoryPressureCycle {}
+
+fn relieve_memory_pressure(cx: &mut App) -> Option<Instant> {
+    let pressure = current_memory_pressure(cx);
+    if !cx.has_global::<MemoryPressureCycle>() {
+        cx.set_global(MemoryPressureCycle::default());
+    }
+
+    let handles = BrowserWindowRegistry::ordered_handles(cx);
+    for handle in &handles {
+        let Some(window) = handle.downcast::<BrowserWindow>() else {
+            continue;
+        };
+        if window
+            .update(cx, |browser, _, _| {
+                browser
+                    .runtime
+                    .set_memory_pressure(pressure != MemoryPressure::Normal);
+            })
+            .is_ok()
+        {
+            break;
+        }
+    }
+
+    let now = Instant::now();
+    let cleaned_tabs = {
+        let cycle = cx.global_mut::<MemoryPressureCycle>();
+        if cycle.pressure != pressure {
+            cycle.pressure = pressure;
+            cycle.cleaned_tabs.clear();
+            cycle.retry_at = None;
+        }
+        if pressure == MemoryPressure::Normal {
+            cycle.retry_at = None;
+            cycle.cleaned_tabs.clear();
+            return None;
+        }
+        if let Some(retry_at) = cycle.retry_at
+            && retry_at > now
+        {
+            return Some(retry_at);
+        }
+        cycle.retry_at = None;
+        cycle.cleaned_tabs.clone()
+    };
+
+    let mut candidates = Vec::new();
+    for handle in &handles {
+        let Some(window) = handle.downcast::<BrowserWindow>() else {
+            continue;
+        };
+        let window_id = window.window_id().as_u64();
+        let Ok(window_candidates) =
+            window.update(cx, |browser, _, cx| browser.pressure_candidates(cx))
+        else {
+            continue;
+        };
+        candidates.extend(window_candidates.into_iter().filter_map(
+            |(tab_id, memory_bytes, last_active, discardable)| {
+                (!cleaned_tabs.contains(&(window_id, tab_id))).then_some(PressureCandidate {
+                    window_id,
+                    tab_id,
+                    memory_bytes,
+                    last_active,
+                    discardable,
+                })
+            },
+        ));
+    }
+    candidates.sort_by_key(|candidate| {
+        (
+            std::cmp::Reverse(candidate.memory_bytes),
+            std::cmp::Reverse(pressure.should_discard_hidden_tabs() && candidate.discardable),
+            candidate.last_active,
+            candidate.window_id,
+            candidate.tab_id,
+        )
+    });
+
+    let batch_size = pressure.cleanup_batch();
+    let more_candidates = candidates.len() > batch_size;
+    let mut attempted = Vec::new();
+    for candidate in candidates.into_iter().take(batch_size) {
+        let Some(window) = handles
+            .iter()
+            .find(|handle| handle.window_id().as_u64() == candidate.window_id)
+            .and_then(|handle| handle.downcast::<BrowserWindow>())
+        else {
+            continue;
+        };
+        attempted.push((candidate.window_id, candidate.tab_id));
+        let _ = window.update(cx, |browser, _, cx| {
+            browser.release_tab_memory(candidate.tab_id, pressure.should_discard_hidden_tabs(), cx)
+        });
+    }
+
+    let retry_at = if more_candidates && !attempted.is_empty() {
+        Some(now + MEMORY_PRESSURE_RETRY_INTERVAL)
+    } else {
+        None
+    };
+    if !attempted.is_empty() {
+        let cycle = cx.global_mut::<MemoryPressureCycle>();
+        cycle.cleaned_tabs.extend(attempted);
+        cycle.retry_at = retry_at;
+    }
+    retry_at
+}
 
 impl BrowserWindow {
     pub(super) fn sleep_inactive_tabs_regularly(
@@ -21,44 +306,79 @@ impl BrowserWindow {
         cx: &mut Context<Self>,
     ) -> (TabSleepWaker, Task<()>) {
         let handle = window.window_handle();
-        let (waker, mut wakeups) = channel(1);
+        let (waker, mut wakeups) = channel(4);
         let task = cx.spawn(async move |this, cx| {
+            let mut next_pressure_retry = None;
             loop {
-                let delay = update_app(cx, |cx| {
+                let sleep_delay = update_app(cx, |cx| {
                     this.read_with(cx, |this, app| this.next_sleep_check_delay(app))
                 })
                 .await;
-                let Some(Ok(delay)) = delay else {
+                let Some(Ok(sleep_delay)) = sleep_delay else {
                     break;
                 };
 
-                let deadline_elapsed = if let Some(delay) = delay {
+                let pressure_delay = next_pressure_retry
+                    .map(|retry_at: Instant| retry_at.saturating_duration_since(Instant::now()));
+                let (delay, timer_wakeup) = match (sleep_delay, pressure_delay) {
+                    (Some(sleep), Some(pressure)) if pressure <= sleep => {
+                        (Some(pressure), SleepWake::MemoryPressureRetry)
+                    }
+                    (Some(sleep), Some(_)) | (Some(sleep), None) => {
+                        (Some(sleep), SleepWake::Deadline)
+                    }
+                    (None, Some(pressure)) => (Some(pressure), SleepWake::MemoryPressureRetry),
+                    (None, None) => (None, SleepWake::Deadline),
+                };
+
+                let work = if let Some(delay) = delay {
                     let timer = cx.background_executor().timer(delay).fuse();
                     let wakeup = wakeups.next().fuse();
                     pin_mut!(timer, wakeup);
                     match select(timer, wakeup).await {
-                        Either::Left(((), _)) => true,
-                        Either::Right((Some(()), _)) => false,
+                        Either::Left(((), _)) => Some(timer_wakeup),
+                        Either::Right((Some(wakeup), _)) => Some(wakeup),
                         Either::Right((None, _)) => break,
                     }
-                } else if wakeups.next().await.is_some() {
-                    false
                 } else {
-                    break;
+                    match wakeups.next().await {
+                        Some(wakeup) => Some(wakeup),
+                        None => break,
+                    }
                 };
 
-                if deadline_elapsed {
-                    let open = update_app(cx, |cx| {
-                        handle
-                            .update(cx, |_, window, cx| {
-                                this.update(cx, |this, cx| this.sleep_idle_tabs(window, cx))
-                            })
-                            .is_ok_and(|updated| updated.is_ok())
-                    })
-                    .await;
-                    if open != Some(true) {
-                        break;
+                match work {
+                    Some(SleepWake::Recheck) => continue,
+                    Some(SleepWake::MemoryPressure) => {
+                        let Some(retry_at) = update_app(cx, relieve_memory_pressure).await else {
+                            break;
+                        };
+                        next_pressure_retry = retry_at;
                     }
+                    Some(SleepWake::MemoryPressureRetry) => {
+                        let Some(retry_at) = update_app(cx, relieve_memory_pressure).await else {
+                            break;
+                        };
+                        next_pressure_retry = retry_at;
+                    }
+                    Some(SleepWake::Deadline) => {
+                        let Some(retry_at) = update_app(cx, relieve_memory_pressure).await else {
+                            break;
+                        };
+                        next_pressure_retry = retry_at;
+                        let open = update_app(cx, |cx| {
+                            handle
+                                .update(cx, |_, window, cx| {
+                                    this.update(cx, |this, cx| this.sleep_idle_tabs(window, cx))
+                                })
+                                .is_ok_and(|updated| updated.is_ok())
+                        })
+                        .await;
+                        if open != Some(true) {
+                            break;
+                        }
+                    }
+                    None => break,
                 }
             }
         });
@@ -66,7 +386,7 @@ impl BrowserWindow {
     }
 
     pub(super) fn wake_tab_sleep_scheduler(&mut self) {
-        let _ = self.tab_sleep_waker.try_send(());
+        let _ = self.tab_sleep_waker.try_send(SleepWake::Recheck);
     }
 
     fn next_sleep_check_delay(&self, cx: &gpui::App) -> Option<Duration> {
@@ -85,6 +405,9 @@ impl BrowserWindow {
                     && !view.state.loading
                     && !view.audio_playing
                     && !view.page_unresponsive
+                    && !view.session.needs_beforeunload_check()
+                    && !view.state.can_go_back
+                    && !view.state.can_go_forward
                     && view.dialogs.open().is_none();
                 safe_to_sleep.then(|| (tab.last_active + timeout).saturating_duration_since(now))
             })
@@ -94,64 +417,135 @@ impl BrowserWindow {
     pub(super) fn sleep_idle_tabs(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         let mode = Settings::get(cx).tab_sleep_mode;
         let Some(timeout) = photon_tab_sleep::idle_timeout(mode) else {
-            let mut woke = 0;
-            for tab in &mut self.tabs {
-                if let TabContent::Sleeping(sleeping) = &tab.content {
-                    tab.content = TabContent::Web(sleeping.webview.clone());
-                    woke += 1;
-                }
-            }
-            if woke > 0 {
-                cx.notify();
-            }
             return;
         };
 
         let mut changed = 0;
         for index in (0..self.tabs.len()).rev() {
             let tab = &self.tabs[index];
-            let Some(webview) = tab.content.webview() else {
+            if !matches!(&tab.content, TabContent::Web(_)) {
                 continue;
-            };
+            }
             let candidate = self.is_sleep_candidate(index, tab);
-            let sleeping = matches!(&tab.content, TabContent::Sleeping(_));
-            if !candidate {
-                if sleeping {
-                    self.tabs[index].content = TabContent::Web(webview);
-                    changed += 1;
-                }
+            if !candidate || tab.last_active.elapsed() < timeout {
                 continue;
             }
-            if sleeping || tab.last_active.elapsed() < timeout {
-                continue;
-            }
-            let safe_to_sleep = webview.update(cx, |view, _| {
-                if !view.has_page()
-                    || view.state.loading
-                    || view.audio_playing
-                    || view.page_unresponsive
-                    || view.dialogs.open().is_some()
-                {
-                    return false;
-                }
-                view.session.set_visible(false);
-                view.session.set_focus(false);
-                true
-            });
-            if safe_to_sleep {
-                self.tabs[index].content = TabContent::Sleeping(SleepingTab { webview });
+            if self.discard_tab(index, cx) {
                 changed += 1;
             }
         }
         if changed > 0 {
             trace(format_args!(
-                "updated {changed} inactive tab(s) in the sleep policy"
+                "discarded {changed} inactive page(s) in the sleep policy"
             ));
             cx.notify();
         }
     }
 
+    fn pressure_candidates(&self, cx: &App) -> Vec<(u64, u64, Instant, bool)> {
+        self.tabs
+            .iter()
+            .enumerate()
+            .filter(|(index, tab)| self.is_pressure_candidate(*index, tab))
+            .filter_map(|(index, tab)| {
+                let webview = tab.content.webview()?;
+                let view = webview.read(cx);
+                let safe = view.has_page()
+                    && !view.state.loading
+                    && !view.audio_playing
+                    && !view.page_unresponsive
+                    && !view.session.needs_beforeunload_check()
+                    && view.dialogs.open().is_none();
+                safe.then(|| {
+                    (
+                        tab.id,
+                        view.diagnostics
+                            .memory_bytes
+                            .or(view.diagnostics.managed_heap_bytes)
+                            .unwrap_or_default(),
+                        tab.last_active,
+                        self.is_sleep_candidate(index, tab)
+                            && !view.state.can_go_back
+                            && !view.state.can_go_forward,
+                    )
+                })
+            })
+            .collect()
+    }
+
+    fn release_tab_memory(
+        &mut self,
+        id: u64,
+        discard_if_safe: bool,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(index) = self.tabs.iter().position(|tab| tab.id == id) else {
+            return false;
+        };
+        if !self.is_pressure_candidate(index, &self.tabs[index]) {
+            return false;
+        }
+        if discard_if_safe
+            && self.is_sleep_candidate(index, &self.tabs[index])
+            && self.discard_tab(index, cx)
+        {
+            cx.notify();
+            return true;
+        }
+        let Some(webview) = self.tabs[index].content.webview() else {
+            return false;
+        };
+        webview.update(cx, |view, _| {
+            if !view.has_page()
+                || view.state.loading
+                || view.audio_playing
+                || view.page_unresponsive
+                || view.dialogs.open().is_some()
+            {
+                return false;
+            }
+            view.session.release_hidden_memory();
+            true
+        })
+    }
+
+    fn discard_tab(&mut self, index: usize, cx: &mut Context<Self>) -> bool {
+        let Some(webview) = self.tabs.get(index).and_then(|tab| tab.content.webview()) else {
+            return false;
+        };
+        let snapshot = webview.update(cx, |view, _| {
+            if !view.has_page()
+                || view.state.loading
+                || view.audio_playing
+                || view.page_unresponsive
+                || view.session.needs_beforeunload_check()
+                || view.state.can_go_back
+                || view.state.can_go_forward
+                || view.dialogs.open().is_some()
+            {
+                return None;
+            }
+            view.session.set_visible(false);
+            view.session.set_focus(false);
+            Some(SleepingTab {
+                state: view.state.clone(),
+                favicon: view.favicon.clone(),
+            })
+        });
+        let Some(snapshot) = snapshot else {
+            return false;
+        };
+        self.tabs[index].content = TabContent::Sleeping(snapshot);
+        self.tab_subscriptions[index] = None;
+        true
+    }
+
     fn is_sleep_candidate(&self, index: usize, tab: &BrowserTab) -> bool {
         self.active_tab != Some(index) && !self.closing_tabs.contains(&tab.id)
+    }
+
+    fn is_pressure_candidate(&self, index: usize, tab: &BrowserTab) -> bool {
+        !self.closing_tabs.contains(&tab.id)
+            && (self.active_tab != Some(index) || !self.window_visible)
     }
 }

@@ -6,12 +6,13 @@
 use gpui::{App, Global, Menu, MenuItem, OsAction, SystemMenuType};
 use gpui_elements::editable_text::actions::{Copy, Cut, Paste, Redo, SelectAll, Undo};
 use photon_brand::NAME;
+use photon_core::Command;
 use photon_shortcuts::{
     CloseTab, FindInPage, FindNext, FindPrevious, GoBack, GoForward, HideApp, HideOtherApps,
     MinimizeWindow, NewWindow, NextSpace, OpenCommandBar, OpenSettings, PreviousSpace, Quit,
     Reload, ReopenClosedTab, ResetZoom, SelectNextTab, SelectPreviousTab, ShowAllApps,
     ShowKeyboardShortcuts, StopLoading, ToggleSidebar, ToggleSidebarIcons, ToggleZenMode, ZoomIn,
-    ZoomOut, ZoomWindow,
+    ZoomOut, ZoomWindow, shortcut_name_for_action,
 };
 
 use crate::platform::MenuBarState;
@@ -42,7 +43,7 @@ pub(crate) fn install_app_menus(cx: &mut App) {
     cx.on_action(|_: &HideOtherApps, cx| cx.hide_other_apps());
     cx.on_action(|_: &ShowAllApps, cx| cx.unhide_other_apps());
     show_menu_bar(MenuBarState::default(), cx);
-    cx.set_dock_menu(vec![MenuItem::action("New Window", NewWindow)]);
+    cx.set_dock_menu(vec![MenuItem::action(label(&NewWindow), NewWindow)]);
 }
 
 pub(crate) fn update_menu_bar(state: MenuBarState, cx: &mut App) {
@@ -50,24 +51,27 @@ pub(crate) fn update_menu_bar(state: MenuBarState, cx: &mut App) {
 }
 
 fn menu_bar(state: MenuBarState) -> Vec<Menu> {
+    let commands = state.commands;
     let reload = if state.loading {
-        MenuItem::action("Stop Loading", StopLoading)
+        MenuItem::action(label(&StopLoading), StopLoading)
     } else {
-        MenuItem::action("Reload Page", Reload)
-    };
+        MenuItem::action(label(&Reload), Reload)
+    }
+    .disabled(!commands.allows(Command::ReloadPage));
     let mut view = Vec::new();
-    if state.has_sidebar {
+    if commands.has_sidebar {
         view.extend([
-            MenuItem::action("Show or Hide Sidebar", ToggleSidebar),
-            MenuItem::action("Sidebar as Icons", ToggleSidebarIcons).checked(state.sidebar_icons),
+            MenuItem::action(label(&ToggleSidebar), ToggleSidebar),
+            MenuItem::action(label(&ToggleSidebarIcons), ToggleSidebarIcons)
+                .checked(state.sidebar_icons),
         ]);
     }
     view.extend([
-        MenuItem::action("Zen Mode", ToggleZenMode).checked(state.zen),
+        MenuItem::action(label(&ToggleZenMode), ToggleZenMode).checked(state.zen),
         MenuItem::separator(),
-        MenuItem::action("Zoom In", ZoomIn),
-        MenuItem::action("Zoom Out", ZoomOut),
-        MenuItem::action("Actual Size", ResetZoom),
+        MenuItem::action(label(&ZoomIn), ZoomIn),
+        MenuItem::action(label(&ZoomOut), ZoomOut),
+        MenuItem::action(label(&ResetZoom), ResetZoom),
         MenuItem::separator(),
         reload,
     ]);
@@ -85,10 +89,11 @@ fn menu_bar(state: MenuBarState) -> Vec<Menu> {
         ]),
         Menu::new("File").items([
             MenuItem::action("New Tab…", OpenCommandBar),
-            MenuItem::action("New Window", NewWindow),
-            MenuItem::action("Reopen Closed Tab", ReopenClosedTab),
+            MenuItem::action(label(&NewWindow), NewWindow),
+            MenuItem::action(label(&ReopenClosedTab), ReopenClosedTab)
+                .disabled(!commands.allows(Command::ReopenClosedTab)),
             MenuItem::separator(),
-            MenuItem::action("Close Tab", CloseTab),
+            MenuItem::action(label(&CloseTab), CloseTab),
         ]),
         Menu::new("Edit").items([
             MenuItem::os_action("Undo", Undo, OsAction::Undo),
@@ -99,29 +104,77 @@ fn menu_bar(state: MenuBarState) -> Vec<Menu> {
             MenuItem::os_action("Paste", Paste, OsAction::Paste),
             MenuItem::os_action("Select All", SelectAll, OsAction::SelectAll),
             MenuItem::separator(),
-            MenuItem::action("Find in Page…", FindInPage),
-            MenuItem::action("Find Next", FindNext),
-            MenuItem::action("Find Previous", FindPrevious),
+            MenuItem::action(label(&FindInPage), FindInPage)
+                .disabled(!commands.allows(Command::FindInPage)),
+            MenuItem::action(label(&FindNext), FindNext).disabled(!commands.has_page),
+            MenuItem::action(label(&FindPrevious), FindPrevious).disabled(!commands.has_page),
         ]),
         Menu::new("View").items(view),
         Menu::new("History").items([
-            MenuItem::action("Back", GoBack),
-            MenuItem::action("Forward", GoForward),
+            MenuItem::action(label(&GoBack), GoBack),
+            MenuItem::action(label(&GoForward), GoForward),
         ]),
         // AppKit lists the open windows at the end of the menu named
         // "Window".
         Menu::new("Window").items([
-            MenuItem::action("Minimize", MinimizeWindow),
+            MenuItem::action(label(&MinimizeWindow), MinimizeWindow),
             MenuItem::action("Zoom", ZoomWindow),
             MenuItem::separator(),
-            MenuItem::action("Next Tab", SelectNextTab),
-            MenuItem::action("Previous Tab", SelectPreviousTab),
-            MenuItem::action("Next Space", NextSpace),
-            MenuItem::action("Previous Space", PreviousSpace),
+            MenuItem::action(label(&SelectNextTab), SelectNextTab),
+            MenuItem::action(label(&SelectPreviousTab), SelectPreviousTab),
+            MenuItem::action(label(&NextSpace), NextSpace)
+                .disabled(!commands.allows(Command::NextSpace)),
+            MenuItem::action(label(&PreviousSpace), PreviousSpace)
+                .disabled(!commands.allows(Command::PreviousSpace)),
         ]),
         Menu::new("Help").items([MenuItem::action(
-            "Keyboard Shortcuts",
+            label(&ShowKeyboardShortcuts),
             ShowKeyboardShortcuts,
         )]),
     ]
+}
+
+fn label(action: &dyn gpui::Action) -> &'static str {
+    shortcut_name_for_action(action).expect("native menu action has a shortcut registry entry")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use photon_core::CommandAvailability;
+
+    fn menu_item<'a>(menus: &'a [Menu], menu_name: &str, item_name: &str) -> &'a MenuItem {
+        menus
+            .iter()
+            .find(|menu| menu.name.as_ref() == menu_name)
+            .and_then(|menu| {
+                menu.items.iter().find(|item| {
+                    matches!(item, MenuItem::Action { name, .. } if name.as_ref() == item_name)
+                })
+            })
+            .unwrap_or_else(|| panic!("missing {item_name:?} item in {menu_name:?} menu"))
+    }
+
+    #[test]
+    fn native_menu_commands_follow_current_availability() {
+        let unavailable = menu_bar(MenuBarState::default());
+        assert!(menu_item(&unavailable, "File", "Reopen Closed Tab").is_disabled());
+        assert!(menu_item(&unavailable, "Edit", "Find in Page").is_disabled());
+        assert!(menu_item(&unavailable, "Window", "Next Space").is_disabled());
+
+        let available = menu_bar(MenuBarState {
+            commands: CommandAvailability {
+                has_page: true,
+                has_closed_tabs: true,
+                has_sidebar: true,
+                shows_spaces: true,
+                has_next_space: true,
+                has_previous_space: true,
+            },
+            ..MenuBarState::default()
+        });
+        assert!(!menu_item(&available, "File", "Reopen Closed Tab").is_disabled());
+        assert!(!menu_item(&available, "Edit", "Find in Page").is_disabled());
+        assert!(!menu_item(&available, "Window", "Next Space").is_disabled());
+    }
 }

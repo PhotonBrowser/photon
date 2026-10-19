@@ -1,0 +1,111 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Velocity targeted style invalidation fixture</title>
+<style>
+  .branch { display: block; }
+  .isolated.active { --velocity-target: localized; color: rgb(17, 34, 51); }
+  .branch.active .item .leaf { --velocity-target: descendant; color: rgb(34, 68, 102); }
+  .item.sibling-active + .item .leaf { --velocity-adjacent: matched; }
+  .item.sibling-active ~ .item .leaf { --velocity-general: matched; }
+  .branch:has(.selected) .target { --velocity-target: relational; }
+</style>
+<body>
+<main><p>Fixed nested tree with one selected style invalidation scenario.</p><div id="tree"></div></main>
+<script>
+(() => {
+  const scenario = "__VELOCITY_STYLE_SCENARIO__";
+  const mutationCount = 1024;
+  const styleReadInterval = 65;
+  const branchCount = 16;
+  const itemsPerBranch = 32;
+  const tree = document.querySelector("#tree");
+  const branches = [];
+  const items = [];
+
+  for (let branchIndex = 0; branchIndex < branchCount; ++branchIndex) {
+    const branch = document.createElement("section");
+    branch.className = "branch";
+    const target = document.createElement("span");
+    target.className = "target";
+    branches.push(branch);
+    for (let itemIndex = 0; itemIndex < itemsPerBranch; ++itemIndex) {
+      const item = document.createElement("div");
+      item.className = `item${branchIndex === 0 && itemIndex === 0 ? " isolated" : ""}`;
+      const leaf = document.createElement("span");
+      leaf.className = "leaf";
+      leaf.textContent = `${branchIndex}:${itemIndex}`;
+      item.append(leaf);
+      branch.append(item);
+      items.push(item);
+    }
+    branch.append(target);
+    tree.append(branch);
+  }
+
+  function run() {
+    const isolated = items[0];
+    const firstBranch = branches[0];
+    const startedAt = performance.now();
+    for (let operation = 0; operation < mutationCount; ++operation) {
+      if (scenario === "localized") {
+        isolated.classList.toggle("active");
+      } else if (scenario === "descendant") {
+        firstBranch.classList.toggle("active");
+      } else if (scenario === "sibling") {
+        items[0].classList.toggle("sibling-active");
+      } else if (scenario === "relational") {
+        items[0].classList.toggle("selected");
+      }
+
+      if ((operation + 1) % styleReadInterval === 0) {
+        const sample = scenario === "descendant"
+          ? items[itemsPerBranch - 1].firstElementChild
+          : scenario === "sibling"
+            ? items[1].firstElementChild
+            : scenario === "relational"
+              ? firstBranch.lastElementChild
+              : isolated;
+        getComputedStyle(sample).getPropertyValue("--velocity-target");
+      }
+    }
+
+    const finalSample = scenario === "descendant"
+      ? items[itemsPerBranch - 1].firstElementChild
+      : scenario === "sibling"
+        ? items[1].firstElementChild
+        : scenario === "relational"
+          ? firstBranch.lastElementChild
+          : isolated;
+    getComputedStyle(finalSample).getPropertyValue("--velocity-target");
+    const durationMs = performance.now() - startedAt;
+    let correct = items.length === branchCount * itemsPerBranch;
+    if (scenario === "localized") {
+      isolated.classList.add("active");
+      correct = correct && getComputedStyle(isolated).getPropertyValue("--velocity-target").trim() === "localized";
+    } else if (scenario === "descendant") {
+      firstBranch.classList.add("active");
+      correct = correct && getComputedStyle(items[itemsPerBranch - 1].firstElementChild)
+        .getPropertyValue("--velocity-target").trim() === "descendant";
+    } else if (scenario === "sibling") {
+      items[0].classList.add("sibling-active");
+      const adjacent = getComputedStyle(items[1].firstElementChild);
+      const later = getComputedStyle(items[itemsPerBranch - 1].firstElementChild);
+      correct = correct && adjacent.getPropertyValue("--velocity-adjacent").trim() === "matched"
+        && adjacent.getPropertyValue("--velocity-general").trim() === "matched"
+        && later.getPropertyValue("--velocity-general").trim() === "matched";
+    } else if (scenario === "relational") {
+      items[0].classList.add("selected");
+      correct = correct && CSS.supports("selector(.branch:has(.selected))")
+        && getComputedStyle(firstBranch.lastElementChild)
+          .getPropertyValue("--velocity-target").trim() === "relational";
+    } else {
+      correct = false;
+    }
+
+    document.title = `VelocityStyleInvalidation:${mutationCount}:${durationMs.toFixed(3)}:${correct}`;
+  }
+
+  window.addEventListener("load", () => setTimeout(run, 900), { once: true });
+})();
+</script>
+</body>

@@ -9,6 +9,7 @@ use gpui::{
 use io_surface::IOSurface;
 use mach2::{port::mach_port_t, traps::mach_task_self};
 use metal::SharedEvent;
+use photon_performance::PerformanceMonitor;
 use std::{
     collections::HashMap,
     ffi::c_void,
@@ -206,6 +207,10 @@ pub(in crate::platform) struct PresentedSurface {
 }
 
 impl PresentedSurface {
+    pub(in crate::platform) fn timing_identity(&self) -> (u64, u64) {
+        (self.key.generation, self.key.frame)
+    }
+
     pub(in crate::platform) fn retire(&self) -> RetiredSurface {
         RetiredSurface {
             key: self.key,
@@ -237,6 +242,7 @@ pub(in crate::platform) struct PresentationRuntime {
     pub(super) gpu_activity: Arc<GpuActivity>,
     pub(super) release_scheduler: Arc<AtomicPtr<c_void>>,
     navigation_timing: Option<Arc<NavigationTimingProfiler>>,
+    performance: Arc<PerformanceMonitor>,
     accepting_frames: AtomicBool,
 }
 
@@ -247,6 +253,7 @@ impl PresentationRuntime {
         leases: Arc<Mutex<LeaseLedger>>,
         gpu_activity: Arc<GpuActivity>,
         navigation_timing: Option<Arc<NavigationTimingProfiler>>,
+        performance: Arc<PerformanceMonitor>,
     ) -> anyhow::Result<Self> {
         Ok(Self {
             channel: Channel::connect(service)?,
@@ -259,6 +266,7 @@ impl PresentationRuntime {
             gpu_activity,
             release_scheduler: Arc::new(AtomicPtr::new(std::ptr::null_mut())),
             navigation_timing,
+            performance,
             accepting_frames: AtomicBool::new(true),
         })
     }
@@ -388,6 +396,7 @@ impl PresentationRuntime {
         width: i32,
         height: i32,
     ) {
+        self.performance.record_frame_handoff(generation, frame);
         let key = FrameKey {
             backing,
             generation,
@@ -424,6 +433,8 @@ impl PresentationRuntime {
             height,
         };
         if let Some(replaced) = self.latest.lock().unwrap().replace(ready) {
+            self.performance
+                .record_frame_coalesced_before_install(replaced.key.generation, replaced.key.frame);
             trace(format_args!(
                 "frame={} gen={} state=release reason=superseded-before-present",
                 replaced.key.frame, replaced.key.generation
@@ -489,6 +500,9 @@ impl PresentationRuntime {
         let release_scheduler = self.release_scheduler.clone();
         let submitted_release_scheduler = self.release_scheduler.clone();
         let navigation_timing = self.navigation_timing.clone();
+        let submitted_performance = self.performance.clone();
+        let completed_performance = self.performance.clone();
+        let presented_performance = self.performance.clone();
         let surface = ExternalMetalSurface::new(
             ExternalSurfaceDescriptor {
                 identity: ExternalTextureIdentity {
@@ -572,6 +586,46 @@ impl PresentationRuntime {
                 }
             },
         );
+        let surface = if presented_performance.is_frame_timing_active() {
+            let frame_timing_enabled = presented_performance.frame_timing_enabled_flag();
+            let submitted_performance = submitted_performance.clone();
+            let completed_performance = completed_performance.clone();
+            surface.with_gpu_sampling_feedback(
+                frame_timing_enabled,
+                move |drawable_id| {
+                    submitted_performance.record_gpu_submission(
+                        key.generation,
+                        key.frame,
+                        drawable_id,
+                    );
+                },
+                move |drawable_id| {
+                    completed_performance.record_gpu_completion_callback(
+                        key.generation,
+                        key.frame,
+                        drawable_id,
+                    );
+                },
+            )
+        } else {
+            surface
+        };
+        let surface = if presented_performance.is_frame_timing_active() {
+            let frame_timing_enabled = presented_performance.frame_timing_enabled_flag();
+            surface.with_drawable_presentation_feedback(
+                frame_timing_enabled,
+                move |drawable_id, presented_time_seconds| {
+                    presented_performance.record_drawable_presentation(
+                        key.generation,
+                        key.frame,
+                        drawable_id,
+                        presented_time_seconds,
+                    );
+                },
+            )
+        } else {
+            surface
+        };
         trace(format_args!(
             "frame={} gen={} surface-ready signal={}",
             key.frame, key.generation, ready.signal

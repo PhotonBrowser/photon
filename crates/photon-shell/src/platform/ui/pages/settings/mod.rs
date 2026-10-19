@@ -256,6 +256,11 @@ impl Render for SettingsPage {
                 "settings-content",
                 content,
                 crate::platform::supports_elastic_scroll() && Settings::get(cx).elastic_scroll,
+                if section == Section::Appearance {
+                    metrics::SETTINGS_APPEARANCE_MAX_WIDTH
+                } else {
+                    metrics::INTERNAL_PAGE_MAX_WIDTH
+                },
             )))
             .children(reset_dialog)
             .children(workspace_preset_dialog)
@@ -283,7 +288,7 @@ impl SettingsPage {
                 .gap(px(metrics::OMNIBOX_GAP))
                 .h(px(metrics::SETTINGS_SIDEBAR_ITEM_HEIGHT))
                 .px(px(metrics::MENU_ITEM_HORIZONTAL_PADDING))
-                .rounded(px(metrics::CONTROL_RADIUS))
+                .rounded(px(metrics::control_radius()))
                 .text_size(px(metrics::BUTTON_FONT_SIZE))
                 .text_color(rgb(color))
                 .owns_clicks()

@@ -6,7 +6,8 @@ mod overlay;
 mod process;
 
 pub use accumulator::{
-    EnginePerformanceStats, PerformanceDiagnostics, PerformanceHistory, PerformanceMonitor,
+    DrawablePresentationEvent, EnginePerformanceStats, EngineSurfaceFrameTiming,
+    FrameTimingDiagnostics, PerformanceDiagnostics, PerformanceHistory, PerformanceMonitor,
     PerformanceSample, PerformanceTask, PresentationMode,
 };
 pub use chart::{ChartPoint, performance_chart};

@@ -65,7 +65,7 @@ pub(super) fn status_chip(
         } else {
             metrics::CHIP_PADDING
         }))
-        .rounded(px(metrics::CHIP_RADIUS))
+        .rounded(px(metrics::chip_radius()))
         .border_1()
         .border_color(rgba(palette.menu_border))
         .raised(palette)

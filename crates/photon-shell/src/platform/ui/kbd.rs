@@ -55,7 +55,7 @@ fn keycap(label: SharedString, palette: ThemeColors) -> Div {
         .h(px(metrics::KBD_HEIGHT))
         .min_w(px(metrics::KBD_HEIGHT))
         .px(px(metrics::KBD_PADDING))
-        .rounded(px(metrics::KBD_RADIUS))
+        .rounded(px(metrics::keycap_radius()))
         .border_1()
         .border_color(rgba(palette.menu_border))
         .bg(rgba(palette.surface))

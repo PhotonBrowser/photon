@@ -2,7 +2,7 @@
 
 use super::super::engine::{EngineSession, RequestedWebView};
 use super::input::{EditCommand, WebViewInput};
-use super::{metrics::PAGE_RADIUS, settings::Settings, theme::palette};
+use super::{metrics, settings::Settings, theme::palette};
 use gpui::{
     AnyWindowHandle, Context, EventEmitter, FocusHandle, InteractiveElement, KeyDownEvent,
     KeyUpEvent, MouseButton, NavigationDirection, Render, Subscription, Window, WindowAppearance,
@@ -47,6 +47,7 @@ pub(in crate::platform) struct PhotonWebView {
     pub(in crate::platform) state: BrowserState,
     pub(in crate::platform) diagnostics: PerformanceDiagnostics,
     pub(in crate::platform) performance_overlay_enabled: bool,
+    performance_diagnostics_session_active: bool,
     /// What the tab's crash chip says, if anything.
     pub(in crate::platform) crash_notice: Option<CrashNotice>,
     crashes: PageCrashes,
@@ -166,6 +167,8 @@ impl PhotonWebView {
             return;
         };
         let navigation_id = presented.navigation_id;
+        let (generation, frame_id) = presented.timing_identity();
+        self.session.record_surface_install(generation, frame_id);
         self.external = Some(crate::platform::renderer::replace_surface(
             self.external.take(),
             presented,
@@ -321,6 +324,7 @@ impl PhotonWebView {
             state: BrowserState::default(),
             diagnostics: PerformanceDiagnostics::default(),
             performance_overlay_enabled: false,
+            performance_diagnostics_session_active: false,
             crash_notice: None,
             crashes: PageCrashes::default(),
             recorded: history::Recorded::default(),
@@ -395,6 +399,42 @@ impl PhotonWebView {
     pub(super) fn set_performance_overlay_enabled(&mut self, enabled: bool) {
         self.performance_overlay_enabled = enabled;
         self.session.set_diagnostics_enabled(enabled);
+    }
+
+    pub(super) fn start_task_queue_diagnostics(&mut self) -> Result<(), String> {
+        if self.performance_diagnostics_session_active {
+            return Err("task queue diagnostics are already active for this tab".to_owned());
+        }
+        if !self.session.set_task_queue_diagnostics_enabled(true) {
+            return Err(
+                "a WebContent process hosting this tab already has another diagnostics session, or the tab has no active content process".to_owned(),
+            );
+        }
+        self.session.start_frame_timing_diagnostics();
+        self.performance_diagnostics_session_active = true;
+        Ok(())
+    }
+
+    pub(super) fn task_queue_diagnostics_json(&self) -> Result<String, String> {
+        if !self.performance_diagnostics_session_active {
+            return Err("task queue diagnostics are not active for this tab".to_owned());
+        }
+        self.session
+            .task_queue_diagnostics_json()
+            .map_err(|error| format!("cannot read Engine task queue diagnostics: {error:#}"))
+    }
+
+    pub(super) fn stop_task_queue_diagnostics(&mut self) -> Result<String, String> {
+        self.session.stop_frame_timing_diagnostics();
+        let snapshot = self.task_queue_diagnostics_json();
+        let _ = self.session.set_task_queue_diagnostics_enabled(false);
+        self.performance_diagnostics_session_active = false;
+        snapshot
+    }
+
+    pub(super) fn frame_timing_diagnostics_json(&self) -> Result<String, String> {
+        serde_json::to_string(&self.session.frame_timing_diagnostics_json())
+            .map_err(|error| format!("cannot serialize Photon frame diagnostics: {error}"))
     }
 
     /// Runs a page command, closing the page's dialog first when the command
@@ -567,7 +607,7 @@ impl Render for PhotonWebView {
                 this.input.key_up(&mut this.session, event);
             }));
         webview = webview
-            .rounded(px(PAGE_RADIUS))
+            .rounded(px(metrics::page_radius()))
             .overflow_hidden()
             .bg(gpui::rgb(palette.page_background));
         {

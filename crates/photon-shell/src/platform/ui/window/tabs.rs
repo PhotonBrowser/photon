@@ -1,8 +1,7 @@
 //! Opening, closing and switching tabs, and the tab strip they show in.
 
 use gpui::{
-    AnyDrag, App, AppContext, Context, DispatchPhase, HapticFeedbackStyle, Hitbox, KeyDownEvent,
-    MouseMoveEvent, Window,
+    AnyDrag, App, AppContext, Context, DispatchPhase, Hitbox, KeyDownEvent, MouseMoveEvent, Window,
 };
 use photon_core::Shortcut;
 use photon_core::WindowSession;
@@ -25,7 +24,6 @@ use super::content::{
 use super::registry::BrowserWindowRegistry;
 use crate::platform::app_update::update_app;
 use crate::platform::engine::RequestedWebView;
-use crate::platform::window_config;
 
 /// A closed tab's page and position, for reopening.
 pub(super) struct ClosedTab {
@@ -137,7 +135,6 @@ impl BrowserWindow {
 
         let axis = layout.axis;
         let previous_position = layout.pointer_position;
-        let was_over_favourites = layout.phase == super::TabDragPhase::DraggingOverFavourites;
         if let Some(layout) = self.tab_drag_layout.as_mut() {
             layout.pointer_position = position;
         }
@@ -215,30 +212,7 @@ impl BrowserWindow {
             return;
         }
 
-        let moving_toward_favourites = !was_over_favourites
-            && self.favourites_drop_bounds(cx).is_some_and(|bounds| {
-                bounds_distance(bounds, position) < bounds_distance(bounds, previous_position)
-            });
-        if moving_toward_favourites {
-            self.set_tab_drag_phase(super::TabDragPhase::OutsideTarget, cx);
-            return;
-        }
-
-        let outside = bounds_distance(hitbox.bounds, position);
-        if outside < super::super::metrics::TAB_DETACH_DISTANCE {
-            self.set_tab_drag_phase(super::TabDragPhase::OutsideTarget, cx);
-            return;
-        }
-        if !can_detach_tab_count(
-            self.tabs.len(),
-            Settings::get(cx).close_window_with_last_tab,
-        ) {
-            self.set_tab_drag_phase(super::TabDragPhase::OutsideTarget, cx);
-            return;
-        }
-
-        self.set_tab_drag_phase(super::TabDragPhase::Detaching, cx);
-        self.detach_tab(dragged, position, window, cx);
+        self.set_tab_drag_phase(super::TabDragPhase::OutsideTarget, cx);
     }
 
     fn reorder_tab_at_pointer(
@@ -1252,7 +1226,7 @@ impl BrowserWindow {
                         .or_else(|| browser.tab_index_by_id(dragged.id));
                     if let Some(index) = index {
                         browser.tab_drag_layout = None;
-                        browser.remove_tab_for_transfer(index, true, source_window, cx);
+                        browser.remove_tab_for_transfer(index, source_window, cx);
                     }
                 })
                 .ok();
@@ -1359,127 +1333,9 @@ impl BrowserWindow {
         )
     }
 
-    fn detach_tab(
-        &mut self,
-        dragged: DraggedTab,
-        position: gpui::Point<gpui::Pixels>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(index) = self.tab_index_by_id(dragged.id) else {
-            self.cancel_tab_drag(dragged.id, window, cx);
-            return;
-        };
-        if !can_detach_tab_count(
-            self.tabs.len(),
-            Settings::get(cx).close_window_with_last_tab,
-        ) {
-            self.set_tab_drag_outside_target(dragged.id, cx);
-            return;
-        }
-        let tab = self.tabs[index].clone();
-        let cursor_position = window.inner_window_bounds().get_bounds().origin + position;
-        let move_anchor = gpui::point(
-            gpui::px(window_config::INITIAL_WIDTH / 2.0),
-            gpui::px(window_config::INITIAL_HEIGHT / 2.0),
-        );
-        let new_window_origin = detached_window_origin(
-            cursor_position,
-            window_config::INITIAL_WIDTH,
-            window_config::INITIAL_HEIGHT,
-        );
-        let source_display_id = window.display(cx).map(|display| display.id());
-        let Ok(new_window) = super::open_browser_window_at(
-            self.runtime.clone(),
-            None,
-            false,
-            Some(new_window_origin),
-            source_display_id,
-            cx,
-        ) else {
-            self.set_tab_drag_outside_target(dragged.id, cx);
-            return;
-        };
-        let transfer = new_window.update(cx, |browser, window, cx| {
-            browser.insert_tab_at_immediately(
-                0,
-                tab.content.clone(),
-                tab.pin.clone(),
-                true,
-                window,
-                cx,
-            );
-            browser.tabs[0].id = tab.id;
-            browser.tabs[0].space = tab.space;
-            browser.tabs[0].favourite = tab.favourite.clone();
-        });
-        if transfer.is_err() {
-            let _ = new_window.update(cx, |_, window, _| window.remove_window());
-            self.set_tab_drag_outside_target(dragged.id, cx);
-            return;
-        }
-
-        cx.play_haptic_feedback(HapticFeedbackStyle::Alignment);
-
-        // Detaching hands this physical gesture to the native window manager.
-        // Do not start a second GPUI drag over the moving window: some platforms
-        // consume the native move's release, leaving that drag active and
-        // preventing the newly detached tab from being dragged back afterward.
-        let _ = cx.stop_active_drag(window);
-        window.release_pointer();
-        self.clear_previous_target(cx);
-        self.clear_favourites_drag_hover(window.window_handle(), dragged.id, cx);
-        self.tab_drag_layout = None;
-        self.suppress_tab_click_until = Some(Instant::now() + Duration::from_millis(250));
-        self.remove_tab_for_detach(index, window, cx);
-        Self::notify_other_tab_drop_targets(cx, window.window_handle());
-        let _ = new_window.update(cx, |browser, window, cx| {
-            if let Some(index) = browser.tab_index_by_id(tab.id) {
-                browser.activate_tab(index, true, window, cx);
-            }
-            // Keep the center of the new window under the cursor while it moves.
-            window.start_window_move_at(move_anchor);
-        });
-    }
-
-    fn set_tab_drag_outside_target(&mut self, id: u64, cx: &mut Context<Self>) {
-        if let Some(drag) = self.tab_drag_layout.as_mut().filter(|drag| drag.id == id) {
-            drag.phase = super::TabDragPhase::OutsideTarget;
-            drag.target_window = None;
-        }
-        cx.notify();
-    }
-
-    fn cancel_tab_drag(&mut self, id: u64, window: &mut Window, cx: &mut Context<Self>) {
-        if self
-            .tab_drag_layout
-            .as_ref()
-            .is_some_and(|drag| drag.id == id)
-        {
-            self.clear_previous_target(cx);
-            self.clear_favourites_drag_hover(window.window_handle(), id, cx);
-            let _ = cx.stop_active_drag(window);
-            window.release_pointer();
-            self.tab_drag_layout = None;
-            self.tab_position_animations.remove(&id);
-            cx.notify();
-        }
-    }
-
-    fn remove_tab_for_detach(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
-        if !can_detach_tab_count(
-            self.tabs.len(),
-            Settings::get(cx).close_window_with_last_tab,
-        ) {
-            return;
-        }
-        self.remove_tab_for_transfer(index, false, window, cx);
-    }
-
     fn remove_tab_for_transfer(
         &mut self,
         index: usize,
-        close_empty_window: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -1520,16 +1376,9 @@ impl BrowserWindow {
             self.omnibox.update(cx, |omnibox, cx| {
                 omnibox.set_content(None, None, window, cx)
             });
-            if should_close_empty_source_window(
-                close_empty_window,
-                Settings::get(cx).close_window_with_last_tab,
-            ) {
-                self.record_session_state(WindowSession::default(), cx);
-                window.remove_window();
-                return;
-            } else {
-                self.show_empty_new_tab_page(window, cx);
-            }
+            self.record_session_state(WindowSession::default(), cx);
+            window.remove_window();
+            return;
         } else if was_active && let Some(next) = self.active_tab {
             self.activate_tab(next, true, window, cx);
         }
@@ -1547,7 +1396,7 @@ impl BrowserWindow {
         if index >= self.tabs.len() || self.closing_tabs.contains(&self.tabs[index].id) {
             return;
         }
-        if !self.wake_tab(index) {
+        if !self.wake_tab(index, window, cx) {
             return;
         }
         if self.active_tab != Some(index) {
@@ -2306,8 +2155,7 @@ impl BrowserWindow {
     fn remember_closed(&mut self, index: usize, content: &TabContent, cx: &Context<Self>) {
         let url = match content {
             TabContent::Sleeping(sleeping) => {
-                let view = sleeping.webview.read(cx);
-                view.has_page().then(|| view.state.url.clone())
+                (!sleeping.state.url.is_empty()).then(|| sleeping.state.url.clone())
             }
             TabContent::Web(webview) => {
                 let view = webview.read(cx);
@@ -2506,14 +2354,6 @@ fn content_local_position(
     global_position - content_origin
 }
 
-fn detached_window_origin(
-    cursor_position: gpui::Point<gpui::Pixels>,
-    window_width: f32,
-    window_height: f32,
-) -> gpui::Point<gpui::Pixels> {
-    cursor_position - gpui::point(gpui::px(window_width / 2.0), gpui::px(window_height / 2.0))
-}
-
 fn external_drop_target_kind(
     position: gpui::Point<gpui::Pixels>,
     favourites: Option<gpui::Bounds<gpui::Pixels>>,
@@ -2583,17 +2423,6 @@ fn insert_id_at(order: &mut Vec<u64>, id: u64, index: usize) {
     order.insert(index.min(order.len()), id);
 }
 
-fn can_detach_tab_count(tab_count: usize, close_window_with_last_tab: bool) -> bool {
-    tab_count > 1 || (tab_count == 1 && !close_window_with_last_tab)
-}
-
-fn should_close_empty_source_window(
-    close_source_after_transfer: bool,
-    close_window_with_last_tab: bool,
-) -> bool {
-    close_source_after_transfer || close_window_with_last_tab
-}
-
 fn plan_tab_transfer(
     source_ids: &[u64],
     target_ids: &[u64],
@@ -2621,10 +2450,9 @@ mod tab_drag_tests {
     use super::super::{TabPositionAnimation, tab_position_animation_offset};
     use super::TabDragAxis;
     use super::{
-        ExternalDropTargetKind, animation_retarget_offset, can_detach_tab_count,
-        detached_window_origin, external_drop_target_kind, insert_id_at,
+        ExternalDropTargetKind, animation_retarget_offset, external_drop_target_kind, insert_id_at,
         is_over_or_moving_toward_bounds, midpoint_insertion_index, plan_tab_transfer,
-        should_close_empty_source_window, stable_slot_midpoint,
+        stable_slot_midpoint,
     };
 
     #[test]
@@ -2694,25 +2522,7 @@ mod tab_drag_tests {
     }
 
     #[test]
-    fn detaching_the_last_tab_follows_the_window_close_setting() {
-        assert!(!can_detach_tab_count(0, false));
-        assert!(!can_detach_tab_count(0, true));
-        assert!(can_detach_tab_count(1, false));
-        assert!(!can_detach_tab_count(1, true));
-        assert!(can_detach_tab_count(2, false));
-        assert!(can_detach_tab_count(2, true));
-    }
-
-    #[test]
-    fn transferring_the_last_tab_to_another_window_closes_the_empty_source() {
-        assert!(should_close_empty_source_window(true, false));
-        assert!(should_close_empty_source_window(true, true));
-        assert!(should_close_empty_source_window(false, true));
-        assert!(!should_close_empty_source_window(false, false));
-    }
-
-    #[test]
-    fn another_window_in_the_drag_path_delays_detachment() {
+    fn another_window_in_the_drag_path_remains_a_drop_target() {
         let bounds = gpui::Bounds::new(
             gpui::point(gpui::px(100.0), gpui::px(100.0)),
             gpui::size(gpui::px(200.0), gpui::px(200.0)),
@@ -2742,19 +2552,6 @@ mod tab_drag_tests {
         assert_eq!(
             super::content_local_position(global, content_origin),
             gpui::point(gpui::px(40.0), gpui::px(90.0))
-        );
-    }
-
-    #[test]
-    fn detached_window_centers_on_the_drag_pointer() {
-        let cursor = gpui::point(gpui::px(540.0), gpui::px(390.0));
-        let width = 640.0;
-        let height = 480.0;
-        let origin = detached_window_origin(cursor, width, height);
-
-        assert_eq!(
-            origin + gpui::point(gpui::px(width / 2.0), gpui::px(height / 2.0)),
-            cursor,
         );
     }
 

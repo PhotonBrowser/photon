@@ -169,6 +169,12 @@ void* photon_view_create_for_traversable(void* runtime, void* parent_view,
     PhotonViewCallbacks const* callbacks);
 void photon_view_resize(void* view, int width, int height, double dpr);
 void photon_view_set_performance_monitor_enabled(void* view, bool enabled);
+void photon_view_set_residency_monitor_enabled(void* view, bool enabled);
+bool photon_view_set_task_queue_diagnostics_enabled(void* view, bool enabled);
+size_t photon_view_copy_task_queue_diagnostics(void* view, char* output,
+    size_t capacity);
+void photon_view_release_hidden_memory(void* view);
+bool photon_view_needs_beforeunload_check(void* view);
 void photon_view_set_visible(void* view, bool visible);
 void photon_view_set_display_metadata(void* view, uint64_t display_id,
     double refresh_rate);
@@ -218,6 +224,7 @@ void photon_view_zoom(void* view, int step);
 void photon_view_restart_unresponsive_page(void* view);
 void photon_runtime_set_system_reduced_motion_preference(void* runtime,
     bool reduce_motion);
+void photon_runtime_set_memory_pressure(void* runtime, bool pressured);
 void photon_runtime_set_elastic_scroll_enabled(void* runtime, bool enabled);
 void photon_runtime_set_service_callback(void* runtime, void* callback_data,
     PhotonServiceCallback callback);

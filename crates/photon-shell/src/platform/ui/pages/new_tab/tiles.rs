@@ -152,7 +152,7 @@ fn tile(
         .w(px(metrics::SHORTCUT_TILE_WIDTH))
         .py(px(metrics::INTERNAL_PAGE_GROUP_GAP))
         .px(px(metrics::SHORTCUT_GAP))
-        .rounded(px(metrics::SURFACE_RADIUS))
+        .rounded(px(metrics::surface_radius()))
         .hover(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
         .child(

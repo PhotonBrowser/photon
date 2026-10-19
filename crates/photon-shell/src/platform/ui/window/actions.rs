@@ -1,7 +1,7 @@
 //! Keyboard shortcuts and Escape handling for the browser window.
 
 use gpui::{Context, Div, KeyDownEvent, Window, prelude::*};
-use photon_core::BrowserCommand;
+use photon_core::{BrowserCommand, Command};
 use photon_shortcuts::{
     CloseTab, FindInPage, FindNext, FindPrevious, FocusOmnibox, GoBack, GoForward, MinimizeWindow,
     NewTab, NextSpace, OpenCommandBar, OpenSettings, PreviousSpace, Reload, ReopenClosedTab,
@@ -11,8 +11,6 @@ use photon_shortcuts::{
 };
 
 use super::super::super::engine::ZoomStep;
-use super::super::pages::SETTINGS;
-use super::super::settings::Settings;
 use super::BrowserWindow;
 
 impl BrowserWindow {
@@ -24,24 +22,32 @@ impl BrowserWindow {
                 this.omnibox
                     .update(cx, |omnibox, cx| omnibox.focus(window, cx));
             }))
-            .on_action(cx.listener(|this, _: &ToggleSidebar, _, cx| this.toggle_sidebar(cx)))
-            .on_action(cx.listener(|this, _: &ToggleSidebarIcons, _, cx| {
-                this.toggle_sidebar_icons(cx);
+            .on_action(cx.listener(|this, _: &ToggleSidebar, window, cx| {
+                this.execute_command(Command::ToggleSidebar, window, cx);
             }))
-            .on_action(cx.listener(|this, _: &ToggleZenMode, _, cx| this.toggle_zen_mode(cx)))
+            .on_action(cx.listener(|this, _: &ToggleSidebarIcons, window, cx| {
+                this.execute_command(Command::ToggleSidebarIcons, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ToggleZenMode, window, cx| {
+                this.execute_command(Command::ToggleZenMode, window, cx);
+            }))
             .on_action(cx.listener(|this, _: &OpenSettings, window, cx| {
-                this.open_page_tab(SETTINGS, window, cx);
+                this.execute_command(Command::OpenSettings, window, cx);
             }))
             .on_action(cx.listener(|this, _: &ShowKeyboardShortcuts, window, cx| {
-                this.show_keyboard_shortcuts(window, cx);
+                this.execute_command(Command::ShowKeyboardShortcuts, window, cx);
             }))
             .on_action(cx.listener(|this, _: &ToggleDebugInfo, _, cx| {
                 this.toggle_performance_overlay(cx);
             }))
-            .on_action(cx.listener(|this, _: &NextSpace, _, cx| this.switch_space_by(1, cx)))
-            .on_action(cx.listener(|this, _: &PreviousSpace, _, cx| this.switch_space_by(-1, cx)))
+            .on_action(cx.listener(|this, _: &NextSpace, window, cx| {
+                this.execute_command(Command::NextSpace, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &PreviousSpace, window, cx| {
+                this.execute_command(Command::PreviousSpace, window, cx);
+            }))
             .on_action(cx.listener(|this, _: &FindInPage, window, cx| {
-                this.open_find_bar(window, cx);
+                this.execute_command(Command::FindInPage, window, cx);
             }))
             .on_action(cx.listener(|this, _: &FindNext, window, cx| {
                 this.find_step(true, window, cx);
@@ -56,12 +62,12 @@ impl BrowserWindow {
                 this.open_command_bar(window, cx);
             }))
             .on_action(cx.listener(|this, _: &NewTab, window, cx| {
-                this.dispatch_command(BrowserCommand::NewTab, window, cx);
+                this.execute_command(Command::NewTab, window, cx);
             }))
             .on_action(|_: &MinimizeWindow, window, _| window.minimize_window())
             .on_action(|_: &ZoomWindow, window, _| window.zoom_window())
             .on_action(cx.listener(|this, _: &Reload, window, cx| {
-                this.dispatch_command(BrowserCommand::Reload, window, cx);
+                this.execute_command(Command::ReloadPage, window, cx);
             }))
             .on_action(cx.listener(|this, _: &StopLoading, window, cx| {
                 this.dispatch_command(BrowserCommand::StopLoading, window, cx);
@@ -73,14 +79,10 @@ impl BrowserWindow {
                 this.dispatch_command(BrowserCommand::Forward, window, cx);
             }))
             .on_action(cx.listener(|this, _: &CloseTab, window, cx| {
-                if let Some(active_tab) = this.active_tab {
-                    this.close_tab(active_tab, window, cx);
-                } else if this.tabs.is_empty() && !Settings::get(cx).close_window_with_last_tab {
-                    cx.quit();
-                }
+                this.execute_command(Command::CloseTab, window, cx);
             }))
             .on_action(cx.listener(|this, _: &ReopenClosedTab, window, cx| {
-                this.reopen_closed_tab(window, cx);
+                this.execute_command(Command::ReopenClosedTab, window, cx);
             }))
             .on_action(cx.listener(|this, _: &SelectNextTab, window, cx| {
                 this.select_relative_tab(1, window, cx);

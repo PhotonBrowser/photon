@@ -72,7 +72,7 @@ impl BrowserWindow {
                         (page.definition.title.to_owned(), icon)
                     }
                     TabContent::Sleeping(sleeping) => {
-                        let state = &sleeping.webview.read(cx).state;
+                        let state = &sleeping.state;
                         (
                             if state.title.trim().is_empty() {
                                 state.url.clone()
@@ -152,9 +152,11 @@ impl BrowserWindow {
                     self.tab_entry_appearing(stable_id, &animations)
                 };
                 let opacity = if dragging {
-                    super::super::metrics::TAB_DRAG_SOURCE_OPACITY
+                    crate::platform::theme_config::theme()
+                        .opacity
+                        .tab_drag_source
                 } else if matches!(&tab.content, TabContent::Sleeping(_)) {
-                    super::super::metrics::SLEEPING_TAB_OPACITY
+                    crate::platform::theme_config::theme().opacity.sleeping_tab
                 } else {
                     1.0
                 };

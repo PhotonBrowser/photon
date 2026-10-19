@@ -336,7 +336,7 @@ impl Render for SpaceEditor {
                 ),
                 palette,
             ))
-            .child(form_field("Window colour", colors, palette))
+            .child(form_field("Accent color", colors, palette))
             .child(form_field("Layout preset", preset_picker, palette))
             .children(preset_creation)
             .child(

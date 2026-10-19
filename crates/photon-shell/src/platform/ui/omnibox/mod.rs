@@ -48,7 +48,7 @@ impl FieldStyle {
         match layout {
             OmniboxPlacement::Toolbar => Self {
                 height: metrics::OMNIBOX_HEIGHT,
-                radius: metrics::OMNIBOX_RADIUS,
+                radius: metrics::omnibox_radius(),
                 font_size: metrics::OMNIBOX_FONT_SIZE,
                 idle_icon: true,
                 center_text: false,
@@ -56,7 +56,7 @@ impl FieldStyle {
             },
             OmniboxPlacement::Sidebar => Self {
                 height: metrics::SIDEBAR_OMNIBOX_HEIGHT,
-                radius: metrics::SIDEBAR_OMNIBOX_RADIUS,
+                radius: metrics::sidebar_omnibox_radius(),
                 font_size: metrics::SIDEBAR_OMNIBOX_FONT_SIZE,
                 idle_icon: false,
                 center_text: true,
@@ -99,6 +99,7 @@ pub(super) struct Omnibox {
     deleting: bool,
     _input_subscriptions: [Subscription; 3],
     _history_subscription: Subscription,
+    _keystroke_subscription: Subscription,
     _page_subscriptions: Vec<Subscription>,
 }
 
@@ -128,6 +129,30 @@ impl Omnibox {
         ];
         let history_subscription =
             cx.observe_global::<BrowsingHistory>(|this, cx| this.text_changed(cx));
+        let this = cx.entity().downgrade();
+        let keystroke_subscription = cx.intercept_keystrokes(move |event, window, cx| {
+            this.update(cx, |this, cx| {
+                if !this.is_editing(window, cx) || event.keystroke.modifiers.modified() {
+                    return;
+                }
+
+                let handled = match event.keystroke.key.as_str() {
+                    "up" if !this.suggestions.is_empty() => {
+                        this.select(this.selected.saturating_sub(1), cx);
+                        true
+                    }
+                    "down" if !this.suggestions.is_empty() => {
+                        this.select((this.selected + 1).min(this.suggestions.len() - 1), cx);
+                        true
+                    }
+                    _ => false,
+                };
+                if handled {
+                    cx.stop_propagation();
+                }
+            })
+            .ok();
+        });
         let mut omnibox = Self {
             input,
             webview: None,
@@ -144,6 +169,7 @@ impl Omnibox {
             deleting: false,
             _input_subscriptions: input_subscriptions,
             _history_subscription: history_subscription,
+            _keystroke_subscription: keystroke_subscription,
             _page_subscriptions: Vec::new(),
         };
         omnibox.set_content(None, None, window, cx);

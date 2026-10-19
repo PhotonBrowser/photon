@@ -13,8 +13,14 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use velocity_core::{
-    RESOURCE_BENCHMARK_SCHEMA_VERSION, ReportBrowser, ResourceBenchmarkReport, ResourceWorkload,
-    StartupBenchmarkReport, StartupMetric,
+    ANIMATION_FIXTURE_REVISION, ANIMATION_PHASE_COUNT, ANIMATION_PHASE_DURATION_MS,
+    ANIMATION_PRE_ROLL_MS, DOM_STYLE_FIXTURE_REVISION, DOM_STYLE_MUTATION_COUNT,
+    GC_PRESSURE_FIXTURE_REVISION, GC_PRESSURE_RECORD_COUNT, LAYOUT_UPDATE_COUNT,
+    LAYOUT_UPDATES_FIXTURE_REVISION, MIN_SUPPORTED_RESPONSIVENESS_SCHEMA_VERSION,
+    RESOURCE_BENCHMARK_SCHEMA_VERSION, RESPONSIVENESS_SCHEMA_VERSION, ReportBrowser,
+    ResourceBenchmarkReport, ResourceWorkload, ResponsivenessBenchmarkReport,
+    STYLE_INVALIDATION_FIXTURE_REVISION, STYLE_INVALIDATION_MUTATION_COUNT, StartupBenchmarkReport,
+    StartupMetric, TASK_BACKLOG_FIXTURE_REVISION,
 };
 
 const HISTORY_SCHEMA_VERSION: u32 = 1;
@@ -481,8 +487,519 @@ pub(crate) fn parse_import_entries(bytes: &[u8]) -> Result<Vec<ImportEntry>, Str
         "speedometer" => crate::speedometer_cli::parse_history_report(bytes),
         "jetstream" => crate::jetstream_cli::parse_history_report(bytes),
         "idle" | "page" | "tabs" => parse_resource_report(bytes, benchmark),
+        "responsiveness" => parse_responsiveness_report(bytes),
         other => Err(format!("unsupported benchmark report '{other}'")),
     }
+}
+
+fn parse_responsiveness_report(bytes: &[u8]) -> Result<Vec<ImportEntry>, String> {
+    let report: ResponsivenessBenchmarkReport = serde_json::from_slice(bytes)
+        .map_err(|error| format!("invalid responsiveness report: {error}"))?;
+    if report.benchmark != "responsiveness" || report.benchmark_type != "browser_responsiveness" {
+        return Err("responsiveness report has an unsupported benchmark identity".to_owned());
+    }
+    if !(MIN_SUPPORTED_RESPONSIVENESS_SCHEMA_VERSION..=RESPONSIVENESS_SCHEMA_VERSION)
+        .contains(&report.schema_version)
+    {
+        return Err(format!(
+            "unsupported responsiveness report schema {}; supported schemas are {} through {}",
+            report.schema_version,
+            MIN_SUPPORTED_RESPONSIVENESS_SCHEMA_VERSION,
+            RESPONSIVENESS_SCHEMA_VERSION
+        ));
+    }
+    let fixture_parameters_are_valid = match report.workload.as_str() {
+        "task-backlog" => {
+            report.fixture_revision == TASK_BACKLOG_FIXTURE_REVISION
+                && report
+                    .configuration
+                    .get("task_count")
+                    .and_then(Value::as_u64)
+                    == Some(512)
+                && report
+                    .configuration
+                    .get("task_source")
+                    .and_then(Value::as_str)
+                    == Some("timer")
+        }
+        "gc-pressure" => {
+            report.fixture_revision == GC_PRESSURE_FIXTURE_REVISION
+                && report
+                    .configuration
+                    .get("allocation_record_count")
+                    .and_then(Value::as_u64)
+                    == Some(GC_PRESSURE_RECORD_COUNT)
+                && report
+                    .configuration
+                    .get("allocation_cycles")
+                    .and_then(Value::as_u64)
+                    == Some(32)
+                && report
+                    .configuration
+                    .get("records_per_cycle")
+                    .and_then(Value::as_u64)
+                    == Some(25_000)
+                && report
+                    .configuration
+                    .get("retained_graph_sample_period")
+                    .and_then(Value::as_u64)
+                    == Some(128)
+                && report
+                    .configuration
+                    .get("temporary_dom_nodes_per_cycle")
+                    .and_then(Value::as_u64)
+                    == Some(16)
+        }
+        "dom-style" => {
+            report.fixture_revision == DOM_STYLE_FIXTURE_REVISION
+                && report
+                    .configuration
+                    .get("dom_style_mutation_count")
+                    .and_then(Value::as_u64)
+                    == Some(DOM_STYLE_MUTATION_COUNT)
+                && report
+                    .configuration
+                    .get("dom_style_branch_count")
+                    .and_then(Value::as_u64)
+                    == Some(16)
+                && report
+                    .configuration
+                    .get("dom_style_items_per_branch")
+                    .and_then(Value::as_u64)
+                    == Some(32)
+                && report
+                    .configuration
+                    .get("dom_style_selector_kinds")
+                    .and_then(Value::as_array)
+                    .is_some_and(|selectors| {
+                        selectors.iter().filter_map(Value::as_str).eq([
+                            "descendant",
+                            "sibling",
+                            "state",
+                            "relational",
+                        ])
+                    })
+        }
+        "style-localized" | "style-descendant" | "style-sibling" | "style-relational" => {
+            let expected_selector = match report.workload.as_str() {
+                "style-localized" => "isolated class selector",
+                "style-descendant" => "ancestor class descendant selector",
+                "style-sibling" => "adjacent and general sibling selectors",
+                "style-relational" => ":has() descendant dependency",
+                _ => unreachable!("matched a supported style invalidation workload"),
+            };
+            report.fixture_revision == STYLE_INVALIDATION_FIXTURE_REVISION
+                && report
+                    .configuration
+                    .get("style_invalidation_mutation_count")
+                    .and_then(Value::as_u64)
+                    == Some(STYLE_INVALIDATION_MUTATION_COUNT)
+                && report
+                    .configuration
+                    .get("style_invalidation_tree_shape")
+                    .and_then(Value::as_str)
+                    == Some("16 branches x 32 items with one leaf per item")
+                && report
+                    .configuration
+                    .get("style_invalidation_selector")
+                    .and_then(Value::as_str)
+                    == Some(expected_selector)
+        }
+        "layout-updates" => {
+            report.fixture_revision == LAYOUT_UPDATES_FIXTURE_REVISION
+                && report
+                    .configuration
+                    .get("layout_update_count")
+                    .and_then(Value::as_u64)
+                    == Some(LAYOUT_UPDATE_COUNT)
+                && report
+                    .configuration
+                    .get("layout_normal_flow_count")
+                    .and_then(Value::as_u64)
+                    == Some(256)
+                && report
+                    .configuration
+                    .get("layout_absolute_count")
+                    .and_then(Value::as_u64)
+                    == Some(128)
+        }
+        "animation" => {
+            let supported_fixture_revision = if report.schema_version == 1 {
+                report.fixture_revision == "1"
+            } else {
+                report.fixture_revision == ANIMATION_FIXTURE_REVISION
+            };
+            let preroll_matches = report.schema_version == 1
+                || report
+                    .configuration
+                    .get("animation_pre_roll_ms")
+                    .and_then(Value::as_u64)
+                    == Some(ANIMATION_PRE_ROLL_MS);
+            supported_fixture_revision
+                && report
+                    .configuration
+                    .get("animation_phase_count")
+                    .and_then(Value::as_u64)
+                    == Some(ANIMATION_PHASE_COUNT)
+                && report
+                    .configuration
+                    .get("animation_phase_duration_ms")
+                    .and_then(Value::as_u64)
+                    == Some(ANIMATION_PHASE_DURATION_MS)
+                && preroll_matches
+        }
+        _ => false,
+    };
+    let balanced_diagnostics = report
+        .configuration
+        .get("diagnostics_mode")
+        .and_then(Value::as_str)
+        == Some("balanced_interleaved");
+    if !fixture_parameters_are_valid
+        || report
+            .configuration
+            .get("diagnostic_schema_version")
+            .and_then(Value::as_u64)
+            != Some(1)
+        || report
+            .configuration
+            .get("sample_capacity_per_webcontent_process")
+            .and_then(Value::as_u64)
+            != Some(1024)
+        || (!balanced_diagnostics
+            && report
+                .configuration
+                .get("diagnostics_enabled")
+                .and_then(Value::as_bool)
+                .is_none())
+        || (balanced_diagnostics
+            && report
+                .configuration
+                .get("diagnostic_overhead_assessment")
+                .and_then(|value| value.get("metrics"))
+                .and_then(Value::as_object)
+                .is_none())
+    {
+        return Err("responsiveness report workload provenance is incomplete".to_owned());
+    }
+    let has_process_resource_metrics = report
+        .metrics
+        .keys()
+        .any(|name| name.starts_with("process_tree_"))
+        || report.coverage.process_resource_iterations > 0
+        || report.coverage.process_resource_complete_iterations > 0
+        || report.coverage.process_resource_sample_count > 0;
+    if has_process_resource_metrics
+        && (report
+            .configuration
+            .get("process_resource_sampling_interval_ms")
+            .and_then(Value::as_u64)
+            .is_none_or(|interval| !(10..=60_000).contains(&interval))
+            || report
+                .configuration
+                .get("process_resource_scope")
+                .and_then(Value::as_str)
+                != Some("verified_managed_process_session_tree"))
+    {
+        return Err("responsiveness process-resource provenance is incomplete".to_owned());
+    }
+    validate_browser(&report.browser)?;
+    validate_environment(
+        &report.machine_information.operating_system,
+        &report.machine_information.architecture,
+    )?;
+    if report.timestamp_unix_ms == 0 {
+        return Err("responsiveness report timestamp is missing or invalid".to_owned());
+    }
+    if report.coverage.requested_iterations != report.iterations
+        || report.coverage.successful_iterations > report.iterations
+        || report.coverage.failed_iterations > report.iterations
+        || report
+            .coverage
+            .successful_iterations
+            .checked_add(report.coverage.failed_iterations)
+            .is_none_or(|count| count > report.iterations)
+        || report.coverage.complete_single_process_samples > report.coverage.successful_iterations
+        || report
+            .coverage
+            .style_layout_available_snapshots
+            .checked_add(report.coverage.style_layout_incomplete_snapshots)
+            .is_none_or(|count| count > report.coverage.complete_single_process_samples)
+        || report.coverage.gc_timing_available_snapshots
+            > report.coverage.complete_single_process_samples
+        || report.coverage.gc_live_heap_available_snapshots
+            > report.coverage.complete_single_process_samples
+        || report.coverage.frame_timing_available_iterations > report.coverage.successful_iterations
+        || report.coverage.actual_presentation_iterations
+            > report.coverage.frame_timing_available_iterations
+        || report.coverage.frame_interval_samples
+            > report.coverage.frame_presentation_feedback_samples
+        || report.coverage.process_resource_iterations > report.coverage.successful_iterations
+        || report.coverage.process_resource_complete_iterations
+            > report.coverage.process_resource_iterations
+        || report.coverage.process_resource_complete_iterations
+            > report.coverage.process_resource_sample_count
+        || (report.coverage.process_resource_sample_count == 0
+            && report.coverage.process_resource_incomplete_sample_count != 0)
+        || report.coverage.process_resource_incomplete_sample_count
+            > report.coverage.process_resource_sample_count
+        || report.coverage.warmup_iterations != report.warmup_count
+    {
+        return Err("responsiveness report iteration coverage is inconsistent".to_owned());
+    }
+
+    let metrics = report
+        .metrics
+        .iter()
+        .map(|(name, statistics)| {
+            let unit = responsiveness_metric_unit(name)
+                .ok_or_else(|| format!("responsiveness metric '{name}' is unsupported"))?;
+            validate_responsiveness_metric(name, statistics)?;
+            let is_fixture_metric = name.starts_with("task_backlog_")
+                || name.starts_with("gc_pressure_")
+                || name.starts_with("dom_style_")
+                || name.starts_with("style_localized_")
+                || name.starts_with("style_descendant_")
+                || name.starts_with("style_sibling_")
+                || name.starts_with("style_relational_")
+                || name.starts_with("layout_update")
+                || name.starts_with("layout_updates_")
+                || name == "animation_active_window_ms"
+                || name == "animation_raf_callback_count"
+                || name.starts_with("raf_interval_");
+            let coverage_limit = if name.starts_with("process_tree_") {
+                report.coverage.process_resource_complete_iterations
+            } else if is_frame_timing_metric(name) {
+                report.coverage.frame_timing_available_iterations
+            } else if is_fixture_metric {
+                report.coverage.successful_iterations
+            } else {
+                report.coverage.complete_single_process_samples
+            };
+            if statistics.sample_count > coverage_limit {
+                return Err(format!(
+                    "responsiveness metric '{name}' has more samples than its available scope coverage"
+                ));
+            }
+            Ok(HistoryMetric {
+                name: name.clone(),
+                unit: unit.to_owned(),
+                median: statistics.median,
+                mean: Some(statistics.mean),
+                standard_deviation: statistics.sample_standard_deviation,
+                sample_count: statistics.sample_count,
+                higher_is_better: Some(
+                    name.contains("throughput") || name.ends_with("_per_second"),
+                ),
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    if metrics.is_empty() {
+        return Err("responsiveness report contains no comparable metrics".to_owned());
+    }
+    let diagnostics_enabled = balanced_diagnostics
+        || report
+            .configuration
+            .get("diagnostics_enabled")
+            .and_then(Value::as_bool)
+            .unwrap_or(true);
+    let mut warnings = report.warnings.clone();
+    if diagnostics_enabled
+        && report.coverage.complete_single_process_samples < report.coverage.successful_iterations
+    {
+        warnings.push(
+            "Engine diagnostics metrics use only iterations with exactly one available WebContent process; fixture metrics use all successful iterations.".to_owned(),
+        );
+    }
+    if report.coverage.process_resource_complete_iterations < report.coverage.successful_iterations
+    {
+        warnings.push(
+            "Process-tree resource metrics are available only for iterations with complete verified session-tree attribution; these metrics are not per-tab memory.".to_owned(),
+        );
+    }
+    let comparable = !balanced_diagnostics
+        && report.coverage.successful_iterations >= 5
+        && metrics.iter().any(|metric| metric.sample_count >= 5)
+        && if diagnostics_enabled {
+            report.coverage.complete_single_process_samples == report.coverage.successful_iterations
+        } else {
+            true
+        };
+    Ok(vec![ImportEntry {
+        benchmark: "responsiveness".to_owned(),
+        benchmark_version: Some("performance-diagnostics-v1".to_owned()),
+        benchmark_schema_version: report.schema_version,
+        browser: report.browser.clone(),
+        timestamp_unix_ms: report.timestamp_unix_ms,
+        operating_system: report.machine_information.operating_system.clone(),
+        architecture: report.machine_information.architecture.clone(),
+        hardware: None,
+        benchmark_source: Some(serde_json::json!({
+            "workload": report.workload,
+            "fixture_revision": report.fixture_revision,
+        })),
+        configuration: report.configuration.clone(),
+        scenario: Some(report.workload),
+        summary: metrics,
+        comparability: ComparabilityMetadata {
+            status: if comparable {
+                "comparable"
+            } else {
+                "inconclusive"
+            }
+            .to_owned(),
+            warnings,
+        },
+    }])
+}
+
+fn validate_responsiveness_metric(
+    name: &str,
+    statistics: &velocity_metrics::MetricStatistics,
+) -> Result<(), String> {
+    validate_stat("responsiveness metric", statistics.median, statistics.mean)?;
+    if statistics.sample_count == 0
+        || !statistics.minimum.is_finite()
+        || !statistics.maximum.is_finite()
+        || statistics.minimum < 0.0
+        || statistics.minimum > statistics.median
+        || statistics.median > statistics.maximum
+        || statistics
+            .sample_standard_deviation
+            .is_some_and(|value| !value.is_finite() || value < 0.0)
+        || statistics
+            .coefficient_of_variation_percent
+            .is_some_and(|value| !value.is_finite() || value < 0.0)
+    {
+        return Err(format!(
+            "responsiveness metric '{name}' has invalid summary statistics"
+        ));
+    }
+    Ok(())
+}
+
+fn responsiveness_metric_unit(name: &str) -> Option<&'static str> {
+    match name {
+        "task_backlog_duration_ms"
+        | "dom_style_duration_ms"
+        | "layout_update_duration_ms"
+        | "gc_pressure_duration_ms"
+        | "style_localized_duration_ms"
+        | "style_descendant_duration_ms"
+        | "style_sibling_duration_ms"
+        | "style_relational_duration_ms"
+        | "task_queue_wait_p50_ms"
+        | "task_queue_wait_p95_ms"
+        | "task_queue_wait_p99_ms"
+        | "task_queue_wait_max_ms"
+        | "timer_task_queue_wait_p95_ms"
+        | "task_execution_duration_p95_ms"
+        | "style_update_duration_ms"
+        | "style_update_submission_duration_ms"
+        | "style_update_bridge_duration_ms"
+        | "style_update_apply_duration_ms"
+        | "style_update_remainder_duration_ms"
+        | "style_engine_transaction_setup_duration_ms"
+        | "style_broad_matching_apply_duration_ms"
+        | "style_narrow_matching_apply_duration_ms"
+        | "layout_full_duration_ms"
+        | "layout_partial_duration_ms"
+        | "gc_mark_duration_p50_ms"
+        | "gc_mark_duration_p95_ms"
+        | "gc_mark_duration_p99_ms"
+        | "gc_mark_duration_max_ms"
+        | "gc_synchronous_sweep_duration_p50_ms"
+        | "gc_synchronous_sweep_duration_p95_ms"
+        | "gc_synchronous_sweep_duration_p99_ms"
+        | "gc_synchronous_sweep_duration_max_ms"
+        | "gc_pause_duration_p50_ms"
+        | "gc_pause_duration_p95_ms"
+        | "gc_pause_duration_p99_ms"
+        | "gc_pause_duration_max_ms"
+        | "frame_interval_p50_ms"
+        | "frame_interval_p95_ms"
+        | "frame_interval_p99_ms"
+        | "frame_interval_max_ms"
+        | "surface_handoff_to_install_p50_ms"
+        | "surface_handoff_to_install_p95_ms"
+        | "surface_install_to_gpu_submission_p50_ms"
+        | "surface_install_to_gpu_submission_p95_ms"
+        | "gpu_submission_to_completion_callback_p50_ms"
+        | "gpu_submission_to_completion_callback_p95_ms"
+        | "gpu_sampling_submission_to_completion_callback_p50_ms"
+        | "gpu_sampling_submission_to_completion_callback_p95_ms"
+        | "gpu_sampling_submission_to_completion_callback_p99_ms"
+        | "gpu_sampling_submission_to_completion_callback_max_ms"
+        | "animation_active_window_ms"
+        | "raf_interval_p50_ms"
+        | "raf_interval_p95_ms"
+        | "raf_interval_p99_ms"
+        | "raf_interval_max_ms" => Some("milliseconds"),
+        "task_backlog_throughput_tasks_per_second" => Some("tasks_per_second"),
+        "gc_pressure_records_per_second" => Some("records_per_second"),
+        "dom_style_mutations_per_second" => Some("mutations_per_second"),
+        "style_localized_mutations_per_second"
+        | "style_descendant_mutations_per_second"
+        | "style_sibling_mutations_per_second"
+        | "style_relational_mutations_per_second" => Some("mutations_per_second"),
+        "layout_updates_per_second" => Some("updates_per_second"),
+        "animation_raf_callback_count"
+        | "frame_gpu_completion_callback_count"
+        | "frame_completion_count"
+        | "frame_gpu_submission_count"
+        | "frame_actual_presentation_count"
+        | "frame_actual_drawable_presentation_count"
+        | "frame_reused_count"
+        | "frame_zero_presented_time_event_count"
+        | "frame_unpresented_or_dropped_drawable_count"
+        | "frame_coalesced_before_install_count"
+        | "frame_interval_outlier_count"
+        | "frame_interval_sample_count" => Some("count"),
+        "engine_surface_update_count"
+        | "coalesced_surface_update_count"
+        | "presented_engine_surface_update_count"
+        | "repeated_surface_presentation_count"
+        | "retained_coalesced_surface_update_count"
+        | "surface_updates_with_feedback_but_no_valid_presented_time_count"
+        | "surface_updates_without_drawable_feedback_count"
+        | "surface_updates_without_valid_presentation_evidence_count"
+        | "gpu_sampling_submission_event_count"
+        | "gpu_sampling_completed_event_count"
+        | "gpu_sampling_presented_drawable_match_count" => Some("count"),
+        "event_loop_queue_depth_at_enqueue_mean" => Some("tasks"),
+        "style_reaction_elements" => Some("elements"),
+        "style_reaction_batches" => Some("batches"),
+        "style_engine_transaction_count"
+        | "style_engine_transaction_setup_count"
+        | "style_unscoped_transaction_count" => Some("transactions"),
+        "style_unscoped_transaction_reaction_entries"
+        | "style_broad_reaction_elements"
+        | "style_narrow_reaction_elements" => Some("elements"),
+        "style_broad_matching_batch_count" | "style_narrow_matching_batch_count" => Some("batches"),
+        "full_layout_count" | "partial_layout_count" => Some("layouts"),
+        "gc_collection_count" => Some("collections"),
+        "gc_live_heap_bytes" => Some("bytes"),
+        "process_tree_physical_footprint_peak_bytes"
+        | "process_tree_physical_footprint_mean_bytes"
+        | "process_tree_resident_peak_bytes"
+        | "process_tree_resident_mean_bytes" => Some("bytes"),
+        "process_tree_cpu_mean_percent" => Some("percent"),
+        "frame_presentation_feedback_coverage_percent"
+        | "frame_presentation_event_retention_percent"
+        | "gpu_sampling_event_retention_percent" => Some("percent"),
+        _ => None,
+    }
+}
+
+fn is_frame_timing_metric(name: &str) -> bool {
+    name.starts_with("frame_")
+        || name.starts_with("engine_surface_")
+        || name.starts_with("coalesced_surface_")
+        || name.starts_with("presented_engine_surface_")
+        || name.starts_with("repeated_surface_")
+        || name.starts_with("retained_coalesced_surface_")
+        || name.starts_with("surface_")
+        || name.starts_with("gpu_sampling_")
 }
 
 fn parse_startup_report(bytes: &[u8]) -> Result<Vec<ImportEntry>, String> {
@@ -980,7 +1497,7 @@ fn set_private_directory(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn host_hardware_metadata() -> HardwareMetadata {
+pub(crate) fn host_hardware_metadata() -> HardwareMetadata {
     #[cfg(target_os = "macos")]
     let read_setting = |name: &str| -> Option<String> {
         let output = Command::new("/usr/sbin/sysctl")
@@ -1220,11 +1737,14 @@ mod tests {
                 browser,
                 iteration: 1,
                 warmup: false,
+                diagnostic_pair_id: None,
+                diagnostics_enabled: None,
                 tab_count: None,
                 automation_protocol: Some("Photon Automation Protocol".to_owned()),
                 profile_isolation: "private profile".to_owned(),
                 started_at_unix_ms: 1,
                 resource: Some(resource),
+                responsiveness: None,
                 failure: None,
                 cleanup: CleanupStatus {
                     browser_closed: true,
@@ -1235,6 +1755,428 @@ mod tests {
             false,
         );
         serde_json::to_vec(&report).unwrap()
+    }
+
+    fn responsiveness_report_json(
+        complete_single_process_samples: usize,
+        diagnostics_enabled: bool,
+    ) -> Vec<u8> {
+        let metric_sample_count = if diagnostics_enabled {
+            complete_single_process_samples
+        } else {
+            5
+        };
+        let mut metrics = serde_json::json!({
+            "task_queue_wait_p95_ms": {
+                "sample_count": metric_sample_count,
+                "median": 2.5,
+                "mean": 2.6,
+                "minimum": 2.0,
+                "maximum": 3.0,
+                "sample_standard_deviation": 0.4,
+                "coefficient_of_variation_percent": 15.0
+            },
+            "task_backlog_throughput_tasks_per_second": {
+                "sample_count": 5,
+                "median": 1000.0,
+                "mean": 1000.0,
+                "minimum": 900.0,
+                "maximum": 1100.0,
+                "sample_standard_deviation": 70.0,
+                "coefficient_of_variation_percent": 7.0
+            },
+            "style_update_duration_ms": {
+                "sample_count": metric_sample_count,
+                "median": 3.0,
+                "mean": 3.1,
+                "minimum": 2.0,
+                "maximum": 4.0,
+                "sample_standard_deviation": 0.4,
+                "coefficient_of_variation_percent": 12.9
+            }
+        });
+        if !diagnostics_enabled {
+            let metrics = metrics.as_object_mut().unwrap();
+            metrics.remove("task_queue_wait_p95_ms");
+            metrics.remove("style_update_duration_ms");
+        }
+        serde_json::to_vec(&serde_json::json!({
+            "benchmark": "responsiveness",
+            "benchmark_type": "browser_responsiveness",
+            "schema_version": RESPONSIVENESS_SCHEMA_VERSION,
+            "run_id": "responsiveness-test",
+            "timestamp_unix_ms": 1792080000000_u64,
+            "browser": {
+                "id": "photon",
+                "installation_id": "photon-development",
+                "name": "Photon",
+                "version": "0.1.0",
+                "executable_path": "/Applications/Photon.app/Contents/MacOS/Photon"
+            },
+            "browser_version": "0.1.0",
+            "engine_revision": null,
+            "executable_revision": null,
+            "workload": "task-backlog",
+            "fixture_revision": "1",
+            "configuration": {
+                "task_count": 512,
+                "task_source": "timer",
+                "diagnostic_schema_version": 1,
+                "sample_capacity_per_webcontent_process": 1024,
+                "diagnostics_enabled": diagnostics_enabled
+            },
+            "machine_information": {"operating_system": "macos", "architecture": "aarch64"},
+            "display_refresh_rate_hz": null,
+            "iterations": 5,
+            "warmup_count": 1,
+            "metrics": metrics,
+            "samples": [],
+            "coverage": {
+                "requested_iterations": 5,
+                "successful_iterations": 5,
+                "failed_iterations": 0,
+                "warmup_iterations": 1,
+                "process_scoped_snapshots": if diagnostics_enabled { 5 } else { 0 },
+                "complete_single_process_samples": complete_single_process_samples,
+                "retained_task_samples": if diagnostics_enabled { 2560 } else { 0 }
+            },
+            "warnings": [],
+            "cancelled": false
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn responsiveness_history_import_preserves_metric_semantics_and_coverage() {
+        let entries = parse_import_entries(&responsiveness_report_json(5, true)).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].benchmark, "responsiveness");
+        assert_eq!(entries[0].comparability.status, "comparable");
+        let wait = entries[0]
+            .summary
+            .iter()
+            .find(|metric| metric.name == "task_queue_wait_p95_ms")
+            .unwrap();
+        assert_eq!(wait.unit, "milliseconds");
+        assert_eq!(wait.higher_is_better, Some(false));
+        let style_duration = entries[0]
+            .summary
+            .iter()
+            .find(|metric| metric.name == "style_update_duration_ms")
+            .unwrap();
+        assert_eq!(style_duration.unit, "milliseconds");
+        assert_eq!(style_duration.higher_is_better, Some(false));
+        let throughput = entries[0]
+            .summary
+            .iter()
+            .find(|metric| metric.name == "task_backlog_throughput_tasks_per_second")
+            .unwrap();
+        assert_eq!(throughput.unit, "tasks_per_second");
+        assert_eq!(throughput.higher_is_better, Some(true));
+
+        let partial = parse_import_entries(&responsiveness_report_json(4, true)).unwrap();
+        assert_eq!(partial[0].comparability.status, "inconclusive");
+        let disabled = parse_import_entries(&responsiveness_report_json(0, false)).unwrap();
+        assert_eq!(disabled[0].comparability.status, "comparable");
+        let inconsistent = parse_import_entries(&responsiveness_report_json(6, true)).unwrap_err();
+        assert!(inconsistent.contains("iteration coverage is inconsistent"));
+    }
+
+    #[test]
+    fn style_invalidation_responsiveness_history_requires_fixture_provenance() {
+        for workload in [
+            "style-localized",
+            "style-descendant",
+            "style-sibling",
+            "style-relational",
+        ] {
+            let mut report: Value =
+                serde_json::from_slice(&responsiveness_report_json(5, true)).unwrap();
+            report["workload"] = Value::String(workload.to_owned());
+            report["fixture_revision"] =
+                Value::String(STYLE_INVALIDATION_FIXTURE_REVISION.to_owned());
+            report["configuration"]["style_invalidation_mutation_count"] =
+                Value::from(STYLE_INVALIDATION_MUTATION_COUNT);
+            report["configuration"]["style_invalidation_tree_shape"] =
+                Value::String("16 branches x 32 items with one leaf per item".to_owned());
+            report["configuration"]["style_invalidation_selector"] = Value::String(
+                match workload {
+                    "style-localized" => "isolated class selector",
+                    "style-descendant" => "ancestor class descendant selector",
+                    "style-sibling" => "adjacent and general sibling selectors",
+                    "style-relational" => ":has() descendant dependency",
+                    _ => unreachable!(),
+                }
+                .to_owned(),
+            );
+            assert!(parse_import_entries(&serde_json::to_vec(&report).unwrap()).is_ok());
+
+            report["configuration"]["style_invalidation_selector"] =
+                Value::String("unverified selector".to_owned());
+            let error = parse_import_entries(&serde_json::to_vec(&report).unwrap()).unwrap_err();
+            assert!(error.contains("workload provenance"));
+        }
+    }
+
+    #[test]
+    fn style_and_frame_metric_units_are_registered_for_history() {
+        for (name, unit) in [
+            ("style_localized_duration_ms", "milliseconds"),
+            (
+                "style_descendant_mutations_per_second",
+                "mutations_per_second",
+            ),
+            ("style_engine_transaction_count", "transactions"),
+            ("style_broad_matching_apply_duration_ms", "milliseconds"),
+            ("layout_full_duration_ms", "milliseconds"),
+            ("engine_surface_update_count", "count"),
+            ("gpu_sampling_event_retention_percent", "percent"),
+            (
+                "gpu_sampling_submission_to_completion_callback_p95_ms",
+                "milliseconds",
+            ),
+        ] {
+            assert_eq!(responsiveness_metric_unit(name), Some(unit), "{name}");
+        }
+    }
+
+    #[test]
+    fn process_tree_resource_metric_import_requires_scope_and_coverage() {
+        let mut report: Value =
+            serde_json::from_slice(&responsiveness_report_json(5, true)).unwrap();
+        report["configuration"]["process_resource_sampling_interval_ms"] = Value::from(100);
+        report["configuration"]["process_resource_scope"] =
+            Value::from("verified_managed_process_session_tree");
+        report["metrics"]["process_tree_physical_footprint_peak_bytes"] = serde_json::json!({
+            "sample_count": 5,
+            "median": 2048.0,
+            "mean": 2048.0,
+            "minimum": 2048.0,
+            "maximum": 2048.0,
+            "sample_standard_deviation": 0.0,
+            "coefficient_of_variation_percent": 0.0
+        });
+        report["coverage"]["process_resource_iterations"] = Value::from(5);
+        report["coverage"]["process_resource_complete_iterations"] = Value::from(5);
+        report["coverage"]["process_resource_sample_count"] = Value::from(5);
+        let entries = parse_import_entries(&serde_json::to_vec(&report).unwrap()).unwrap();
+        let footprint = entries[0]
+            .summary
+            .iter()
+            .find(|metric| metric.name == "process_tree_physical_footprint_peak_bytes")
+            .unwrap();
+        assert_eq!(footprint.unit, "bytes");
+
+        report["configuration"]
+            .as_object_mut()
+            .unwrap()
+            .remove("process_resource_scope");
+        let error = parse_import_entries(&serde_json::to_vec(&report).unwrap()).unwrap_err();
+        assert!(error.contains("process-resource provenance"));
+    }
+
+    #[test]
+    fn disabled_gc_pressure_fixture_metrics_use_successful_iteration_coverage() {
+        let mut report: Value =
+            serde_json::from_slice(&responsiveness_report_json(0, false)).unwrap();
+        report["workload"] = Value::String("gc-pressure".to_owned());
+        report["fixture_revision"] = Value::String(GC_PRESSURE_FIXTURE_REVISION.to_owned());
+        report["configuration"]["allocation_record_count"] = Value::from(GC_PRESSURE_RECORD_COUNT);
+        report["configuration"]["allocation_cycles"] = Value::from(32);
+        report["configuration"]["records_per_cycle"] = Value::from(25_000);
+        report["configuration"]["retained_graph_sample_period"] = Value::from(128);
+        report["configuration"]["temporary_dom_nodes_per_cycle"] = Value::from(16);
+        report["metrics"] = serde_json::json!({
+            "gc_pressure_duration_ms": {
+                "sample_count": 5,
+                "median": 63.7,
+                "mean": 64.16,
+                "minimum": 54.0,
+                "maximum": 73.9,
+                "sample_standard_deviation": 8.53,
+                "coefficient_of_variation_percent": 13.3
+            },
+            "gc_pressure_records_per_second": {
+                "sample_count": 5,
+                "median": 12558869.7,
+                "mean": 12648887.3,
+                "minimum": 10825439.7,
+                "maximum": 14814814.8,
+                "sample_standard_deviation": 1697891.4,
+                "coefficient_of_variation_percent": 13.4
+            }
+        });
+
+        let entries = parse_import_entries(&serde_json::to_vec(&report).unwrap()).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].comparability.status, "comparable");
+        assert!(
+            entries[0]
+                .summary
+                .iter()
+                .all(|metric| metric.sample_count == 5)
+        );
+    }
+
+    #[test]
+    fn disabled_dom_style_and_layout_fixture_metrics_import_as_fixture_samples() {
+        for (workload, revision, duration_metric, throughput_metric) in [
+            (
+                "dom-style",
+                DOM_STYLE_FIXTURE_REVISION,
+                "dom_style_duration_ms",
+                "dom_style_mutations_per_second",
+            ),
+            (
+                "layout-updates",
+                LAYOUT_UPDATES_FIXTURE_REVISION,
+                "layout_update_duration_ms",
+                "layout_updates_per_second",
+            ),
+        ] {
+            let mut report: Value =
+                serde_json::from_slice(&responsiveness_report_json(0, false)).unwrap();
+            report["workload"] = Value::String(workload.to_owned());
+            report["fixture_revision"] = Value::String(revision.to_owned());
+            report["configuration"]["task_count"] = Value::Null;
+            report["configuration"]["task_source"] = Value::Null;
+            if workload == "dom-style" {
+                report["configuration"]["dom_style_mutation_count"] =
+                    Value::from(DOM_STYLE_MUTATION_COUNT);
+                report["configuration"]["dom_style_branch_count"] = Value::from(16);
+                report["configuration"]["dom_style_items_per_branch"] = Value::from(32);
+                report["configuration"]["dom_style_selector_kinds"] =
+                    serde_json::json!(["descendant", "sibling", "state", "relational"]);
+            } else {
+                report["configuration"]["layout_update_count"] = Value::from(LAYOUT_UPDATE_COUNT);
+                report["configuration"]["layout_normal_flow_count"] = Value::from(256);
+                report["configuration"]["layout_absolute_count"] = Value::from(128);
+            }
+            let mut metrics = serde_json::Map::new();
+            for name in [duration_metric, throughput_metric] {
+                metrics.insert(
+                    name.to_owned(),
+                    serde_json::json!({
+                        "sample_count": 5,
+                        "median": 64.0,
+                        "mean": 65.0,
+                        "minimum": 60.0,
+                        "maximum": 70.0,
+                        "sample_standard_deviation": 4.0,
+                        "coefficient_of_variation_percent": 6.15
+                    }),
+                );
+            }
+            report["metrics"] = Value::Object(metrics);
+
+            let entries = parse_import_entries(&serde_json::to_vec(&report).unwrap()).unwrap();
+            assert_eq!(entries.len(), 1, "{workload}");
+            assert_eq!(entries[0].scenario.as_deref(), Some(workload));
+            assert_eq!(entries[0].comparability.status, "comparable");
+            assert!(
+                entries[0]
+                    .summary
+                    .iter()
+                    .all(|metric| metric.sample_count == 5)
+            );
+        }
+    }
+
+    #[test]
+    fn balanced_animation_fixture_metrics_use_all_successful_iterations() {
+        let mut report: Value =
+            serde_json::from_slice(&responsiveness_report_json(10, true)).unwrap();
+        report["workload"] = Value::String("animation".to_owned());
+        report["fixture_revision"] = Value::String(ANIMATION_FIXTURE_REVISION.to_owned());
+        report["iterations"] = Value::from(20);
+        report["configuration"]["iterations"] = Value::from(20);
+        report["configuration"]["task_count"] = Value::Null;
+        report["configuration"]["task_source"] = Value::Null;
+        report["configuration"]["animation_phase_count"] = Value::from(ANIMATION_PHASE_COUNT);
+        report["configuration"]["animation_phase_duration_ms"] =
+            Value::from(ANIMATION_PHASE_DURATION_MS);
+        report["configuration"]["animation_pre_roll_ms"] = Value::from(ANIMATION_PRE_ROLL_MS);
+        report["configuration"]["frame_interval_pre_roll_rule_version"] =
+            Value::from(velocity_core::FRAME_INTERVAL_PRE_ROLL_RULE_VERSION);
+        report["configuration"]["diagnostics_enabled"] = Value::Null;
+        report["configuration"]["diagnostics_mode"] =
+            Value::String("balanced_interleaved".to_owned());
+        report["configuration"]["diagnostics_order_seed"] = Value::from(88271498792782_u64);
+        report["configuration"]["diagnostic_overhead_assessment"] =
+            serde_json::json!({"metrics": {}});
+        report["metrics"] = serde_json::json!({
+            "animation_active_window_ms": {
+                "sample_count": 20,
+                "median": 4500.0,
+                "mean": 4500.0,
+                "minimum": 4500.0,
+                "maximum": 4500.0,
+                "sample_standard_deviation": 0.0,
+                "coefficient_of_variation_percent": 0.0
+            },
+            "animation_raf_callback_count": {
+                "sample_count": 20,
+                "median": 260.0,
+                "mean": 260.0,
+                "minimum": 260.0,
+                "maximum": 260.0,
+                "sample_standard_deviation": 0.0,
+                "coefficient_of_variation_percent": 0.0
+            },
+            "raf_interval_p50_ms": {
+                "sample_count": 20,
+                "median": 16.7,
+                "mean": 16.7,
+                "minimum": 16.7,
+                "maximum": 16.7,
+                "sample_standard_deviation": 0.0,
+                "coefficient_of_variation_percent": 0.0
+            },
+            "style_update_duration_ms": {
+                "sample_count": 10,
+                "median": 3.0,
+                "mean": 3.0,
+                "minimum": 3.0,
+                "maximum": 3.0,
+                "sample_standard_deviation": 0.0,
+                "coefficient_of_variation_percent": 0.0
+            }
+        });
+        report["coverage"]["requested_iterations"] = Value::from(20);
+        report["coverage"]["successful_iterations"] = Value::from(20);
+        report["coverage"]["failed_iterations"] = Value::from(0);
+        report["coverage"]["complete_single_process_samples"] = Value::from(10);
+        report["coverage"]["process_scoped_snapshots"] = Value::from(10);
+        report["coverage"]["style_layout_available_snapshots"] = Value::from(10);
+        report["coverage"]["retained_task_samples"] = Value::from(0);
+
+        let entries = parse_import_entries(&serde_json::to_vec(&report).unwrap()).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].comparability.status, "inconclusive");
+        for name in [
+            "animation_active_window_ms",
+            "animation_raf_callback_count",
+            "raf_interval_p50_ms",
+        ] {
+            assert_eq!(
+                entries[0]
+                    .summary
+                    .iter()
+                    .find(|metric| metric.name == name)
+                    .unwrap()
+                    .sample_count,
+                20
+            );
+        }
+        assert_eq!(
+            entries[0]
+                .summary
+                .iter()
+                .find(|metric| metric.name == "style_update_duration_ms")
+                .unwrap()
+                .sample_count,
+            10
+        );
     }
 
     #[test]

@@ -64,6 +64,11 @@ impl Omnibox {
             })),
         )
         .aria_expanded(site_info_open);
+        let site_info_button = if style.trailing_site_info {
+            site_info_button.rounded_r(px(metrics::sidebar_omnibox_button_radius()))
+        } else {
+            site_info_button
+        };
         let row = h_stack()
             .items_center()
             .gap(px(metrics::OMNIBOX_GAP))
@@ -103,7 +108,7 @@ impl Omnibox {
                     row.child(
                         site_info_button
                             .absolute()
-                            .right(px(metrics::SIDEBAR_PADDING))
+                            .right(px(metrics::SIDEBAR_OMNIBOX_BUTTON_INSET))
                             .top(px((style.height
                                 - 2.0 * metrics::OMNIBOX_BORDER_WIDTH
                                 - metrics::TOOLBAR_BUTTON_SIZE)
@@ -231,7 +236,8 @@ impl Omnibox {
                 .when(!FieldStyle::current(cx).trailing_site_info, |panel| {
                     panel.min_w(px(metrics::OMNIBOX_PANEL_MIN_WIDTH))
                 })
-                .rounded(px(FieldStyle::current(cx).radius))
+                .rounded_t(px(FieldStyle::current(cx).radius))
+                .rounded_b(px(metrics::omnibox_panel_bottom_radius()))
                 .border_1()
                 .border_color(rgba(palette.menu_border))
                 .raised(palette)
@@ -260,8 +266,10 @@ impl Omnibox {
             remove: Rc::new(move |index, _, cx| {
                 remove.update(cx, |this, cx| this.remove(index, cx)).ok();
             }),
-            hover: Rc::new(move |index, _, cx| {
-                hover.update(cx, |this, cx| this.hover(index, cx)).ok();
+            hover: Rc::new(move |index, hovered, _, cx| {
+                hover
+                    .update(cx, |this, cx| this.hover(index, hovered, cx))
+                    .ok();
             }),
         }
     }

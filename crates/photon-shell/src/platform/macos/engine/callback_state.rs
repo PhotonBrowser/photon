@@ -248,6 +248,11 @@ impl CallbackState {
         }
     }
 
+    pub(super) fn set_residency_monitor_enabled(&self, enabled: bool) {
+        self.performance.set_residency_enabled(enabled);
+        self.sync_engine_monitor();
+    }
+
     pub(super) fn performance_task(&self) -> PerformanceTask {
         let details = self.page_details.lock().unwrap().clone();
         PerformanceTask {
@@ -265,7 +270,11 @@ impl CallbackState {
             unsafe {
                 embedder::photon_view_set_performance_monitor_enabled(
                     view,
-                    self.performance.should_monitor_engine(),
+                    self.performance.is_enabled(),
+                );
+                embedder::photon_view_set_residency_monitor_enabled(
+                    view,
+                    self.performance.should_monitor_residency(),
                 );
             }
         }

@@ -42,16 +42,168 @@ pub(in crate::platform) struct RequestedWebView {
     pub(in crate::platform) session: EngineSession,
     pub(in crate::platform) popup: bool,
     pub(in crate::platform) activate: bool,
-    pub(in crate::platform) needs_confirmation: bool,
     pub(in crate::platform) width: Option<i32>,
     pub(in crate::platform) height: Option<i32>,
 }
 
 impl EngineSession {
+    pub(in crate::platform) fn release_hidden_memory(&self) {
+        if !self.view.is_null() {
+            unsafe { embedder::photon_view_release_hidden_memory(self.view) };
+        }
+    }
+
+    pub(in crate::platform) fn needs_beforeunload_check(&self) -> bool {
+        !self.view.is_null() && unsafe { embedder::photon_view_needs_beforeunload_check(self.view) }
+    }
+
     pub(in crate::platform) fn registered_engine_processes(
         &self,
     ) -> Vec<super::RegisteredEngineProcess> {
         self._runtime.registered_processes()
+    }
+
+    pub(in crate::platform) fn set_task_queue_diagnostics_enabled(&self, enabled: bool) -> bool {
+        !self.view.is_null()
+            && unsafe {
+                embedder::photon_view_set_task_queue_diagnostics_enabled(self.view, enabled)
+            }
+    }
+
+    pub(in crate::platform) fn task_queue_diagnostics_json(&self) -> anyhow::Result<String> {
+        if self.view.is_null() {
+            anyhow::bail!("Engine view is unavailable");
+        }
+        const CAPACITY: usize = 64 * 1024;
+        let mut output = vec![0_u8; CAPACITY];
+        let length = unsafe {
+            embedder::photon_view_copy_task_queue_diagnostics(
+                self.view,
+                output.as_mut_ptr().cast(),
+                output.len(),
+            )
+        };
+        if length >= output.len() {
+            anyhow::bail!("Engine task queue diagnostics exceeded the 64 KiB response limit");
+        }
+        let json = unsafe { CStr::from_ptr(output.as_ptr().cast()) };
+        Ok(json.to_str()?.to_owned())
+    }
+
+    pub(in crate::platform) fn start_frame_timing_diagnostics(&self) {
+        self.callbacks.performance.start_frame_timing(
+            self.display
+                .and_then(super::super::display::known_refresh_rate),
+        );
+    }
+
+    pub(in crate::platform) fn stop_frame_timing_diagnostics(&self) {
+        self.callbacks.performance.stop_frame_timing();
+    }
+
+    pub(in crate::platform) fn record_surface_install(&self, generation: u64, frame_id: u64) {
+        self.callbacks
+            .performance
+            .record_surface_install(generation, frame_id);
+    }
+
+    pub(in crate::platform) fn frame_timing_diagnostics_json(&self) -> serde_json::Value {
+        let diagnostics = self.callbacks.performance.frame_timing_snapshot();
+        let frames = diagnostics
+            .frames
+            .into_iter()
+            .map(|frame| {
+                serde_json::json!([
+                    frame.generation,
+                    frame.frame_id,
+                    frame.handoff_elapsed_ns,
+                    frame.surface_install_elapsed_ns,
+                    frame.gpu_submission_elapsed_ns,
+                    frame.gpu_completion_callback_elapsed_ns,
+                    frame.drawable_id,
+                    frame.presented_time_seconds,
+                    frame.presentation_feedback_received,
+                    frame.presentation_dropped,
+                    frame.presentation_feedback_count,
+                    frame.presentation_dropped_count,
+                    frame.coalesced_before_install,
+                ])
+            })
+            .collect::<Vec<_>>();
+        let presentation_events = diagnostics
+            .presentation_events
+            .into_iter()
+            .map(|event| {
+                serde_json::json!([
+                    event.generation,
+                    event.frame_id,
+                    event.drawable_id,
+                    event.presented_time_seconds,
+                ])
+            })
+            .collect::<Vec<_>>();
+        let gpu_sampling_events = diagnostics
+            .gpu_sampling_events
+            .into_iter()
+            .map(|event| {
+                serde_json::json!([
+                    event.generation,
+                    event.frame_id,
+                    event.drawable_id,
+                    event.submitted_elapsed_ns,
+                    event.completion_callback_elapsed_ns,
+                ])
+            })
+            .collect::<Vec<_>>();
+        serde_json::json!({
+            "schema_version": 1,
+            "scope": "photon_tab_engine_surface_frames",
+            "surface_identity_semantics": "generation is the IOSurface backing-pool epoch; engine_frame_id is the monotonic Photon embedder publication sequence within this WebView; the pair identifies a surface update, not a content generation or proof of changed pixels",
+            "duration_clock_domain": "photon_process_monotonic_elapsed_ns",
+            "presentation_clock_domain": "metal_host_time_seconds",
+            "presentation_timestamp_source": "MTLDrawable.presentedTime",
+            "measurement_window_ms": diagnostics.measurement_window_ms,
+            "display_refresh_rate_hz": diagnostics.display_refresh_rate_hz,
+            "display_refresh_rate_change_count": diagnostics.display_refresh_rate_change_count,
+            "coalesced_before_install_count": diagnostics.coalesced_before_install_count,
+            "evicted_frame_sample_count": diagnostics.evicted_frame_sample_count,
+            "evicted_presentation_event_count": diagnostics.evicted_presentation_event_count,
+            "evicted_gpu_sampling_event_count": diagnostics.evicted_gpu_sampling_event_count,
+            "frame_sample_count": frames.len(),
+            "frame_sample_fields": [
+                "generation",
+                "engine_frame_id",
+                "handoff_elapsed_ns",
+                "surface_install_elapsed_ns",
+                "gpu_submission_elapsed_ns",
+                "gpu_completion_callback_elapsed_ns",
+                "drawable_id",
+                "presented_time_seconds",
+                "presentation_feedback_received",
+                "presentation_dropped",
+                "presentation_feedback_count",
+                "presentation_dropped_count",
+                "coalesced_before_install",
+            ],
+            "presentation_event_count": presentation_events.len(),
+            "presentation_event_fields": [
+                "generation",
+                "engine_frame_id",
+                "drawable_id",
+                "presented_time_seconds",
+            ],
+            "gpu_sampling_event_count": gpu_sampling_events.len(),
+            "gpu_sampling_event_fields": [
+                "generation",
+                "engine_frame_id",
+                "drawable_id",
+                "submitted_elapsed_ns",
+                "completion_callback_elapsed_ns",
+            ],
+            "frames": frames,
+            "presentation_events": presentation_events,
+            "gpu_sampling_events": gpu_sampling_events,
+        })
     }
 
     pub(in crate::platform) fn create(
@@ -104,6 +256,7 @@ impl EngineSession {
         let channel_id = presentation_channel_id();
         let leases = Arc::new(Mutex::new(LeaseLedger::default()));
         let gpu_activity = Arc::new(GpuActivity::default());
+        let performance = Arc::new(PerformanceMonitor::default());
         let navigation_timing =
             navigation_profile_enabled().then(|| Arc::new(NavigationTimingProfiler::default()));
         // Engine threads reach both through raw callback contexts and touch
@@ -119,6 +272,7 @@ impl EngineSession {
             leases.clone(),
             gpu_activity.clone(),
             navigation_timing.clone(),
+            performance.clone(),
         )?);
         presentation
             .release_scheduler
@@ -134,7 +288,7 @@ impl EngineSession {
             engine_view: AtomicPtr::new(std::ptr::null_mut()),
             ui_wake: Mutex::new(None),
             redraw_pending: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-            performance: Arc::new(PerformanceMonitor::default()),
+            performance,
             page_details: Mutex::default(),
             navigation_timing: navigation_timing.clone(),
         });
@@ -185,6 +339,7 @@ impl EngineSession {
             anyhow::bail!("Photon Engine could not create a webpage view");
         }
         callbacks.engine_view.store(view, Ordering::Release);
+        callbacks.set_residency_monitor_enabled(true);
         if runtime.performance_dashboard_active() {
             callbacks.set_dashboard_enabled(true);
         }
@@ -426,6 +581,9 @@ impl EngineSession {
         }
         self.display = Some(display);
         let refresh_rate = super::super::display::refresh_rate(display);
+        self.callbacks
+            .performance
+            .set_display_refresh_rate_hz(super::super::display::known_refresh_rate(display));
         trace(format_args!(
             "display={display} refresh-rate={refresh_rate:.2}Hz"
         ));

@@ -9,8 +9,7 @@
 //! translates them to GPUI's native options. Additional GPUI options that can
 //! be made configurable here if needed include whether windows are resizable,
 //! movable, minimizable, focused or shown on creation, and the macOS titlebar
-//! title/appearance. Bounds are centered by default; options_at uses the origin
-//! supplied by the caller for windows opened from a detached tab.
+//! title/appearance. Bounds are centered by default.
 //!
 //! Other native window details that can be centralized here later include the
 //! macOS traffic-light size, gap, position and insets (currently constants in

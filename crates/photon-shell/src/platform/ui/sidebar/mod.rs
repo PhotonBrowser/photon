@@ -28,7 +28,7 @@ pub(super) use navigation::{navigation_bar, navigation_column};
 pub(super) fn collapsed_tile<E: Styled>(item: E) -> E {
     item.size(px(metrics::SIDEBAR_COLLAPSED_ITEM_SIZE))
         .flex_shrink_0()
-        .rounded(px(metrics::SIDEBAR_COLLAPSED_ITEM_RADIUS))
+        .rounded(px(metrics::sidebar_collapsed_item_radius()))
 }
 
 /// One independently placed panel in the side dock.

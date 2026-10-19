@@ -1,4 +1,9 @@
-use gpui::{Canvas, PathBuilder, Pixels, Styled, canvas, point, px, rgba};
+use gpui::{Bounds, Canvas, PaintQuad, Pixels, Styled, Window, canvas, point, px, rgba, size};
+
+const GRID_DIVISIONS: usize = 3;
+const GRID_LINE_WIDTH: f32 = 1.0;
+const SERIES_LINE_WIDTH: f32 = 1.75;
+const SERIES_SAMPLE_STEP: f32 = 1.0;
 
 /// A value positioned in a rolling timeline, with `None` marking a gap.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -20,19 +25,25 @@ pub fn performance_chart(points: Vec<ChartPoint>, line_color: u32, grid_color: u
                 return;
             }
 
-            let mut grid = PathBuilder::stroke(px(1.0));
-            for row in 0..=3 {
-                let y = top + height * (row as f32 / 3.0);
-                grid.move_to(point(left, y));
-                grid.line_to(point(left + width, y));
+            for row in 0..=GRID_DIVISIONS {
+                let y = top + height * (row as f32 / GRID_DIVISIONS as f32);
+                window.paint_quad(
+                    PaintQuad::new(Bounds::new(
+                        point(left, y - px(GRID_LINE_WIDTH / 2.0)),
+                        size(width, px(GRID_LINE_WIDTH)),
+                    ))
+                    .background(rgba(grid_color)),
+                );
             }
-            for column in 1..=3 {
-                let x = left + width * (column as f32 / 4.0);
-                grid.move_to(point(x, top));
-                grid.line_to(point(x, top + height));
-            }
-            if let Ok(grid) = grid.build() {
-                window.paint_path(grid, rgba(grid_color));
+            for column in 1..=GRID_DIVISIONS {
+                let x = left + width * (column as f32 / (GRID_DIVISIONS + 1) as f32);
+                window.paint_quad(
+                    PaintQuad::new(Bounds::new(
+                        point(x - px(GRID_LINE_WIDTH / 2.0), top),
+                        size(px(GRID_LINE_WIDTH), height),
+                    ))
+                    .background(rgba(grid_color)),
+                );
             }
 
             draw_series(points, left, top, width, height, line_color, window);
@@ -48,7 +59,7 @@ fn draw_series(
     width: Pixels,
     height: Pixels,
     color: u32,
-    window: &mut gpui::Window,
+    window: &mut Window,
 ) {
     let Some(first) = points.first() else {
         return;
@@ -65,25 +76,50 @@ fn draw_series(
         .fold(0.0_f64, f64::max)
         .max(1.0);
 
-    let mut line = PathBuilder::stroke(px(1.75));
-    let mut segment_started = false;
+    let mut previous = None;
     for sample in points {
         let Some(value) = sample.value.filter(|value| value.is_finite()) else {
-            segment_started = false;
+            previous = None;
             continue;
         };
         let time_fraction = ((sample.elapsed_seconds - first_time) / time_span).clamp(0.0, 1.0);
         let value_fraction = (value / value_max).clamp(0.0, 1.0);
-        let x = left + width * time_fraction as f32;
-        let y = top + height * (1.0 - value_fraction as f32);
-        if segment_started {
-            line.line_to(point(x, y));
-        } else {
-            line.move_to(point(x, y));
+        let current = point(
+            left + width * time_fraction as f32,
+            top + height * (1.0 - value_fraction as f32),
+        );
+        if let Some(previous) = previous {
+            draw_segment(previous, current, color, window);
         }
-        segment_started = true;
+        previous = Some(current);
     }
-    if let Ok(line) = line.build() {
-        window.paint_path(line, rgba(color));
+}
+
+/// Paints a line with overlapping quads so charts do not allocate GPUI's
+/// full-window path-rasterization texture.
+fn draw_segment(
+    start: gpui::Point<Pixels>,
+    end: gpui::Point<Pixels>,
+    color: u32,
+    window: &mut Window,
+) {
+    let dx = end.x - start.x;
+    let dy = end.y - start.y;
+    let steps = (dx.as_f32().abs().max(dy.as_f32().abs()) / SERIES_SAMPLE_STEP)
+        .ceil()
+        .max(1.0) as usize;
+    let diameter = px(SERIES_LINE_WIDTH);
+
+    for step in 0..=steps {
+        let progress = step as f32 / steps as f32;
+        let center = point(start.x + dx * progress, start.y + dy * progress);
+        window.paint_quad(
+            PaintQuad::new(Bounds::new(
+                point(center.x - diameter / 2.0, center.y - diameter / 2.0),
+                size(diameter, diameter),
+            ))
+            .corner_radii(diameter / 2.0)
+            .background(rgba(color)),
+        );
     }
 }

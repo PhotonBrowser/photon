@@ -6,4 +6,6 @@ mod catalog;
 
 pub use actions::*;
 pub use bindings::browser_shortcuts;
-pub use catalog::{ShortcutEntry, ShortcutGroup, shortcut_groups};
+pub use catalog::{
+    ShortcutEntry, ShortcutGroup, action_for_command, shortcut_groups, shortcut_name_for_action,
+};

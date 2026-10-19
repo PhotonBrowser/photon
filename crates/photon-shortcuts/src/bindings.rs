@@ -1,51 +1,25 @@
 //! Default key bindings for browser-level actions.
 
-use gpui::KeyBinding;
+use gpui::{DummyKeyboardMapper, KeyBinding};
 
-use crate::actions::*;
+use crate::catalog::shortcut_specs;
 
 /// Returns the browser's default keyboard shortcuts.
 pub fn browser_shortcuts() -> Vec<KeyBinding> {
-    vec![
-        KeyBinding::new("secondary-q", Quit, None),
-        KeyBinding::new("secondary-h", HideApp, None),
-        KeyBinding::new("secondary-alt-h", HideOtherApps, None),
-        KeyBinding::new("secondary-m", MinimizeWindow, None),
-        KeyBinding::new("secondary-t", OpenCommandBar, None),
-        KeyBinding::new("secondary-n", NewWindow, None),
-        KeyBinding::new("secondary-w", CloseTab, None),
-        KeyBinding::new("secondary-shift-t", ReopenClosedTab, None),
-        KeyBinding::new("ctrl-tab", SelectNextTab, None),
-        KeyBinding::new("ctrl-shift-tab", SelectPreviousTab, None),
-        KeyBinding::new("secondary-shift-]", SelectNextTab, None),
-        KeyBinding::new("secondary-shift-[", SelectPreviousTab, None),
-        KeyBinding::new("secondary-1", SelectTab1, None),
-        KeyBinding::new("secondary-2", SelectTab2, None),
-        KeyBinding::new("secondary-3", SelectTab3, None),
-        KeyBinding::new("secondary-4", SelectTab4, None),
-        KeyBinding::new("secondary-5", SelectTab5, None),
-        KeyBinding::new("secondary-6", SelectTab6, None),
-        KeyBinding::new("secondary-7", SelectTab7, None),
-        KeyBinding::new("secondary-8", SelectTab8, None),
-        KeyBinding::new("secondary-9", SelectLastTab, None),
-        KeyBinding::new("secondary-r", Reload, None),
-        KeyBinding::new("secondary-.", StopLoading, None),
-        KeyBinding::new("secondary-[", GoBack, None),
-        KeyBinding::new("secondary-]", GoForward, None),
-        KeyBinding::new("secondary-l", FocusOmnibox, None),
-        KeyBinding::new("secondary-f", FindInPage, None),
-        KeyBinding::new("secondary-g", FindNext, None),
-        KeyBinding::new("secondary-shift-g", FindPrevious, None),
-        KeyBinding::new("secondary-=", ZoomIn, None),
-        KeyBinding::new("secondary-+", ZoomIn, None),
-        KeyBinding::new("secondary--", ZoomOut, None),
-        KeyBinding::new("secondary-0", ResetZoom, None),
-        KeyBinding::new("secondary-,", OpenSettings, None),
-        KeyBinding::new("secondary-/", ShowKeyboardShortcuts, None),
-        KeyBinding::new("secondary-s", ToggleSidebar, None),
-        KeyBinding::new("secondary-shift-s", ToggleSidebarIcons, None),
-        KeyBinding::new("secondary-alt-z", ToggleZenMode, None),
-        KeyBinding::new("secondary-alt-right", NextSpace, None),
-        KeyBinding::new("secondary-alt-left", PreviousSpace, None),
-    ]
+    shortcut_specs()
+        .iter()
+        .flat_map(|shortcut| {
+            shortcut.keys.iter().map(|keystrokes| {
+                KeyBinding::load(
+                    keystrokes,
+                    shortcut.action.action(),
+                    None,
+                    false,
+                    None,
+                    &DummyKeyboardMapper,
+                )
+                .expect("shortcut registry contains valid GPUI key sequences")
+            })
+        })
+        .collect()
 }

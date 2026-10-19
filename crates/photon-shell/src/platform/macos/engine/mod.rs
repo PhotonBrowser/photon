@@ -134,6 +134,12 @@ impl EngineRuntime {
         !self.runtime.is_null()
     }
 
+    pub(in crate::platform) fn set_memory_pressure(&self, pressured: bool) {
+        if self.is_available() {
+            unsafe { embedder::photon_runtime_set_memory_pressure(self.runtime, pressured) };
+        }
+    }
+
     pub(in crate::platform) fn popup_policy(&self) -> PopupPolicy {
         match self.popup_policy.load(Ordering::Relaxed) {
             value if value == PopupPolicy::Allow as u8 => PopupPolicy::Allow,

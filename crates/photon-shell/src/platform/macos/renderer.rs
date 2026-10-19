@@ -25,7 +25,7 @@ pub(in crate::platform) fn page_surface(
 ) -> AnyElement {
     let mut page = gpui::div()
         .size_full()
-        .rounded(px(metrics::PAGE_RADIUS))
+        .rounded(px(metrics::page_radius()))
         .bg(gpui::rgb(palette.background));
     if let Some(presented) = presented {
         page = page.child(
@@ -33,7 +33,7 @@ pub(in crate::platform) fn page_surface(
                 .size_full()
                 .object_fit(ObjectFit::Fill)
                 .relative()
-                .rounded(px(metrics::PAGE_RADIUS)),
+                .rounded(px(metrics::page_radius())),
         );
     }
     page.into_any_element()

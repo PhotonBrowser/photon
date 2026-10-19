@@ -114,7 +114,7 @@ pub(in super::super) fn favourites_empty_state(
                 + 2.0 * metrics::SIDEBAR_FAVOURITES_HINT_PADDING))
                 .justify_center()
         })
-        .rounded(px(metrics::SIDEBAR_ITEM_RADIUS))
+        .rounded(px(metrics::sidebar_item_radius()))
         .border_1()
         .border_dashed()
         .border_dashed_length(metrics::SIDEBAR_FAVOURITES_HINT_DASH_LENGTH)
@@ -219,6 +219,6 @@ fn favourite_tile(
     tile_element
         .flex_1()
         .h(px(metrics::SIDEBAR_FAVOURITE_HEIGHT))
-        .rounded(px(metrics::SIDEBAR_ITEM_RADIUS))
+        .rounded(px(metrics::sidebar_item_radius()))
         .into_any_element()
 }

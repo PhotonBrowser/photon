@@ -1,6 +1,7 @@
 //! Confirmation and routing for site-requested browsing contexts.
 
 use gpui::{AnyElement, Context, Entity, FocusHandle, KeyDownEvent, Role, Window, prelude::*, px};
+use photon_core::PopupPolicy;
 
 use crate::platform::engine::RequestedWebView;
 
@@ -17,6 +18,30 @@ pub(super) struct PendingPopup {
     origin: String,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum RequestedWebViewAction {
+    OpenTab,
+    OpenWindow,
+    Ask,
+    Block,
+}
+
+/// Resolves popup policy when the UI receives the request, so a queued Engine
+/// callback cannot use a stale permission decision.
+pub(super) fn requested_web_view_action(
+    popup: bool,
+    policy: PopupPolicy,
+) -> RequestedWebViewAction {
+    if !popup {
+        return RequestedWebViewAction::OpenTab;
+    }
+    match policy {
+        PopupPolicy::Ask => RequestedWebViewAction::Ask,
+        PopupPolicy::Allow => RequestedWebViewAction::OpenWindow,
+        PopupPolicy::Block => RequestedWebViewAction::Block,
+    }
+}
+
 impl BrowserWindow {
     pub(super) fn handle_requested_web_view(
         &mut self,
@@ -25,19 +50,24 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if request.popup && request.needs_confirmation {
-            let origin = source.read(cx).state.url.clone();
-            let was_empty = self.pending_popups.is_empty();
-            self.pending_popups
-                .push_back(PendingPopup { request, origin });
-            if was_empty {
-                window.focus(&self.popup_confirmation_focus, cx);
+        match requested_web_view_action(request.popup, self.runtime.popup_policy()) {
+            RequestedWebViewAction::OpenTab => self.open_requested_tab(request, window, cx),
+            RequestedWebViewAction::OpenWindow => {
+                open_minimal_window(self.runtime.clone(), request, cx);
             }
-            cx.notify();
-        } else if request.popup {
-            open_minimal_window(self.runtime.clone(), request, cx);
-        } else {
-            self.open_requested_tab(request, window, cx);
+            RequestedWebViewAction::Ask => {
+                let origin = source.read(cx).state.url.clone();
+                let was_empty = self.pending_popups.is_empty();
+                self.pending_popups
+                    .push_back(PendingPopup { request, origin });
+                if was_empty {
+                    window.focus(&self.popup_confirmation_focus, cx);
+                }
+                cx.notify();
+            }
+            RequestedWebViewAction::Block => {
+                crate::platform::trace(format_args!("blocked site popup after policy update"));
+            }
         }
     }
 
@@ -67,7 +97,13 @@ impl BrowserWindow {
 
     pub(super) fn allow_pending_popup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(popup) = self.pending_popups.pop_front() {
-            open_minimal_window(self.runtime.clone(), popup.request, cx);
+            if requested_web_view_action(popup.request.popup, self.runtime.popup_policy())
+                != RequestedWebViewAction::Block
+            {
+                open_minimal_window(self.runtime.clone(), popup.request, cx);
+            } else {
+                crate::platform::trace(format_args!("blocked confirmed popup after policy update"));
+            }
         }
         self.refocus_after_popup_decision(window, cx);
     }
@@ -158,4 +194,29 @@ pub(super) fn popup_confirmation_dialog<V: 'static>(
                 )),
         );
     modal("popup-confirmation", transition, palette, panel, cx).into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn applies_the_current_policy_to_site_popups() {
+        assert_eq!(
+            requested_web_view_action(false, PopupPolicy::Block),
+            RequestedWebViewAction::OpenTab
+        );
+        assert_eq!(
+            requested_web_view_action(true, PopupPolicy::Ask),
+            RequestedWebViewAction::Ask
+        );
+        assert_eq!(
+            requested_web_view_action(true, PopupPolicy::Allow),
+            RequestedWebViewAction::OpenWindow
+        );
+        assert_eq!(
+            requested_web_view_action(true, PopupPolicy::Block),
+            RequestedWebViewAction::Block
+        );
+    }
 }

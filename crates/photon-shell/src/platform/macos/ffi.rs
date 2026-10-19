@@ -179,6 +179,18 @@ pub(super) mod embedder {
         ) -> *mut c_void;
         pub fn photon_view_resize(view: *mut c_void, width: i32, height: i32, dpr: f64);
         pub fn photon_view_set_performance_monitor_enabled(view: *mut c_void, enabled: bool);
+        pub fn photon_view_set_residency_monitor_enabled(view: *mut c_void, enabled: bool);
+        pub fn photon_view_set_task_queue_diagnostics_enabled(
+            view: *mut c_void,
+            enabled: bool,
+        ) -> bool;
+        pub fn photon_view_copy_task_queue_diagnostics(
+            view: *mut c_void,
+            output: *mut c_char,
+            capacity: usize,
+        ) -> usize;
+        pub fn photon_view_release_hidden_memory(view: *mut c_void);
+        pub fn photon_view_needs_beforeunload_check(view: *mut c_void) -> bool;
         pub fn photon_view_set_visible(view: *mut c_void, visible: bool);
         pub fn photon_view_set_display_metadata(
             view: *mut c_void,
@@ -221,6 +233,7 @@ pub(super) mod embedder {
             runtime: *mut c_void,
             reduce_motion: bool,
         );
+        pub fn photon_runtime_set_memory_pressure(runtime: *mut c_void, pressured: bool);
         pub fn photon_runtime_set_elastic_scroll_enabled(runtime: *mut c_void, enabled: bool);
         #[cfg(not(feature = "ui-only"))]
         pub fn photon_runtime_set_service_callback(

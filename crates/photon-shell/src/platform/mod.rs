@@ -1,5 +1,7 @@
 //! Shared GPUI browser UI and target-specific shell adapters.
 
+use photon_core::CommandAvailability;
+
 #[cfg_attr(target_os = "linux", allow(dead_code))]
 mod app_update;
 #[cfg(target_os = "linux")]
@@ -8,6 +10,7 @@ mod linux;
 mod macos;
 #[path = "ui/metrics.rs"]
 pub(crate) mod metrics;
+pub(crate) mod theme_config;
 #[cfg(target_os = "macos")]
 mod ui;
 pub(crate) mod window_config;
@@ -33,7 +36,7 @@ pub(crate) use ui::run;
 #[derive(Clone, Copy, Default, PartialEq)]
 #[cfg_attr(target_os = "linux", allow(dead_code))]
 pub(crate) struct MenuBarState {
-    pub(crate) has_sidebar: bool,
+    pub(crate) commands: CommandAvailability,
     pub(crate) sidebar_icons: bool,
     pub(crate) zen: bool,
     pub(crate) loading: bool,

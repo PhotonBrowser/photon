@@ -369,9 +369,11 @@ impl TabParts {
                 element.top(px(position_offset))
             })
             .opacity(if dragged {
-                metrics::TAB_DRAG_SOURCE_OPACITY
+                crate::platform::theme_config::theme()
+                    .opacity
+                    .tab_drag_source
             } else if sleeping {
-                metrics::SLEEPING_TAB_OPACITY
+                crate::platform::theme_config::theme().opacity.sleeping_tab
             } else {
                 1.0
             });
@@ -456,7 +458,7 @@ impl TabParts {
 pub(super) fn insertion_marker(axis: TabDragAxis, size: f32, palette: ThemeColors) -> AnyElement {
     let marker = div()
         .flex_shrink_0()
-        .rounded(px(metrics::CONTROL_RADIUS))
+        .rounded(px(metrics::control_radius()))
         .bg(rgba(palette.chosen));
     match axis {
         TabDragAxis::Horizontal => marker
@@ -500,7 +502,7 @@ fn audio_control_button(
         .items_center()
         .justify_center()
         .size(px(metrics::TAB_AUDIO_BUTTON_SIZE))
-        .rounded(px(metrics::CONTROL_RADIUS))
+        .rounded(px(metrics::control_radius()))
         .text_color(rgb(icon_color))
         .hover(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
@@ -529,7 +531,7 @@ fn close_tab_button(
         .items_center()
         .justify_center()
         .size(px(metrics::TAB_CLOSE_BUTTON_SIZE))
-        .rounded(px(metrics::CONTROL_RADIUS))
+        .rounded(px(metrics::control_radius()))
         .hover(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
         .pressable()

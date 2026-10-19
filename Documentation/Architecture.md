@@ -11,7 +11,8 @@ photon-app
 photon-ffi ── photon-core ── photon-omnibox
                     ↑
 photon-shell ── photon-storage
-            └── gpui-motion
+            ├── gpui-motion
+            └── photon-haptics
 photon-core ── photon-tab-sleep
 ```
 
@@ -89,15 +90,25 @@ presentation surface.
   GPUI-CE and has no Photon, browser, or native-platform dependencies. The shell
   owns its visual presets and adapts persisted browser preferences to the
   crate's `MotionConfig`.
+- `crates/photon-haptics` provides a semantic haptic API for Photon UI. It maps
+  taps, control state changes, and alignment feedback to GPUI-CE styles, which
+  handles platform support.
 - `crates/photon-tab-sleep` owns the framework-independent tab sleep modes and
   adaptive idle-time policy. The shell hides rendering for quiet inactive
   Engine views while retaining their live sessions, so selection restores the
   exact page state without reloading. Audio and recent Engine CPU or network
-  activity keep a tab out of the sleeping state.
-- `crates/photon-shortcuts` owns browser-level GPUI actions, their default
-  key bindings, and the named, grouped catalog the shortcuts dialog lists.
-  Views show an action's keys with `ui/kbd.rs`, which reads the keymap, so
-  labels never drift from the bindings.
+  activity keep a tab out of the sleeping state. On macOS, the shell samples
+  Engine memory per tab at a low rate and asks hidden, safe pages to release
+  rebuildable layout and unreachable heap memory when OS pressure rises; page
+  sessions remain live.
+- `crates/photon-shortcuts` owns one registry of browser shortcuts: each
+  entry supplies its action, key sequences, group, and display label. The
+  registry builds both the keymap and the grouped shortcuts dialog; native
+  menus reuse its labels for shared actions. Commands shared with the command
+  bar use names from `photon-core`. `BrowserWindow::execute_command` carries
+  out shared browser commands from the command bar, shortcuts, and menus.
+  Views show an action's effective keys with `ui/kbd.rs`, which reads the
+  keymap.
 - `crates/photon-presentation-ipc` owns the macOS XPC protocol, Rust client
   channel, native descriptor transport, and service entry point. The separate
   `crates/photon-presentation-broker` package is the small service executable.
@@ -114,13 +125,14 @@ crates/photon-shell/src/
 ├── lib.rs                         # Public run entry point
 └── platform/
     ├── mod.rs                     # Selects the target adapter and shared contracts
+    ├── theme_config.rs            # Loads semantic values from theme.toml
     ├── app_update.rs              # Safe GPUI update retries for async callbacks
     ├── ui/                         # Shared browser chrome and PhotonWebView source
     │   ├── window/                 # Browser layout, tabs, commands and overlays
     │   ├── webview/                # Shared page state, input and browser UI
     │   ├── pages/                  # Photon pages, including new tab and settings
     │   ├── tabs/, sidebar/         # Shared browser controls and layouts
-    │   ├── theme.rs                # Shared semantic color roles
+    │   ├── theme.rs                # Resolves shared semantic color roles
     │   └── metrics.rs              # Shared dimensions and type sizes
     ├── macos/                      # Native controls and current Engine backend
     │   ├── engine/                 # Engine runtime and per-tab sessions
@@ -148,15 +160,16 @@ window and page renderer adapters.
 | Package | Owns | Depends on |
 | --- | --- | --- |
 | `photon-app` | Runnable Photon entry point | `photon-shell` |
-| `photon-shell` | Window-bound GPUI views, Engine session adapter, native presentation lifecycle, browser input | GPUI-CE, `photon-core`, `gpui-motion`, `photon-performance`, `photon-shortcuts`, `photon-storage`, `photon-tab-sleep`, `photon-brand`, `photon-presentation-ipc`, native embedder bridge |
+| `photon-shell` | Window-bound GPUI views, Engine session adapter, native presentation lifecycle, browser input | GPUI-CE, `photon-core`, `gpui-motion`, `photon-haptics`, `photon-performance`, `photon-shortcuts`, `photon-storage`, `photon-tab-sleep`, `photon-brand`, `photon-presentation-ipc`, native embedder bridge |
 | `photon-performance` | Performance snapshots, monitor state, timing accumulation, formatting, GPUI overlay | GPUI-CE |
 | `gpui-motion` | Reusable GPUI motion primitives, transitions, presence, and tweens | GPUI-CE |
+| `photon-haptics` | Semantic haptic feedback helpers for Photon controls | GPUI-CE |
 | `photon-core` | Browser state, commands, shared address normalization, history rules, settings, clearing requests, command bar results | `photon-omnibox`, `photon-tab-sleep`, `photon-brand`, serde |
 | `photon-omnibox` | Search engine list, address/query resolution, suggestion and word matching | `photon-brand`, URL parsing library |
 | `photon-storage` | Profile folder, history and settings files, saved page icons, data usage | `photon-core`, `photon-brand`, serde |
 | `photon-brand` | Browser name, engine name, internal page scheme, profile folder name, logo | none |
 | `photon-ffi` | `photon_browser_*` C ABI and static library | `photon-core` |
-| `photon-shortcuts` | Browser actions and default key bindings | GPUI-CE |
+| `photon-shortcuts` | Browser actions, shortcut registry, and default key bindings | GPUI-CE, `photon-core` |
 | `photon-tab-sleep` | Tab sleep modes and adaptive idle timeout policy | serde |
 | `photon-cli` | `./photon` developer and runtime commands | CLI and command-line support libraries |
 | `photon-presentation-ipc` | XPC protocol, client channel, descriptor transport, service entry point | macOS frameworks |
@@ -172,12 +185,13 @@ owned by the shell; the presentation XPC implementation lives inside
 | Change | Start here |
 | --- | --- |
 | Performance diagnostics or overlay | [`photon-performance`](../crates/photon-performance/src/lib.rs) and the Engine adapter |
+| Semantic haptic feedback | [`photon-haptics`](../crates/photon-haptics/src/lib.rs) |
 | Shared GPUI window size and layout measurements | [`platform/ui/metrics.rs`](../crates/photon-shell/src/platform/ui/metrics.rs) |
 | Native window controls and materials | [`platform/macos/window_settings.rs`](../crates/photon-shell/src/platform/macos/window_settings.rs) and [`platform/linux/window_settings.rs`](../crates/photon-shell/src/platform/linux/window_settings.rs) |
-| Shell colors, appearance, transparency, or theme mapping | [`ui/theme.rs`](../crates/photon-shell/src/platform/ui/theme.rs) |
+| Shell theme values | [`theme.toml`](../crates/photon-shell/theme.toml) and [`ui/theme.rs`](../crates/photon-shell/src/platform/ui/theme.rs) |
 | Menus, popovers, and shared controls | [`ui/menu.rs`](../crates/photon-shell/src/platform/ui/menu.rs) and [`ui/controls.rs`](../crates/photon-shell/src/platform/ui/controls.rs) |
 | The browser's name, bundle identifier, page scheme, profile folder, logo, or app icon | [`photon-brand`](../crates/photon-brand/src/lib.rs) |
-| Shared layout, spacing, corner radii, or type sizes | [`ui/metrics.rs`](../crates/photon-shell/src/platform/ui/metrics.rs) |
+| Shared layout, spacing, or type sizes | [`ui/metrics.rs`](../crates/photon-shell/src/platform/ui/metrics.rs) |
 | Window layout or app startup | [`ui/window/`](../crates/photon-shell/src/platform/ui/window/mod.rs) |
 | Dialogs, modals, and buttons | [`ui/js_dialog.rs`](../crates/photon-shell/src/platform/ui/js_dialog.rs), [`ui/modal.rs`](../crates/photon-shell/src/platform/ui/modal.rs), [`ui/button.rs`](../crates/photon-shell/src/platform/ui/button.rs), and [`photon-core/src/dialogs.rs`](../crates/photon-core/src/dialogs.rs) |
 | Crash recovery and its notices | [`photon-core/src/crashes.rs`](../crates/photon-core/src/crashes.rs), [`ui/window/alerts.rs`](../crates/photon-shell/src/platform/ui/window/alerts.rs), and [`ui/status_chip.rs`](../crates/photon-shell/src/platform/ui/status_chip.rs) |
@@ -206,7 +220,8 @@ owned by the shell; the presentation XPC implementation lives inside
 
 Keep macOS window policy in `platform/macos/window_settings.rs`, Linux window
 policy in `platform/linux/window_settings.rs`, shared measurements in
-`platform/ui/metrics.rs`, shared shell color roles in `platform/ui/theme.rs`,
+`platform/ui/metrics.rs`, shared shell color roles in `platform/ui/theme.rs` and
+their values in `theme.toml`,
 browser rules in core and omnibox, frame lifecycle in the macOS presentation
 module, and XPC transport in
 `photon-presentation-ipc`. Add a crate only when the code has an independent

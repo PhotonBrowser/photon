@@ -4,7 +4,7 @@
 use gpui::{Action, Context, InteractiveElement, Window};
 use gpui_elements::editable_text::actions::{
     DeleteLeft, DeleteRight, DeleteToLineEnd, DeleteToLineStart, DeleteWordLeft, DeleteWordRight,
-    NavDown, NavUp,
+    NavDown, NavUp, Tab,
 };
 use photon_core::SuggestionKind;
 
@@ -82,12 +82,17 @@ impl Omnibox {
         element
             .capture_action(cx.listener(Self::select_previous))
             .capture_action(cx.listener(Self::select_next))
+            .capture_action(cx.listener(Self::focus_next))
             .capture_action(cx.listener(Self::note_deletion::<DeleteLeft>))
             .capture_action(cx.listener(Self::note_deletion::<DeleteRight>))
             .capture_action(cx.listener(Self::note_deletion::<DeleteWordLeft>))
             .capture_action(cx.listener(Self::note_deletion::<DeleteWordRight>))
             .capture_action(cx.listener(Self::note_deletion::<DeleteToLineStart>))
             .capture_action(cx.listener(Self::note_deletion::<DeleteToLineEnd>))
+    }
+
+    fn focus_next(&mut self, _: &Tab, window: &mut Window, cx: &mut Context<Self>) {
+        window.focus_next(cx);
     }
 
     fn note_deletion<A: Action>(&mut self, _: &A, _: &mut Window, cx: &mut Context<Self>) {
@@ -100,6 +105,7 @@ impl Omnibox {
             cx.propagate();
             return;
         }
+        cx.stop_propagation();
         self.select(self.selected.saturating_sub(1), cx);
     }
 
@@ -108,13 +114,14 @@ impl Omnibox {
             cx.propagate();
             return;
         }
+        cx.stop_propagation();
         self.select((self.selected + 1).min(self.suggestions.len() - 1), cx);
     }
 
     /// Highlights the suggestion at `index` and shows it in the field: the
     /// typed text and its completion for the first, otherwise the
     /// suggestion's address or query.
-    fn select(&mut self, index: usize, cx: &mut Context<Self>) {
+    pub(super) fn select(&mut self, index: usize, cx: &mut Context<Self>) {
         self.selected = index;
         let (text, selection_start) = match (index, &self.completion) {
             (0, Some(completion)) => (completion.clone(), self.typed.len()),
@@ -162,9 +169,16 @@ impl Omnibox {
 
     /// Follows the pointer over the rows. Leaving one row and entering the
     /// next can arrive in either order.
-    pub(super) fn hover(&mut self, index: Option<usize>, cx: &mut Context<Self>) {
-        if index.is_some() || self.hovered.is_some() {
-            self.hovered = index;
+    pub(super) fn hover(&mut self, index: usize, hovered: bool, cx: &mut Context<Self>) {
+        let next = if hovered {
+            Some(index)
+        } else if self.hovered == Some(index) {
+            None
+        } else {
+            self.hovered
+        };
+        if self.hovered != next {
+            self.hovered = next;
             cx.notify();
         }
     }

@@ -23,7 +23,7 @@ pub(crate) fn page_surface(
     div()
         .size_full()
         .relative()
-        .rounded(px(metrics::PAGE_RADIUS))
+        .rounded(px(metrics::page_radius()))
         .bg(rgb(palette.background))
         .child(
             div()
@@ -34,7 +34,7 @@ pub(crate) fn page_surface(
                 .aria_label("Linux renderer not implemented yet")
                 .px(px(metrics::CHIP_PADDING))
                 .py(px((metrics::CHIP_HEIGHT - metrics::CHIP_FONT_SIZE) / 2.0))
-                .rounded(px(metrics::CHIP_RADIUS))
+                .rounded(px(metrics::chip_radius()))
                 .border_1()
                 .border_color(rgba(palette.notice_border))
                 .bg(rgb(palette.notice_surface))

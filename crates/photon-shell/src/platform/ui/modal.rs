@@ -17,7 +17,7 @@ pub(super) fn modal_panel(palette: ThemeColors) -> Div {
         .max_w_full()
         .gap(px(metrics::MODAL_GAP))
         .p(px(metrics::MODAL_PADDING))
-        .rounded(px(metrics::SURFACE_RADIUS))
+        .rounded(px(metrics::surface_radius()))
         .border_1()
         .border_color(rgba(palette.menu_border))
         .raised(palette)
