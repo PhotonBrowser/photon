@@ -1,30 +1,34 @@
+<p align="center"><img src="crates/photon-brand/assets/logo.svg" alt="Photon" width="96" /></p>
+
 # Photon
 
-Photon is a native Rust browser shell around the Ladybird-derived Photon Engine. GPUI-CE owns the native window and samples real Engine IOSurfaces through Metal.
+<p align="center"><strong>A browser built on <a href="https://ladybird.org">Ladybird</a>.</strong></p>
 
-```text
-Photon Rust application
-        ↓
-     GPUI-CE
-        ↓
-   PhotonWebView
-        ↓
-Photon presentation broker
-        ↓ IOSurface + MTLSharedEvent
-Ladybird / Skia
-```
+<p align="center">
+  <a href="#run-from-source">Run from source</a> ·
+  <a href="Documentation/Architecture.md">Architecture</a> ·
+  <a href="Documentation/Roadmap.md">Roadmap</a>
+</p>
 
-The shell is native GPUI throughout: a vertical tab sidebar with favourites, an omnibox with history suggestions, menus, and the browser's own pages such as the new tab page and settings. Each web page is an Engine view. Browser state stays in Rust; page pixels and platform handles never enter a JavaScript runtime.
+## Run from source
 
-## Get started
-
-```bash
+```sh
 git clone --recurse-submodules https://github.com/PhotonBrowser/photon.git
 cd photon
 ./photon setup
 ./photon run
 ```
 
-See [Contributor setup](CONTRIBUTOR_SETUP.md), [Building Photon](Documentation/Building.md), [Architecture](Documentation/Architecture.md), [theme and style tokens](Documentation/Theme.md), [PhotonWebView](Documentation/WebView.md), [tab layouts and the sidebar](Documentation/Sidebar.md), the [customizable browser workspace plan](Documentation/Customization.md), [the browser's own pages](Documentation/Pages.md), [profile, settings, history and branding](Documentation/Profile.md), [the omnibox](Documentation/Omnibox.md), and [upstream maintenance](Documentation/Upstream.md). Performance results are in [Performance](Documentation/Performance.md). Current features and what comes next are in the [Roadmap](Documentation/Roadmap.md).
+## Develop Photon
 
-Photon Engine is maintained in [PhotonBrowser/photon-engine](https://github.com/PhotonBrowser/photon-engine), downstream of Ladybird. Photon maintains its GPUI-CE fork at [PhotonBrowser/gpui-ce](https://github.com/PhotonBrowser/gpui-ce), upstream of [gpui-ce/gpui-ce](https://github.com/gpui-ce/gpui-ce).
+Start with [contributor setup](CONTRIBUTOR_SETUP.md), [building Photon](Documentation/Building.md), and the [architecture guide](Documentation/Architecture.md). The [roadmap](Documentation/Roadmap.md) describes current work.
+
+<details>
+<summary>Rust crate guides</summary>
+
+- [photon-app](crates/photon-app/README.md) · [photon-brand](crates/photon-brand/README.md) · [photon-cli](crates/photon-cli/README.md) · [photon-core](crates/photon-core/README.md)
+- [photon-ffi](crates/photon-ffi/README.md) · [photon-haptics](crates/photon-haptics/README.md) · [photon-omnibox](crates/photon-omnibox/README.md) · [photon-performance](crates/photon-performance/README.md)
+- [photon-presentation-broker](crates/photon-presentation-broker/README.md) · [photon-presentation-ipc](crates/photon-presentation-ipc/README.md) · [photon-shell](crates/photon-shell/README.md)
+- [photon-shortcuts](crates/photon-shortcuts/README.md) · [photon-storage](crates/photon-storage/README.md) · [photon-tab-sleep](crates/photon-tab-sleep/README.md) · [gpui-motion](crates/gpui-motion/README.md)
+
+</details>

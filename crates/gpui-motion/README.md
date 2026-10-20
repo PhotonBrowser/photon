@@ -1,4 +1,6 @@
-# gpui-motion
+<p align="center"><img src="../photon-brand/assets/logo.svg" alt="Photon" width="72" /></p>
+
+# `gpui-motion`
 
 Reusable animation mechanics for applications built with GPUI-CE. The crate is
 independent of Photon and does not provide a scheduler: it composes on GPUI's
