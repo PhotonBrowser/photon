@@ -130,7 +130,21 @@ impl Omnibox {
         let this = cx.entity().downgrade();
         let keystroke_subscription = cx.intercept_keystrokes(move |event, window, cx| {
             this.update(cx, |this, cx| {
-                if !this.is_editing(window, cx) || event.keystroke.modifiers.modified() {
+                if !this.is_editing(window, cx) {
+                    return;
+                }
+
+                if event.keystroke.key == "backspace"
+                    && !event.keystroke.modifiers.modified()
+                    && this.completion.is_some()
+                {
+                    // Mark this before EditableText dispatches DeleteLeft. This
+                    // keeps the suggestion rows but prevents the selected
+                    // inline completion from being filled again after deletion.
+                    this.deleting = true;
+                }
+
+                if event.keystroke.modifiers.modified() {
                     return;
                 }
 
