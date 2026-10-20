@@ -300,7 +300,7 @@ impl SettingsPage {
                 item.bg(rgba(palette.selected_surface))
                     .font_weight(FontWeight::MEDIUM)
             } else {
-                item.hover(|style| style.bg(rgba(palette.hover_surface)))
+                item.hover_style(|style| style.bg(rgba(palette.hover_surface)))
             }
         });
         let saved_note = if Settings::is_saved(cx) {

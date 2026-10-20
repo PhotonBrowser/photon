@@ -122,7 +122,7 @@ fn space_dot(index: usize, space: SpaceDot, palette: ThemeColors) -> impl IntoEl
         .items_center()
         .justify_center()
         .rounded_full()
-        .hover(|style| style.bg(rgba(palette.hover_surface)))
+        .hover_style(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
         .pressable()
         .on_mouse_down(MouseButton::Right, space.on_context_menu)

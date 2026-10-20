@@ -65,7 +65,7 @@ pub(super) fn button(
         .role(Role::Button)
         .aria_label(label.clone())
         .aria_disabled(!enabled)
-        .focus_visible(|style| {
+        .focus_visible_style(|style| {
             style.border_color(rgb(if primary {
                 palette.on_chosen
             } else {
@@ -103,14 +103,14 @@ pub(super) fn button(
         .pressable()
         .on_click(on_click);
     match kind {
-        ButtonKind::Primary => button.hover(|style| {
+        ButtonKind::Primary => button.hover_style(|style| {
             style
                 .bg(rgb(palette.chosen_hover))
                 .border_color(rgb(palette.chosen_hover))
         }),
-        ButtonKind::Secondary => button.hover(|style| style.bg(rgba(palette.surface_hover))),
+        ButtonKind::Secondary => button.hover_style(|style| style.bg(rgba(palette.surface_hover))),
         ButtonKind::Destructive => {
-            button.hover(|style| style.bg(rgba(palette.error_hover_surface)))
+            button.hover_style(|style| style.bg(rgba(palette.error_hover_surface)))
         }
     }
 }
@@ -151,7 +151,7 @@ pub(super) fn icon_button(
     icon_pressable(
         button
             .tab_index(0)
-            .hover(|style| style.bg(rgba(palette.hover_surface)))
+            .hover_style(|style| style.bg(rgba(palette.hover_surface)))
             .owns_clicks(),
     )
     .on_click(on_click)
@@ -189,7 +189,7 @@ pub(super) fn toolbar_button(
     icon_pressable(
         button
             .tab_index(tab_index)
-            .hover(|style| style.bg(rgba(palette.hover_surface)))
+            .hover_style(|style| style.bg(rgba(palette.hover_surface)))
             .owns_clicks(),
     )
     .on_click(on_click)
@@ -213,7 +213,7 @@ pub(super) fn menu_button(
         .justify_center()
         .size(px(metrics::TOOLBAR_BUTTON_SIZE))
         .rounded(px(metrics::control_radius()))
-        .hover(|style| style.bg(rgba(palette.hover_surface)))
+        .hover_style(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks();
     icon_pressable(button).on_click(on_click).child(more_icon(
         palette.text_secondary,

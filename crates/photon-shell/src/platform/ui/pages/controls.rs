@@ -122,7 +122,7 @@ fn row(
         .rounded(px(metrics::control_radius()))
         .text_size(px(metrics::INTERNAL_PAGE_BODY_SIZE))
         .text_color(rgb(palette.text_primary))
-        .hover(|style| style.bg(rgba(palette.hover_surface)))
+        .hover_style(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
         .pressable()
         .on_click(on_toggle)

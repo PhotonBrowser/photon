@@ -134,7 +134,7 @@ fn strip_tab(parts: TabParts, palette: ThemeColors) -> impl IntoElement {
         let tab = if parts.active {
             tab.bg(rgba(palette.selected_surface))
         } else {
-            tab.hover(|style| style.bg(rgba(palette.hover_surface)))
+            tab.hover_style(|style| style.bg(rgba(palette.hover_surface)))
         };
         return animate_tab_motion(
             tab.child(parts.icon),
@@ -158,7 +158,7 @@ fn strip_tab(parts: TabParts, palette: ThemeColors) -> impl IntoElement {
     let tab = if parts.active {
         tab.bg(rgba(palette.selected_surface))
     } else {
-        tab.hover(|style| style.bg(rgba(palette.hover_surface)))
+        tab.hover_style(|style| style.bg(rgba(palette.hover_surface)))
     };
     animate_tab_motion(
         tab.child(parts.icon)
@@ -187,7 +187,7 @@ fn new_tab_button(
         .size(px(metrics::TAB_HEIGHT))
         .rounded(px(metrics::control_radius()))
         .text_color(rgb(palette.text_secondary))
-        .hover(|style| style.bg(rgba(palette.hover_surface)))
+        .hover_style(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
         .pressable()
         .on_click(on_click)

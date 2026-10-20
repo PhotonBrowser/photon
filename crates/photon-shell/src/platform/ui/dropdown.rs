@@ -180,7 +180,7 @@ impl RenderOnce for Dropdown {
             .justify_between()
             .control_surface(palette)
             .when(open, |control| control.bg(rgba(palette.selected_surface)))
-            .hover(|style| style.bg(rgba(palette.surface_hover)))
+            .hover_style(|style| style.bg(rgba(palette.surface_hover)))
             .text_size(px(metrics::BUTTON_FONT_SIZE))
             .text_color(rgb(palette.text_primary))
             .owns_clicks()

@@ -139,7 +139,7 @@ fn suggestion_row(
             metrics::OMNIBOX_HORIZONTAL_PADDING - metrics::OMNIBOX_SUGGESTIONS_INSET
         ))
         .rounded(px(metrics::menu_item_radius()))
-        .hover(|style| style.bg(gpui::rgba(palette.hover_surface)))
+        .hover_style(|style| style.bg(gpui::rgba(palette.hover_surface)))
         .child(suggestion_icon(suggestion, palette, cx))
         .child(
             div()

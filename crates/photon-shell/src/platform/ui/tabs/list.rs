@@ -155,7 +155,7 @@ fn tab_row(parts: TabParts, palette: ThemeColors) -> AnyElement {
     let row = if parts.active {
         row.bg(rgba(palette.selected_surface))
     } else {
-        row.hover(|style| style.bg(rgba(palette.hover_surface)))
+        row.hover_style(|style| style.bg(rgba(palette.hover_surface)))
     };
     let close = if parts.active {
         parts.close
@@ -166,7 +166,7 @@ fn tab_row(parts: TabParts, palette: ThemeColors) -> AnyElement {
             .close
             .tab_stop(false)
             .opacity(0.0)
-            .group_hover(parts.group, |style| style.opacity(1.0))
+            .group_hover_style(parts.group, |style| style.opacity(1.0))
     };
     animate_tab_motion(
         row.child(parts.icon)
@@ -191,7 +191,7 @@ fn tab_tile(parts: TabParts, palette: ThemeColors) -> AnyElement {
     let tile = if parts.active {
         tile.bg(rgba(palette.selected_surface))
     } else {
-        tile.hover(|style| style.bg(rgba(palette.hover_surface)))
+        tile.hover_style(|style| style.bg(rgba(palette.hover_surface)))
     };
     animate_tab_motion(
         tile.child(parts.icon),
@@ -218,7 +218,7 @@ fn new_tab_row(
         .rounded(px(metrics::sidebar_item_radius()))
         .text_size(px(metrics::SIDEBAR_FONT_SIZE))
         .text_color(rgb(palette.text_secondary))
-        .hover(|style| style.bg(rgba(palette.hover_surface)))
+        .hover_style(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
         .pressable()
         .on_click(on_click)

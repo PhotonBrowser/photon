@@ -194,7 +194,7 @@ pub(super) trait FocusRing: InteractiveElement + Styled + Sized {
     fn focus_ring_in(self, color: u32) -> Self {
         self.border_1()
             .border_color(gpui::transparent_black())
-            .focus_visible(move |style| style.border_color(rgb(color)))
+            .focus_visible_style(move |style| style.border_color(rgb(color)))
     }
 }
 
@@ -234,11 +234,11 @@ pub(super) fn choices(
             segment
                 .bg(rgb(palette.chosen))
                 .text_color(rgb(palette.on_chosen))
-                .hover(|style| style.bg(rgb(palette.chosen_hover)))
+                .hover_style(|style| style.bg(rgb(palette.chosen_hover)))
         } else {
             segment
                 .text_color(rgb(palette.text_primary))
-                .hover(|style| style.bg(rgba(palette.hover_surface)))
+                .hover_style(|style| style.bg(rgba(palette.hover_surface)))
         }
     });
     h_stack()
@@ -640,11 +640,11 @@ pub(super) fn swatches(
                 gpui::transparent_black()
             })
             .when(!option.chosen, |ring| {
-                ring.hover(|style| style.border_color(rgba(palette.selected_surface)))
+                ring.hover_style(|style| style.border_color(rgba(palette.selected_surface)))
             })
             // Focus rings in the text colour, apart from the chosen ring's
             // accent, so a focused swatch never looks chosen.
-            .focus_visible(|style| style.border_color(rgb(palette.text_primary)))
+            .focus_visible_style(|style| style.border_color(rgb(palette.text_primary)))
             .owns_clicks()
             .pressable()
             .on_click(option.on_choose)
@@ -762,12 +762,12 @@ impl RenderOnce for Switch {
             .when(visual_on, |track| {
                 track
                     .bg(rgb(palette.chosen))
-                    .hover(|style| style.bg(rgb(palette.chosen_hover)))
+                    .hover_style(|style| style.bg(rgb(palette.chosen_hover)))
             })
             .when(!visual_on, |track| {
                 track
                     .bg(rgba(palette.selected_surface))
-                    .hover(|style| style.bg(rgba(palette.hover_surface)))
+                    .hover_style(|style| style.bg(rgba(palette.hover_surface)))
             })
             .child(
                 div()

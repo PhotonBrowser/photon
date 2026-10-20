@@ -60,7 +60,7 @@ pub(super) fn color_picker(
             .control_surface(palette)
             .text_size(px(metrics::INTERNAL_PAGE_BODY_SIZE))
             .text_color(rgb(palette.text_primary))
-            .hover(|style| style.bg(rgba(palette.hover_surface)))
+            .hover_style(|style| style.bg(rgba(palette.hover_surface)))
             .owns_clicks()
             .on_mouse_down_all(move |event, phase, _, _, _| {
                 if phase == gpui::DispatchPhase::Capture && event.button == gpui::MouseButton::Left

@@ -204,8 +204,8 @@ fn favourite_tile(
             palette.surface
         }))
         .when(!tile.active, |tile| {
-            tile.hover(|style| style.bg(rgba(palette.surface_hover)))
-                .active(|style| style.bg(rgba(palette.selected_surface)))
+            tile.hover_style(|style| style.bg(rgba(palette.surface_hover)))
+                .active_style(|style| style.bg(rgba(palette.selected_surface)))
         })
         .owns_clicks()
         .pressable()

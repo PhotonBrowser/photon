@@ -83,7 +83,7 @@ pub struct PressSpec {
 pub fn pressable<E: StatefulInteractiveElement + Styled>(element: E, spec: PressSpec) -> E {
     element
         .transitions(|transitions| transitions.scale(Motion::spring(spec.spring)))
-        .active(|style| style.scale(spec.scale))
+        .active_style(|style| style.scale(spec.scale))
 }
 
 /// Adds a spring scale transition to a stateful interactive element.

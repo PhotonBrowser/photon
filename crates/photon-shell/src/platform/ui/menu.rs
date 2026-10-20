@@ -171,7 +171,7 @@ fn menu_item(
     pressable(menu_row(id, label.into(), role).tab_index(tab_index))
         .focus_ring(palette)
         .rounded(px(metrics::menu_item_radius()))
-        .hover(|style| style.bg(rgba(palette.hover_surface)))
+        .hover_style(|style| style.bg(rgba(palette.hover_surface)))
 }
 
 /// A menu row's layout, with a label that is cut short when too long.

@@ -153,7 +153,7 @@ fn tile(
         .py(px(metrics::INTERNAL_PAGE_GROUP_GAP))
         .px(px(metrics::SHORTCUT_GAP))
         .rounded(px(metrics::surface_radius()))
-        .hover(|style| style.bg(rgba(palette.hover_surface)))
+        .hover_style(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
         .child(
             h_stack()

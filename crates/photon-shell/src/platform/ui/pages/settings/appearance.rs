@@ -414,7 +414,7 @@ fn theme_card(
         .min_w_0()
         .items_center()
         .gap(px(metrics::MENU_ITEM_GAP))
-        .focus_visible(|style| style.bg(rgba(palette.hover_surface)))
+        .focus_visible_style(|style| style.bg(rgba(palette.hover_surface)))
         .pressable()
         .on_click(on_choose)
         .child(
@@ -550,7 +550,7 @@ fn accent_color_section(
             } else {
                 gpui::transparent_black()
             })
-            .focus_visible(|style| style.border_color(rgb(palette.chosen)))
+            .focus_visible_style(|style| style.border_color(rgb(palette.chosen)))
             .pressable()
             .on_click(change(move |settings| {
                 if let Some(space) = settings.spaces.get_mut(active_space_id) {
