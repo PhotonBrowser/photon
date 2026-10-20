@@ -8,7 +8,7 @@ use super::super::button::{menu_button, toolbar_button};
 use super::super::icons::{back_icon, close_icon, forward_icon, reload_icon};
 use super::super::layout::{h_stack, v_stack};
 use super::super::settings::Settings;
-use super::super::tabs::{TabDragMove, tab_strip};
+use super::super::tabs::{TabDragAxis, TabDragMove, tab_strip};
 use super::super::titlebar::titlebar;
 use super::super::toolbar::toolbar_row;
 use super::super::workspace_layout::{ComponentId, WorkspaceLayout};
@@ -134,6 +134,12 @@ impl BrowserWindow {
                 self.tab_strip_scroll.clone(),
                 palette,
                 crate::platform::supports_elastic_scroll() && Settings::get(cx).elastic_scroll,
+                self.tab_reorder_groups
+                    .group(TabDragAxis::Horizontal, true)
+                    .clone(),
+                self.tab_reorder_groups
+                    .group(TabDragAxis::Horizontal, false)
+                    .clone(),
             );
             return if region == DockRegion::Top {
                 self.with_browser_menu(titlebar(strip, window, palette), cx)

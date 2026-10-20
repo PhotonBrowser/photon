@@ -114,6 +114,7 @@ pub(crate) fn setup(root: &Path, verbose: bool) -> Result<(), String> {
     }
     crate::commands::engine::edit(root, verbose)?;
     crate::commands::gpui::edit(root, verbose)?;
+    crate::commands::motion::edit(root, verbose)?;
     for path in ["build/engine-debug", "build/app-debug", "build/bin"] {
         std::fs::create_dir_all(root.join(path)).map_err(|e| e.to_string())?;
     }

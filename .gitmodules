@@ -4,3 +4,7 @@
 [submodule "vendor/gpui-ce"]
 	path = vendor/gpui-ce
 	url = git@github.com:PhotonBrowser/gpui-ce.git
+[submodule "crates/gpui-motion"]
+	path = crates/gpui-motion
+	url = git@github.com:PhotonBrowser/gpui-motion.git
+	branch = main

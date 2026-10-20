@@ -2,7 +2,11 @@ use std::path::Path;
 
 use crate::support::{command, output, stage, success};
 
-const DEPENDENCIES: [(&str, &str); 2] = [("Engine", "master"), ("vendor/gpui-ce", "main")];
+const DEPENDENCIES: [(&str, &str); 3] = [
+    ("Engine", "master"),
+    ("vendor/gpui-ce", "main"),
+    ("crates/gpui-motion", "main"),
+];
 
 pub(crate) fn pin(root: &Path, verbose: bool) -> Result<(), String> {
     let mut changed = Vec::new();
@@ -73,6 +77,28 @@ pub(crate) fn pin(root: &Path, verbose: bool) -> Result<(), String> {
             verbose,
         )?;
         command("cargo", &["test", "-p", "gpui_ce_apple"], &gpui_ce, verbose)?;
+    }
+    if changed.contains(&"crates/gpui-motion") {
+        command(
+            "cargo",
+            &[
+                "test",
+                "--manifest-path",
+                "crates/gpui-motion/Cargo.toml",
+                "--features",
+                "gpui,native-tests",
+                "--test",
+                "advanced_native",
+                "--test",
+                "features",
+                "--test",
+                "motion",
+                "--config",
+                "patch.crates-io.gpui-ce.path=\"vendor/gpui-ce/crates/gpui\"",
+            ],
+            root,
+            verbose,
+        )?;
     }
     crate::commands::check::check(root, verbose)?;
     crate::commands::tests::run(root, verbose)?;

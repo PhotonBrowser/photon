@@ -184,7 +184,7 @@ impl RenderOnce for Dropdown {
             .text_size(px(metrics::BUTTON_FONT_SIZE))
             .text_color(rgb(palette.text_primary))
             .owns_clicks()
-            .pressable()
+            .pressable_with_focus(focus.clone())
             .on_click(move |_, window, cx| toggle(!open, window, cx))
             // Closed, Up and Down step through the options without opening
             // the menu, as a native pop-up button does.

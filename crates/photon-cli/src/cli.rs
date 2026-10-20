@@ -79,16 +79,21 @@ enum Command {
     Format,
     /// Verify and commit the current dependency branch tips as Photon pins.
     Pin,
-    /// Merge Ladybird and GPUI-CE upstream changes into the Photon branches.
+    /// Merge Ladybird, GPUI-CE, and gpui-motion upstream changes into Photon branches.
     Sync {
         /// Fetch and preview commit counts and merge conflicts without merging.
         #[arg(long)]
         check: bool,
     },
-    /// Switch between pinned GPUI-CE and its persistent edit branch.
+    /// Maintain the vendored GPUI-CE checkout.
     Gpui {
         #[command(subcommand)]
         command: GpuiCommand,
+    },
+    /// Maintain Photon’s gpui-motion fork.
+    Motion {
+        #[command(subcommand)]
+        command: MotionCommand,
     },
     /// Run Rust workspace tests.
     Test,
@@ -112,6 +117,20 @@ enum GpuiCommand {
     /// Return GPUI-CE to the revision pinned by this Photon checkout.
     Pin,
     /// Merge the configured upstream GPUI-CE branch into the Photon branch.
+    Sync {
+        /// Fetch and preview commit counts and merge conflicts without merging.
+        #[arg(long)]
+        check: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum MotionCommand {
+    /// Switch gpui-motion to its persistent Photon development branch.
+    Edit,
+    /// Return gpui-motion to the revision pinned by this Photon checkout.
+    Pin,
+    /// Merge the configured upstream gpui-motion branch into the Photon fork.
     Sync {
         /// Fetch and preview commit counts and merge conflicts without merging.
         #[arg(long)]
@@ -200,10 +219,12 @@ pub fn run() -> Result<(), String> {
         Some(Command::Sync { check }) => {
             if check {
                 commands::engine::check_upstream(&root, verbose)?;
-                commands::gpui::check_upstream(&root, verbose)
+                commands::gpui::check_upstream(&root, verbose)?;
+                commands::motion::check_upstream(&root, verbose)
             } else {
                 commands::engine::engine(&root, Some("sync"), false, verbose)?;
-                commands::gpui::sync(&root, verbose)
+                commands::gpui::sync(&root, verbose)?;
+                commands::motion::sync(&root, verbose)
             }
         }
         Some(Command::Gpui { command }) => match command {
@@ -214,6 +235,17 @@ pub fn run() -> Result<(), String> {
                     commands::gpui::check_upstream(&root, verbose)
                 } else {
                     commands::gpui::sync(&root, verbose)
+                }
+            }
+        },
+        Some(Command::Motion { command }) => match command {
+            MotionCommand::Edit => commands::motion::edit(&root, verbose),
+            MotionCommand::Pin => commands::motion::pin(&root, verbose),
+            MotionCommand::Sync { check } => {
+                if check {
+                    commands::motion::check_upstream(&root, verbose)
+                } else {
+                    commands::motion::sync(&root, verbose)
                 }
             }
         },

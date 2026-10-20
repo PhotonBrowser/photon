@@ -5,9 +5,9 @@
 
 use gpui::{
     AccessibleAction, App, Bounds, ClickEvent, Context, DispatchPhase, Div, DragMoveEvent,
-    ElementId, FontWeight, InteractiveElement, KeyDownEvent, MouseButton, MouseClickEvent,
-    MouseDownEvent, Pixels, Render, Role, SharedString, Stateful, StatefulInteractiveElement,
-    Toggled, Window, div, prelude::*, px, rgb, rgb_to_hsla, rgba,
+    ElementId, FocusHandle, FontWeight, InteractiveElement, KeyDownEvent, MouseButton,
+    MouseClickEvent, MouseDownEvent, Pixels, Render, Role, SharedString, Stateful,
+    StatefulInteractiveElement, Toggled, Window, div, prelude::*, px, rgb, rgb_to_hsla, rgba,
 };
 use gpui_elements::editable_text::EditableTextElement;
 use photon_haptics::Feedback;
@@ -19,7 +19,7 @@ use super::motion::{AnimateIn, fade};
 use super::motion::{
     CONTROL_THUMB_HELD_STRETCH_X, SLIDER_EDGE_STRETCH_MAX, SLIDER_EDGE_STRETCH_SPEED_RANGE,
     SLIDER_EDGE_STRETCH_SPEED_THRESHOLD, control_scale_transition, control_thumb_transition,
-    control_thumb_transition_tracking, pressable,
+    pressable, pressable_with_focus,
 };
 use super::{ClickHandler, metrics, theme::ThemeColors};
 use std::cell::Cell;
@@ -123,16 +123,17 @@ impl RenderOnce for StretchThumb {
             .h(px(height))
             .flex_shrink_0()
             .child(control_thumb_transition(
+                id,
                 div()
-                    .id(id)
                     .absolute()
                     .top(px(0.0))
-                    .left(px(offset))
-                    .w(px(width + extension))
                     .h(px(height))
                     .rounded_full()
                     .bg(rgb(color))
                     .elevated(Elevation::Low),
+                offset,
+                width + extension,
+                false,
                 &animations,
             ))
     }
@@ -174,8 +175,18 @@ where
 
 /// Adds the shared pressed scale to a control that responds to user input.
 pub(super) trait Pressable: StatefulInteractiveElement + Styled + Sized {
-    fn pressable(self) -> Self {
+    fn pressable(self) -> gpui_motion::PressScaleElement<Self>
+    where
+        Self: IntoElement + 'static,
+    {
         pressable(self)
+    }
+
+    fn pressable_with_focus(self, focus_handle: FocusHandle) -> gpui_motion::PressScaleElement<Self>
+    where
+        Self: IntoElement + 'static,
+    {
+        pressable_with_focus(self, focus_handle)
     }
 }
 
@@ -363,20 +374,21 @@ impl RenderOnce for IntensitySlider {
             .flex_grow(1.0 - fraction)
             .rounded_full()
             .bg(rgba(palette.control_border));
+        let track_contents_id = ElementId::Name(format!("{id}-slider-contents").into());
         let track_contents = control_scale_transition(
+            track_contents_id,
             div()
-                .id(ElementId::Name(format!("{id}-slider-contents").into()))
                 .relative()
-                .left(px(stretch.offset))
                 .flex()
                 .flex_row()
                 .items_center()
                 .w_full()
                 .h(px(metrics::INTENSITY_SLIDER_THUMB_HEIGHT))
-                .scale_xy(1.0 + stretch.scale, 1.0)
                 .child(active_track)
                 .child(thumb)
                 .child(remaining_track),
+            stretch.offset,
+            1.0 + stretch.scale,
             thumb_is_pressed,
             &animations,
         );
@@ -741,16 +753,20 @@ impl RenderOnce for Switch {
             .clamp(0.0, track_inner_width - thumb_width);
 
         let thumb = div()
-            .id(ElementId::Name(format!("{id}-switch-thumb").into()))
             .absolute()
-            .left(px(thumb_left))
             .top(px(0.0))
-            .w(px(thumb_width))
             .h(px(metrics::SWITCH_KNOB_HEIGHT))
             .rounded_full()
             .bg(rgb(palette.on_chosen))
             .elevated(Elevation::Low);
-        let thumb = control_thumb_transition_tracking(thumb, is_dragging, &animations);
+        let thumb = control_thumb_transition(
+            ElementId::Name(format!("{id}-switch-thumb-motion").into()),
+            thumb,
+            thumb_left,
+            thumb_width,
+            is_dragging,
+            &animations,
+        );
 
         let track = div()
             .id(ElementId::Name(format!("{id}-switch-track").into()))

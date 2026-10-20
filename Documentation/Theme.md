@@ -145,6 +145,12 @@ Timing comes from `speed(Speed::Quick | Standard | Gentle)` or `duration`, plus
 `Curve::BOUNCY`. The default timing tiers are 120, 200 and 320 ms. Distances
 come from the shell's `motion::distance` values.
 
+Press feedback is opt-in at the control call site: `.pressable()` adds a
+spring scale of 0.97, and `.icon_pressable()` uses 0.92. Both use the fork's
+native gesture and scale adapter, so the child keeps its click, keyboard,
+focus, accessibility, and reduced-motion behavior. Slider stretch and switch
+thumb motion also use the fork's retained `MotionElement` state.
+
 | Preset | Effect | Used for |
 | --- | --- | --- |
 | Shell `fade()` | Quick fade | Status chips, settings sections, checkmarks |

@@ -6,10 +6,12 @@ use super::super::controls::FocusRing;
 use super::super::controls::{OwnsClicks, Pressable};
 use super::super::icons::add_icon;
 use super::super::layout::h_stack;
+use super::super::motion::ReorderGroup;
 use super::super::{ClickHandler, metrics, theme::ThemeColors};
 use super::{
     DraggedTab, TabDragAxis, TabDragMove, TabDrop, TabItem, TabParts, TabPrepaint,
-    animate_tab_motion, insertion_marker, is_foreign_tab_drag,
+    animate_tab_motion, insertion_marker, is_foreign_tab_drag, reorder_tab_items,
+    sync_reorder_order,
 };
 
 /// The tabs side by side, then a button that opens a new tab.
@@ -26,6 +28,8 @@ pub(in super::super) fn tab_strip(
     scroll_handle: ScrollHandle,
     palette: ThemeColors,
     elastic_scroll: bool,
+    pinned_reorder: ReorderGroup<u64>,
+    today_reorder: ReorderGroup<u64>,
 ) -> impl IntoElement {
     tab_strip_content(
         tabs,
@@ -36,6 +40,8 @@ pub(in super::super) fn tab_strip(
         scroll_handle,
         palette,
         elastic_scroll,
+        pinned_reorder,
+        today_reorder,
     )
     .w_full()
 }
@@ -56,7 +62,12 @@ pub(in super::super) fn tab_strip_content(
     scroll_handle: ScrollHandle,
     palette: ThemeColors,
     elastic_scroll: bool,
+    pinned_reorder: ReorderGroup<u64>,
+    today_reorder: ReorderGroup<u64>,
 ) -> gpui::Stateful<gpui::Div> {
+    sync_reorder_order(&pinned_reorder, &tabs, true);
+    sync_reorder_order(&today_reorder, &tabs, false);
+    let tabs = reorder_tab_items(tabs, &pinned_reorder, &today_reorder);
     let tab_count = tabs.len();
     let mut focus_index = 0;
     let mut tabs_element = h_stack()
@@ -68,24 +79,27 @@ pub(in super::super) fn tab_strip_content(
         .flex_initial();
     for (index, tab) in tabs.into_iter().enumerate() {
         let stops = TabParts::focus_stops(&tab.icon);
+        let reorder = if tab.pinned {
+            &pinned_reorder
+        } else {
+            &today_reorder
+        };
         let before = tab.insertion_before;
         let after = tab.insertion_after;
         if let Some(size) = before {
             tabs_element =
                 tabs_element.child(insertion_marker(TabDragAxis::Horizontal, size, palette));
         }
-        tabs_element = tabs_element.child(strip_tab(
-            TabParts::new(
-                tab,
-                index,
-                tab_count,
-                focus_index,
-                metrics::TAB_FAVICON_SIZE,
-                palette,
-                TabDragAxis::Horizontal,
-            ),
+        let parts = TabParts::new(
+            tab,
+            index,
+            tab_count,
+            focus_index,
+            metrics::TAB_FAVICON_SIZE,
             palette,
-        ));
+            TabDragAxis::Horizontal,
+        );
+        tabs_element = tabs_element.child(strip_tab(parts, palette, reorder));
         if let Some(size) = after {
             tabs_element =
                 tabs_element.child(insertion_marker(TabDragAxis::Horizontal, size, palette));
@@ -122,10 +136,17 @@ pub(in super::super) fn tab_strip_content(
 
 /// A tab sized to share the strip: icon, title and close button. A pinned
 /// tab is just its icon, at a fixed width.
-fn strip_tab(parts: TabParts, palette: ThemeColors) -> impl IntoElement {
+fn strip_tab(
+    parts: TabParts,
+    palette: ThemeColors,
+    reorder: &ReorderGroup<u64>,
+) -> impl IntoElement {
     if parts.pinned {
         let motion = parts.motion;
         let position_offset = parts.position_offset;
+        let reorder_key = parts.reorder_key;
+        let focus_handle = parts.focus_handle.clone();
+        let closing = parts.closing;
         let tab = parts
             .tab
             .flex_shrink_0()
@@ -138,15 +159,19 @@ fn strip_tab(parts: TabParts, palette: ThemeColors) -> impl IntoElement {
         } else {
             tab.hover_style(|style| style.bg(rgba(palette.hover_surface)))
         };
-        return animate_tab_motion(
+        let tab = animate_tab_motion(
             tab.child(parts.icon),
             motion,
             TabDragAxis::Horizontal,
             position_offset,
         );
+        return super::measured_tab(tab, reorder_key, focus_handle, closing, reorder);
     }
     let motion = parts.motion;
     let position_offset = parts.position_offset;
+    let reorder_key = parts.reorder_key;
+    let focus_handle = parts.focus_handle.clone();
+    let closing = parts.closing;
     let tab = parts
         .tab
         .flex_1()
@@ -163,14 +188,15 @@ fn strip_tab(parts: TabParts, palette: ThemeColors) -> impl IntoElement {
     } else {
         tab.hover_style(|style| style.bg(rgba(palette.hover_surface)))
     };
-    animate_tab_motion(
+    let tab = animate_tab_motion(
         tab.child(parts.icon)
             .child(div().flex_1().min_w_0().truncate().child(parts.label))
             .child(parts.close),
         motion,
         TabDragAxis::Horizontal,
         position_offset,
-    )
+    );
+    super::measured_tab(tab, reorder_key, focus_handle, closing, reorder)
 }
 
 fn new_tab_button(

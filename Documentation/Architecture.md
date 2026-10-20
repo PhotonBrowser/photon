@@ -85,11 +85,14 @@ presentation surface.
   chart history, current-process sampling, value formatting, chart drawing, and
   the GPUI diagnostics overlay. It has no Engine IPC, native embedder, or
   window-lifecycle dependencies.
-- `crates/gpui-motion` provides reusable GPUI entrance and exit effects,
-  presence, tweens, spring helpers, and control transitions. It depends on
-  GPUI-CE and has no Photon, browser, or native-platform dependencies. The shell
-  owns its visual presets and adapts persisted browser preferences to the
-  crate's `MotionConfig`.
+- `crates/gpui-motion` is Photon's maintained fork of `1bye/gpui-motion` and
+  provides reusable native motion, spring, measured reorder, gesture, layout,
+  and scalar-value primitives. Its GPUI adapter is patched to the same vendored
+  GPUI-CE package as the shell. The shell's `ui/motion.rs` owns Photon presets,
+  press/stretch semantics, and accessibility policy. Tab dragging continues to
+  use the shell's model and existing native drop targets; the fork's measured
+  reorder engine supplies local slot snapping and does not detach tabs into
+  windows.
 - `crates/photon-haptics` provides a semantic haptic API for Photon UI. It maps
   taps, control state changes, and alignment feedback to GPUI-CE styles, which
   handles platform support.
@@ -176,10 +179,10 @@ window and page renderer adapters.
 | `photon-presentation-ipc` | XPC protocol, client channel, descriptor transport, service entry point | macOS frameworks |
 | `photon-presentation-broker` | macOS XPC service executable | `photon-presentation-ipc` |
 
-`Engine/` and `vendor/gpui-ce/` are separately maintained submodules, not
-Photon workspace packages. `native/embedder` is the small native build target
-owned by the shell; the presentation XPC implementation lives inside
-`photon-presentation-ipc`.
+`Engine/`, `vendor/gpui-ce/`, and `crates/gpui-motion/` are separately maintained
+submodules, not Photon workspace packages. `native/embedder` is the small native
+build target owned by the shell; the presentation XPC implementation lives
+inside `photon-presentation-ipc`.
 
 ## Common edit points
 

@@ -20,7 +20,9 @@ use super::icons::{
     audio_icon, close_icon, globe_icon, loading_spinner, photon_logo, sleeping_icon,
 };
 use super::layout::{h_stack, v_stack};
-use super::motion::{AnimateIn, AnimateSpring, Entrance, SpringSpec, pop};
+use super::motion::{
+    AnimateIn, AnimateSpring, Entrance, ReorderAxis, ReorderGroup, SpringSpec, pop,
+};
 use super::{
     ClickHandler, KeyDownHandler, MouseDownHandler, MouseUpHandler, metrics, theme::ThemeColors,
 };
@@ -41,14 +43,32 @@ pub(super) fn is_foreign_tab_drag(value: &dyn std::any::Any, window: &Window) ->
         .is_some_and(|dragged| dragged.source != window.window_handle())
 }
 
-/// A stable drag payload shared by both tab layouts and native drop targets.
+/// Generic source and payload envelope for a native GPUI drag. Future external
+/// targets can add their own payload type without changing the drag lifecycle.
+/// The current tab payload only serves Photon-owned drop targets.
 #[derive(Clone)]
-pub(super) struct DraggedTab {
+pub(super) struct NativeDragHandoff<P> {
     pub source: AnyWindowHandle,
+    pub payload: P,
+}
+
+impl<P> std::ops::Deref for NativeDragHandoff<P> {
+    type Target = P;
+
+    fn deref(&self) -> &Self::Target {
+        &self.payload
+    }
+}
+
+/// A stable tab payload shared by both tab layouts and Photon drop targets.
+#[derive(Clone)]
+pub(super) struct TabDragPayload {
     pub id: u64,
     pub size: f32,
     pub pinned: bool,
 }
+
+pub(super) type DraggedTab = NativeDragHandoff<TabDragPayload>;
 
 /// An invisible GPUI drag view. The source tab itself dims during a drag.
 pub(super) struct TabDragPreview;
@@ -63,6 +83,40 @@ impl Render for TabDragPreview {
 pub(super) enum TabDragAxis {
     Horizontal,
     Vertical,
+}
+
+/// Separate measured layouts keep pinned tabs from snapping across the pinned
+/// boundary and keep each orientation's slots in its own viewport.
+#[derive(Clone)]
+pub(super) struct TabReorderGroups {
+    horizontal_pinned: ReorderGroup<u64>,
+    horizontal_today: ReorderGroup<u64>,
+    vertical_pinned: ReorderGroup<u64>,
+    vertical_today: ReorderGroup<u64>,
+}
+
+impl TabReorderGroups {
+    pub(super) fn new() -> Self {
+        Self {
+            horizontal_pinned: ReorderGroup::new(Vec::new(), ReorderAxis::X)
+                .expect("empty tab order is unique"),
+            horizontal_today: ReorderGroup::new(Vec::new(), ReorderAxis::X)
+                .expect("empty tab order is unique"),
+            vertical_pinned: ReorderGroup::new(Vec::new(), ReorderAxis::Y)
+                .expect("empty tab order is unique"),
+            vertical_today: ReorderGroup::new(Vec::new(), ReorderAxis::Y)
+                .expect("empty tab order is unique"),
+        }
+    }
+
+    pub(super) fn group(&self, axis: TabDragAxis, pinned: bool) -> &ReorderGroup<u64> {
+        match (axis, pinned) {
+            (TabDragAxis::Horizontal, true) => &self.horizontal_pinned,
+            (TabDragAxis::Horizontal, false) => &self.horizontal_today,
+            (TabDragAxis::Vertical, true) => &self.vertical_pinned,
+            (TabDragAxis::Vertical, false) => &self.vertical_today,
+        }
+    }
 }
 
 /// What a tab shows before its title.
@@ -246,6 +300,7 @@ where
 
 pub(super) struct TabItem {
     pub id: String,
+    pub reorder_key: u64,
     /// The tab's entrance or in-place closing spring.
     pub motion: Option<TabMotion>,
     /// The tab is leaving and should no longer respond to input.
@@ -281,16 +336,19 @@ pub(super) struct TabItem {
 /// A tab's parts, ready for the strip or the list to lay out.
 struct TabParts {
     /// The tab itself, with its role, focus and interactions, but no layout.
-    tab: Stateful<gpui::Div>,
+    tab: gpui_motion::PressScaleElement<Stateful<gpui::Div>>,
     icon: AnyElement,
     label: String,
-    close: Stateful<gpui::Div>,
+    close: gpui_motion::PressScaleElement<Stateful<gpui::Div>>,
     active: bool,
     pinned: bool,
     suppress_tooltips: bool,
     group: String,
     motion: Option<TabMotion>,
     position_offset: f32,
+    reorder_key: u64,
+    focus_handle: FocusHandle,
+    closing: bool,
 }
 
 impl TabParts {
@@ -314,11 +372,13 @@ impl TabParts {
         };
         let close_id = format!("{}-close", tab.id);
         let tab_id = tab.id.clone();
+        let reorder_key = tab.reorder_key;
         let audio_control = matches!(&tab.icon, TabIcon::Audio { .. });
         let position_offset = tab.position_offset;
         let animations = tab.animations;
         let motion = tab.motion.clone();
         let dragged = tab.dragging;
+        let closing = tab.closing;
         let sleeping = tab.sleeping;
         let suppress_tooltips = tab.suppress_tooltips;
         let focus_handle = tab
@@ -344,7 +404,7 @@ impl TabParts {
                 palette.text_secondary
             }))
             .owns_clicks()
-            .pressable()
+            .pressable_with_focus(focus_handle.clone())
             .on_click(tab.on_select)
             .on_key_down(tab.on_key_down)
             .on_mouse_up(MouseButton::Middle, tab.on_middle_click)
@@ -440,6 +500,9 @@ impl TabParts {
             group: tab_id,
             motion,
             position_offset,
+            reorder_key,
+            focus_handle,
+            closing,
         }
     }
 
@@ -451,6 +514,122 @@ impl TabParts {
         } else {
             2
         }
+    }
+}
+
+fn measured_tab(
+    element: AnyElement,
+    key: u64,
+    focus_handle: FocusHandle,
+    closing: bool,
+    reorder: &ReorderGroup<u64>,
+) -> AnyElement {
+    if closing {
+        return element;
+    }
+    reorder
+        .item_with_focus(
+            format!("browser-tab-reorder-{key}"),
+            key,
+            focus_handle,
+            element,
+        )
+        .drag_listener(false)
+        .into_any_element()
+}
+
+pub(super) fn sync_reorder_order(reorder: &ReorderGroup<u64>, tabs: &[TabItem], pinned: bool) {
+    if reorder.is_dragging() {
+        return;
+    }
+
+    let current = reorder.order();
+    if current.iter().copied().eq(tabs
+        .iter()
+        .filter(|tab| tab.pinned == pinned && !tab.closing)
+        .map(|tab| tab.reorder_key))
+    {
+        return;
+    }
+    drop(current);
+
+    reorder
+        .set_order(
+            tabs.iter()
+                .filter(|tab| tab.pinned == pinned && !tab.closing)
+                .map(|tab| tab.reorder_key)
+                .collect(),
+        )
+        .expect("tab IDs are unique");
+}
+
+pub(super) fn reorder_tab_items(
+    mut tabs: Vec<TabItem>,
+    pinned_reorder: &ReorderGroup<u64>,
+    today_reorder: &ReorderGroup<u64>,
+) -> Vec<TabItem> {
+    let reorder_pinned =
+        pinned_reorder.is_dragging() && !reorder_order_matches(pinned_reorder, &tabs, true);
+    let reorder_today =
+        today_reorder.is_dragging() && !reorder_order_matches(today_reorder, &tabs, false);
+    if !reorder_pinned && !reorder_today {
+        return tabs;
+    }
+
+    if reorder_pinned {
+        reorder_section(&mut tabs, pinned_reorder, true);
+    }
+    if reorder_today {
+        reorder_section(&mut tabs, today_reorder, false);
+    }
+    tabs
+}
+
+fn reorder_order_matches(reorder: &ReorderGroup<u64>, tabs: &[TabItem], pinned: bool) -> bool {
+    reorder.order().iter().copied().eq(tabs
+        .iter()
+        .filter(|tab| tab.pinned == pinned && !tab.closing)
+        .map(|tab| tab.reorder_key))
+}
+
+fn reorder_section(tabs: &mut [TabItem], reorder: &ReorderGroup<u64>, pinned: bool) {
+    if !reorder.is_dragging() {
+        return;
+    }
+
+    let order = reorder.order();
+    let count = tabs
+        .iter()
+        .filter(|tab| tab.pinned == pinned && !tab.closing)
+        .count();
+    if count != order.len()
+        || order.iter().any(|key| {
+            !tabs
+                .iter()
+                .any(|tab| tab.pinned == pinned && !tab.closing && tab.reorder_key == *key)
+        })
+    {
+        return;
+    }
+
+    // Swap only live slots in place: closing tabs keep their exit geometry and
+    // pointer-driven order changes need no temporary allocations.
+    for (target_index, key) in order.iter().enumerate() {
+        let target = tabs
+            .iter()
+            .enumerate()
+            .filter(|(_, tab)| tab.pinned == pinned && !tab.closing)
+            .nth(target_index)
+            .map(|(index, _)| index)
+            .expect("reorder group matches rendered tabs");
+        if tabs[target].reorder_key == *key {
+            continue;
+        }
+        let source = tabs
+            .iter()
+            .position(|tab| tab.pinned == pinned && !tab.closing && tab.reorder_key == *key)
+            .expect("tab key belongs to reorder group");
+        tabs.swap(target, source);
     }
 }
 
@@ -520,7 +699,7 @@ fn close_tab_button(
     on_click: ClickHandler,
     focus_index: isize,
     palette: ThemeColors,
-) -> gpui::Stateful<gpui::Div> {
+) -> gpui_motion::PressScaleElement<gpui::Stateful<gpui::Div>> {
     h_stack()
         .id(id)
         .role(Role::Button)

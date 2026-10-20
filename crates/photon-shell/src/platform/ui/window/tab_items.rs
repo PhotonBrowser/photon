@@ -208,6 +208,7 @@ impl BrowserWindow {
                 });
                 TabItem {
                     id: format!("browser-tab-{stable_id}"),
+                    reorder_key: stable_id,
                     motion,
                     closing,
                     label,
@@ -287,6 +288,7 @@ impl BrowserWindow {
                                         pinned,
                                         phase: super::TabDragPhase::PendingDrag,
                                         visual_offset: 0.0,
+                                        measured_reorder: false,
                                         target_window: None,
                                     });
                                 })
@@ -299,7 +301,7 @@ impl BrowserWindow {
                             let running = browser
                                 .update(cx, |this, _| {
                                     this.tab_geometry.insert(stable_id, bounds);
-                                    match this.tab_position_animations.get(&stable_id).copied() {
+                                    match this.tab_position_animations.get(&stable_id) {
                                         Some(animation)
                                             if animation.axis == axis && animation.is_running() =>
                                         {
@@ -326,7 +328,7 @@ impl BrowserWindow {
                         .map(|drag| drag.visual_offset)
                         .unwrap_or_else(|| {
                             super::tab_position_animation_offset(
-                                self.tab_position_animations.get(&stable_id).copied(),
+                                self.tab_position_animations.get(&stable_id),
                                 axis,
                             )
                         }),

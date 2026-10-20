@@ -75,7 +75,7 @@ pub(super) fn menu_action(
     tab_index: isize,
     on_click: ClickHandler,
     palette: ThemeColors,
-) -> gpui::Stateful<gpui::Div> {
+) -> gpui_motion::PressScaleElement<gpui::Stateful<gpui::Div>> {
     menu_item(id, label, tab_index, Role::MenuItem, palette).on_click(on_click)
 }
 
@@ -167,7 +167,7 @@ fn menu_item(
     tab_index: isize,
     role: Role,
     palette: ThemeColors,
-) -> gpui::Stateful<gpui::Div> {
+) -> gpui_motion::PressScaleElement<gpui::Stateful<gpui::Div>> {
     pressable(menu_row(id, label.into(), role).tab_index(tab_index))
         .focus_ring(palette)
         .rounded(px(metrics::menu_item_radius()))

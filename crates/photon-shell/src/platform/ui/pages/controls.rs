@@ -104,7 +104,7 @@ fn row(
     on: bool,
     palette: ThemeColors,
     on_toggle: ClickHandler,
-) -> Stateful<gpui::Div> {
+) -> gpui_motion::PressScaleElement<Stateful<gpui::Div>> {
     let label = label.into();
     h_stack()
         .id(id)

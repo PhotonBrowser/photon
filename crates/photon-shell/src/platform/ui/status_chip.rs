@@ -1,7 +1,6 @@
 //! A small status chip in the window's bottom-right corner.
 
 use gpui::{ElementId, Role, SharedString, prelude::*, px, rgb, rgba};
-use gpui_motion::MotionConfig;
 
 use super::button::{ButtonKind, ButtonSize, button, icon_button};
 use super::controls::OwnsClicks;
@@ -10,7 +9,7 @@ use super::icons::{
 };
 use super::layout::h_stack;
 use super::layout::{Elevated, Elevation, Raised};
-use super::motion::{AnimateIn, Entrance, Transition, fade};
+use super::motion::{AnimateIn, Entrance, MotionConfig, Transition, fade};
 use super::{ClickHandler, metrics, theme::ThemeColors};
 
 /// How chips appear and disappear.

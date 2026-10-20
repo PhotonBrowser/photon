@@ -7,12 +7,14 @@ use super::super::controls::FocusRing;
 use super::super::controls::{OwnsClicks, Pressable};
 use super::super::icons::add_icon;
 use super::super::layout::{h_stack, v_stack};
+use super::super::motion::ReorderGroup;
 use super::super::sidebar::collapsed_tile;
 use super::super::tooltip::label_tooltip;
 use super::super::{ClickHandler, metrics, theme::ThemeColors};
 use super::{
     DraggedTab, TabDragAxis, TabDragMove, TabDrop, TabItem, TabParts, TabPrepaint,
-    animate_tab_motion, insertion_marker, is_foreign_tab_drag,
+    animate_tab_motion, insertion_marker, is_foreign_tab_drag, reorder_tab_items,
+    sync_reorder_order,
 };
 
 /// The tabs, one row each: pinned tabs above a divider, then a row that
@@ -30,35 +32,47 @@ pub(in super::super) fn tab_list(
     on_bounds: TabPrepaint,
     collapsed: bool,
     palette: ThemeColors,
+    pinned_reorder: ReorderGroup<u64>,
+    today_reorder: ReorderGroup<u64>,
 ) -> impl IntoElement {
     let spacing = metrics::SidebarSpacing::new(collapsed);
     let suppress_tooltips = tabs.iter().any(|tab| tab.suppress_tooltips);
     let has_live_pinned = tabs.iter().any(|tab| tab.pinned && !tab.closing);
-    let layout_tab: fn(TabParts, ThemeColors) -> AnyElement =
-        if collapsed { tab_tile } else { tab_row };
+    sync_reorder_order(&pinned_reorder, &tabs, true);
+    sync_reorder_order(&today_reorder, &tabs, false);
+    let tabs = reorder_tab_items(tabs, &pinned_reorder, &today_reorder);
     let tab_count = tabs.len();
     let mut focus_index = 1;
     let (mut pinned, mut today) = (Vec::new(), Vec::new());
     for (index, tab) in tabs.into_iter().enumerate() {
         let stops = TabParts::focus_stops(&tab.icon);
-        let section = if tab.pinned { &mut pinned } else { &mut today };
+        let is_pinned = tab.pinned;
+        let section = if is_pinned { &mut pinned } else { &mut today };
+        let reorder = if is_pinned {
+            &pinned_reorder
+        } else {
+            &today_reorder
+        };
         let before = tab.insertion_before;
         let after = tab.insertion_after;
         if let Some(size) = before {
             section.push(insertion_marker(TabDragAxis::Vertical, size, palette));
         }
-        section.push(layout_tab(
-            TabParts::new(
-                tab,
-                index,
-                tab_count,
-                focus_index,
-                spacing.icon_size,
-                palette,
-                TabDragAxis::Vertical,
-            ),
+        let parts = TabParts::new(
+            tab,
+            index,
+            tab_count,
+            focus_index,
+            spacing.icon_size,
             palette,
-        ));
+            TabDragAxis::Vertical,
+        );
+        let item = if collapsed {
+            tab_tile(parts, palette, reorder)
+        } else {
+            tab_row(parts, palette, reorder)
+        };
+        section.push(item);
         if let Some(size) = after {
             section.push(insertion_marker(TabDragAxis::Vertical, size, palette));
         }
@@ -140,9 +154,12 @@ pub(in super::super) fn tab_list(
 /// A full-width row: icon, title, and a close button on the active tab and
 /// on the row under the pointer. Hidden, the close button still sits under
 /// the pointer only when its row is hovered, so it is never clicked unseen.
-fn tab_row(parts: TabParts, palette: ThemeColors) -> AnyElement {
+fn tab_row(parts: TabParts, palette: ThemeColors, reorder: &ReorderGroup<u64>) -> AnyElement {
     let motion = parts.motion;
     let position_offset = parts.position_offset;
+    let reorder_key = parts.reorder_key;
+    let focus_handle = parts.focus_handle.clone();
+    let closing = parts.closing;
     let row = parts
         .tab
         .w_full()
@@ -168,21 +185,25 @@ fn tab_row(parts: TabParts, palette: ThemeColors) -> AnyElement {
             .opacity(0.0)
             .group_hover_style(parts.group, |style| style.opacity(1.0))
     };
-    animate_tab_motion(
+    let row = animate_tab_motion(
         row.child(parts.icon)
             .child(div().flex_1().min_w_0().truncate().child(parts.label))
             .child(close),
         motion,
         TabDragAxis::Vertical,
         position_offset,
-    )
+    );
+    super::measured_tab(row, reorder_key, focus_handle, closing, reorder)
 }
 
 /// A square holding only the tab's icon, for the collapsed sidebar. The
 /// tab's title stays its accessible name; middle-click still closes it.
-fn tab_tile(parts: TabParts, palette: ThemeColors) -> AnyElement {
+fn tab_tile(parts: TabParts, palette: ThemeColors, reorder: &ReorderGroup<u64>) -> AnyElement {
     let motion = parts.motion;
     let position_offset = parts.position_offset;
+    let reorder_key = parts.reorder_key;
+    let focus_handle = parts.focus_handle.clone();
+    let closing = parts.closing;
     let tooltip = (!parts.suppress_tooltips).then(|| label_tooltip(parts.label.clone(), palette));
     let tile = collapsed_tile(parts.tab)
         .relative()
@@ -193,12 +214,13 @@ fn tab_tile(parts: TabParts, palette: ThemeColors) -> AnyElement {
     } else {
         tile.hover_style(|style| style.bg(rgba(palette.hover_surface)))
     };
-    animate_tab_motion(
+    let tile = animate_tab_motion(
         tile.child(parts.icon),
         motion,
         TabDragAxis::Vertical,
         position_offset,
-    )
+    );
+    super::measured_tab(tile, reorder_key, focus_handle, closing, reorder)
 }
 
 /// "+ New Tab", above the tabs; collapsed, only "+".
@@ -207,7 +229,7 @@ fn new_tab_row(
     collapsed: bool,
     suppress_tooltip: bool,
     palette: ThemeColors,
-) -> gpui::Stateful<gpui::Div> {
+) -> gpui_motion::PressScaleElement<gpui::Stateful<gpui::Div>> {
     let row = h_stack()
         .id("browser-new-tab")
         .role(Role::Button)

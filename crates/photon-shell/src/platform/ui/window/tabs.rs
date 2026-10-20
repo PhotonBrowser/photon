@@ -13,8 +13,8 @@ use super::super::icons::LOADING_SPINNER_STEPS;
 use super::super::pages::{NEW_TAB, PageDefinition, find_page};
 use super::super::settings::Settings;
 use super::super::tabs::{
-    DraggedTab, ICON_ENTRANCE, TAB_CLOSE_DURATION, TabDragAxis, TabDragPreview, TabDrop, TabIcon,
-    TabPrepaint,
+    DraggedTab, ICON_ENTRANCE, TAB_CLOSE_DURATION, TabDragAxis, TabDragPayload, TabDragPreview,
+    TabDrop, TabIcon, TabPrepaint,
 };
 use super::super::workspace_layout::WorkspaceLayout;
 use super::BrowserWindow;
@@ -42,6 +42,83 @@ struct TabInsertionOptions {
 }
 
 impl BrowserWindow {
+    pub(super) fn bind_tab_reorder_groups(&self, cx: &Context<Self>) {
+        let browser = cx.entity().downgrade();
+        for axis in [TabDragAxis::Horizontal, TabDragAxis::Vertical] {
+            for pinned in [true, false] {
+                let browser = browser.clone();
+                self.tab_reorder_groups
+                    .group(axis, pinned)
+                    .clone()
+                    .on_keyboard_change(move |order, _, cx| {
+                        let order = order.to_vec();
+                        browser
+                            .update(cx, |this, cx| {
+                                this.apply_tab_reorder(axis, pinned, &order, cx);
+                            })
+                            .ok();
+                    });
+            }
+        }
+    }
+
+    fn apply_tab_reorder(
+        &mut self,
+        axis: TabDragAxis,
+        pinned: bool,
+        order: &[u64],
+        cx: &mut Context<Self>,
+    ) {
+        let current: Vec<u64> = match axis {
+            TabDragAxis::Horizontal => self
+                .tabs
+                .iter()
+                .filter(|tab| tab.pin.is_some() == pinned && !self.closing_tabs.contains(&tab.id))
+                .map(|tab| tab.id)
+                .collect(),
+            TabDragAxis::Vertical => self
+                .listed_tabs(cx)
+                .into_iter()
+                .filter(|&index| {
+                    self.tabs[index].pin.is_some() == pinned
+                        && !self.closing_tabs.contains(&self.tabs[index].id)
+                })
+                .map(|index| self.tabs[index].id)
+                .collect(),
+        };
+        if current.len() != order.len()
+            || current.iter().any(|id| !order.contains(id))
+            || current == order
+        {
+            return;
+        }
+
+        let Some(first) = current
+            .iter()
+            .zip(order)
+            .position(|(left, right)| left != right)
+        else {
+            return;
+        };
+        let last = current
+            .iter()
+            .zip(order)
+            .rposition(|(left, right)| left != right)
+            .expect("first mismatch exists");
+        let moved_id = if current[first] == order[last] {
+            current[first]
+        } else if current[last] == order[first] {
+            current[last]
+        } else {
+            return;
+        };
+
+        self.move_tab_to_visible_order(moved_id, order);
+        self.tab_position_animations
+            .retain(|id, _| !order.contains(id));
+        cx.notify();
+    }
+
     pub(super) fn update_tab_drag(
         &mut self,
         event: &MouseMoveEvent,
@@ -88,30 +165,46 @@ impl BrowserWindow {
                 return;
             }
 
-            let Some(index) = self.tab_index_by_id(layout.id) else {
+            if self.tab_index_by_id(layout_id).is_none() {
                 self.tab_drag_layout = None;
                 return;
-            };
-            let tab = &self.tabs[index];
+            }
+            let axis = layout.axis;
+            let pinned = layout.pinned;
             let bounds = self
                 .tab_geometry
-                .get(&tab.id)
+                .get(&layout_id)
                 .copied()
                 .unwrap_or(layout.tab_bounds);
             let dragged = DraggedTab {
                 source: window.window_handle(),
-                id: tab.id,
-                size: match layout.axis {
-                    TabDragAxis::Horizontal => f32::from(bounds.size.width),
-                    TabDragAxis::Vertical => f32::from(bounds.size.height),
+                payload: TabDragPayload {
+                    id: layout_id,
+                    size: match layout.axis {
+                        TabDragAxis::Horizontal => f32::from(bounds.size.width),
+                        TabDragAxis::Vertical => f32::from(bounds.size.height),
+                    },
+                    pinned: layout.pinned,
                 },
-                pinned: layout.pinned,
             };
             let offset = layout.grab_offset;
+            let reorder = self.tab_reorder_groups.group(axis, pinned);
+            let measured_reorder = reorder.start_drag(
+                &layout_id,
+                [f64::from(position.x), f64::from(position.y)],
+                window,
+                cx,
+            );
+            if measured_reorder {
+                for id in reorder.order().iter() {
+                    self.tab_position_animations.remove(id);
+                }
+            }
             let preview = cx.new(|_| TabDragPreview);
             if let Some(layout) = self.tab_drag_layout.as_mut() {
                 layout.phase = super::TabDragPhase::Reordering;
                 layout.pointer_position = position;
+                layout.measured_reorder = measured_reorder;
             }
             self.suppress_tab_click_until = Some(Instant::now() + Duration::from_millis(250));
             cx.start_drag(AnyDrag::new(dragged, preview).offset(offset));
@@ -208,7 +301,15 @@ impl BrowserWindow {
             if let Some(layout) = self.tab_drag_layout.as_mut() {
                 layout.phase = super::TabDragPhase::Reordering;
             }
-            self.reorder_tab_at_pointer(dragged.id, axis, position, cx, window);
+            let measured_reorder = self
+                .tab_drag_layout
+                .as_ref()
+                .is_some_and(|layout| layout.measured_reorder);
+            if measured_reorder {
+                cx.notify();
+            } else {
+                self.reorder_tab_at_pointer(dragged.id, axis, position, cx, window);
+            }
             return;
         }
 
@@ -389,7 +490,7 @@ impl BrowserWindow {
         if let Some(drag) = self.tab_drag_layout.as_ref().filter(|drag| drag.id == id) {
             return drag.visual_offset;
         }
-        super::tab_position_animation_offset(self.tab_position_animations.get(&id).copied(), axis)
+        super::tab_position_animation_offset(self.tab_position_animations.get(&id), axis)
     }
 
     /// The tab's layout slot with its temporary drag animation removed. Using
@@ -934,10 +1035,15 @@ impl BrowserWindow {
                 && !self
                     .favourites_drop_bounds(cx)
                     .is_some_and(|bounds| bounds.contains(&release_position)))
-            .then_some((drag.id, drag.axis))
+            .then_some((drag.id, drag.axis, drag.pinned, drag.measured_reorder))
         });
-        if let Some((id, axis)) = release_target {
-            self.reorder_tab_at_pointer(id, axis, release_position, cx, window);
+        if let Some((id, axis, pinned, measured_reorder)) = release_target {
+            if measured_reorder {
+                let order = self.tab_reorder_groups.group(axis, pinned).order().to_vec();
+                self.apply_tab_reorder(axis, pinned, &order, cx);
+            } else {
+                self.reorder_tab_at_pointer(id, axis, release_position, cx, window);
+            }
         }
 
         self.clear_previous_target(cx);
@@ -950,7 +1056,7 @@ impl BrowserWindow {
         }
         drag.phase = super::TabDragPhase::Completing;
         let current_offset = drag.visual_offset;
-        if current_offset.abs() > 0.1 {
+        if !drag.measured_reorder && current_offset.abs() > 0.1 {
             self.tab_position_animations.insert(
                 drag.id,
                 super::TabPositionAnimation::new(
@@ -2512,9 +2618,9 @@ mod tab_drag_tests {
             axis: TabDragAxis::Horizontal,
             tween: super::super::Tween::at(24.0),
         };
-        assert!(tab_position_animation_offset(Some(animation), TabDragAxis::Horizontal) > 0.0);
+        assert!(tab_position_animation_offset(Some(&animation), TabDragAxis::Horizontal) > 0.0);
         assert_eq!(
-            tab_position_animation_offset(Some(animation), TabDragAxis::Vertical),
+            tab_position_animation_offset(Some(&animation), TabDragAxis::Vertical),
             0.0
         );
     }

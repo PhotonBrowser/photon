@@ -60,7 +60,7 @@ use super::omnibox::{Omnibox, OmniboxEvent};
 use super::pages::find_page;
 use super::settings::Settings;
 use super::shortcuts_dialog::ShortcutsDialog;
-use super::tabs::{RevealedIcon, TabDragAxis, TabIcon};
+use super::tabs::{RevealedIcon, TabDragAxis, TabIcon, TabReorderGroups};
 use super::theme::{ThemeColors, palette};
 use alerts::{AlertCenter, EngineNotice, NoticeExpiry};
 use content::{BrowserTab, TabContent, create_webview};
@@ -115,6 +115,7 @@ struct BrowserWindow {
     favourites_drag_hover: Option<(AnyWindowHandle, u64)>,
     incoming_tab_drag: Option<IncomingTabDrag>,
     tab_position_animations: HashMap<u64, TabPositionAnimation>,
+    tab_reorder_groups: TabReorderGroups,
     suppress_tab_click_until: Option<Instant>,
     omnibox: Entity<Omnibox>,
     _omnibox_subscription: Subscription,
@@ -221,6 +222,7 @@ struct TabDragLayout {
     pinned: bool,
     phase: TabDragPhase,
     visual_offset: f32,
+    measured_reorder: bool,
     target_window: Option<AnyWindowHandle>,
 }
 
@@ -247,7 +249,7 @@ enum TabDragPhase {
     Cancelled,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 struct TabPositionAnimation {
     axis: TabDragAxis,
     tween: Tween,
@@ -265,17 +267,17 @@ impl TabPositionAnimation {
         Self { axis, tween }
     }
 
-    fn value(self) -> f32 {
+    fn value(&self) -> f32 {
         self.tween.value()
     }
 
-    fn is_running(self) -> bool {
+    fn is_running(&self) -> bool {
         self.tween.is_running()
     }
 }
 
 fn tab_position_animation_offset(
-    animation: Option<TabPositionAnimation>,
+    animation: Option<&TabPositionAnimation>,
     axis: TabDragAxis,
 ) -> f32 {
     animation
@@ -526,6 +528,7 @@ fn open_browser_window(
                 favourites_drag_hover: None,
                 incoming_tab_drag: None,
                 tab_position_animations: HashMap::new(),
+                tab_reorder_groups: TabReorderGroups::new(),
                 suppress_tab_click_until: None,
                 omnibox,
                 _omnibox_subscription: omnibox_subscription,
@@ -584,6 +587,7 @@ fn open_browser_window(
                     })
                 },
             };
+            browser.bind_tab_reorder_groups(cx);
             match (initial_webview, startup_page) {
                 (Some(webview), _) => {
                     let content = TabContent::Web(webview);

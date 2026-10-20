@@ -3,11 +3,12 @@
 use gpui::{Div, ElementId, Role, SharedString, Stateful, prelude::*, px, rgb, rgba};
 
 use super::ClickHandler;
-use super::controls::{FocusRing, OwnsClicks, Pressable};
+use super::controls::{FocusRing, OwnsClicks};
 use super::icons::more_icon;
 use super::layout::{ControlSurface, h_stack};
-use super::motion::icon_pressable;
+use super::motion::{icon_pressable, pressable};
 use super::{metrics, theme::ThemeColors};
+use gpui_motion::PressScaleElement;
 
 /// A button's size.
 #[derive(Clone, Copy)]
@@ -41,7 +42,7 @@ pub(super) fn button(
     size: ButtonSize,
     palette: ThemeColors,
     on_click: ClickHandler,
-) -> Stateful<Div> {
+) -> PressScaleElement<Stateful<Div>> {
     let label = label.into();
     let (height, min_width, padding, font_size, radius) = match size {
         ButtonSize::Regular => (
@@ -90,18 +91,16 @@ pub(super) fn button(
         ButtonKind::Secondary => button.text_color(rgb(palette.text_primary)),
         ButtonKind::Destructive => button.text_color(rgb(palette.error)),
     };
-    if !enabled {
-        return button.opacity(
+    let button = if enabled {
+        button.tab_index(0).owns_clicks().on_click(on_click)
+    } else {
+        button.opacity(
             crate::platform::theme_config::theme()
                 .opacity
                 .disabled_control,
-        );
-    }
-    let button = button
-        .tab_index(0)
-        .owns_clicks()
-        .pressable()
-        .on_click(on_click);
+        )
+    };
+    let button = pressable(button).enabled(enabled);
     match kind {
         ButtonKind::Primary => button.hover_style(|style| {
             style
@@ -125,7 +124,7 @@ pub(super) fn icon_button(
     icon: impl IntoElement,
     palette: ThemeColors,
     on_click: ClickHandler,
-) -> Stateful<Div> {
+) -> PressScaleElement<Stateful<Div>> {
     let button = h_stack()
         .id(id)
         .role(Role::Button)
@@ -145,16 +144,16 @@ pub(super) fn icon_button(
                 .disabled_control
         })
         .child(icon);
-    if !enabled {
-        return button;
-    }
-    icon_pressable(
+    let button = if enabled {
         button
             .tab_index(0)
             .hover_style(|style| style.bg(rgba(palette.hover_surface)))
-            .owns_clicks(),
-    )
-    .on_click(on_click)
+            .owns_clicks()
+            .on_click(on_click)
+    } else {
+        button
+    };
+    icon_pressable(button).enabled(enabled)
 }
 
 /// A square toolbar button showing an icon, dimmed and inert while disabled.
@@ -166,7 +165,7 @@ pub(super) fn toolbar_button(
     icon: impl IntoElement,
     palette: ThemeColors,
     on_click: ClickHandler,
-) -> Stateful<Div> {
+) -> PressScaleElement<Stateful<Div>> {
     let button = h_stack()
         .id(id)
         .role(Role::Button)
@@ -179,20 +178,20 @@ pub(super) fn toolbar_button(
         .size(px(metrics::TOOLBAR_BUTTON_SIZE))
         .rounded(px(metrics::control_radius()))
         .child(icon);
-    if !enabled {
-        return button.opacity(
-            crate::platform::theme_config::theme()
-                .opacity
-                .disabled_control,
-        );
-    }
-    icon_pressable(
+    let button = if enabled {
         button
             .tab_index(tab_index)
             .hover_style(|style| style.bg(rgba(palette.hover_surface)))
-            .owns_clicks(),
-    )
-    .on_click(on_click)
+            .owns_clicks()
+            .on_click(on_click)
+    } else {
+        button.opacity(
+            crate::platform::theme_config::theme()
+                .opacity
+                .disabled_control,
+        )
+    };
+    icon_pressable(button).enabled(enabled)
 }
 
 /// The button that opens the browser menu.
@@ -201,7 +200,7 @@ pub(super) fn menu_button(
     tab_index: isize,
     palette: ThemeColors,
     on_click: ClickHandler,
-) -> Stateful<Div> {
+) -> PressScaleElement<Stateful<Div>> {
     let button = h_stack()
         .id(id)
         .role(Role::Button)

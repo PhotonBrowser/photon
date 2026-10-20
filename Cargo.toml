@@ -3,7 +3,6 @@ resolver = "2"
 members = [
     "crates/photon-cli",
     "crates/photon-core",
-    "crates/gpui-motion",
     "crates/photon-ffi",
     "crates/photon-app",
     "crates/photon-brand",
@@ -17,7 +16,15 @@ members = [
     "crates/photon-tab-sleep",
     "crates/photon-haptics",
 ]
-exclude = ["Engine/Libraries/LibJS/Flap", "vendor/gpui-ce"]
+exclude = [
+    "Engine/Libraries/LibJS/Flap",
+    "crates/gpui-motion",
+    "vendor/gpui-ce",
+]
+
+[patch.crates-io]
+# Keep the fork's optional GPUI adapter on the exact vendored native element types.
+gpui-ce = { path = "vendor/gpui-ce/crates/gpui" }
 
 [workspace.package]
 edition = "2024"

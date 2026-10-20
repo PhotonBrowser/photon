@@ -7,7 +7,6 @@
 //! Edits to the profile's config file are picked up while the app is running.
 
 use gpui::{App, BorrowAppContext, Global, Task, WindowAppearance};
-use gpui_motion::{MotionConfig, MotionTimings};
 use photon_core::{BrowserSettings, ThemeMode};
 use photon_omnibox::SearchEngines;
 use photon_storage::{Profile, ProfileWriteTicket};
@@ -18,6 +17,7 @@ use std::time::{Duration, Instant};
 
 use super::super::app_update::update_app;
 use super::super::trace;
+use super::motion::{MotionConfig, MotionTimings};
 use super::workspace_layout::WorkspaceLayout;
 
 /// How long after a change the settings are saved, so a burst of changes,

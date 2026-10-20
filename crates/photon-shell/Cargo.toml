@@ -14,7 +14,7 @@ gpui = { package = "gpui-ce", path = "../../vendor/gpui-ce/crates/gpui", default
 gpui_platform = { package = "gpui_ce_platform", path = "../../vendor/gpui-ce/crates/gpui_platform" }
 gpui_elements = { package = "gpui_ce_elements", path = "../../vendor/gpui-ce/crates/gpui_elements" }
 photon-core = { path = "../photon-core" }
-gpui-motion = { path = "../gpui-motion" }
+gpui-motion = { package = "gpui-ce-motion", path = "../gpui-motion", features = ["gpui"] }
 photon-omnibox = { path = "../photon-omnibox" }
 photon-performance = { path = "../photon-performance" }
 photon-shortcuts = { path = "../photon-shortcuts" }

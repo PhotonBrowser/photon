@@ -16,7 +16,7 @@ use super::super::super::sidebar::{
     FooterActions, SidebarSection, collapsed_tile, favourites_empty_state, favourites_grid, footer,
     navigation_bar, navigation_column, sidebar,
 };
-use super::super::super::tabs::{TabDragMove, tab_list};
+use super::super::super::tabs::{TabDragAxis, TabDragMove, tab_list};
 use super::super::super::titlebar::window_drag_area;
 use super::super::super::tooltip::label_tooltip;
 use super::super::super::workspace_layout::{ComponentId, WorkspaceLayout};
@@ -173,7 +173,7 @@ impl BrowserWindow {
         icon_size: f32,
         palette: ThemeColors,
         cx: &mut Context<Self>,
-    ) -> Stateful<Div> {
+    ) -> gpui_motion::PressScaleElement<Stateful<Div>> {
         let sidebar = &self.sidebar;
         let color = palette.text_secondary;
         let label = self.sidebar_toggle_label();
@@ -332,6 +332,12 @@ impl BrowserWindow {
             self.tab_container_bounds_handler(cx),
             collapsed,
             palette,
+            self.tab_reorder_groups
+                .group(TabDragAxis::Vertical, true)
+                .clone(),
+            self.tab_reorder_groups
+                .group(TabDragAxis::Vertical, false)
+                .clone(),
         );
         match self
             .spaces
