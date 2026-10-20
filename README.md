@@ -1,6 +1,6 @@
 <p align="center"><img src="crates/photon-brand/assets/logo.svg" alt="Photon" width="96" /></p>
 
-# Photon
+<h1 align="center">Photon</h1>
 
 <p align="center"><strong>A browser built on <a href="https://ladybird.org">Ladybird</a>.</strong></p>
 
