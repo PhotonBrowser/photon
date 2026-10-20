@@ -128,7 +128,6 @@ pub(crate) struct RadiusTokens {
     pub(crate) sidebar_collapsed_item: f32,
     pub(crate) sidebar_item: f32,
     pub(crate) sidebar_reveal: f32,
-    pub(crate) command_bar_top: f32,
 }
 
 pub(crate) fn theme() -> &'static ThemeDefinition {
@@ -225,7 +224,6 @@ fn validate_theme(theme: &ThemeDefinition) {
         ("sidebar_collapsed_item", radii.sidebar_collapsed_item),
         ("sidebar_item", radii.sidebar_item),
         ("sidebar_reveal", radii.sidebar_reveal),
-        ("command_bar_top", radii.command_bar_top),
     ] {
         assert!(
             value.is_finite() && value >= 0.0,

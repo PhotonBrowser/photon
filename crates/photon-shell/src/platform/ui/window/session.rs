@@ -22,11 +22,11 @@ use super::super::super::trace;
 #[cfg(not(feature = "ui-only"))]
 use super::super::pages::find_page;
 use super::BrowserWindow;
-use super::command_bar::tab_summary;
 #[cfg(not(feature = "ui-only"))]
 use super::content::create_webview;
 #[cfg(not(feature = "ui-only"))]
 use super::open_browser_window;
+use super::tab_summary::tab_summary;
 use crate::platform::app_update::update_app;
 
 /// How long after a change the session is saved, so a burst saves once.

@@ -7,7 +7,8 @@ mod app;
 mod automation;
 mod background_noise;
 mod chrome;
-mod command_bar;
+mod command_palette;
+mod commands;
 mod content;
 mod context_menu;
 mod favourites;
@@ -28,6 +29,7 @@ mod sleeping;
 mod spaces;
 mod tab_items;
 mod tab_menu;
+mod tab_summary;
 mod tabs;
 mod title;
 mod workspace;
@@ -49,7 +51,7 @@ use super::super::engine::EngineRuntime;
 use super::super::trace;
 use super::super::window_observer::WindowObserver;
 use super::super::window_settings;
-use super::command_bar::CommandBar;
+use super::command_palette::CommandPalette;
 use super::find_bar::FindBar;
 use super::history::BrowsingHistory;
 use super::js_dialog::DialogHost;
@@ -118,10 +120,10 @@ struct BrowserWindow {
     /// The keyboard shortcuts dialog, while open.
     shortcuts_dialog: Option<(Entity<ShortcutsDialog>, Subscription)>,
     shortcuts_dialog_presence: Presence<Entity<ShortcutsDialog>>,
-    /// The command bar, while open.
-    command_bar: Option<Entity<CommandBar>>,
-    command_bar_presence: Presence<Entity<CommandBar>>,
-    _command_bar_subscription: Option<Subscription>,
+    /// The command palette, while open.
+    command_palette: Option<Entity<CommandPalette>>,
+    command_palette_presence: Presence<Entity<CommandPalette>>,
+    _command_palette_subscription: Option<Subscription>,
     notice_presence: Presence<alerts::Notice>,
     /// Pages of closed tabs, most recent last, for reopening.
     closed_tabs: Vec<ClosedTab>,
@@ -289,9 +291,9 @@ impl Render for BrowserChrome {
     }
 }
 
-/// What floats over the whole window: the command bar, the space dialog, a
-/// JavaScript dialog, menus and the pop-up prompt. Cached like the chrome, so
-/// Engine frames do not rebuild it.
+/// What floats over the whole window: the space dialog, a JavaScript dialog,
+/// menus and the pop-up prompt. Cached like the chrome, so Engine frames do not
+/// rebuild it.
 struct BrowserOverlays {
     browser: WeakEntity<BrowserWindow>,
 }
@@ -395,9 +397,9 @@ impl BrowserWindow {
         div()
             .size_full()
             .children(self.peek_overlay(palette, cx))
-            .children(self.command_bar_overlay(cx))
             .children(self.space_editor_overlay(palette, cx))
             .children(self.shortcuts_dialog_overlay(palette, cx))
+            .children(self.command_palette_overlay(window, cx))
             // A JavaScript dialog is modal to the whole window.
             .children(dialog)
             .children(self.popup_confirmation(palette, cx))
@@ -511,9 +513,9 @@ fn open_browser_window(
                 peek: PeekState::default(),
                 shortcuts_dialog: None,
                 shortcuts_dialog_presence: Presence::default(),
-                command_bar: None,
-                command_bar_presence: Presence::default(),
-                _command_bar_subscription: None,
+                command_palette: None,
+                command_palette_presence: Presence::default(),
+                _command_palette_subscription: None,
                 notice_presence: Presence::default(),
                 closed_tabs: Vec::new(),
                 spinner_step: 0,

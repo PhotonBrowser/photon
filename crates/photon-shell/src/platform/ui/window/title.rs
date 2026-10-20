@@ -4,7 +4,7 @@
 use gpui::{App, Window};
 
 use super::BrowserWindow;
-use super::command_bar::tab_summary;
+use super::tab_summary::tab_summary;
 
 impl BrowserWindow {
     /// Titles the window after the active tab, or the browser with none.

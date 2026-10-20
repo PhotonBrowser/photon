@@ -2,7 +2,7 @@
 
 mod button;
 mod color_picker;
-mod command_bar;
+mod command_palette;
 mod controls;
 mod dropdown;
 mod find_bar;

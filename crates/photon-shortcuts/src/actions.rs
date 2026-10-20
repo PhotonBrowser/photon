@@ -5,9 +5,8 @@ gpui::actions!(
     [
         /// Open a new tab and focus its address field.
         NewTab,
-        /// Open the command bar: open an address in a new tab, switch to a
-        /// tab or run a command.
-        OpenCommandBar,
+        /// Open the browser command palette.
+        OpenCommandPalette,
         /// Open a new browser window.
         NewWindow,
         /// Close the active tab, or the window with its last tab.

@@ -154,16 +154,6 @@ fn suggestion_row(
     row
 }
 
-/// `text` with `matches` in bold, for rows that show matched words.
-pub(in super::super) fn matched_text(
-    text: &str,
-    matches: &[Range<usize>],
-) -> (SharedString, Vec<(Range<usize>, HighlightStyle)>) {
-    let (mut shown, mut highlights) = (String::new(), Vec::new());
-    push(&mut shown, &mut highlights, text, matches, None);
-    (shown.into(), highlights)
-}
-
 /// A row's text, such as "Discord - discord.com/channels/me" or
 /// "rust - Google Search", with the typed words in bold and addresses tinted.
 pub(in super::super) fn row_text(

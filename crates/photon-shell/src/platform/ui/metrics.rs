@@ -107,6 +107,16 @@ pub(super) const DIALOG_TEXT_SIZE: f32 = 13.0;
 /// names and keys, and scrolling past this height.
 pub(super) const SHORTCUTS_DIALOG_WIDTH: f32 = 460.0;
 pub(super) const SHORTCUTS_DIALOG_MAX_HEIGHT: f32 = 520.0;
+pub(super) const COMMAND_PALETTE_WIDTH: f32 = 520.0;
+pub(super) const COMMAND_PALETTE_MAX_HEIGHT: f32 = 560.0;
+pub(super) const COMMAND_PALETTE_MAX_RESULTS_HEIGHT: f32 = 448.0;
+pub(super) const COMMAND_PALETTE_INPUT_HEIGHT: f32 = 48.0;
+pub(super) const COMMAND_PALETTE_ROW_HEIGHT: f32 = 32.0;
+pub(super) const COMMAND_PALETTE_PADDING: f32 = 14.0;
+pub(super) const COMMAND_PALETTE_ROW_INSET: f32 = 10.0;
+pub(super) const COMMAND_PALETTE_LIST_PADDING: f32 = 4.0;
+pub(super) const COMMAND_PALETTE_FOOTER_HEIGHT: f32 = 30.0;
+pub(super) const COMMAND_PALETTE_FOOTER_GAP: f32 = 12.0;
 
 /// The address field in the toolbar.
 pub(super) const OMNIBOX_HEIGHT: f32 = 28.0;
@@ -382,18 +392,6 @@ pub(super) fn sidebar_reveal_radius() -> f32 {
     crate::platform::theme_config::radius_tokens().sidebar_reveal
 }
 
-pub(super) fn command_bar_top_radius() -> f32 {
-    crate::platform::theme_config::radius_tokens().command_bar_top
-}
-
-pub(super) fn command_bar_bottom_radius() -> f32 {
-    concentric_radius(
-        menu_item_radius(),
-        COMMAND_BAR_ROWS_INSET,
-        SURFACE_BORDER_WIDTH,
-    )
-}
-
 pub(super) fn omnibox_panel_bottom_radius() -> f32 {
     concentric_radius(
         menu_item_radius(),
@@ -430,16 +428,3 @@ pub(super) const SPACE_DOT_GAP: f32 = 2.0;
 /// between its buttons and the page.
 pub(super) const PEEK_INSET_FRACTION: f32 = 0.08;
 pub(super) const PEEK_CONTROL_GAP: f32 = 6.0;
-
-/// The command bar ⌘T opens over the page.
-pub(super) const COMMAND_BAR_WIDTH: f32 = 640.0;
-/// How far down the window the command bar's field starts, as a fraction of
-/// its height: a little above the middle.
-pub(super) const COMMAND_BAR_TOP_FRACTION: f32 = 0.36;
-pub(super) const COMMAND_BAR_FIELD_HEIGHT: f32 = 52.0;
-pub(super) const COMMAND_BAR_FIELD_PADDING: f32 = 16.0;
-pub(super) const COMMAND_BAR_FONT_SIZE: f32 = 18.0;
-pub(super) const COMMAND_BAR_ICON_SIZE: f32 = 18.0;
-pub(super) const COMMAND_BAR_ROW_HEIGHT: f32 = 40.0;
-pub(super) const COMMAND_BAR_ROWS_INSET: f32 = 6.0;
-pub(super) const COMMAND_BAR_DETAIL_FONT_SIZE: f32 = 12.0;

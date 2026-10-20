@@ -9,8 +9,8 @@ use photon_brand::NAME;
 use photon_core::Command;
 use photon_shortcuts::{
     CloseTab, FindInPage, FindNext, FindPrevious, GoBack, GoForward, HideApp, HideOtherApps,
-    MinimizeWindow, NewWindow, NextSpace, OpenCommandBar, OpenSettings, PreviousSpace, Quit,
-    Reload, ReopenClosedTab, ResetZoom, SelectNextTab, SelectPreviousTab, ShowAllApps,
+    MinimizeWindow, NewTab, NewWindow, NextSpace, OpenCommandPalette, OpenSettings, PreviousSpace,
+    Quit, Reload, ReopenClosedTab, ResetZoom, SelectNextTab, SelectPreviousTab, ShowAllApps,
     ShowKeyboardShortcuts, StopLoading, ToggleSidebar, ToggleSidebarIcons, ToggleZenMode, ZoomIn,
     ZoomOut, ZoomWindow, shortcut_name_for_action,
 };
@@ -58,7 +58,10 @@ fn menu_bar(state: MenuBarState) -> Vec<Menu> {
         MenuItem::action(label(&Reload), Reload)
     }
     .disabled(!commands.allows(Command::ReloadPage));
-    let mut view = Vec::new();
+    let mut view = vec![
+        MenuItem::action(label(&OpenCommandPalette), OpenCommandPalette),
+        MenuItem::separator(),
+    ];
     if commands.has_sidebar {
         view.extend([
             MenuItem::action(label(&ToggleSidebar), ToggleSidebar),
@@ -88,7 +91,7 @@ fn menu_bar(state: MenuBarState) -> Vec<Menu> {
             MenuItem::action(format!("Quit {NAME}"), Quit),
         ]),
         Menu::new("File").items([
-            MenuItem::action("New Tab…", OpenCommandBar),
+            MenuItem::action(label(&NewTab), NewTab),
             MenuItem::action(label(&NewWindow), NewWindow),
             MenuItem::action(label(&ReopenClosedTab), ReopenClosedTab)
                 .disabled(!commands.allows(Command::ReopenClosedTab)),
@@ -165,7 +168,11 @@ mod tests {
         let available = menu_bar(MenuBarState {
             commands: CommandAvailability {
                 has_page: true,
+                has_multiple_tabs: true,
                 has_closed_tabs: true,
+                can_go_back: true,
+                can_go_forward: true,
+                is_loading: true,
                 has_sidebar: true,
                 shows_spaces: true,
                 has_next_space: true,

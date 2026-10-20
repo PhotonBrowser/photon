@@ -129,17 +129,6 @@ pub(super) fn sidebar_expand_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("panel-left-open"), color, size)
 }
 
-/// A frame of corners around nothing, for Zen mode, which leaves only the
-/// page.
-pub(super) fn zen_icon(color: u32, size: f32) -> impl IntoElement {
-    icon(lucide!("scan"), color, size)
-}
-
-/// A keyboard, for the list of keyboard shortcuts.
-pub(super) fn keyboard_icon(color: u32, size: f32) -> impl IntoElement {
-    icon(lucide!("keyboard"), color, size)
-}
-
 /// A pencil, for customising.
 pub(super) fn edit_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("pencil"), color, size)
@@ -212,19 +201,9 @@ pub(super) fn chevron_down_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("chevron-down"), color, size)
 }
 
-/// Two overlapping pages, for copying.
-pub(super) fn copy_icon(color: u32, size: f32) -> impl IntoElement {
-    icon(lucide!("copy"), color, size)
-}
-
 /// Two arrows pointing apart, for opening a preview in a tab.
 pub(super) fn open_in_tab_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("maximize-2"), color, size)
-}
-
-/// A window, for opening a new one.
-pub(super) fn window_icon(color: u32, size: f32) -> impl IntoElement {
-    icon(lucide!("app-window"), color, size)
 }
 
 /// A single window outline, for maximizing.

@@ -1,26 +1,26 @@
 //! Keyboard shortcuts and Escape handling for the browser window.
 
 use gpui::{Context, Div, KeyDownEvent, Window, prelude::*};
-use photon_core::{BrowserCommand, Command};
+use photon_core::Command;
 use photon_shortcuts::{
     CloseTab, FindInPage, FindNext, FindPrevious, FocusOmnibox, GoBack, GoForward, MinimizeWindow,
-    NewTab, NextSpace, OpenCommandBar, OpenSettings, PreviousSpace, Reload, ReopenClosedTab,
+    NewTab, NextSpace, OpenCommandPalette, OpenSettings, PreviousSpace, Reload, ReopenClosedTab,
     ResetZoom, SelectLastTab, SelectNextTab, SelectPreviousTab, SelectTab1, SelectTab2, SelectTab3,
     SelectTab4, SelectTab5, SelectTab6, SelectTab7, SelectTab8, ShowKeyboardShortcuts, StopLoading,
     ToggleDebugInfo, ToggleSidebar, ToggleSidebarIcons, ToggleZenMode, ZoomIn, ZoomOut, ZoomWindow,
 };
 
-use super::super::super::engine::ZoomStep;
 use super::BrowserWindow;
 
 impl BrowserWindow {
     /// Handles the browser's shortcuts and Escape on the window's root element.
     pub(super) fn on_actions(&self, root: Div, cx: &mut Context<Self>) -> Div {
         root.on_key_down(cx.listener(Self::escape))
+            .on_action(cx.listener(|this, _: &OpenCommandPalette, window, cx| {
+                this.open_command_palette(window, cx);
+            }))
             .on_action(cx.listener(|this, _: &FocusOmnibox, window, cx| {
-                this.show_address_field(cx);
-                this.omnibox
-                    .update(cx, |omnibox, cx| omnibox.focus(window, cx));
+                this.execute_command(Command::FocusAddressField, window, cx);
             }))
             .on_action(cx.listener(|this, _: &ToggleSidebar, window, cx| {
                 this.execute_command(Command::ToggleSidebar, window, cx);
@@ -55,11 +55,14 @@ impl BrowserWindow {
             .on_action(cx.listener(|this, _: &FindPrevious, window, cx| {
                 this.find_step(false, window, cx);
             }))
-            .on_action(cx.listener(|this, _: &ZoomIn, _, cx| this.zoom(ZoomStep::In, cx)))
-            .on_action(cx.listener(|this, _: &ZoomOut, _, cx| this.zoom(ZoomStep::Out, cx)))
-            .on_action(cx.listener(|this, _: &ResetZoom, _, cx| this.zoom(ZoomStep::Reset, cx)))
-            .on_action(cx.listener(|this, _: &OpenCommandBar, window, cx| {
-                this.open_command_bar(window, cx);
+            .on_action(cx.listener(|this, _: &ZoomIn, window, cx| {
+                this.execute_command(Command::ZoomIn, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ZoomOut, window, cx| {
+                this.execute_command(Command::ZoomOut, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &ResetZoom, window, cx| {
+                this.execute_command(Command::ResetZoom, window, cx);
             }))
             .on_action(cx.listener(|this, _: &NewTab, window, cx| {
                 this.execute_command(Command::NewTab, window, cx);
@@ -70,13 +73,13 @@ impl BrowserWindow {
                 this.execute_command(Command::ReloadPage, window, cx);
             }))
             .on_action(cx.listener(|this, _: &StopLoading, window, cx| {
-                this.dispatch_command(BrowserCommand::StopLoading, window, cx);
+                this.execute_command(Command::StopLoading, window, cx);
             }))
             .on_action(cx.listener(|this, _: &GoBack, window, cx| {
-                this.dispatch_command(BrowserCommand::Back, window, cx);
+                this.execute_command(Command::GoBack, window, cx);
             }))
             .on_action(cx.listener(|this, _: &GoForward, window, cx| {
-                this.dispatch_command(BrowserCommand::Forward, window, cx);
+                this.execute_command(Command::GoForward, window, cx);
             }))
             .on_action(cx.listener(|this, _: &CloseTab, window, cx| {
                 this.execute_command(Command::CloseTab, window, cx);
@@ -85,10 +88,10 @@ impl BrowserWindow {
                 this.execute_command(Command::ReopenClosedTab, window, cx);
             }))
             .on_action(cx.listener(|this, _: &SelectNextTab, window, cx| {
-                this.select_relative_tab(1, window, cx);
+                this.execute_command(Command::SelectNextTab, window, cx);
             }))
             .on_action(cx.listener(|this, _: &SelectPreviousTab, window, cx| {
-                this.select_relative_tab(-1, window, cx);
+                this.execute_command(Command::SelectPreviousTab, window, cx);
             }))
             .on_action(cx.listener(select_tab_at::<SelectTab1>(0)))
             .on_action(cx.listener(select_tab_at::<SelectTab2>(1)))

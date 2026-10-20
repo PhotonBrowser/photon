@@ -104,9 +104,10 @@ presentation surface.
 - `crates/photon-shortcuts` owns one registry of browser shortcuts: each
   entry supplies its action, key sequences, group, and display label. The
   registry builds both the keymap and the grouped shortcuts dialog; native
-  menus reuse its labels for shared actions. Commands shared with the command
-  bar use names from `photon-core`. `BrowserWindow::execute_command` carries
-  out shared browser commands from the command bar, shortcuts, and menus.
+  menus reuse its labels for shared actions. Browser commands and their
+  availability metadata live in `photon-core`'s command registry.
+  `BrowserWindow::execute_command` carries them out from shortcuts, menus,
+  and controls.
   Views show an action's effective keys with `ui/kbd.rs`, which reads the
   keymap.
 - `crates/photon-presentation-ipc` owns the macOS XPC protocol, Rust client
@@ -164,7 +165,7 @@ window and page renderer adapters.
 | `photon-performance` | Performance snapshots, monitor state, timing accumulation, formatting, GPUI overlay | GPUI-CE |
 | `gpui-motion` | Reusable GPUI motion primitives, transitions, presence, and tweens | GPUI-CE |
 | `photon-haptics` | Semantic haptic feedback helpers for Photon controls | GPUI-CE |
-| `photon-core` | Browser state, commands, shared address normalization, history rules, settings, clearing requests, command bar results | `photon-omnibox`, `photon-tab-sleep`, `photon-brand`, serde |
+| `photon-core` | Browser state, command registry, shared address normalization, history rules, settings, clearing requests | `photon-omnibox`, `photon-tab-sleep`, `photon-brand`, serde |
 | `photon-omnibox` | Search engine list, address/query resolution, suggestion and word matching | `photon-brand`, URL parsing library |
 | `photon-storage` | Profile folder, history and settings files, saved page icons, data usage | `photon-core`, `photon-brand`, serde |
 | `photon-brand` | Browser name, engine name, internal page scheme, profile folder name, logo | none |
@@ -213,7 +214,7 @@ owned by the shell; the presentation XPC implementation lives inside
 | C ABI exposed to native callers | [`photon-ffi/include/photon_ffi.h`](../crates/photon-ffi/include/photon_ffi.h) and [`photon-ffi/src/api.rs`](../crates/photon-ffi/src/api.rs) |
 | Search engines or address/query classification | [`photon-omnibox/src/`](../crates/photon-omnibox/src/lib.rs) |
 | Omnibox suggestions and their panel | [`photon-omnibox/src/suggest.rs`](../crates/photon-omnibox/src/suggest.rs), and [`ui/omnibox/`](../crates/photon-shell/src/platform/ui/omnibox/mod.rs) |
-| The ⌘T command bar | [`photon-core/src/command_bar.rs`](../crates/photon-core/src/command_bar.rs), [`ui/command_bar/`](../crates/photon-shell/src/platform/ui/command_bar/mod.rs), and [`ui/window/command_bar.rs`](../crates/photon-shell/src/platform/ui/window/command_bar.rs) |
+| Browser commands and their availability | [`photon-core/src/commands.rs`](../crates/photon-core/src/commands.rs), [`ui/command_palette.rs`](../crates/photon-shell/src/platform/ui/command_palette.rs), and [`ui/window/commands.rs`](../crates/photon-shell/src/platform/ui/window/commands.rs) |
 | History, saved data, and clearing it | [`photon-core/src/history.rs`](../crates/photon-core/src/history.rs), [`photon-storage`](../crates/photon-storage/src/lib.rs), and [`ui/history.rs`](../crates/photon-shell/src/platform/ui/history.rs) |
 | `./photon` command behavior | [`photon-cli/src/commands/`](../crates/photon-cli/src/commands/) |
 | The development `Photon.app` bundle `./photon run` builds in `~/Library/Application Support/Photon/Development/`: Info.plist, icon, web-link registration | [`photon-cli/src/commands/app_bundle.rs`](../crates/photon-cli/src/commands/app_bundle.rs) |

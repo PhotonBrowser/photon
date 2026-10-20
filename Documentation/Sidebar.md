@@ -20,7 +20,7 @@ change applies at once, in every window.
 | Address field | The [omnibox](Omnibox.md), larger than in the toolbar: the page's address the short way while idle, the full address while editing, and suggestions in a panel that reaches over the page. |
 | Favourites | A three-column grid of this space's favourite sites with their icons, up to 12. When empty, a dismissible drop hint explains how to add one. Drag a tab into the grid or choose "Add to Favourites" from its right-click menu; the tab becomes its tile rather than staying in the tab list. Click a tile to switch to its tab or open it. The tile is highlighted while its tab is in use. Right-click to close its tab or remove the favourite, which returns its tab to the list. |
 | Pinned tabs | Tabs pinned from their menu ("Pin Tab"), above a divider. See [Pinned tabs](#pinned-tabs). |
-| Tabs | "+ New Tab", which opens the [command bar](Omnibox.md#command-bar), then one row per tab of today's tabs: icon or loading spinner, title, and a close button on the active tab and on the row under the pointer. Click to switch, middle-click or the close button to close, drag to reorder or move to another window's tab list, right-click for the tab menu, and the up and down arrows move between focused tabs. Dropping a tab outside all windows leaves it in place. The list scrolls. |
+| Tabs | "+ New Tab", then one row per tab of today's tabs: icon or loading spinner, title, and a close button on the active tab and on the row under the pointer. Click to switch, middle-click or the close button to close, drag to reorder or move to another window's tab list, right-click for the tab menu, and the up and down arrows move between focused tabs. Dropping a tab outside all windows leaves it in place. The list scrolls. |
 | Footer | Settings, the spaces as dots with a button to add one, and the browser menu, which opens above it. |
 
 Right-clicking any empty space in the sidebar or titlebar opens the browser's
@@ -59,13 +59,12 @@ showing the sidebar keeps it.
 
 ## Zen mode
 
-⌥⌘Z, "Zen Mode" in the browser menu or the command bar hides the chrome
-around the page: the sidebar, any bars above and below it, and the window
-controls. The page keeps its margin, and the margin above it moves the
-window. Pointing at the left edge still
-reveals the sidebar, and its sidebar button leaves Zen mode and keeps it. The
-page's right-click menu offers "Exit Zen Mode" while it is on. Zen mode
-belongs to its window and is not saved.
+⌥⌘Z or "Zen Mode" in the browser menu hides the chrome around the page: the
+sidebar, any bars above and below it, and the window controls. The page keeps
+its margin, and the margin above it moves the window. Pointing at the left edge
+still reveals the sidebar, and its sidebar button leaves Zen mode and keeps
+it. The page's right-click menu offers "Exit Zen Mode" while it is on. Zen
+mode belongs to its window and is not saved.
 
 The window draws the sidebar as a layer over itself and keeps room for it
 beside the page, each following a `Tween` from
@@ -111,9 +110,8 @@ stay with that space. The sidebar shows the tabs and favourites of the space
 shown, and new tabs join it.
 
 - Switch with the footer's dots, a two-finger swipe sideways across the
-  sidebar, ⌘⌥← and ⌘⌥→, or the command bar. The tabs slide in from the side
-  the space lies on, and the window takes its colour. Choosing a tab of
-  another space, as from the command bar, switches to that space.
+  sidebar, or ⌘⌥← and ⌘⌥→. The tabs slide in from the side the space lies on,
+  and the window takes its colour.
 - A space shows its most recent tab, or a new tab page when it has none.
 - The footer's + creates a space, in a dialog asking for its name and colour.
   Right-click a dot to edit its space, or delete it and close its tabs; the

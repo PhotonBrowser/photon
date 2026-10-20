@@ -2,7 +2,7 @@
 //! panels are placed independently by the active workspace layout.
 
 use gpui::{AnyElement, Context, Div, Window, div, prelude::*, px};
-use photon_core::{BrowserCommand, DockRegion};
+use photon_core::{Command, DockRegion};
 
 use super::super::button::{menu_button, toolbar_button};
 use super::super::icons::{back_icon, close_icon, forward_icon, reload_icon};
@@ -154,7 +154,7 @@ impl BrowserWindow {
                 back_icon(color, size),
                 palette,
                 Box::new(cx.listener(|this, _, window, cx| {
-                    this.dispatch_command(BrowserCommand::Back, window, cx);
+                    this.execute_command(Command::GoBack, window, cx);
                 })),
             )
             .into_any_element(),
@@ -166,7 +166,7 @@ impl BrowserWindow {
                 forward_icon(color, size),
                 palette,
                 Box::new(cx.listener(|this, _, window, cx| {
-                    this.dispatch_command(BrowserCommand::Forward, window, cx);
+                    this.execute_command(Command::GoForward, window, cx);
                 })),
             )
             .into_any_element(),
@@ -186,11 +186,11 @@ impl BrowserWindow {
                     palette,
                     Box::new(cx.listener(move |this, _, window, cx| {
                         let command = if state.loading {
-                            BrowserCommand::StopLoading
+                            Command::StopLoading
                         } else {
-                            BrowserCommand::Reload
+                            Command::ReloadPage
                         };
-                        this.dispatch_command(command, window, cx);
+                        this.execute_command(command, window, cx);
                     })),
                 )
                 .into_any_element()

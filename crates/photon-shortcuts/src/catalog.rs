@@ -28,7 +28,8 @@ pub(super) enum ShortcutAction {
     HideApp,
     HideOtherApps,
     MinimizeWindow,
-    OpenCommandBar,
+    NewTab,
+    OpenCommandPalette,
     NewWindow,
     CloseTab,
     ReopenClosedTab,
@@ -70,7 +71,8 @@ impl ShortcutAction {
             Self::HideApp => Box::new(HideApp),
             Self::HideOtherApps => Box::new(HideOtherApps),
             Self::MinimizeWindow => Box::new(MinimizeWindow),
-            Self::OpenCommandBar => Box::new(OpenCommandBar),
+            Self::NewTab => Box::new(NewTab),
+            Self::OpenCommandPalette => Box::new(OpenCommandPalette),
             Self::NewWindow => Box::new(NewWindow),
             Self::CloseTab => Box::new(CloseTab),
             Self::ReopenClosedTab => Box::new(ReopenClosedTab),
@@ -117,9 +119,15 @@ pub(super) struct ShortcutSpec {
 const SHORTCUTS: &[ShortcutSpec] = &[
     ShortcutSpec {
         group: "Tabs",
-        label: ShortcutLabel::Text("Open Command Bar"),
+        label: ShortcutLabel::Command(Command::NewTab),
         keys: &["secondary-t"],
-        action: ShortcutAction::OpenCommandBar,
+        action: ShortcutAction::NewTab,
+    },
+    ShortcutSpec {
+        group: "Tabs",
+        label: ShortcutLabel::Text("Command Palette"),
+        keys: &["secondary-k"],
+        action: ShortcutAction::OpenCommandPalette,
     },
     ShortcutSpec {
         group: "Tabs",
@@ -135,13 +143,13 @@ const SHORTCUTS: &[ShortcutSpec] = &[
     },
     ShortcutSpec {
         group: "Tabs",
-        label: ShortcutLabel::Text("Next Tab"),
+        label: ShortcutLabel::Command(Command::SelectNextTab),
         keys: &["ctrl-tab", "secondary-shift-]"],
         action: ShortcutAction::SelectNextTab,
     },
     ShortcutSpec {
         group: "Tabs",
-        label: ShortcutLabel::Text("Previous Tab"),
+        label: ShortcutLabel::Command(Command::SelectPreviousTab),
         keys: &["ctrl-shift-tab", "secondary-shift-["],
         action: ShortcutAction::SelectPreviousTab,
     },
@@ -201,7 +209,7 @@ const SHORTCUTS: &[ShortcutSpec] = &[
     },
     ShortcutSpec {
         group: "Page",
-        label: ShortcutLabel::Text("Focus Address Field"),
+        label: ShortcutLabel::Command(Command::FocusAddressField),
         keys: &["secondary-l"],
         action: ShortcutAction::FocusOmnibox,
     },
@@ -213,19 +221,19 @@ const SHORTCUTS: &[ShortcutSpec] = &[
     },
     ShortcutSpec {
         group: "Page",
-        label: ShortcutLabel::Text("Stop Loading"),
+        label: ShortcutLabel::Command(Command::StopLoading),
         keys: &["secondary-."],
         action: ShortcutAction::StopLoading,
     },
     ShortcutSpec {
         group: "Page",
-        label: ShortcutLabel::Text("Back"),
+        label: ShortcutLabel::Command(Command::GoBack),
         keys: &["secondary-["],
         action: ShortcutAction::GoBack,
     },
     ShortcutSpec {
         group: "Page",
-        label: ShortcutLabel::Text("Forward"),
+        label: ShortcutLabel::Command(Command::GoForward),
         keys: &["secondary-]"],
         action: ShortcutAction::GoForward,
     },
@@ -249,19 +257,19 @@ const SHORTCUTS: &[ShortcutSpec] = &[
     },
     ShortcutSpec {
         group: "Page",
-        label: ShortcutLabel::Text("Zoom In"),
+        label: ShortcutLabel::Command(Command::ZoomIn),
         keys: &["secondary-=", "secondary-+"],
         action: ShortcutAction::ZoomIn,
     },
     ShortcutSpec {
         group: "Page",
-        label: ShortcutLabel::Text("Zoom Out"),
+        label: ShortcutLabel::Command(Command::ZoomOut),
         keys: &["secondary--"],
         action: ShortcutAction::ZoomOut,
     },
     ShortcutSpec {
         group: "Page",
-        label: ShortcutLabel::Text("Actual Size"),
+        label: ShortcutLabel::Command(Command::ResetZoom),
         keys: &["secondary-0"],
         action: ShortcutAction::ResetZoom,
     },
@@ -414,9 +422,10 @@ mod tests {
     }
 
     #[test]
-    fn command_bar_shortcuts_use_the_registered_action() {
+    fn registered_command_shortcuts_use_their_action() {
         let bindings = browser_shortcuts();
-        for command in Command::ALL {
+        for definition in photon_core::COMMAND_REGISTRY.builtins() {
+            let command = definition.command;
             if let Some(action) = action_for_command(command) {
                 assert!(
                     bindings
