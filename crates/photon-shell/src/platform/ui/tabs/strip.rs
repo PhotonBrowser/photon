@@ -56,28 +56,25 @@ pub(in super::super) fn tab_strip_content(
     scroll_handle: ScrollHandle,
     palette: ThemeColors,
     elastic_scroll: bool,
-) -> gpui::Div {
+) -> gpui::Stateful<gpui::Div> {
     let tab_count = tabs.len();
     let mut focus_index = 0;
-    let mut strip = h_stack()
+    let mut tabs_element = h_stack()
         .id("browser-tab-list")
         .role(Role::TabList)
         .aria_label("Browser tabs")
         .items_center()
         .gap(px(metrics::TAB_STRIP_GAP))
-        .flex_initial()
-        .min_w_0()
-        .overflow_x_scroll()
-        .elastic_scroll(elastic_scroll)
-        .track_scroll(&scroll_handle);
+        .flex_initial();
     for (index, tab) in tabs.into_iter().enumerate() {
         let stops = TabParts::focus_stops(&tab.icon);
         let before = tab.insertion_before;
         let after = tab.insertion_after;
         if let Some(size) = before {
-            strip = strip.child(insertion_marker(TabDragAxis::Horizontal, size, palette));
+            tabs_element =
+                tabs_element.child(insertion_marker(TabDragAxis::Horizontal, size, palette));
         }
-        strip = strip.child(strip_tab(
+        tabs_element = tabs_element.child(strip_tab(
             TabParts::new(
                 tab,
                 index,
@@ -90,11 +87,24 @@ pub(in super::super) fn tab_strip_content(
             palette,
         ));
         if let Some(size) = after {
-            strip = strip.child(insertion_marker(TabDragAxis::Horizontal, size, palette));
+            tabs_element =
+                tabs_element.child(insertion_marker(TabDragAxis::Horizontal, size, palette));
         }
         focus_index += stops;
     }
-    let strip = strip
+    h_stack()
+        .id("browser-tab-strip-scroll")
+        .items_center()
+        .gap(px(metrics::TAB_STRIP_GAP))
+        .h(px(metrics::TITLEBAR_HEIGHT))
+        .px(px(metrics::TAB_STRIP_INSET))
+        .tab_group()
+        .min_w_0()
+        .overflow_x_scroll()
+        .elastic_scroll(elastic_scroll)
+        .track_scroll(&scroll_handle)
+        .child(tabs_element)
+        .child(new_tab_button(on_new_tab, focus_index, palette))
         .on_prepaint(move |prepaint, window, cx| {
             on_bounds(prepaint.bounds, window, cx);
         })
@@ -107,15 +117,7 @@ pub(in super::super) fn tab_strip_content(
                 .border_color(rgba(palette.soft_accent_border))
         })
         .can_drop(|value, window, _| is_foreign_tab_drag(value, window))
-        .on_drop(move |dragged: &DraggedTab, window, cx| on_drop(dragged, window, cx));
-    h_stack()
-        .items_center()
-        .gap(px(metrics::TAB_STRIP_GAP))
-        .h(px(metrics::TITLEBAR_HEIGHT))
-        .px(px(metrics::TAB_STRIP_INSET))
-        .tab_group()
-        .child(strip)
-        .child(new_tab_button(on_new_tab, focus_index, palette))
+        .on_drop(move |dragged: &DraggedTab, window, cx| on_drop(dragged, window, cx))
 }
 
 /// A tab sized to share the strip: icon, title and close button. A pinned
@@ -147,7 +149,8 @@ fn strip_tab(parts: TabParts, palette: ThemeColors) -> impl IntoElement {
     let position_offset = parts.position_offset;
     let tab = parts
         .tab
-        .flex_auto()
+        .flex_1()
+        .flex_basis(px(metrics::TAB_MAX_WIDTH))
         .min_w(px(metrics::TAB_MIN_WIDTH))
         .max_w(px(metrics::TAB_MAX_WIDTH))
         .gap(px(metrics::TAB_CLOSE_GAP))
