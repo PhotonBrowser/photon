@@ -61,6 +61,23 @@ impl Omnibox {
         });
     }
 
+    /// Removes the inline completion without changing the typed prefix or
+    /// closing the suggestion panel.
+    pub(super) fn dismiss_completion(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some(completion) = self.completion.as_deref() else {
+            return false;
+        };
+        if self.selected != 0 || completion == self.typed {
+            return false;
+        }
+
+        let typed = self.typed.clone();
+        self.completion = None;
+        self.fill(&typed, typed.len(), cx);
+        cx.notify();
+        true
+    }
+
     pub(super) fn close_suggestions(&mut self, cx: &mut Context<Self>) {
         self.typed.clear();
         self.completion = None;

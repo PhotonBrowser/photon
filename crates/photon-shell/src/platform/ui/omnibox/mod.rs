@@ -134,13 +134,17 @@ impl Omnibox {
                     return;
                 }
 
-                if event.keystroke.key == "backspace"
-                    && !event.keystroke.modifiers.modified()
-                    && this.completion.is_some()
-                {
+                let backspace =
+                    event.keystroke.key == "backspace" && !event.keystroke.modifiers.modified();
+                if backspace && this.dismiss_completion(cx) {
+                    cx.stop_propagation();
+                    return;
+                }
+
+                if backspace && !this.suggestions.is_empty() {
                     // Mark this before EditableText dispatches DeleteLeft. This
-                    // keeps the suggestion rows but prevents the selected
-                    // inline completion from being filled again after deletion.
+                    // keeps the suggestion rows but prevents inline completion
+                    // from being filled again after deletion.
                     this.deleting = true;
                 }
 
