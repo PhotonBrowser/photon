@@ -37,6 +37,7 @@ pub(super) enum ChipIcon {
 pub(super) fn status_chip(
     id: ElementId,
     transition: Transition,
+    entrance: Entrance,
     palette: ThemeColors,
     icon: ChipIcon,
     message: SharedString,
@@ -102,5 +103,5 @@ pub(super) fn status_chip(
         ));
     }
 
-    chip.animate(id, CHIP_MOTION, transition, &animations)
+    chip.animate(id, entrance, transition, &animations)
 }

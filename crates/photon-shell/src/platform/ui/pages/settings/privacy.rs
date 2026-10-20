@@ -160,6 +160,7 @@ impl SettingsPage {
                 page.update(cx, |page, cx| {
                     page.clearing.state = ClearState::Cleared;
                     page.clearing.measure(cx);
+                    super::super::super::show_alert(cx, "Browsing data cleared");
                     cx.notify();
                 })
                 .ok();

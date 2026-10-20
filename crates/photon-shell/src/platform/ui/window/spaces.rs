@@ -249,10 +249,18 @@ impl BrowserWindow {
                 preset_id.clone(),
                 new_preset.clone(),
             );
-            Settings::update(cx, move |settings| {
+            let creating = editing.space.is_none();
+            let previous_name = editing
+                .space
+                .and_then(|id| Settings::get(cx).spaces.get(id))
+                .map(|space| space.name.clone());
+            let created_preset = new_preset.is_some();
+            let mut saved = false;
+            Settings::update(cx, |settings| {
                 let preset_id = new_preset
+                    .clone()
                     .and_then(|(name, layout)| settings.workspace.add_preset(&name, layout))
-                    .or(preset_id.filter(|id| {
+                    .or(preset_id.clone().filter(|id| {
                         settings
                             .workspace
                             .presets
@@ -261,17 +269,18 @@ impl BrowserWindow {
                     }));
                 let space_id = match editing.space {
                     Some(id) => {
-                        if let Some(space) = settings.spaces.get_mut(id) {
-                            if !name.is_empty() {
-                                space.name = name;
-                            }
-                            space.color = color;
-                            space.gradient = gradient;
+                        let Some(space) = settings.spaces.get_mut(id) else {
+                            return;
+                        };
+                        if !name.is_empty() {
+                            space.name = name.clone();
                         }
+                        space.color = color;
+                        space.gradient = gradient;
                         id
                     }
                     None => {
-                        let id = settings.spaces.add(Some(name), color, gradient);
+                        let id = settings.spaces.add(Some(name.clone()), color, gradient);
                         settings.spaces.activate(id);
                         id
                     }
@@ -281,7 +290,27 @@ impl BrowserWindow {
                 } else {
                     settings.spaces.clear_layout_override(space_id);
                 }
+                saved = true;
             });
+            if saved {
+                let renamed = previous_name
+                    .as_deref()
+                    .is_some_and(|previous| !name.trim().is_empty() && previous != name.trim());
+                let message = if created_preset {
+                    if creating {
+                        "Space created with a layout preset".to_owned()
+                    } else {
+                        "Space and layout preset saved".to_owned()
+                    }
+                } else if creating {
+                    "Space created".to_owned()
+                } else if renamed {
+                    format!("Space renamed to “{}”", name.trim())
+                } else {
+                    "Space updated".to_owned()
+                };
+                self.show_action_alert(message, cx);
+            }
         }
         if let Some(active_tab) = self.active_tab {
             self.activate_tab(active_tab, true, window, cx);
@@ -297,11 +326,22 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let name = Settings::get(cx)
+            .spaces
+            .get(id)
+            .map(|space| space.name.clone());
         let mut removed = false;
         Settings::update(cx, |settings| removed = settings.spaces.remove(id));
         if !removed {
             return;
         }
+        self.show_action_alert(
+            name.map_or_else(
+                || "Space deleted".to_owned(),
+                |name| format!("Deleted space “{name}”"),
+            ),
+            cx,
+        );
         self.follow_space(window, cx);
         for index in (0..self.tabs.len()).rev() {
             if self.tabs[index].space == id && self.tabs.len() > 1 {

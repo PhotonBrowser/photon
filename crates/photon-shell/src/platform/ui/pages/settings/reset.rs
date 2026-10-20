@@ -40,6 +40,7 @@ impl SettingsPage {
 
     fn reset(&mut self, cx: &mut Context<Self>) {
         Settings::update(cx, |settings| settings.reset_preferences());
+        super::super::super::show_alert(cx, "Settings reset");
         self.set_confirming_reset(false, cx);
     }
 

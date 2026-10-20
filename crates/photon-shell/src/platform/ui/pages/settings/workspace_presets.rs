@@ -111,10 +111,18 @@ impl SettingsPage {
         let name = draft.name.read(cx).as_str().trim().to_owned();
         let tab_layout = draft.tab_layout;
         let preset_id = draft.preset_id.clone();
+        let previous_name = preset_id.as_deref().and_then(|id| {
+            Settings::get(cx)
+                .workspace
+                .presets
+                .iter()
+                .find(|preset| preset.id == id)
+                .map(|preset| preset.name.clone())
+        });
         let layout = SavedWorkspaceLayout::for_tab_layout_and_side(tab_layout, draft.sidebar_side);
         let mut workspace = Settings::get(cx).workspace.clone();
-        let saved = match preset_id {
-            Some(id) => workspace.update_preset(&id, &name, layout),
+        let saved = match preset_id.as_deref() {
+            Some(id) => workspace.update_preset(id, &name, layout),
             None => workspace.add_preset(&name, layout).is_some(),
         };
         if !saved {
@@ -132,6 +140,14 @@ impl SettingsPage {
                 .default_preset()
                 .map_or(tab_layout, |preset| preset.layout.tab_layout());
         });
+        let message = match previous_name {
+            None => "Layout preset created".to_owned(),
+            Some(previous_name) if previous_name != name => {
+                format!("Layout preset renamed to “{name}”")
+            }
+            Some(_) => "Layout preset saved".to_owned(),
+        };
+        super::super::super::show_alert(cx, message);
         self.workspace_preset_draft = None;
         cx.notify();
     }
@@ -142,21 +158,24 @@ impl SettingsPage {
     }
 
     fn confirm_delete_workspace_preset(&mut self, cx: &mut Context<Self>) {
-        let Some(id) = self
-            .pending_delete_preset
-            .as_ref()
-            .map(|preset| preset.id.clone())
-        else {
+        let Some(preset) = self.pending_delete_preset.as_ref().cloned() else {
             return;
         };
-        Settings::update(cx, move |settings| {
-            if settings.workspace.remove_preset(&id) {
+        let id = preset.id.clone();
+        let name = preset.name.clone();
+        let mut removed = false;
+        Settings::update(cx, |settings| {
+            removed = settings.workspace.remove_preset(&id);
+            if removed {
                 settings.spaces.remove_preset_override(&id);
                 if let Some(default) = settings.workspace.default_preset() {
                     settings.tab_layout = default.layout.tab_layout();
                 }
             }
         });
+        if removed {
+            super::super::super::show_alert(cx, format!("Deleted layout preset “{name}”"));
+        }
         self.pending_delete_preset = None;
         cx.notify();
     }

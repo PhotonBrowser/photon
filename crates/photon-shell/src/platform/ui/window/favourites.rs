@@ -150,8 +150,9 @@ impl BrowserWindow {
         // Marked first, as unpinning moves the tab.
         self.tabs[index].favourite = Some(url);
         if self.tabs[index].pin.is_some() {
-            self.toggle_pin(index, cx);
+            self.toggle_pin_without_alert(index, cx);
         }
+        self.show_action_alert("Added to Favourites", cx);
         cx.notify();
     }
 
@@ -164,6 +165,10 @@ impl BrowserWindow {
         cx: &mut Context<Self>,
     ) {
         let site = site_name(url);
+        let existed = Settings::get(cx)
+            .spaces
+            .get(space_id)
+            .is_some_and(|space| space.favourite_for(url).is_some());
         for tab in &mut self.tabs {
             if tab.space == space_id
                 && tab
@@ -179,6 +184,9 @@ impl BrowserWindow {
                 space.remove_favourite(url);
             }
         });
+        if existed {
+            self.show_action_alert("Removed from Favourites", cx);
+        }
         cx.notify();
     }
 

@@ -37,7 +37,15 @@ impl LayoutOptions {
     }
 
     pub(in super::super) fn restore_removed(&self) -> ClickHandler {
-        change(|settings| NewTabSettings::restore_removed(&mut settings.new_tab))
+        Box::new(|_, _, cx| {
+            if !Settings::get(cx).new_tab.has_removed() {
+                return;
+            }
+            Settings::update(cx, |settings| {
+                NewTabSettings::restore_removed(&mut settings.new_tab)
+            });
+            super::super::super::show_alert(cx, "Removed shortcuts restored");
+        })
     }
 
     /// The numbers of shortcuts to choose from, the current one chosen.

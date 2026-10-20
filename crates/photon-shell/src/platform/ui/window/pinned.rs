@@ -29,6 +29,15 @@ impl BrowserWindow {
     /// Pins the tab at `index` at its current address, after the other
     /// pinned tabs, or returns a pinned tab to the top of today's tabs.
     pub(super) fn toggle_pin(&mut self, index: usize, cx: &mut Context<Self>) {
+        self.toggle_pin_inner(index, true, cx);
+    }
+
+    /// Unpins a tab as part of another action, such as adding it to Favourites.
+    pub(super) fn toggle_pin_without_alert(&mut self, index: usize, cx: &mut Context<Self>) {
+        self.toggle_pin_inner(index, false, cx);
+    }
+
+    fn toggle_pin_inner(&mut self, index: usize, announce: bool, cx: &mut Context<Self>) {
         let Some(tab) = self.tabs.get(index) else {
             return;
         };
@@ -43,9 +52,13 @@ impl BrowserWindow {
             Some(_) => self.pinned_count(),
             None => self.pinned_count() - 1,
         };
+        let pinned = pin.is_some();
         let previous = std::mem::replace(&mut self.tabs[index].pin, pin);
         self.save_pin_change(&self.tabs[index], previous, cx);
         self.move_tab_to(index, to, cx);
+        if announce {
+            self.show_action_alert(if pinned { "Tab pinned" } else { "Tab unpinned" }, cx);
+        }
         cx.notify();
     }
 
@@ -85,6 +98,7 @@ impl BrowserWindow {
             let previous = std::mem::replace(&mut self.tabs[from].pin, pin);
             self.save_pin_change(&self.tabs[from], previous, cx);
             self.move_tab_to(from, to, cx);
+            self.show_action_alert(if pinned { "Tab pinned" } else { "Tab unpinned" }, cx);
             cx.notify();
         } else {
             self.move_tab_to(from, to, cx);

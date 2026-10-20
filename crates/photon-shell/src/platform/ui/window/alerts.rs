@@ -1,23 +1,28 @@
 //! Notices over the page: crash, restart and zoom chips, and JavaScript dialogs.
 
-use gpui::{App, Context, ElementId, Global, SharedString, Task, Window, prelude::*};
+use gpui::{
+    AnyElement, App, Context, ElementId, Global, SharedString, Task, Window, div, prelude::*, px,
+};
 use photon_core::BrowserCommand;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     time::{Duration, Instant},
 };
 
 use super::super::super::engine::ZoomStep;
+use super::super::motion::{Speed, Transition, toast};
 use super::super::settings::{ConfigReloadNotice, Settings};
 use super::super::status_chip::{CHIP_MOTION, ChipIcon, status_chip};
 use super::super::theme::ThemeColors;
-use super::super::{ClickHandler, CrashNotice};
+use super::super::{ClickHandler, CrashNotice, metrics};
 use super::BrowserWindow;
 use super::BrowserWindowRegistry;
 use crate::platform::app_update::update_app;
 
 /// How long a general-purpose notice stays visible.
 const ALERT_DURATION: Duration = Duration::from_secs(3);
+/// Maximum number of general-purpose alerts shown in the corner stack.
+const ALERT_STACK_LIMIT: usize = 3;
 
 /// What the window says about an Engine service that stopped.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -40,43 +45,86 @@ pub(super) struct AppAlert {
     expires_at: Instant,
 }
 
-/// The active general-purpose notice for each browser window.
+/// The active general-purpose notices for each browser window.
 #[derive(Default)]
 pub(super) struct AlertCenter {
     next_id: u64,
-    alerts: HashMap<u64, AppAlert>,
+    alerts: HashMap<u64, VecDeque<AppAlert>>,
 }
 
 impl Global for AlertCenter {}
 
 impl AlertCenter {
     fn show(&mut self, window_id: u64, message: SharedString) {
+        let now = Instant::now();
         self.next_id = self.next_id.wrapping_add(1).max(1);
-        self.alerts.insert(
-            window_id,
-            AppAlert {
-                id: self.next_id,
-                message,
-                expires_at: Instant::now() + ALERT_DURATION,
-            },
-        );
+        let alerts = self.alerts.entry(window_id).or_default();
+        alerts.retain(|alert| alert.expires_at > now);
+        alerts.push_back(AppAlert {
+            id: self.next_id,
+            message,
+            expires_at: now + ALERT_DURATION,
+        });
+        while alerts.len() > ALERT_STACK_LIMIT {
+            alerts.pop_front();
+        }
     }
 
-    pub(super) fn current(window_id: u64, cx: &App) -> Option<&AppAlert> {
-        cx.try_global::<Self>()?.alerts.get(&window_id)
+    pub(super) fn current(window_id: u64, cx: &App) -> Vec<AppAlert> {
+        let now = Instant::now();
+        cx.try_global::<Self>()
+            .and_then(|center| center.alerts.get(&window_id))
+            .into_iter()
+            .flatten()
+            .filter(|alert| alert.expires_at > now)
+            .cloned()
+            .collect()
     }
 
-    pub(super) fn dismiss(window_id: u64, cx: &mut App) -> bool {
+    pub(super) fn dismiss_latest(window_id: u64, cx: &mut App) -> bool {
         if !cx
             .try_global::<Self>()
-            .is_some_and(|center| center.alerts.contains_key(&window_id))
+            .and_then(|center| center.alerts.get(&window_id))
+            .is_some_and(|alerts| !alerts.is_empty())
         {
             return false;
         }
         cx.update_global::<Self, _>(|center, _| {
-            center.alerts.remove(&window_id);
+            if let Some(alerts) = center.alerts.get_mut(&window_id) {
+                alerts.pop_back();
+            }
+            center.alerts.retain(|_, alerts| !alerts.is_empty());
         });
         true
+    }
+
+    pub(super) fn dismiss_alert(window_id: u64, alert_id: u64, cx: &mut App) -> bool {
+        let exists = cx
+            .try_global::<Self>()
+            .and_then(|center| center.alerts.get(&window_id))
+            .is_some_and(|alerts| alerts.iter().any(|alert| alert.id == alert_id));
+        if !exists {
+            return false;
+        }
+        cx.update_global::<Self, _>(|center, _| {
+            if let Some(alerts) = center.alerts.get_mut(&window_id) {
+                alerts.retain(|alert| alert.id != alert_id);
+            }
+            center.alerts.retain(|_, alerts| !alerts.is_empty());
+        });
+        true
+    }
+
+    fn expire(window_id: u64, cx: &mut App) {
+        let now = Instant::now();
+        if cx.has_global::<Self>() {
+            cx.update_global::<Self, _>(|center, _| {
+                if let Some(alerts) = center.alerts.get_mut(&window_id) {
+                    alerts.retain(|alert| alert.expires_at > now);
+                }
+                center.alerts.retain(|_, alerts| !alerts.is_empty());
+            });
+        }
     }
 
     pub(super) fn remove_window(window_id: u64, cx: &mut App) {
@@ -92,8 +140,9 @@ impl AlertCenter {
 ///
 /// The same call works from a window `Context` or from `&mut App`:
 /// `show_alert(cx, "Settings saved")`.
-/// A new notice replaces the previous general-purpose notice in that window.
-/// Returns `false` when no Photon browser window is open.
+/// Notices stack at the bottom right of the active browser window. Each expires
+/// independently; the stack shows the three newest notices. Returns `false` when
+/// no Photon browser window is open.
 pub fn show_alert(cx: &mut App, message: impl Into<SharedString>) -> bool {
     let target = cx
         .active_window()
@@ -138,6 +187,16 @@ pub(super) struct Notice {
 }
 
 impl BrowserWindow {
+    /// Reports a completed, user-visible change in this browser window.
+    pub(super) fn show_action_alert(
+        &self,
+        message: impl Into<SharedString>,
+        cx: &mut Context<Self>,
+    ) {
+        cx.default_global::<AlertCenter>()
+            .show(self.window_id, message.into());
+    }
+
     /// Shows the JavaScript dialog of the page in view: the preview's while
     /// it has one open, otherwise the active tab's. Focus returns to the
     /// page when the dialog closes.
@@ -165,7 +224,7 @@ impl BrowserWindow {
 
     /// Dismisses the shown notice, returning whether there was one.
     pub(super) fn dismiss_notice(&mut self, cx: &mut Context<Self>) -> bool {
-        if AlertCenter::dismiss(self.window_id, cx) {
+        if AlertCenter::dismiss_latest(self.window_id, cx) {
             return true;
         }
         if self.engine_notice.take().is_some() || self.zoom_shown_at.take().is_some() {
@@ -195,18 +254,6 @@ impl BrowserWindow {
     /// The notice to show: an Engine restart first, then a zoom change, then
     /// the active tab's crash or error.
     fn notice(&self, cx: &Context<Self>) -> Option<Notice> {
-        if let Some(alert) = AlertCenter::current(self.window_id, cx)
-            && Instant::now() < alert.expires_at
-        {
-            return Some(Notice {
-                id: ElementId::Integer(alert.id),
-                icon: ChipIcon::Info,
-                message: alert.message.clone(),
-                expires_at: Some(alert.expires_at),
-                action: None,
-            });
-        }
-
         let step = self.spinner_step;
         let webview = self.active_webview();
         let zoom_notice = self.zoom_shown_at.and_then(|shown_at| {
@@ -323,8 +370,53 @@ impl BrowserWindow {
         &mut self,
         palette: ThemeColors,
         cx: &mut Context<Self>,
-    ) -> Option<impl IntoElement + use<>> {
+    ) -> Option<AnyElement> {
         let animations = Settings::motion(cx);
+        let alerts = AlertCenter::current(self.window_id, cx);
+        if !alerts.is_empty() {
+            if let Some(deadline) = alerts.iter().map(|alert| alert.expires_at).min() {
+                self.expire_notice_at(deadline, cx);
+            }
+
+            let count = alerts.len();
+            let stack_height = metrics::CHIP_HEIGHT * count as f32
+                + metrics::CHIP_GAP * count.saturating_sub(1) as f32;
+            let chips = alerts.into_iter().map(|alert| {
+                let alert_id = alert.id;
+                let dismiss: ClickHandler = Box::new(cx.listener(move |this, _, _, cx| {
+                    cx.stop_propagation();
+                    AlertCenter::dismiss_alert(this.window_id, alert_id, cx);
+                }));
+                status_chip(
+                    ElementId::Integer(alert.id),
+                    Transition::Enter,
+                    toast(),
+                    palette,
+                    ChipIcon::Info,
+                    alert.message,
+                    None,
+                    Some(dismiss),
+                    animations,
+                )
+                .into_any_element()
+            });
+
+            return Some(
+                div()
+                    .id("alert-stack")
+                    .flex()
+                    .flex_col()
+                    .items_end()
+                    .gap(px(metrics::CHIP_GAP))
+                    .h(px(stack_height))
+                    .transitions(|transitions| {
+                        transitions.size(animations.duration(Speed::Standard))
+                    })
+                    .children(chips)
+                    .into_any_element(),
+            );
+        }
+
         let notice = self.notice(cx);
         if let Some(deadline) = notice.as_ref().and_then(|notice| notice.expires_at) {
             self.expire_notice_at(deadline, cx);
@@ -362,16 +454,20 @@ impl BrowserWindow {
             }
             None => (None, None),
         };
-        Some(status_chip(
-            notice.id,
-            transition,
-            palette,
-            notice.icon,
-            notice.message,
-            action,
-            on_dismiss,
-            animations,
-        ))
+        Some(
+            status_chip(
+                notice.id,
+                transition,
+                CHIP_MOTION,
+                palette,
+                notice.icon,
+                notice.message,
+                action,
+                on_dismiss,
+                animations,
+            )
+            .into_any_element(),
+        )
     }
 
     /// Redraws once a recovery notice has had its time, so it disappears.
@@ -395,6 +491,7 @@ impl BrowserWindow {
                     }
                     this.notice_expiry = None;
                     this.notice_expiry_generation = this.notice_expiry_generation.wrapping_add(1);
+                    AlertCenter::expire(this.window_id, cx);
                     if matches!(this.engine_notice, Some(EngineNotice::Restarted(_))) {
                         this.engine_notice = None;
                     }
@@ -416,3 +513,25 @@ impl BrowserWindow {
 
 /// Keeps a pending notice expiry alive.
 pub(super) type NoticeExpiry = Option<(Instant, u64, Task<()>)>;
+
+#[cfg(test)]
+mod tests {
+    use super::AlertCenter;
+
+    #[test]
+    fn alert_center_keeps_the_three_newest_alerts_per_window() {
+        let mut center = AlertCenter::default();
+        center.show(1, "first".into());
+        center.show(1, "second".into());
+        center.show(1, "third".into());
+        center.show(1, "fourth".into());
+        center.show(2, "another window".into());
+
+        let messages: Vec<_> = center.alerts[&1]
+            .iter()
+            .map(|alert| alert.message.to_string())
+            .collect();
+        assert_eq!(messages, ["second", "third", "fourth"]);
+        assert_eq!(center.alerts[&2].len(), 1);
+    }
+}

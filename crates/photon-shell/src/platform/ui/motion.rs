@@ -55,6 +55,16 @@ pub(super) const fn fade() -> Entrance {
     Entrance::new().fade_from(0.0).speed(Speed::Quick)
 }
 
+/// Preset for bottom-right alerts: rise in with a soft focus settle.
+pub(super) const fn toast() -> Entrance {
+    Entrance::new()
+        .fade_from(0.0)
+        .slide_from(Edge::Bottom, distance::SHIFT)
+        .scale_from(0.97)
+        .blur_from(2.0)
+        .speed(Speed::Gentle)
+}
+
 /// Photon preset for panels and dialogs.
 pub(super) const fn rise() -> Entrance {
     Entrance::new()

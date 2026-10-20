@@ -59,12 +59,16 @@ impl NewTabPage {
             cx.notify();
             return;
         };
+        let already_pinned = Settings::get(cx).new_tab.is_pinned(&url);
         let title = if name.is_empty() {
             site_name(&url)
         } else {
             name
         };
         Settings::update(cx, |settings| settings.new_tab.pin(Shortcut { title, url }));
+        if !already_pinned {
+            super::super::super::show_alert(cx, "Shortcut added");
+        }
         self.adding = None;
         cx.notify();
     }

@@ -86,6 +86,7 @@ impl NewTabPage {
     fn remove(&mut self, url: &str, cx: &mut Context<Self>) {
         self.hovered = None;
         Settings::update(cx, |settings| settings.new_tab.remove(url));
+        super::super::show_alert(cx, "Shortcut removed");
     }
 }
 
