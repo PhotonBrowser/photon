@@ -131,7 +131,8 @@ and the dialog in
 
 Closing the last tab closes the window, unless Settings → Tabs says to keep
 it open; then a fresh new tab page takes the closed tab's place, and ⌘⇧T
-still reopens what was closed.
+still reopens what was closed. In the horizontal layout, keeping the window
+open creates a replacement tab so the tab strip never stays empty.
 
 ## Where it lives
 

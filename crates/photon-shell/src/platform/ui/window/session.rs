@@ -127,7 +127,7 @@ pub(super) fn restore_session(
         .iter()
         .filter(|window| !window.tabs.is_empty())
     {
-        let window = match open_browser_window(runtime.clone(), None, !opened, cx) {
+        let window = match open_browser_window(runtime.clone(), None, !opened, true, cx) {
             Ok(window) => window,
             Err(error) => {
                 trace(format_args!("restoring window: {error:#}"));
@@ -233,6 +233,8 @@ impl BrowserWindow {
         let active = saved.active.map_or(first, |position| first + position);
         if active < self.tabs.len() {
             self.activate_tab(active, true, window, cx);
+        } else if self.tabs.is_empty() && self.tab_axis(cx) == super::TabDragAxis::Horizontal {
+            self.open_tab(window, cx);
         }
     }
 }

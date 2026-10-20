@@ -320,6 +320,9 @@ impl BrowserWindow {
 
     /// Redraws the chrome and every tab for changed settings, such as the theme.
     fn settings_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.tabs.is_empty() && self.tab_axis(cx) == TabDragAxis::Horizontal {
+            self.open_tab(window, cx);
+        }
         let tab_sleep_mode = Settings::get(cx).tab_sleep_mode;
         if tab_sleep_mode != self.tab_sleep_mode {
             self.tab_sleep_mode = tab_sleep_mode;
@@ -373,9 +376,13 @@ impl BrowserWindow {
         match command {
             BrowserCommand::NewTab => self.open_tab(window, cx),
             BrowserCommand::NewWindow => {
-                if let Err(error) =
-                    open_browser_window(self.runtime.clone(), app::launch_address(), false, cx)
-                {
+                if let Err(error) = open_browser_window(
+                    self.runtime.clone(),
+                    app::launch_address(),
+                    false,
+                    false,
+                    cx,
+                ) {
                     trace(format_args!("new window: {error:#}"));
                 }
             }
@@ -414,12 +421,13 @@ impl BrowserWindow {
     }
 }
 
-/// Opens a browser window showing `startup_address`, or no tab when there is
-/// no startup address. The first window at launch also opens pinned tabs.
+/// Opens a browser window showing `startup_address`, or a New Tab page when
+/// the horizontal layout needs a tab. Session restoration fills tabs afterward.
 fn open_browser_window(
     runtime: Rc<EngineRuntime>,
     startup_address: Option<String>,
     restore_pinned_tabs: bool,
+    restoring_session: bool,
     cx: &mut App,
 ) -> anyhow::Result<WindowHandle<BrowserWindow>> {
     // A page's address opens that page; any other address a web page.
@@ -591,7 +599,11 @@ fn open_browser_window(
                 browser.activate_tab(0, true, window, cx);
             }
             if browser.tabs.is_empty() {
-                browser.show_empty_new_tab_page(window, cx);
+                if !restoring_session && browser.tab_axis(cx) == TabDragAxis::Horizontal {
+                    browser.open_tab(window, cx);
+                } else {
+                    browser.show_empty_new_tab_page(window, cx);
+                }
             }
             browser
         })

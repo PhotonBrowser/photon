@@ -1376,8 +1376,14 @@ impl BrowserWindow {
             self.omnibox.update(cx, |omnibox, cx| {
                 omnibox.set_content(None, None, window, cx)
             });
-            self.record_session_state(WindowSession::default(), cx);
-            window.remove_window();
+            if self.tab_axis(cx) == TabDragAxis::Horizontal
+                && !Settings::get(cx).close_window_with_last_tab
+            {
+                self.open_tab(window, cx);
+            } else {
+                self.record_session_state(WindowSession::default(), cx);
+                window.remove_window();
+            }
             return;
         } else if was_active && let Some(next) = self.active_tab {
             self.activate_tab(next, true, window, cx);
@@ -1994,7 +2000,13 @@ impl BrowserWindow {
                 self.omnibox.update(cx, |omnibox, cx| {
                     omnibox.set_content(None, None, window, cx)
                 });
-                self.show_empty_new_tab_page(window, cx);
+                if self.tab_axis(cx) == TabDragAxis::Horizontal
+                    && !Settings::get(cx).close_window_with_last_tab
+                {
+                    self.open_tab(window, cx);
+                } else {
+                    self.show_empty_new_tab_page(window, cx);
+                }
             }
         }
         cx.notify();
@@ -2080,7 +2092,11 @@ impl BrowserWindow {
             self.omnibox.update(cx, |omnibox, cx| {
                 omnibox.set_content(None, None, window, cx)
             });
-            if self.empty_page.is_none() {
+            if self.tab_axis(cx) == TabDragAxis::Horizontal
+                && !Settings::get(cx).close_window_with_last_tab
+            {
+                self.open_tab(window, cx);
+            } else if self.empty_page.is_none() {
                 self.show_empty_new_tab_page(window, cx);
             }
             cx.notify();

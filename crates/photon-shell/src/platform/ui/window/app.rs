@@ -116,9 +116,13 @@ pub fn run() {
                                 })
                                 .ok();
                         });
-                    } else if let Err(error) =
-                        open_browser_window(new_window_runtime.clone(), launch_address(), false, cx)
-                    {
+                    } else if let Err(error) = open_browser_window(
+                        new_window_runtime.clone(),
+                        launch_address(),
+                        false,
+                        false,
+                        cx,
+                    ) {
                         crate::platform::trace(format_args!("new window: {error:#}"));
                     }
                 });
@@ -166,6 +170,7 @@ pub fn run() {
                     runtime,
                     Some(photon_core::internal_page_url("newtab")),
                     false,
+                    false,
                     cx,
                 )
                 .expect("open UI-only Photon window");
@@ -175,7 +180,7 @@ pub fn run() {
                     // come back, or a new one opens.
                     let address = initial_address();
                     if address.is_some() || !restore_session(&saved_session, &runtime, cx) {
-                        open_browser_window(runtime, address, true, cx)
+                        open_browser_window(runtime, address, true, false, cx)
                             .expect("open GPUI-CE Photon window");
                     }
                 }

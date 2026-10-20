@@ -51,7 +51,7 @@ fn open_urls(urls: &[String], runtime: &Rc<EngineRuntime>, cx: &mut App) {
         });
     let (window, rest) = match frontmost {
         Some(window) => (window, urls),
-        None => match open_browser_window(runtime.clone(), Some(first.clone()), false, cx) {
+        None => match open_browser_window(runtime.clone(), Some(first.clone()), false, false, cx) {
             Ok(window) => (window, rest),
             Err(error) => {
                 trace(format_args!("open url: {error:#}"));
