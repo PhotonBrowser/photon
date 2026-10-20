@@ -10,6 +10,7 @@ What the Photon shell does today and what comes next. Engine performance work is
 - [x] Native macOS traffic lights use their disabled idle appearance while windowed and remain interactive in fullscreen
 - [x] In native and borderless fullscreen the shell uses the space the hidden window controls leave
 - [x] Engine pages drawn from shared IOSurfaces through Metal, paced to the window's display and refresh rate
+- [x] Engine frames update the page without rebuilding cached browser chrome or overlays
 - [x] Engine stops rendering while the window is occluded or the tab is hidden
 - [x] Heavy pages no longer freeze scrolling while they first paint: the GPU programs they need are compiled at startup ([section 9](CompositorPerformance.md#9-slow-first-paint-on-heavy-pages--fixed))
 - [x] Keyboard, pointer, scroll and cursor forwarding to the page; page focus follows window focus
@@ -107,8 +108,6 @@ See the [customization architecture and delivery plan](Customization.md).
 - [ ] Polish: ⌘⇧C to copy the address with a toast, a mini player for background audio, spring motion on tab rows
 
 ### Engine
-
-- [ ] Draw the page area without re-rendering the whole window on every Engine frame
 
 ## Later
 
