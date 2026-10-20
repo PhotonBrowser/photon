@@ -14,7 +14,7 @@ use photon_shortcuts::action_for_command;
 
 use super::controls::{OwnsClicks, themed_text_input};
 use super::icons::search_icon_sized;
-use super::kbd::action_kbd;
+use super::kbd::{action_kbd, keycap_label};
 use super::layout::{Elevated, Raised, h_stack, v_stack};
 use super::metrics;
 use super::settings::Settings;
@@ -306,7 +306,13 @@ impl Render for CommandPalette {
                     .text_size(px(metrics::KBD_FONT_SIZE))
                     .text_color(rgb(palette.text_secondary))
                     .child("↑ ↓ Navigate")
-                    .child("↵ Run")
+                    .child(
+                        h_stack()
+                            .items_center()
+                            .gap(px(metrics::KBD_GAP))
+                            .child(keycap_label("Enter", palette))
+                            .child("Run"),
+                    )
                     .child("Esc Close"),
             )
     }

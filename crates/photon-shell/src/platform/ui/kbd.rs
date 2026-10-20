@@ -47,6 +47,11 @@ pub(super) fn kbd(binding: &KeyBinding, palette: ThemeColors) -> Div {
         .children(caps)
 }
 
+/// A themed keycap for a fixed keyboard hint that is not bound to an action.
+pub(super) fn keycap_label(label: impl Into<SharedString>, palette: ThemeColors) -> Div {
+    keycap(label.into(), palette)
+}
+
 fn keycap(label: SharedString, palette: ThemeColors) -> Div {
     div()
         .flex()
