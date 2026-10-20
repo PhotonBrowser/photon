@@ -58,3 +58,4 @@ pub(in crate::platform) use webview::{
     WebViewEvent, install_form_controls,
 };
 pub use window::run;
+pub use window::show_alert;

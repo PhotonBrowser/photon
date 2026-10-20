@@ -62,7 +62,7 @@ use super::settings::Settings;
 use super::shortcuts_dialog::ShortcutsDialog;
 use super::tabs::{RevealedIcon, TabDragAxis, TabIcon};
 use super::theme::{ThemeColors, palette};
-use alerts::{EngineNotice, NoticeExpiry};
+use alerts::{AlertCenter, EngineNotice, NoticeExpiry};
 use content::{BrowserTab, TabContent, create_webview};
 use peek::PeekState;
 use popups::PendingPopup;
@@ -71,6 +71,7 @@ use side_dock::SidebarState;
 use spaces::SpacesState;
 use tabs::ClosedTab;
 
+pub use alerts::show_alert;
 pub use app::run;
 
 struct BrowserWindow {
@@ -82,6 +83,10 @@ struct BrowserWindow {
     _empty_page_subscription: Option<Subscription>,
     /// Rebuilds tab and favourite icons after an asynchronous disk load.
     _history_subscription: Subscription,
+    /// Re-renders this window when its transient notice changes.
+    _alert_subscription: Subscription,
+    /// The GPUI window ID used to target notices to this window.
+    window_id: u64,
     /// The sidebar, cached so Engine frames repaint only the page.
     chrome: Entity<BrowserChrome>,
     /// Menus and dialogs over the window, cached for the same reason.
@@ -154,6 +159,8 @@ struct BrowserWindow {
     zoom_shown_at: Option<Instant>,
     /// Redraws when a recovery chip expires.
     notice_expiry: NoticeExpiry,
+    /// Invalidates expiry tasks after a newer notice replaces the current one.
+    notice_expiry_generation: u64,
     /// The icon each tab last revealed and when, so an icon animates in once
     /// rather than whenever the tab redraws it after a spinner.
     revealed_icons: RefCell<HashMap<u64, (RevealedIcon, Instant)>>,
@@ -440,6 +447,10 @@ fn open_browser_window(
                     this.settings_changed(window, cx);
                 });
             let history_subscription = cx.observe_global::<BrowsingHistory>(|_, cx| cx.notify());
+            if !cx.has_global::<AlertCenter>() {
+                cx.set_global(AlertCenter::default());
+            }
+            let alert_subscription = cx.observe_global::<AlertCenter>(|_, cx| cx.notify());
             let browser = cx.entity().downgrade();
             let chrome = cx.new(|_| BrowserChrome {
                 browser: browser.clone(),
@@ -485,6 +496,8 @@ fn open_browser_window(
                 empty_page: None,
                 _empty_page_subscription: None,
                 _history_subscription: history_subscription,
+                _alert_subscription: alert_subscription,
+                window_id: registry_window_id,
                 chrome,
                 overlays,
                 sidebar: SidebarState::new(cx),
@@ -530,6 +543,7 @@ fn open_browser_window(
                 state_changed: true,
                 engine_notice: None,
                 notice_expiry: None,
+                notice_expiry_generation: 0,
                 zoom_shown_at: None,
                 revealed_icons: RefCell::default(),
                 tab_entry_animations: RefCell::default(),
@@ -557,6 +571,7 @@ fn open_browser_window(
                             this.window_visible
                         ));
                         BrowserWindow::forget_session(key, cx);
+                        AlertCenter::remove_window(registry_window_id, cx);
                         BrowserWindowRegistry::unregister_window(registry_window_id, cx);
                     })
                 },

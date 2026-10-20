@@ -4,7 +4,7 @@
 //! between icons and labels.
 
 use gpui::{AnyElement, Context, Div, Stateful, Window, div, prelude::*, px};
-use photon_core::DockRegion;
+use photon_core::{Command, DockRegion};
 
 use super::super::super::button::toolbar_button;
 use super::super::super::icons::{sidebar_expand_icon, sidebar_icon};
@@ -189,7 +189,12 @@ impl BrowserWindow {
             true,
             icon,
             palette,
-            Box::new(cx.listener(|this, _, _, cx| this.press_sidebar_toggle(cx))),
+            Box::new(cx.listener(|this, _, window, cx| {
+                this.press_sidebar_toggle(cx);
+                if !this.sidebar.docked() {
+                    window.focus(&this.root_focus, cx);
+                }
+            })),
         )
     }
 
@@ -319,7 +324,7 @@ impl BrowserWindow {
             items,
             Box::new(cx.listener(|this, _, window, cx| {
                 cx.stop_propagation();
-                this.open_command_bar(window, cx);
+                this.execute_command(Command::NewTab, window, cx);
             })),
             self.drop_tab_into_today_handler(cx),
             on_drag_move,

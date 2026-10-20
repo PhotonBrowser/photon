@@ -63,7 +63,7 @@ impl BrowserWindow {
     pub(in super::super) fn drag_sidebar_edge(
         &mut self,
         event: &DragMoveEvent<SidebarEdgeDrag>,
-        window: &Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let x = event.event.position.x;
@@ -73,7 +73,10 @@ impl BrowserWindow {
         };
         let before = (self.sidebar.docked(), self.sidebar.collapsed());
         match SidebarResize::to(f32::from(edge)) {
-            SidebarResize::Hide => self.set_sidebar_visible(false, cx),
+            SidebarResize::Hide => {
+                self.set_sidebar_visible(false, cx);
+                window.focus(&self.root_focus, cx);
+            }
             SidebarResize::Collapse => {
                 self.set_sidebar_visible(true, cx);
                 self.set_sidebar_collapsed(true, cx);

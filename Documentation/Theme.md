@@ -88,7 +88,7 @@ shell's shadows. Use `element.elevated(Elevation::…)`, not shadow sizes:
 Floating surfaces take their background with `element.raised(palette)`
 rather than setting it themselves: the translucent `menu_surface`, blurring
 what is behind by `raised_blur`. Menus and popovers, the omnibox panel, the
-command bar, the find bar, chips, dialogs, the revealed sidebar and a dragged
+find bar, chips, dialogs, the revealed sidebar and a dragged
 tab all use it, so they frost alike and follow the transparency setting.
 
 ## Shared components

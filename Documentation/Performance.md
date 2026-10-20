@@ -31,7 +31,7 @@ self-scrolling page, or `https://en.wikipedia.org/wiki/Web_browser`. Rates on a
 | Page load | Stop loading SVG images requesting frames of every SVG image (Ladybird bug) | ~13,000 image invalidations while Wikipedia loads (206 SVG images) | 0 |
 | Idle GPU memory | Purge Skia resources unused for 5 s once no frame has completed for 5 s | Compositor on idle Wikipedia: 230 MB footprint, 114 MB GPU memory | 122 MB footprint, 17 MB GPU memory |
 | First paint of heavy pages | Compile the GPU programs recent sessions used when the Compositor starts, one per event loop turn | Slowest first-paint flushes 290–360 ms on a long Wikipedia table, 341 ms on YouTube; scrolling froze behind them while pages loaded | About 8 ms on the Wikipedia table; 41 ms on a second YouTube visit |
-| UI draw | Cache the menus, dialogs and command bar over the window like the chrome | The root view rebuilt them on every page frame | Not rebuilt per frame; the window's whole draw per page frame was already 0.29–0.47 ms (p50), and the change is within that run-to-run spread |
+| UI draw | Cache the menus and dialogs over the window like the chrome | The root view rebuilt them on every page frame | Not rebuilt per frame; the window's whole draw per page frame was already 0.29–0.47 ms (p50), and the change is within that run-to-run spread |
 
 ## Investigated without a change
 

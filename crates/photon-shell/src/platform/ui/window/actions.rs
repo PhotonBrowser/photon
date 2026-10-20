@@ -24,6 +24,9 @@ impl BrowserWindow {
             }))
             .on_action(cx.listener(|this, _: &ToggleSidebar, window, cx| {
                 this.execute_command(Command::ToggleSidebar, window, cx);
+                if !this.sidebar.docked() {
+                    window.focus(&this.root_focus, cx);
+                }
             }))
             .on_action(cx.listener(|this, _: &ToggleSidebarIcons, window, cx| {
                 this.execute_command(Command::ToggleSidebarIcons, window, cx);

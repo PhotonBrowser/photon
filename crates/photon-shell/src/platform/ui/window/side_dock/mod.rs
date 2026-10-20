@@ -197,10 +197,16 @@ impl SidebarState {
     }
 
     fn set_visible(&mut self, visible: bool, cx: &App) -> bool {
-        if self.visible == visible {
+        if self.visible == visible && (visible || self.zen) {
             return false;
         }
         self.visible = visible;
+        // Fully hiding the sidebar hides the rest of the browser chrome too.
+        // Showing it again leaves Zen mode, while an already visible sidebar
+        // can still be hidden by Zen mode independently.
+        self.zen = !visible;
+        self.tucked
+            .animate_to(progress(self.zen), Speed::Gentle, &Settings::motion(cx));
         self.follow_docked(cx);
         true
     }

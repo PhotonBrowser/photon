@@ -3,6 +3,9 @@
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod platform;
 
+#[cfg(target_os = "macos")]
+pub use platform::show_alert;
+
 /// Run the native Photon browser shell.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub fn run() {

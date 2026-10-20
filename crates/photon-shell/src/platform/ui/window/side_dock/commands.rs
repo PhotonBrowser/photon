@@ -9,8 +9,9 @@ use super::super::BrowserWindow;
 use crate::platform::window_settings;
 
 impl BrowserWindow {
-    /// Shows or hides the sidebar, and leaves Zen mode for it. A revealed
-    /// sidebar is kept open with its labels. The horizontal layout has none.
+    /// Shows the sidebar, or hides it along with the rest of the chrome. A
+    /// revealed sidebar is kept open with its labels. The horizontal layout
+    /// has none.
     pub(in super::super) fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
         if !WorkspaceLayout::current(cx).has_sidebar() {
             return;
@@ -46,6 +47,13 @@ impl BrowserWindow {
 
     /// Hides all chrome around the page, or brings it back as it was.
     pub(in super::super) fn toggle_zen_mode(&mut self, cx: &mut Context<Self>) {
+        if self.sidebar.zen && !self.sidebar.visible {
+            // Closing the sidebar also enters Zen mode. Its shortcut should
+            // restore the sidebar when it exits that state.
+            self.sidebar.dock(cx);
+            cx.notify();
+            return;
+        }
         if self.sidebar.set_zen(!self.sidebar.zen, cx) {
             cx.notify();
         }

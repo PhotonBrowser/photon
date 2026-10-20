@@ -38,7 +38,7 @@ impl BrowserWindow {
             }
             Command::ToggleSidebar | Command::ToggleSidebarIcons | Command::ToggleZenMode => {
                 match command {
-                    Command::ToggleSidebar => self.toggle_sidebar(window, cx),
+                    Command::ToggleSidebar => self.toggle_sidebar(cx),
                     Command::ToggleSidebarIcons => self.toggle_sidebar_icons(cx),
                     _ => self.toggle_zen_mode(cx),
                 }

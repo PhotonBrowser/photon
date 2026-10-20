@@ -31,6 +31,8 @@ pub(crate) use macos::{
 pub(crate) use linux::run;
 #[cfg(target_os = "macos")]
 pub(crate) use ui::run;
+#[cfg(target_os = "macos")]
+pub use ui::show_alert;
 
 /// State the shared browser UI sends to its native menu adapter.
 #[derive(Clone, Copy, Default, PartialEq)]

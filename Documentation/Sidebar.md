@@ -32,8 +32,9 @@ Controls take their own clicks, so right-clicking one does not open it.
 including its top row with the window controls, the sidebar button, back,
 forward and reload, slides in from the left edge or back out, and the page
 narrows or widens beside it in step, so it resizes smoothly rather than
-jumping. Hidden, nothing sits above the page: the window controls hide too,
-and only a thin margin around the page moves the window.
+jumping. Hiding it completely also enters Zen mode and tucks away the rest of
+the chrome. Browser keyboard shortcuts, including ⌘S to reopen the sidebar,
+continue to work while it is hidden.
 
 - Pointing at the window's left edge slides the sidebar in over the page, on
   a raised surface, with its labels and the window controls. It slides away

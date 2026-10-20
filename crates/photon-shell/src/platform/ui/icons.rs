@@ -184,6 +184,11 @@ pub(super) fn check_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("check"), color, size)
 }
 
+/// A circled information mark for transient notices.
+pub(super) fn info_icon(color: u32, size: f32) -> impl IntoElement {
+    icon(lucide!("info"), color, size)
+}
+
 /// A clock with a turning-back arrow, for past searches.
 pub(super) fn history_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("history"), color, size)

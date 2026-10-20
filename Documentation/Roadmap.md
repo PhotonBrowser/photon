@@ -68,7 +68,7 @@ What the Photon shell does today and what comes next. Engine performance work is
 
 ### Keyboard shortcuts
 
-- [x] ⌘T (command bar), ⌘N, ⌘W, ⌘⇧T
+- [x] ⌘T (new tab), ⌘N, ⌘W, ⌘⇧T
 - [x] ⌃Tab / ⌃⇧Tab, ⌘⇧] / ⌘⇧[, ⌘1–⌘8, ⌘9
 - [x] ⌘R, ⌘., ⌘[, ⌘], ⌘L
 - [x] ⌘F, ⌘G, ⌘⇧G

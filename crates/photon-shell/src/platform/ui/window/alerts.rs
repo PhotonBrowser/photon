@@ -1,8 +1,11 @@
 //! Notices over the page: crash, restart and zoom chips, and JavaScript dialogs.
 
-use gpui::{Context, ElementId, SharedString, Task, Window, prelude::*};
+use gpui::{App, Context, ElementId, Global, SharedString, Task, Window, prelude::*};
 use photon_core::BrowserCommand;
-use std::time::{Duration, Instant};
+use std::{
+    collections::HashMap,
+    time::{Duration, Instant},
+};
 
 use super::super::super::engine::ZoomStep;
 use super::super::settings::{ConfigReloadNotice, Settings};
@@ -10,7 +13,11 @@ use super::super::status_chip::{CHIP_MOTION, ChipIcon, status_chip};
 use super::super::theme::ThemeColors;
 use super::super::{ClickHandler, CrashNotice};
 use super::BrowserWindow;
+use super::BrowserWindowRegistry;
 use crate::platform::app_update::update_app;
+
+/// How long a general-purpose notice stays visible.
+const ALERT_DURATION: Duration = Duration::from_secs(3);
 
 /// What the window says about an Engine service that stopped.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -24,6 +31,89 @@ pub(super) enum EngineNotice {
 const RECOVERED_NOTICE_DURATION: Duration = Duration::from_secs(3);
 /// How long the zoom chip stays up after the last zoom change.
 const ZOOM_NOTICE_DURATION: Duration = Duration::from_secs(2);
+
+/// One transient notice requested by a shell feature.
+#[derive(Clone)]
+pub(super) struct AppAlert {
+    id: u64,
+    message: SharedString,
+    expires_at: Instant,
+}
+
+/// The active general-purpose notice for each browser window.
+#[derive(Default)]
+pub(super) struct AlertCenter {
+    next_id: u64,
+    alerts: HashMap<u64, AppAlert>,
+}
+
+impl Global for AlertCenter {}
+
+impl AlertCenter {
+    fn show(&mut self, window_id: u64, message: SharedString) {
+        self.next_id = self.next_id.wrapping_add(1).max(1);
+        self.alerts.insert(
+            window_id,
+            AppAlert {
+                id: self.next_id,
+                message,
+                expires_at: Instant::now() + ALERT_DURATION,
+            },
+        );
+    }
+
+    pub(super) fn current(window_id: u64, cx: &App) -> Option<&AppAlert> {
+        cx.try_global::<Self>()?.alerts.get(&window_id)
+    }
+
+    pub(super) fn dismiss(window_id: u64, cx: &mut App) -> bool {
+        if !cx
+            .try_global::<Self>()
+            .is_some_and(|center| center.alerts.contains_key(&window_id))
+        {
+            return false;
+        }
+        cx.update_global::<Self, _>(|center, _| {
+            center.alerts.remove(&window_id);
+        });
+        true
+    }
+
+    pub(super) fn remove_window(window_id: u64, cx: &mut App) {
+        if cx.has_global::<Self>() {
+            cx.update_global::<Self, _>(|center, _| {
+                center.alerts.remove(&window_id);
+            });
+        }
+    }
+}
+
+/// Shows a short-lived notice in the frontmost Photon browser window.
+///
+/// The same call works from a window `Context` or from `&mut App`:
+/// `show_alert(cx, "Settings saved")`.
+/// A new notice replaces the previous general-purpose notice in that window.
+/// Returns `false` when no Photon browser window is open.
+pub fn show_alert(cx: &mut App, message: impl Into<SharedString>) -> bool {
+    let target = cx
+        .active_window()
+        .and_then(|window| window.downcast::<BrowserWindow>())
+        .or_else(|| {
+            if !cx.has_global::<BrowserWindowRegistry>() {
+                return None;
+            }
+            BrowserWindowRegistry::ordered_handles(cx)
+                .into_iter()
+                .find_map(|window| window.downcast::<BrowserWindow>())
+        });
+    let Some(window) = target else {
+        return false;
+    };
+
+    cx.default_global::<AlertCenter>()
+        .show(window.window_id().as_u64(), message.into());
+    true
+}
 
 /// What a chip's button does.
 #[derive(Clone, Copy)]
@@ -39,7 +129,7 @@ enum NoticeAction {
 /// A chip's content.
 #[derive(Clone)]
 pub(super) struct Notice {
-    id: &'static str,
+    id: ElementId,
     icon: ChipIcon,
     message: SharedString,
     /// When the chip goes away by itself, if it does.
@@ -75,6 +165,9 @@ impl BrowserWindow {
 
     /// Dismisses the shown notice, returning whether there was one.
     pub(super) fn dismiss_notice(&mut self, cx: &mut Context<Self>) -> bool {
+        if AlertCenter::dismiss(self.window_id, cx) {
+            return true;
+        }
         if self.engine_notice.take().is_some() || self.zoom_shown_at.take().is_some() {
             cx.notify();
             return true;
@@ -102,12 +195,24 @@ impl BrowserWindow {
     /// The notice to show: an Engine restart first, then a zoom change, then
     /// the active tab's crash or error.
     fn notice(&self, cx: &Context<Self>) -> Option<Notice> {
+        if let Some(alert) = AlertCenter::current(self.window_id, cx)
+            && Instant::now() < alert.expires_at
+        {
+            return Some(Notice {
+                id: ElementId::Integer(alert.id),
+                icon: ChipIcon::Info,
+                message: alert.message.clone(),
+                expires_at: Some(alert.expires_at),
+                action: None,
+            });
+        }
+
         let step = self.spinner_step;
         let webview = self.active_webview();
         let zoom_notice = self.zoom_shown_at.and_then(|shown_at| {
             let percent = webview.as_ref()?.read(cx).zoom_percent();
             Some(Notice {
-                id: "zoom",
+                id: ElementId::Name("zoom".into()),
                 icon: ChipIcon::Zoom,
                 message: SharedString::from(format!("{percent}%")),
                 expires_at: Some(shown_at + ZOOM_NOTICE_DURATION),
@@ -117,21 +222,21 @@ impl BrowserWindow {
         let config_notice = Settings::config_reload_notice(cx)
             .map(|notice| match notice {
                 ConfigReloadNotice::Reloading => Notice {
-                    id: "config-reloading",
+                    id: ElementId::Name("config-reloading".into()),
                     icon: ChipIcon::Working(step),
                     message: SharedString::new_static("Reloading config..."),
                     expires_at: None,
                     action: None,
                 },
                 ConfigReloadNotice::Reloaded(at) => Notice {
-                    id: "config-reloaded",
+                    id: ElementId::Name("config-reloaded".into()),
                     icon: ChipIcon::Done,
                     message: SharedString::new_static("Reloaded!"),
                     expires_at: Some(at + Settings::config_reload_notice_duration()),
                     action: None,
                 },
                 ConfigReloadNotice::Failed(at) => Notice {
-                    id: "config-reload-failed",
+                    id: ElementId::Name("config-reload-failed".into()),
                     icon: ChipIcon::Problem,
                     message: SharedString::new_static("Couldn't reload config"),
                     expires_at: Some(at + Settings::config_reload_notice_duration()),
@@ -145,14 +250,14 @@ impl BrowserWindow {
             });
         let notice = match self.engine_notice {
             Some(EngineNotice::Restarting) => Notice {
-                id: "engine-restarting",
+                id: ElementId::Name("engine-restarting".into()),
                 icon: ChipIcon::Working(step),
                 message: format!("{} stopped. Restarting…", photon_brand::ENGINE_NAME).into(),
                 expires_at: None,
                 action: None,
             },
             Some(EngineNotice::Restarted(at)) => Notice {
-                id: "engine-restarted",
+                id: ElementId::Name("engine-restarted".into()),
                 icon: ChipIcon::Done,
                 message: format!("{} restarted", photon_brand::ENGINE_NAME).into(),
                 expires_at: Some(at + RECOVERED_NOTICE_DURATION),
@@ -164,7 +269,7 @@ impl BrowserWindow {
                 .is_some_and(|view| view.read(cx).page_unresponsive) =>
             {
                 Notice {
-                    id: "page-unresponsive",
+                    id: ElementId::Name("page-unresponsive".into()),
                     icon: ChipIcon::Problem,
                     message: SharedString::new_static("Page isn’t responding"),
                     expires_at: None,
@@ -174,21 +279,21 @@ impl BrowserWindow {
             None if zoom_notice.is_some() => zoom_notice?,
             None => match webview.as_ref()?.read(cx).crash_notice {
                 Some(CrashNotice::Reloading) => Notice {
-                    id: "page-reloading",
+                    id: ElementId::Name("page-reloading".into()),
                     icon: ChipIcon::Working(step),
                     message: SharedString::new_static("This page crashed. Reloading…"),
                     expires_at: None,
                     action: None,
                 },
                 Some(CrashNotice::Reloaded(at)) => Notice {
-                    id: "page-reloaded",
+                    id: ElementId::Name("page-reloaded".into()),
                     icon: ChipIcon::Done,
                     message: SharedString::new_static("Page reloaded"),
                     expires_at: Some(at + RECOVERED_NOTICE_DURATION),
                     action: None,
                 },
                 Some(CrashNotice::KeepsCrashing) => Notice {
-                    id: "page-keeps-crashing",
+                    id: ElementId::Name("page-keeps-crashing".into()),
                     icon: ChipIcon::Problem,
                     message: SharedString::new_static("This page keeps crashing"),
                     expires_at: None,
@@ -198,7 +303,7 @@ impl BrowserWindow {
                     // The Engine's error is for the log; the chip says it plainly.
                     webview.as_ref()?.read(cx).state.error.as_ref()?;
                     Notice {
-                        id: "page-error",
+                        id: ElementId::Name("page-error".into()),
                         icon: ChipIcon::Problem,
                         message: SharedString::new_static("This page couldn't be shown"),
                         expires_at: None,
@@ -258,7 +363,7 @@ impl BrowserWindow {
             None => (None, None),
         };
         Some(status_chip(
-            ElementId::Name(notice.id.into()),
+            notice.id,
             transition,
             palette,
             notice.icon,
@@ -271,15 +376,25 @@ impl BrowserWindow {
 
     /// Redraws once a recovery notice has had its time, so it disappears.
     fn expire_notice_at(&mut self, deadline: Instant, cx: &mut Context<Self>) {
-        if self.notice_expiry.is_some() {
+        if self
+            .notice_expiry
+            .as_ref()
+            .is_some_and(|(scheduled_deadline, _, _)| *scheduled_deadline == deadline)
+        {
             return;
         }
+        self.notice_expiry_generation = self.notice_expiry_generation.wrapping_add(1);
+        let generation = self.notice_expiry_generation;
         let delay = deadline.saturating_duration_since(Instant::now());
-        self.notice_expiry = Some(cx.spawn(async move |this, cx| {
+        let task = cx.spawn(async move |this, cx| {
             cx.background_executor().timer(delay).await;
             update_app(cx, |cx| {
                 this.update(cx, |this, cx| {
+                    if this.notice_expiry_generation != generation {
+                        return;
+                    }
                     this.notice_expiry = None;
+                    this.notice_expiry_generation = this.notice_expiry_generation.wrapping_add(1);
                     if matches!(this.engine_notice, Some(EngineNotice::Restarted(_))) {
                         this.engine_notice = None;
                     }
@@ -294,9 +409,10 @@ impl BrowserWindow {
                 .ok()
             })
             .await;
-        }));
+        });
+        self.notice_expiry = Some((deadline, generation, task));
     }
 }
 
 /// Keeps a pending notice expiry alive.
-pub(super) type NoticeExpiry = Option<Task<()>>;
+pub(super) type NoticeExpiry = Option<(Instant, u64, Task<()>)>;
