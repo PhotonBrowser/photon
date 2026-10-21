@@ -41,5 +41,4 @@ the generic AppKit integration stays in the GPUI-CE submodule.
 
 Photon owns XPC presentation, frame ordering, generations, retirement, release
 forwarding, Engine thread affinity, browser input, and application startup.
-`./photon run` is the direct GPUI-CE application route. Runtime proof and
-remaining validation gates are recorded in `GPUI-Migration-Audit.md`.
+`./photon run` starts the GPUI-CE application directly.

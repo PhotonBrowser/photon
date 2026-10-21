@@ -6,7 +6,7 @@ photon-app
         ├── platform/ui/ (shared GPUI browser chrome and WebView)
         └── platform target selection
             ├── macos/ (native controls, Engine session, Metal renderer)
-            └── linux/ (opaque window and blank renderer placeholders)
+            └── linux/ (window adapter and renderer placeholders)
 
 photon-ffi ── photon-core ── photon-omnibox
                     ↑
@@ -20,19 +20,19 @@ The desktop app uses the framework-independent Rust browser model directly.
 `photon-ffi` is the separate static library for native callers that need the C
 API; it is not part of the desktop shell's internal state path.
 
-## Platform split and Linux landing point
+## Platform split
 
 `crates/photon-shell/src/platform/mod.rs` selects target adapters while the
 shared GPUI browser chrome and `PhotonWebView` live under
 [`platform/ui/`](../crates/photon-shell/src/platform/ui/mod.rs). macOS supplies
 native controls and its Metal page renderer in
 [`platform/macos/`](../crates/photon-shell/src/platform/macos/mod.rs). Linux's
-window adapter and page-renderer landing point are under
+window adapter and page-renderer placeholders are under
 [`platform/linux/`](../crates/photon-shell/src/platform/linux/mod.rs). Its page
 area is deliberately blank and displays a bottom-right “Linux renderer not
 implemented yet” notice until a Linux Engine surface is connected. The Linux
-application shell and Engine session are not wired up yet, so the target still
-exits with an implementation notice.
+shell currently exits with an implementation notice; its application window,
+Engine session, and page renderer are not wired up.
 
 Linux window settings request client-side decorations and keep windows opaque.
 The shared titlebar reserves a right-side slot for GPUI minimize,
@@ -250,8 +250,8 @@ sampling command buffers, releases the current and queued leases, and asserts
 that outstanding leases are zero.
 
 Photon UI code never receives page pixel buffers. Normal rendering uses native
-Metal sampling with no CPU full-frame copies or GPUI image uploads. The app
-currently targets macOS for external IOSurface presentation.
+Metal sampling with no CPU full-frame copies or GPUI image uploads. External
+IOSurface presentation currently works on macOS.
 
 See [tab layouts and the sidebar](Sidebar.md), [PhotonWebView](WebView.md), [the browser's own pages](Pages.md),
 [profile, settings, history and branding](Profile.md), [the omnibox](Omnibox.md),
