@@ -15,7 +15,7 @@ mod sites;
 mod tabs;
 mod workspace_presets;
 
-use super::super::controls::FocusRing;
+use super::super::controls::{FocusRing, RovingAxis, RovingFocus};
 use super::super::controls::{OwnsClicks, Pressable};
 use super::super::icons::{
     appearance_icon, globe_icon, grid_icon, search_icon_sized, settings_icon, shield_icon,
@@ -208,10 +208,15 @@ impl Render for SettingsPage {
         });
         let body = match section {
             Section::General => general::settings(palette, cx).into_any_element(),
-            Section::Appearance => {
-                appearance::settings(palette, cx, create_preset, edit_preset, delete_preset)
-                    .into_any_element()
-            }
+            Section::Appearance => appearance::settings(
+                window,
+                palette,
+                cx,
+                create_preset,
+                edit_preset,
+                delete_preset,
+            )
+            .into_any_element(),
             Section::Search => search::settings(palette, cx).into_any_element(),
             Section::NewTab => new_tab::settings(palette, cx).into_any_element(),
             Section::Tabs => tabs::settings(palette, cx).into_any_element(),
@@ -251,7 +256,7 @@ impl Render for SettingsPage {
             .relative()
             .size_full()
             .items_start()
-            .child(self.sidebar(palette, cx))
+            .child(self.sidebar(window, palette, cx))
             .child(div().flex_1().h_full().min_w_0().child(scrolling_column(
                 "settings-content",
                 content,
@@ -269,49 +274,79 @@ impl Render for SettingsPage {
 }
 
 impl SettingsPage {
-    fn sidebar(&self, palette: ThemeColors, cx: &mut Context<Self>) -> impl IntoElement {
-        let items = Section::ALL.into_iter().map(|section| {
-            let selected = section == self.section;
-            let color = if selected {
-                palette.text_primary
-            } else {
-                palette.text_secondary
-            };
-            let item = h_stack()
-                .id((ElementId::from("settings-sidebar"), section.id()))
-                .role(Role::Tab)
-                .aria_label(section.title())
-                .aria_selected(selected)
-                .tab_index(0)
-                .focus_ring(palette)
-                .items_center()
-                .gap(px(metrics::OMNIBOX_GAP))
-                .h(px(metrics::SETTINGS_SIDEBAR_ITEM_HEIGHT))
-                .px(px(metrics::MENU_ITEM_HORIZONTAL_PADDING))
-                .rounded(px(metrics::control_radius()))
-                .text_size(px(metrics::BUTTON_FONT_SIZE))
-                .text_color(rgb(color))
-                .owns_clicks()
-                .pressable()
-                .on_click(cx.listener(move |this, _, _, cx| this.show(section, cx)))
-                .child(section.icon(color))
-                .child(section.title());
-            if selected {
-                item.bg(rgba(palette.selected_surface))
-                    .font_weight(FontWeight::MEDIUM)
-            } else {
-                item.hover_style(|style| style.bg(rgba(palette.hover_surface)))
-            }
-        });
+    fn sidebar(
+        &self,
+        window: &mut Window,
+        palette: ThemeColors,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let selected_index = Section::ALL
+            .iter()
+            .position(|section| *section == self.section)
+            .unwrap_or(0);
+        let actions: Vec<Rc<ClickHandler>> = Section::ALL
+            .into_iter()
+            .map(|section| {
+                let action: ClickHandler =
+                    Box::new(cx.listener(move |this, _, _, cx| this.show(section, cx)));
+                Rc::new(action)
+            })
+            .collect();
+        let focus = RovingFocus::new("settings-sections", selected_index, actions, window, cx);
+        let items = Section::ALL
+            .into_iter()
+            .enumerate()
+            .map(|(index, section)| {
+                let selected = section == self.section;
+                let color = if selected {
+                    palette.text_primary
+                } else {
+                    palette.text_secondary
+                };
+                let item = h_stack()
+                    .id((ElementId::from("settings-sidebar"), section.id()))
+                    .role(Role::Tab)
+                    .aria_label(section.title())
+                    .aria_selected(selected)
+                    .track_focus(&focus.handle(index))
+                    .tab_index(index as isize)
+                    .tab_stop(focus.selected(index))
+                    .focus_ring(palette)
+                    .items_center()
+                    .gap(px(metrics::OMNIBOX_GAP))
+                    .h(px(metrics::SETTINGS_SIDEBAR_ITEM_HEIGHT))
+                    .px(px(metrics::MENU_ITEM_HORIZONTAL_PADDING))
+                    .rounded(px(metrics::control_radius()))
+                    .text_size(px(metrics::BUTTON_FONT_SIZE))
+                    .text_color(rgb(color))
+                    .owns_clicks()
+                    .pressable()
+                    .on_click(focus.on_click(index))
+                    .on_key_down(focus.on_key_down(index, RovingAxis::Vertical))
+                    .child(section.icon(color))
+                    .child(section.title());
+                if selected {
+                    item.bg(rgba(palette.selected_surface))
+                        .font_weight(FontWeight::MEDIUM)
+                } else {
+                    item.hover_style(|style| style.bg(rgba(palette.hover_surface)))
+                }
+            });
         let saved_note = if Settings::is_saved(cx) {
             "Saved to this profile"
         } else {
             "Not saved: temporary session"
         };
-        v_stack()
-            .id("settings-sidebar")
+        let section_tabs = v_stack()
+            .id("settings-sections")
             .role(Role::TabList)
             .aria_label("Settings sections")
+            .aria_orientation(gpui::Orientation::Vertical)
+            .tab_group()
+            .gap(px(metrics::MENU_ITEM_GAP))
+            .children(items);
+        v_stack()
+            .id("settings-sidebar")
             .flex_shrink_0()
             .h_full()
             .w(px(metrics::SETTINGS_SIDEBAR_WIDTH))
@@ -328,7 +363,7 @@ impl SettingsPage {
                     .text_color(rgb(palette.text_primary))
                     .child("Settings"),
             )
-            .children(items)
+            .child(section_tabs)
             .child(div().flex_1())
             .child(
                 v_stack()

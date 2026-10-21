@@ -7,6 +7,7 @@ use gpui::{
     Subscription, TouchPhase, Window, div, prelude::*,
 };
 use photon_core::{SpaceId, WindowColor};
+use std::rc::Rc;
 use std::time::Instant;
 
 use super::super::input::physical_horizontal_delta;
@@ -171,6 +172,10 @@ impl BrowserWindow {
             .iter()
             .map(|space| {
                 let id = space.id;
+                let on_select: super::super::ClickHandler =
+                    Box::new(cx.listener(move |this, _, _, cx| {
+                        this.switch_space(id, cx);
+                    }));
                 SpaceDot {
                     name: space.name.clone(),
                     color: match space.color {
@@ -178,9 +183,7 @@ impl BrowserWindow {
                         color => window_color_swatch(color, palette),
                     },
                     active: id == active,
-                    on_select: Box::new(cx.listener(move |this, _, _, cx| {
-                        this.switch_space(id, cx);
-                    })),
+                    on_select: Rc::new(on_select),
                     on_context_menu: Box::new(cx.listener(
                         move |this, _: &MouseDownEvent, window, cx| {
                             cx.stop_propagation();

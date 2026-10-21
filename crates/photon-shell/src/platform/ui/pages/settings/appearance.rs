@@ -1,12 +1,12 @@
 //! Appearance settings for the profile and the active space.
 
-use gpui::{App, ElementId, FontWeight, Role, div, prelude::*, px, rgb, rgb_to_hsla, rgba};
+use gpui::{App, ElementId, FontWeight, Role, Window, div, prelude::*, px, rgb, rgb_to_hsla, rgba};
 use photon_core::{ThemeMode, Transparency, WindowBackgroundStyle};
 use std::rc::Rc;
 
 use super::super::super::button::{ButtonKind, ButtonSize, button};
 use super::super::super::controls::{
-    Choice, FocusRing, Pressable, choices, intensity_slider, toggled,
+    Choice, FocusRing, Pressable, RovingAxis, RovingFocus, choices, intensity_slider, toggled,
 };
 use super::super::super::dropdown::dropdown;
 use super::super::super::layout::{form_field, h_stack, v_stack};
@@ -21,13 +21,14 @@ use super::super::change;
 use super::super::layout::{label, secondary_text};
 
 pub(super) fn settings(
+    window: &mut Window,
     palette: ThemeColors,
-    cx: &App,
+    cx: &mut App,
     create_preset: ClickHandler,
     edit_preset: Rc<dyn Fn(String) -> ClickHandler>,
     delete_preset: Rc<dyn Fn(String) -> ClickHandler>,
 ) -> impl IntoElement {
-    let current = Settings::get(cx);
+    let current = Settings::get(cx).clone();
     let transparencies = [
         (Transparency::Off, "Off"),
         (Transparency::Subtle, "Subtle"),
@@ -263,22 +264,63 @@ pub(super) fn settings(
         (ThemeMode::Dark, "Dark"),
         (ThemeMode::System, "System"),
     ];
+    let theme_selected = theme_modes
+        .iter()
+        .position(|(mode, _)| current.theme == *mode)
+        .unwrap_or(0);
+    let theme_actions = theme_modes
+        .iter()
+        .map(|(mode, _)| {
+            let mode = *mode;
+            Rc::new(change(move |settings| settings.theme = mode))
+        })
+        .collect();
+    let theme_focus = RovingFocus::new("settings-theme", theme_selected, theme_actions, window, cx);
     let theme_selector = h_stack()
         .id("settings-theme")
         .role(Role::RadioGroup)
         .aria_label("Theme")
+        .tab_group()
         .w_full()
         .gap(px(metrics::INTERNAL_PAGE_GROUP_GAP))
-        .children(theme_modes.into_iter().map(|(mode, label)| {
-            theme_card(
-                mode,
-                label,
-                current.theme == mode,
-                active_accent,
-                palette,
-                change(move |settings| settings.theme = mode),
-            )
-        }));
+        .children(
+            theme_modes
+                .into_iter()
+                .enumerate()
+                .map(|(index, (mode, label))| {
+                    theme_card(
+                        mode,
+                        label,
+                        current.theme == mode,
+                        active_accent,
+                        palette,
+                        theme_focus.clone(),
+                        index,
+                    )
+                }),
+        );
+
+    let accent_selected = AccentColor::ALL
+        .iter()
+        .position(|color| active_accent == *color)
+        .unwrap_or(0);
+    let accent_actions = AccentColor::ALL
+        .into_iter()
+        .map(|color| {
+            Rc::new(change(move |settings| {
+                if let Some(space) = settings.spaces.get_mut(active_space_id) {
+                    space.color = color.window_color();
+                }
+            }))
+        })
+        .collect();
+    let accent_focus = RovingFocus::new(
+        "settings-accent-color",
+        accent_selected,
+        accent_actions,
+        window,
+        cx,
+    );
 
     let appearance_details = v_stack()
         .w_full()
@@ -362,7 +404,7 @@ pub(super) fn settings(
         .child(theme_and_accent_panel(
             theme_selector,
             active_accent,
-            active_space_id,
+            accent_focus,
             palette,
         ))
         .child(appearance_details)
@@ -371,7 +413,7 @@ pub(super) fn settings(
 fn theme_and_accent_panel(
     theme_selector: impl IntoElement,
     accent: AccentColor,
-    active_space_id: photon_core::SpaceId,
+    accent_focus: RovingFocus,
     palette: ThemeColors,
 ) -> impl IntoElement {
     v_stack()
@@ -394,7 +436,7 @@ fn theme_and_accent_panel(
                 .h(px(metrics::THEME_ACCENT_DIVIDER_HEIGHT))
                 .bg(rgba(palette.menu_border)),
         )
-        .child(accent_color_section(accent, active_space_id, palette))
+        .child(accent_color_section(accent, accent_focus, palette))
 }
 
 fn theme_card(
@@ -403,7 +445,8 @@ fn theme_card(
     chosen: bool,
     accent: AccentColor,
     palette: ThemeColors,
-    on_choose: ClickHandler,
+    focus: RovingFocus,
+    index: usize,
 ) -> impl IntoElement {
     let (sidebar, page) = theme_preview_palettes(mode, accent);
     v_stack()
@@ -411,7 +454,9 @@ fn theme_card(
         .role(Role::RadioButton)
         .aria_label(label)
         .aria_toggled(toggled(chosen))
-        .tab_index(0)
+        .track_focus(&focus.handle(index))
+        .tab_index(index as isize)
+        .tab_stop(focus.selected(index))
         .flex_1()
         .min_w_0()
         .items_center()
@@ -419,7 +464,8 @@ fn theme_card(
         .focus_ring(palette)
         .focus_visible_style(|style| style.bg(rgba(palette.hover_surface)))
         .pressable()
-        .on_click(on_choose)
+        .on_click(focus.on_click(index))
+        .on_key_down(focus.on_key_down(index, RovingAxis::Horizontal))
         .child(
             v_stack()
                 .w_full()
@@ -529,57 +575,59 @@ fn preview_line(width: f32, height: f32, color: impl Into<gpui::Background>) -> 
 
 fn accent_color_section(
     accent: AccentColor,
-    active_space_id: photon_core::SpaceId,
+    focus: RovingFocus,
     palette: ThemeColors,
 ) -> impl IntoElement {
-    let swatches = AccentColor::ALL.into_iter().map(|color| {
-        let chosen = accent == color;
-        h_stack()
-            .id((
-                ElementId::from("settings-accent-color-option"),
-                color.name(),
-            ))
-            .role(Role::RadioButton)
-            .aria_label(color.name())
-            .aria_toggled(toggled(chosen))
-            .tab_index(0)
-            .size(px(metrics::ACCENT_SWATCH_RING_SIZE))
-            .items_center()
-            .justify_center()
-            .rounded_full()
-            .border_2()
-            .border_color(if chosen {
-                rgb_to_hsla(rgb(palette.text_primary))
-            } else {
-                gpui::transparent_black()
-            })
-            .focus_visible_style(|style| style.border_color(rgb(palette.chosen)))
-            .pressable()
-            .on_click(change(move |settings| {
-                if let Some(space) = settings.spaces.get_mut(active_space_id) {
-                    space.color = color.window_color();
-                }
-            }))
-            .child(
-                h_stack()
-                    .size(px(metrics::ACCENT_SWATCH_SIZE))
-                    .items_center()
-                    .justify_center()
-                    .rounded_full()
-                    .border_1()
-                    .border_color(rgba(palette.control_border))
-                    .bg(rgb(accent_swatch(color)))
-                    .when(chosen, |swatch| {
-                        swatch.child(
-                            div()
-                                .text_size(px(metrics::CHECKBOX_ICON_SIZE))
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(rgb(accent_swatch_mark()))
-                                .child("✓"),
-                        )
-                    }),
-            )
-    });
+    let swatches = AccentColor::ALL
+        .into_iter()
+        .enumerate()
+        .map(|(index, color)| {
+            let chosen = accent == color;
+            h_stack()
+                .id((
+                    ElementId::from("settings-accent-color-option"),
+                    color.name(),
+                ))
+                .role(Role::RadioButton)
+                .aria_label(color.name())
+                .aria_toggled(toggled(chosen))
+                .track_focus(&focus.handle(index))
+                .tab_index(index as isize)
+                .tab_stop(focus.selected(index))
+                .size(px(metrics::ACCENT_SWATCH_RING_SIZE))
+                .items_center()
+                .justify_center()
+                .rounded_full()
+                .border_2()
+                .border_color(if chosen {
+                    rgb_to_hsla(rgb(palette.text_primary))
+                } else {
+                    gpui::transparent_black()
+                })
+                .focus_visible_style(|style| style.border_color(rgb(palette.chosen)))
+                .pressable()
+                .on_click(focus.on_click(index))
+                .on_key_down(focus.on_key_down(index, RovingAxis::Any))
+                .child(
+                    h_stack()
+                        .size(px(metrics::ACCENT_SWATCH_SIZE))
+                        .items_center()
+                        .justify_center()
+                        .rounded_full()
+                        .border_1()
+                        .border_color(rgba(palette.control_border))
+                        .bg(rgb(accent_swatch(color)))
+                        .when(chosen, |swatch| {
+                            swatch.child(
+                                div()
+                                    .text_size(px(metrics::CHECKBOX_ICON_SIZE))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(rgb(accent_swatch_mark()))
+                                    .child("✓"),
+                            )
+                        }),
+                )
+        });
 
     h_stack()
         .w_full()
@@ -604,6 +652,7 @@ fn accent_color_section(
                 .id("settings-accent-color")
                 .role(Role::RadioGroup)
                 .aria_label("Accent color")
+                .tab_group()
                 .flex_wrap()
                 .items_center()
                 .justify_end()

@@ -29,7 +29,7 @@ impl BrowserWindow {
     pub(in super::super) fn render_sidebar(
         &self,
         region: DockRegion,
-        window: &Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let sidebar = &self.sidebar;
@@ -50,7 +50,7 @@ impl BrowserWindow {
         &self,
         region: DockRegion,
         out: f32,
-        window: &Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let palette = self.palette(window, cx);
@@ -86,7 +86,7 @@ impl BrowserWindow {
                 div()
                     .flex_1()
                     .min_h_0()
-                    .child(self.sidebar_body(region, collapsed, palette, cx)),
+                    .child(self.sidebar_body(region, collapsed, palette, window, cx)),
             );
         let content = self.with_browser_menu(content, cx);
 
@@ -219,6 +219,7 @@ impl BrowserWindow {
         region: DockRegion,
         collapsed: bool,
         palette: ThemeColors,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let layout = WorkspaceLayout::current(cx);
@@ -235,7 +236,7 @@ impl BrowserWindow {
                     self.sidebar_tabs(collapsed, palette, cx),
                 )),
                 ComponentId::SidebarFooter => Some(SidebarSection::Footer(
-                    self.sidebar_footer(collapsed, palette, cx),
+                    self.sidebar_footer(collapsed, palette, window, cx),
                 )),
                 _ => None,
             })
@@ -360,6 +361,7 @@ impl BrowserWindow {
         &self,
         collapsed: bool,
         palette: ThemeColors,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         footer(
@@ -378,6 +380,8 @@ impl BrowserWindow {
             },
             collapsed,
             palette,
+            window,
+            cx,
         )
     }
 }

@@ -6,7 +6,7 @@
 use gpui::{
     AccessibleAction, App, Bounds, ClickEvent, Context, DispatchPhase, Div, DragMoveEvent,
     ElementId, FocusHandle, FontWeight, InteractiveElement, KeyDownEvent, MouseButton,
-    MouseClickEvent, MouseDownEvent, Pixels, Render, Role, SharedString, Stateful,
+    MouseClickEvent, MouseDownEvent, Pixels, Render, RenderOnce, Role, SharedString, Stateful,
     StatefulInteractiveElement, Toggled, Window, div, prelude::*, px, rgb, rgb_to_hsla, rgba,
 };
 use gpui_elements::editable_text::EditableTextElement;
@@ -211,56 +211,196 @@ pub(super) trait FocusRing: InteractiveElement + Styled + Sized {
 
 impl<E: InteractiveElement + Styled> FocusRing for E {}
 
+#[derive(Clone, Copy)]
+pub(super) enum RovingAxis {
+    Horizontal,
+    Vertical,
+    Any,
+}
+
+#[derive(Clone)]
+pub(super) struct RovingFocus {
+    handles: Rc<Vec<FocusHandle>>,
+    actions: Rc<Vec<Rc<ClickHandler>>>,
+    selected: usize,
+}
+
+impl RovingFocus {
+    pub(super) fn new(
+        id: &'static str,
+        selected: usize,
+        actions: Vec<Rc<ClickHandler>>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Self {
+        let selected = selected.min(actions.len().saturating_sub(1));
+        let actions = Rc::new(actions);
+        let handles = (0..actions.len())
+            .map(|index| {
+                window
+                    .use_keyed_state(
+                        ElementId::Name(format!("{id}-focus-{index}").into()),
+                        cx,
+                        |_, cx| cx.focus_handle(),
+                    )
+                    .read(cx)
+                    .clone()
+            })
+            .collect();
+        Self {
+            handles: Rc::new(handles),
+            actions,
+            selected,
+        }
+    }
+
+    pub(super) fn selected(&self, index: usize) -> bool {
+        index == self.selected
+    }
+
+    pub(super) fn handle(&self, index: usize) -> FocusHandle {
+        self.handles[index].clone()
+    }
+
+    pub(super) fn on_click(
+        &self,
+        index: usize,
+    ) -> impl Fn(&ClickEvent, &mut Window, &mut App) + 'static {
+        let focus = self.clone();
+        move |event, window, cx| {
+            (focus.actions[index])(event, window, cx);
+            window.focus(&focus.handles[index], cx);
+        }
+    }
+
+    pub(super) fn on_key_down(
+        &self,
+        index: usize,
+        axis: RovingAxis,
+    ) -> impl Fn(&KeyDownEvent, &mut Window, &mut App) + 'static {
+        let focus = self.clone();
+        move |event, window, cx| {
+            if event.keystroke.modifiers.modified() || focus.handles.is_empty() {
+                return;
+            }
+            let offset = roving_axis_offset(event.keystroke.key.as_str(), axis);
+            let Some(offset) = offset else { return };
+            let next = (index as isize + offset).rem_euclid(focus.handles.len() as isize) as usize;
+            (focus.actions[next])(&ClickEvent::default(), window, cx);
+            window.focus(&focus.handles[next], cx);
+            window.prevent_default();
+            cx.stop_propagation();
+        }
+    }
+}
+
+fn roving_axis_offset(key: &str, axis: RovingAxis) -> Option<isize> {
+    match (axis, key) {
+        (RovingAxis::Horizontal, "left") | (RovingAxis::Vertical, "up") => Some(-1),
+        (RovingAxis::Horizontal, "right") | (RovingAxis::Vertical, "down") => Some(1),
+        (RovingAxis::Any, "left" | "up") => Some(-1),
+        (RovingAxis::Any, "right" | "down") => Some(1),
+        _ => None,
+    }
+}
+
 pub(super) fn choices(
     id: &'static str,
     label: &'static str,
     options: Vec<Choice>,
     palette: ThemeColors,
 ) -> impl IntoElement {
-    let options = options.into_iter().enumerate().map(|(index, option)| {
-        let segment = h_stack()
-            .id((id, index))
-            .role(Role::RadioButton)
-            .aria_label(option.label.clone())
-            .aria_toggled(toggled(option.chosen))
-            .tab_index(0)
-            // On the chosen segment's accent, the ring takes its text colour.
-            .focus_ring_in(if option.chosen {
-                palette.on_chosen
-            } else {
-                palette.chosen
-            })
-            .flex_1()
-            .items_center()
-            .justify_center()
-            .h(px(metrics::SEGMENT_HEIGHT))
-            .px(px(metrics::SEGMENT_HORIZONTAL_PADDING))
-            .rounded(px(metrics::segment_radius()))
-            .text_size(px(metrics::BUTTON_FONT_SIZE))
-            .owns_clicks()
-            .pressable()
-            .on_click(option.on_choose)
-            .child(option.label);
-        if option.chosen {
-            segment
-                .bg(rgb(palette.chosen))
-                .text_color(rgb(palette.on_chosen))
-                .hover_style(|style| style.bg(rgb(palette.chosen_hover)))
-        } else {
-            segment
-                .text_color(rgb(palette.text_primary))
-                .hover_style(|style| style.bg(rgba(palette.hover_surface)))
-        }
-    });
-    h_stack()
-        .id(id)
-        .role(Role::RadioGroup)
-        .aria_label(label)
-        .gap(px(metrics::SEGMENT_GAP))
-        .p(px(metrics::SEGMENT_INSET))
-        .control_surface(palette)
-        .rounded(px(metrics::choices_radius()))
-        .children(options)
+    ChoiceGroup {
+        id,
+        label,
+        options,
+        palette,
+    }
+}
+
+#[derive(IntoElement)]
+struct ChoiceGroup {
+    id: &'static str,
+    label: &'static str,
+    options: Vec<Choice>,
+    palette: ThemeColors,
+}
+
+impl RenderOnce for ChoiceGroup {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let Self {
+            id,
+            label,
+            options,
+            palette,
+        } = self;
+        let selected = options.iter().position(|option| option.chosen).unwrap_or(0);
+        let options = options
+            .into_iter()
+            .map(|option| (option.label, option.chosen, Rc::new(option.on_choose)))
+            .collect::<Vec<_>>();
+        let focus = RovingFocus::new(
+            id,
+            selected,
+            options
+                .iter()
+                .map(|(_, _, action)| action.clone())
+                .collect(),
+            window,
+            cx,
+        );
+        let options = options
+            .into_iter()
+            .enumerate()
+            .map(|(index, (label, chosen, _))| {
+                let segment = h_stack()
+                    .id((id, index))
+                    .role(Role::RadioButton)
+                    .aria_label(label.clone())
+                    .aria_toggled(toggled(chosen))
+                    .track_focus(&focus.handle(index))
+                    .tab_index(index as isize)
+                    .tab_stop(focus.selected(index))
+                    // On the chosen segment's accent, the ring takes its text colour.
+                    .focus_ring_in(if chosen {
+                        palette.on_chosen
+                    } else {
+                        palette.chosen
+                    })
+                    .flex_1()
+                    .items_center()
+                    .justify_center()
+                    .h(px(metrics::SEGMENT_HEIGHT))
+                    .px(px(metrics::SEGMENT_HORIZONTAL_PADDING))
+                    .rounded(px(metrics::segment_radius()))
+                    .text_size(px(metrics::BUTTON_FONT_SIZE))
+                    .owns_clicks()
+                    .pressable()
+                    .on_click(focus.on_click(index))
+                    .on_key_down(focus.on_key_down(index, RovingAxis::Horizontal))
+                    .child(label);
+                if chosen {
+                    segment
+                        .bg(rgb(palette.chosen))
+                        .text_color(rgb(palette.on_chosen))
+                        .hover_style(|style| style.bg(rgb(palette.chosen_hover)))
+                } else {
+                    segment
+                        .text_color(rgb(palette.text_primary))
+                        .hover_style(|style| style.bg(rgba(palette.hover_surface)))
+                }
+            });
+        h_stack()
+            .id(id)
+            .role(Role::RadioGroup)
+            .aria_label(label)
+            .tab_group()
+            .gap(px(metrics::SEGMENT_GAP))
+            .p(px(metrics::SEGMENT_INSET))
+            .control_surface(palette)
+            .rounded(px(metrics::choices_radius()))
+            .children(options)
+    }
 }
 
 pub(super) fn intensity_slider(
@@ -618,6 +758,21 @@ fn slider_drag_feedback(
     }
 }
 
+#[cfg(test)]
+mod roving_focus_tests {
+    use super::{RovingAxis, roving_axis_offset};
+
+    #[test]
+    fn roving_focus_follows_group_orientation() {
+        assert_eq!(roving_axis_offset("left", RovingAxis::Horizontal), Some(-1));
+        assert_eq!(roving_axis_offset("down", RovingAxis::Horizontal), None);
+        assert_eq!(roving_axis_offset("up", RovingAxis::Vertical), Some(-1));
+        assert_eq!(roving_axis_offset("right", RovingAxis::Vertical), None);
+        assert_eq!(roving_axis_offset("up", RovingAxis::Any), Some(-1));
+        assert_eq!(roving_axis_offset("right", RovingAxis::Any), Some(1));
+    }
+}
+
 /// One colour in [`swatches`].
 pub(super) struct Swatch {
     pub(super) label: SharedString,
@@ -634,48 +789,98 @@ pub(super) fn swatches(
     options: Vec<Swatch>,
     palette: ThemeColors,
 ) -> impl IntoElement {
-    let options = options.into_iter().enumerate().map(|(index, option)| {
+    SwatchGroup {
+        id,
+        label,
+        options,
+        palette,
+    }
+}
+
+#[derive(IntoElement)]
+struct SwatchGroup {
+    id: &'static str,
+    label: &'static str,
+    options: Vec<Swatch>,
+    palette: ThemeColors,
+}
+
+impl RenderOnce for SwatchGroup {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let Self {
+            id,
+            label,
+            options,
+            palette,
+        } = self;
+        let selected = options.iter().position(|option| option.chosen).unwrap_or(0);
+        let options = options
+            .into_iter()
+            .map(|option| {
+                let Swatch {
+                    label,
+                    color,
+                    chosen,
+                    on_choose,
+                } = option;
+                ((label, color, chosen), Rc::new(on_choose))
+            })
+            .collect::<Vec<_>>();
+        let focus = RovingFocus::new(
+            id,
+            selected,
+            options.iter().map(|(_, action)| action.clone()).collect(),
+            window,
+            cx,
+        );
+        let options = options.into_iter().enumerate().map(|(index, (option, _))| {
+            let (label, color, chosen) = option;
+            h_stack()
+                .id((id, index))
+                .role(Role::RadioButton)
+                .aria_label(label)
+                .aria_toggled(toggled(chosen))
+                .track_focus(&focus.handle(index))
+                .tab_index(index as isize)
+                .tab_stop(focus.selected(index))
+                .size(px(metrics::SWATCH_RING_SIZE))
+                .items_center()
+                .justify_center()
+                .rounded_full()
+                .border_2()
+                .border_color(if chosen {
+                    rgb_to_hsla(rgb(palette.chosen))
+                } else {
+                    gpui::transparent_black()
+                })
+                .when(!chosen, |ring| {
+                    ring.hover_style(|style| style.border_color(rgba(palette.selected_surface)))
+                })
+                // Focus rings in the text colour, apart from the chosen ring's
+                // accent, so a focused swatch never looks chosen.
+                .focus_visible_style(|style| style.border_color(rgb(palette.text_primary)))
+                .owns_clicks()
+                .pressable()
+                .on_click(focus.on_click(index))
+                .on_key_down(focus.on_key_down(index, RovingAxis::Any))
+                .child(
+                    div()
+                        .size(px(metrics::SWATCH_SIZE))
+                        .rounded_full()
+                        .border_1()
+                        .border_color(rgba(palette.control_border))
+                        .bg(rgb(color)),
+                )
+        });
         h_stack()
-            .id((id, index))
-            .role(Role::RadioButton)
-            .aria_label(option.label)
-            .aria_toggled(toggled(option.chosen))
-            .tab_index(0)
-            .size(px(metrics::SWATCH_RING_SIZE))
-            .items_center()
-            .justify_center()
-            .rounded_full()
-            .border_2()
-            .border_color(if option.chosen {
-                rgb_to_hsla(rgb(palette.chosen))
-            } else {
-                gpui::transparent_black()
-            })
-            .when(!option.chosen, |ring| {
-                ring.hover_style(|style| style.border_color(rgba(palette.selected_surface)))
-            })
-            // Focus rings in the text colour, apart from the chosen ring's
-            // accent, so a focused swatch never looks chosen.
-            .focus_visible_style(|style| style.border_color(rgb(palette.text_primary)))
-            .owns_clicks()
-            .pressable()
-            .on_click(option.on_choose)
-            .child(
-                div()
-                    .size(px(metrics::SWATCH_SIZE))
-                    .rounded_full()
-                    .border_1()
-                    .border_color(rgba(palette.control_border))
-                    .bg(rgb(option.color)),
-            )
-    });
-    h_stack()
-        .id(id)
-        .role(Role::RadioGroup)
-        .aria_label(label)
-        .flex_wrap()
-        .gap(px(metrics::SWATCH_GAP))
-        .children(options)
+            .id(id)
+            .role(Role::RadioGroup)
+            .aria_label(label)
+            .tab_group()
+            .flex_wrap()
+            .gap(px(metrics::SWATCH_GAP))
+            .children(options)
+    }
 }
 
 /// An on/off switch whose knob slides to the selected side and follows drags.

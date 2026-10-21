@@ -18,7 +18,11 @@ use super::BrowserWindow;
 impl BrowserWindow {
     /// Renders catalog components into the four docks around the page. Zen
     /// mode slides the bars above and below off the window's edges.
-    pub(super) fn render_chrome(&mut self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_chrome(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let layout = WorkspaceLayout::current(cx);
         let tucked = 1.0 - self.sidebar.chrome_shown();
         let mut root = div().size_full().relative();
