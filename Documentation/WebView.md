@@ -42,5 +42,5 @@ appearance chosen in settings, telling pages whether to use their dark
 color scheme.
 
 Shell color roles and measurements live in the shared
-[theme tokens](Theme.md). The app currently targets macOS for external
-IOSurface presentation.
+[theme tokens](Theme.md). External IOSurface presentation currently works on
+macOS.

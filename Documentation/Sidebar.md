@@ -150,7 +150,7 @@ open creates a replacement tab so the tab strip never stays empty.
 - [`ui/window/workspace.rs`](../crates/photon-shell/src/platform/ui/window/workspace.rs):
   composes the cached chrome, active page, and window overlays. Engine frames
   repaint only the page.
-- [`ui/workspace_layout.rs`](../crates/photon-shell/src/platform/ui/workspace_layout.rs):
+- [`ui/workspace_layout/`](../crates/photon-shell/src/platform/ui/workspace_layout/mod.rs):
   resolves the saved horizontal or vertical layout to the shell's built-in
   composition and component catalog.
 - [`photon-core`](../crates/photon-core/src/settings.rs): `TabLayout`, the

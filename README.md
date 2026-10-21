@@ -21,7 +21,7 @@ cd photon
 
 ## Develop Photon
 
-Start with [contributor setup](CONTRIBUTOR_SETUP.md), [building Photon](Documentation/Building.md), and the [architecture guide](Documentation/Architecture.md). The [roadmap](Documentation/Roadmap.md) describes current work.
+Start with [contributor setup](CONTRIBUTOR_SETUP.md), then use the [build guide](Documentation/Building.md) and [architecture guide](Documentation/Architecture.md). See the [roadmap](Documentation/Roadmap.md) for planned work.
 
 <details>
 <summary>Rust crate guides</summary>
