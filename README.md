@@ -1,4 +1,4 @@
-<p align="center"><img src="crates/photon-brand/assets/logo.svg" alt="Photon" width="96" /></p>
+<p align="center"><img src="crates/photon-brand/assets/brand-kit/logo/logo.svg" alt="Photon" width="96" /></p>
 
 <h1 align="center">Photon</h1>
 
