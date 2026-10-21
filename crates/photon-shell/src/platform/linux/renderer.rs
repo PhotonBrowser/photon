@@ -30,6 +30,7 @@ pub(crate) fn page_surface(
                 .absolute()
                 .right(px(metrics::CHIP_INSET))
                 .bottom(px(metrics::CHIP_INSET))
+                .id("linux-renderer-status")
                 .role(Role::Status)
                 .aria_label("Linux renderer not implemented yet")
                 .px(px(metrics::CHIP_PADDING))
