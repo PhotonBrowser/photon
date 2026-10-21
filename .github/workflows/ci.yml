@@ -1,0 +1,60 @@
+name: Photon CI
+
+on:
+  push:
+    paths-ignore:
+      - "Engine/**"
+      - "vendor/gpui-ce/**"
+      - "crates/gpui-motion/**"
+  pull_request:
+    paths-ignore:
+      - "Engine/**"
+      - "vendor/gpui-ce/**"
+      - "crates/gpui-motion/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: photon-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Photon checks
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out Photon and pinned submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install native build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential \
+            clang \
+            cmake \
+            ninja-build \
+            python3 \
+            pkg-config \
+            libfontconfig1-dev \
+            libfreetype6-dev \
+            libx11-dev \
+            libxkbcommon-dev \
+            libwayland-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check Photon
+        run: ./photon check
+
+      - name: Test Photon
+        run: ./photon test
