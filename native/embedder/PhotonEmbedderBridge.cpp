@@ -3,6 +3,7 @@
 #    include "SystemClipboard.h"
 #endif
 
+#include <LibPhotonEmbedder/PhotonAutomation.h>
 #include <LibPhotonEmbedder/PhotonEmbedder.h>
 
 #include <array>
@@ -393,29 +394,44 @@ extern "C" void photon_view_navigate(void* view, char const* url)
         static_cast<ViewHandle*>(view)->view->navigate(url);
 }
 
-extern "C" bool photon_view_has_completed_document_load(void* view)
+extern "C" bool photon_automation_view_has_completed_document_load(void* view)
 {
-    return view && static_cast<ViewHandle*>(view)->view->has_completed_document_load();
+    if (!view)
+        return false;
+    Photon::Automation::View automation_view(*static_cast<ViewHandle*>(view)->view);
+    return automation_view.has_completed_document_load();
 }
 
-extern "C" uint64_t photon_view_document_generation(void* view)
+extern "C" uint64_t photon_automation_view_document_generation(void* view)
 {
-    return view ? static_cast<ViewHandle*>(view)->view->document_generation() : 0;
+    if (!view)
+        return 0;
+    Photon::Automation::View automation_view(*static_cast<ViewHandle*>(view)->view);
+    return automation_view.document_generation();
 }
 
-extern "C" bool photon_view_install_speedometer_result_observer(void* view, uint64_t expected_document_generation)
+extern "C" bool photon_automation_view_install_speedometer_result_observer(void* view, uint64_t expected_document_generation)
 {
-    return view && static_cast<ViewHandle*>(view)->view->install_speedometer_result_observer(expected_document_generation);
+    if (!view)
+        return false;
+    Photon::Automation::View automation_view(*static_cast<ViewHandle*>(view)->view);
+    return automation_view.install_speedometer_result_observer(expected_document_generation);
 }
 
-extern "C" bool photon_view_install_jetstream_result_observer(void* view, uint64_t expected_document_generation)
+extern "C" bool photon_automation_view_install_jetstream_result_observer(void* view, uint64_t expected_document_generation)
 {
-    return view && static_cast<ViewHandle*>(view)->view->install_jetstream_result_observer(expected_document_generation);
+    if (!view)
+        return false;
+    Photon::Automation::View automation_view(*static_cast<ViewHandle*>(view)->view);
+    return automation_view.install_jetstream_result_observer(expected_document_generation);
 }
 
-extern "C" bool photon_view_request_jetstream_start(void* view, uint64_t expected_document_generation)
+extern "C" bool photon_automation_view_request_jetstream_start(void* view, uint64_t expected_document_generation)
 {
-    return view && static_cast<ViewHandle*>(view)->view->request_jetstream_start(expected_document_generation);
+    if (!view)
+        return false;
+    Photon::Automation::View automation_view(*static_cast<ViewHandle*>(view)->view);
+    return automation_view.request_jetstream_start(expected_document_generation);
 }
 
 extern "C" void photon_view_reload(void* view)
@@ -504,12 +520,17 @@ extern "C" void photon_view_file_picker_closed(void* view, char const* const* pa
 {
     if (!view)
         return;
+    auto& engine_view = *static_cast<ViewHandle*>(view)->view;
+    if (!paths && count > 0) {
+        engine_view.file_picker_closed({});
+        return;
+    }
     std::vector<std::string> chosen;
     for (size_t index = 0; index < count; ++index) {
         if (paths[index])
             chosen.emplace_back(paths[index]);
     }
-    static_cast<ViewHandle*>(view)->view->file_picker_closed(chosen);
+    engine_view.file_picker_closed(chosen);
 }
 
 extern "C" void photon_view_zoom(void* view, int step)

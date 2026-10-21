@@ -116,7 +116,10 @@ presentation surface.
 - `crates/photon-presentation-ipc` owns the macOS XPC protocol, Rust client
   channel, native descriptor transport, and service entry point. The separate
   `crates/photon-presentation-broker` package is the small service executable.
-- `native/embedder` is the narrow C++ bridge to LibPhotonEmbedder. Engine
+- `native/embedder` is the narrow C++ bridge to LibPhotonEmbedder. The Engine's
+  general browser `Runtime` and `View` API lives in `PhotonEmbedder.h`; the
+  BrowserBench observers and controlled benchmark action live in the separate
+  `PhotonAutomation.h` API and `PhotonAutomation.cpp` implementation. Engine
   implementation changes belong in the Photon Engine submodule.
 - `vendor/gpui-ce` contains generic external Metal surface rendering and
   platform capabilities. Browser and Ladybird lifecycle policy stays in
@@ -203,6 +206,7 @@ inside `photon-presentation-ipc`.
 | Page renderer | [`platform/macos/renderer.rs`](../crates/photon-shell/src/platform/macos/renderer.rs) or [`platform/linux/renderer.rs`](../crates/photon-shell/src/platform/linux/renderer.rs) |
 | Keyboard, pointer, or scroll forwarding | [`ui/input.rs`](../crates/photon-shell/src/platform/ui/input.rs) |
 | Engine session or callback behavior | [`platform/macos/engine/`](../crates/photon-shell/src/platform/macos/engine/mod.rs) |
+| BrowserBench result observation | [`platform/ui/window/automation.rs`](../crates/photon-shell/src/platform/ui/window/automation.rs), [`PhotonAutomation.h`](../Engine/Libraries/LibPhotonEmbedder/include/LibPhotonEmbedder/PhotonAutomation.h), and [`PhotonAutomation.cpp`](../Engine/Libraries/LibPhotonEmbedder/PhotonAutomation.cpp) |
 | Frame acceptance, presentation order, or release lifetime | [`platform/macos/presentation.rs`](../crates/photon-shell/src/platform/macos/presentation.rs) |
 | XPC messages, descriptor transport, or broker connection | [`photon-presentation-ipc`](../crates/photon-presentation-ipc/src/lib.rs) |
 | Engine frame pacing or pausing Engine while the window is occluded | [`platform/macos/display.rs`](../crates/photon-shell/src/platform/macos/display.rs), [`platform/macos/window_observer.rs`](../crates/photon-shell/src/platform/macos/window_observer.rs), then [`ui/window/`](../crates/photon-shell/src/platform/ui/window/mod.rs) |

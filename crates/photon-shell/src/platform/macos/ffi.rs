@@ -312,17 +312,17 @@ pub(super) mod embedder {
         pub fn photon_default_browser_is_current() -> bool;
         pub fn photon_default_browser_request();
         pub fn photon_view_navigate(view: *mut c_void, url: *const c_char);
-        pub fn photon_view_has_completed_document_load(view: *mut c_void) -> bool;
-        pub fn photon_view_document_generation(view: *mut c_void) -> u64;
-        pub fn photon_view_install_speedometer_result_observer(
+        pub fn photon_automation_view_has_completed_document_load(view: *mut c_void) -> bool;
+        pub fn photon_automation_view_document_generation(view: *mut c_void) -> u64;
+        pub fn photon_automation_view_install_speedometer_result_observer(
             view: *mut c_void,
             expected_document_generation: u64,
         ) -> bool;
-        pub fn photon_view_install_jetstream_result_observer(
+        pub fn photon_automation_view_install_jetstream_result_observer(
             view: *mut c_void,
             expected_document_generation: u64,
         ) -> bool;
-        pub fn photon_view_request_jetstream_start(
+        pub fn photon_automation_view_request_jetstream_start(
             view: *mut c_void,
             expected_document_generation: u64,
         ) -> bool;

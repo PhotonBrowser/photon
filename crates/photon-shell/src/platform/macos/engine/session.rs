@@ -377,11 +377,11 @@ impl EngineSession {
     }
 
     pub(in crate::platform) fn has_completed_document_load(&self) -> bool {
-        unsafe { embedder::photon_view_has_completed_document_load(self.view) }
+        unsafe { embedder::photon_automation_view_has_completed_document_load(self.view) }
     }
 
     pub(in crate::platform) fn document_generation(&self) -> u64 {
-        unsafe { embedder::photon_view_document_generation(self.view) }
+        unsafe { embedder::photon_automation_view_document_generation(self.view) }
     }
 
     pub(in crate::platform) fn install_speedometer_result_observer(
@@ -389,7 +389,7 @@ impl EngineSession {
         expected_document_generation: u64,
     ) -> bool {
         unsafe {
-            embedder::photon_view_install_speedometer_result_observer(
+            embedder::photon_automation_view_install_speedometer_result_observer(
                 self.view,
                 expected_document_generation,
             )
@@ -401,7 +401,7 @@ impl EngineSession {
         expected_document_generation: u64,
     ) -> bool {
         unsafe {
-            embedder::photon_view_install_jetstream_result_observer(
+            embedder::photon_automation_view_install_jetstream_result_observer(
                 self.view,
                 expected_document_generation,
             )
@@ -413,7 +413,10 @@ impl EngineSession {
         expected_document_generation: u64,
     ) -> bool {
         unsafe {
-            embedder::photon_view_request_jetstream_start(self.view, expected_document_generation)
+            embedder::photon_automation_view_request_jetstream_start(
+                self.view,
+                expected_document_generation,
+            )
         }
     }
 
