@@ -507,38 +507,37 @@ fn theme_thumbnail(
                 .flex_shrink_0()
                 .w(px(metrics::THEME_PREVIEW_SIDEBAR_WIDTH))
                 .h_full()
-                .gap(px(metrics::MENU_ITEM_GAP))
-                .p(px(metrics::THEME_PREVIEW_INSET))
+                .gap(px(metrics::THEME_PREVIEW_SIDEBAR_GAP))
+                .p(px(metrics::THEME_PREVIEW_SIDEBAR_INSET))
                 .rounded(px(metrics::control_radius()))
                 .bg(rgba(sidebar.menu_surface))
-                .child(preview_line(
-                    metrics::THEME_PREVIEW_TITLE_WIDTH / 3.0,
-                    metrics::THEME_PREVIEW_LINE_HEIGHT,
-                    rgb(sidebar.text_secondary),
-                ))
                 .child(
-                    v_stack()
+                    h_stack()
                         .w_full()
-                        .gap(px(metrics::MENU_ITEM_GAP))
-                        .p(px(metrics::THEME_PREVIEW_INSET))
-                        .rounded(px(metrics::control_radius()))
+                        .h(px(metrics::THEME_PREVIEW_ADDRESS_HEIGHT))
+                        .px(px(metrics::THEME_PREVIEW_SIDEBAR_INSET))
+                        .items_center()
+                        .rounded(px(metrics::theme_preview_radius()))
                         .bg(rgba(sidebar.selected_surface))
                         .child(preview_line(
-                            metrics::THEME_PREVIEW_TITLE_WIDTH / 2.0,
-                            metrics::THEME_PREVIEW_LINE_HEIGHT,
-                            rgb(sidebar.text_secondary),
-                        ))
-                        .child(preview_line(
-                            metrics::THEME_PREVIEW_TITLE_WIDTH / 2.0,
+                            metrics::THEME_PREVIEW_ADDRESS_LINE_WIDTH,
                             metrics::THEME_PREVIEW_LINE_HEIGHT,
                             rgb(sidebar.text_secondary),
                         )),
                 )
-                .child(preview_line(
-                    metrics::THEME_PREVIEW_TITLE_WIDTH / 2.0,
-                    metrics::THEME_PREVIEW_LINE_HEIGHT,
-                    rgb(sidebar.text_secondary),
-                )),
+                .child(
+                    div()
+                        .w_full()
+                        .h(px(metrics::MENU_SEPARATOR_HEIGHT))
+                        .bg(rgba(sidebar.menu_border)),
+                )
+                .child(
+                    v_stack()
+                        .w_full()
+                        .gap(px(metrics::THEME_PREVIEW_TAB_GAP))
+                        .child(preview_tab(sidebar, true))
+                        .child(preview_tab(sidebar, false)),
+                ),
         )
         .child(
             v_stack()
@@ -567,6 +566,22 @@ fn theme_thumbnail(
                     rgba(page.menu_border),
                 )),
         )
+}
+
+fn preview_tab(palette: ThemeColors, selected: bool) -> impl IntoElement {
+    h_stack()
+        .w_full()
+        .h(px(metrics::THEME_PREVIEW_TAB_HEIGHT))
+        .gap(px(metrics::THEME_PREVIEW_TAB_GAP))
+        .px(px(metrics::THEME_PREVIEW_SIDEBAR_INSET))
+        .items_center()
+        .rounded(px(metrics::theme_preview_radius()))
+        .when(selected, |tab| tab.bg(rgba(palette.selected_surface)))
+        .child(preview_line(
+            metrics::THEME_PREVIEW_TAB_TITLE_WIDTH,
+            metrics::THEME_PREVIEW_LINE_HEIGHT,
+            rgb(palette.text_secondary),
+        ))
 }
 
 fn preview_line(width: f32, height: f32, color: impl Into<gpui::Background>) -> gpui::Div {
