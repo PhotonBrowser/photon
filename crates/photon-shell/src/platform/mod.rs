@@ -8,8 +8,10 @@ mod app_update;
 mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg_attr(target_os = "linux", allow(dead_code))]
 #[path = "ui/metrics.rs"]
 pub(crate) mod metrics;
+#[cfg_attr(target_os = "linux", allow(dead_code))]
 pub(crate) mod theme_config;
 #[cfg(target_os = "macos")]
 mod ui;
@@ -80,6 +82,7 @@ fn trace(args: std::fmt::Arguments<'_>) {
     }
 }
 
+#[cfg_attr(target_os = "linux", allow(dead_code))]
 pub(crate) fn automation_lifecycle_trace(args: std::fmt::Arguments<'_>) {
     static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     static EMITTED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
