@@ -24,6 +24,7 @@ pub(crate) fn page_surface(
         .size_full()
         .relative()
         .rounded(px(metrics::page_radius()))
+        .rounded_smoothing(metrics::page_smoothing())
         .bg(rgb(palette.background))
         .child(
             div()

@@ -103,6 +103,7 @@ impl InternalPage {
             .size_full()
             .overflow_hidden()
             .rounded(px(metrics::page_radius()))
+            .rounded_smoothing(metrics::page_smoothing())
             .bg(rgba(palette.surface))
             .child(self.view.clone())
             .into_any_element()

@@ -593,6 +593,7 @@ impl Render for PhotonWebView {
             }));
         webview = webview
             .rounded(px(metrics::page_radius()))
+            .rounded_smoothing(metrics::page_smoothing())
             .overflow_hidden()
             .bg(gpui::rgb(palette.page_background));
         {

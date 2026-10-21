@@ -122,6 +122,7 @@ pub(crate) struct RadiusTokens {
     pub(crate) omnibox: f32,
     pub(crate) sidebar_omnibox_button: f32,
     pub(crate) page: f32,
+    pub(crate) page_smoothing: f32,
     pub(crate) theme_accent_panel: f32,
     pub(crate) checkbox: f32,
     pub(crate) segment: f32,
