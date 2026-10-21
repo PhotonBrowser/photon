@@ -28,6 +28,8 @@ Before syncing, save work in the root and dependency being changed. Never switch
 
 Run `./photon sync` to fetch and merge Ladybird `master` into `Engine/master`, GPUI-CE `main` into `vendor/gpui-ce/main`, and upstream gpui-motion `main` into `crates/gpui-motion/main`. Use the per-dependency sync commands to update one dependency. Each command selects its persistent Photon branch when the worktree is clean. If a merge conflicts, the command stops and prints every unresolved path, the full combined conflict diff, Git's output, and instructions an agent can use to finish the merge. Resolve and commit that merge before starting another sync.
 
+The top-level `./photon sync` requires an authenticated `gh` CLI because, after all merges complete, it dispatches the upstream review workflow if any dependency branch advanced. `./photon sync --check`, per-dependency sync commands, and pull request merges do not dispatch that workflow. See [Automated upstream sync reviews](UpstreamSyncAutomation.md).
+
 Use `./photon sync --check` to fetch upstream tips and see each Photon branch's ahead/behind counts and predicted merge conflicts without switching branches or merging. Per-dependency `sync --check` commands check one dependency. The preview compares committed branch tips; uncommitted edits are excluded and may still prevent a real sync.
 
 For GPUI-CE, `./photon gpui sync` fetches and merges upstream `main` into the persistent Photon `main` branch. Resolve conflicts by understanding both sides and preserving Photon-independent generic renderer behavior. Run focused dependency checks and Photon checks before pushing the branch:

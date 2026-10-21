@@ -1,22 +1,9 @@
 name: Photon upstream sync review
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - Engine
-      - vendor/gpui-ce
-  workflow_dispatch:
-    inputs:
-      from_sha:
-        description: "Previous Photon root commit SHA"
-        required: true
-        type: string
-      to_sha:
-        description: "New Photon root commit SHA"
-        required: true
-        type: string
+  repository_dispatch:
+    types:
+      - photon_upstream_sync
 
 permissions:
   contents: read
@@ -28,21 +15,26 @@ concurrency:
 
 jobs:
   upstream-sync-review:
-    name: Document tested dependency pin changes
+    name: Document completed Photon upstream sync
     runs-on: ubuntu-latest
     steps:
-      - name: Check out Photon history
+      - name: Check out Photon workflow source
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           persist-credentials: false
           submodules: false
 
       - name: Open or reuse upstream sync issue
         uses: actions/github-script@v7
         env:
-          SYNC_FROM_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.from_sha || github.event.before }}
-          SYNC_TO_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.to_sha || github.sha }}
+          PHOTON_ROOT_SHA: ${{ github.event.client_payload.root_sha }}
+          ENGINE_BEFORE_SHA: ${{ github.event.client_payload.engine_before_sha }}
+          ENGINE_AFTER_SHA: ${{ github.event.client_payload.engine_after_sha }}
+          GPUI_CE_BEFORE_SHA: ${{ github.event.client_payload.gpui_ce_before_sha }}
+          GPUI_CE_AFTER_SHA: ${{ github.event.client_payload.gpui_ce_after_sha }}
+          MOTION_BEFORE_SHA: ${{ github.event.client_payload.motion_before_sha }}
+          MOTION_AFTER_SHA: ${{ github.event.client_payload.motion_after_sha }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |

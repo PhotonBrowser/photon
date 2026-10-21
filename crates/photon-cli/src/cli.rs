@@ -79,7 +79,7 @@ enum Command {
     Format,
     /// Verify and commit the current dependency branch tips as Photon pins.
     Pin,
-    /// Merge Ladybird, GPUI-CE, and gpui-motion upstream changes into Photon branches.
+    /// Merge upstream changes and dispatch a review when dependency branches advance.
     Sync {
         /// Fetch and preview commit counts and merge conflicts without merging.
         #[arg(long)]
@@ -222,9 +222,13 @@ pub fn run() -> Result<(), String> {
                 commands::gpui::check_upstream(&root, verbose)?;
                 commands::motion::check_upstream(&root, verbose)
             } else {
+                commands::sync::require_review_dispatch_auth(&root)?;
+                let before = commands::sync::capture_sync_heads(&root)?;
                 commands::engine::engine(&root, Some("sync"), false, verbose)?;
                 commands::gpui::sync(&root, verbose)?;
-                commands::motion::sync(&root, verbose)
+                commands::motion::sync(&root, verbose)?;
+                let after = commands::sync::capture_sync_heads(&root)?;
+                commands::sync::dispatch_review(&root, &before, &after, verbose)
             }
         }
         Some(Command::Gpui { command }) => match command {
