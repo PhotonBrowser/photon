@@ -141,6 +141,7 @@ tooltip = 7.0
 omnibox = 8.0
 sidebar_omnibox_button = 9.0
 page = 12.0
+page_smoothing = 0.6
 theme_accent_panel = 16.0
 checkbox = 4.0
 segment = 5.0

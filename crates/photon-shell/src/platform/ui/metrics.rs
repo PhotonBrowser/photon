@@ -356,6 +356,10 @@ pub(in crate::platform) fn page_radius() -> f32 {
     crate::platform::theme_config::radius_tokens().page
 }
 
+pub(in crate::platform) fn page_smoothing() -> f32 {
+    crate::platform::theme_config::radius_tokens().page_smoothing
+}
+
 pub(super) fn theme_preview_radius() -> f32 {
     concentric_radius(control_radius(), THEME_PREVIEW_INSET, 0.0)
 }
