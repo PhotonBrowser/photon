@@ -419,7 +419,7 @@ impl TabParts {
         });
         let on_drop = tab.on_drop;
         let element = element
-            .drag_over::<DraggedTab>(move |style, _, _, _| style.bg(rgba(palette.hover_surface)))
+            .on_drag_over::<DraggedTab>(move |style, _, _, _| style.bg(rgba(palette.hover_surface)))
             .on_drop(move |dragged: &DraggedTab, window, cx| on_drop(dragged, window, cx));
         let element = element
             .relative()

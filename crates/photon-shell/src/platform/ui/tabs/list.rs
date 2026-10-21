@@ -103,7 +103,7 @@ pub(in super::super) fn tab_list(
                 metrics::SIDEBAR_TAB_PADDING
             }))
             .rounded(px(metrics::sidebar_item_radius()))
-            .drag_over::<DraggedTab>(move |style, _, _, _| style.bg(rgba(palette.hover_surface)))
+            .on_drag_over::<DraggedTab>(move |style, _, _, _| style.bg(rgba(palette.hover_surface)))
             .on_drop(move |dragged: &DraggedTab, window, cx| on_drop(dragged, window, cx))
             .child(
                 div()
@@ -128,7 +128,7 @@ pub(in super::super) fn tab_list(
         .children(divider)
         .child(
             new_tab_row(on_new_tab, collapsed, suppress_tooltips, palette)
-                .drag_over::<DraggedTab>(move |style, _, _, _| {
+                .on_drag_over::<DraggedTab>(move |style, _, _, _| {
                     style.bg(rgba(palette.hover_surface))
                 })
                 .on_drop(move |dragged: &DraggedTab, window, cx| {

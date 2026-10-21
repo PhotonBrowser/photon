@@ -63,7 +63,7 @@ pub(in super::super) fn favourites_grid(
         .aria_label("Favourites")
         .w_full()
         .gap(px(gap))
-        .drag_over::<DraggedTab>(move |style, _, _, _| {
+        .on_drag_over::<DraggedTab>(move |style, _, _, _| {
             style
                 .border_1()
                 .border_color(rgba(palette.soft_accent_border))
@@ -121,7 +121,7 @@ pub(in super::super) fn favourites_empty_state(
         .border_dashed_gap(metrics::SIDEBAR_FAVOURITES_HINT_DASH_GAP)
         .border_color(rgba(palette.soft_accent_border))
         .bg(rgba(palette.surface))
-        .drag_over::<DraggedTab>(move |style, _, _, _| {
+        .on_drag_over::<DraggedTab>(move |style, _, _, _| {
             style
                 .bg(rgba(palette.hover_surface))
                 .border_color(rgba(palette.chosen))
