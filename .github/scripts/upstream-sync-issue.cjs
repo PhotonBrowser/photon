@@ -116,7 +116,7 @@ async function run({ github, context, core }) {
     '## Provenance',
     '',
     '- Photon root at sync time: ' + commit(rootSha, owner + '/' + repo),
-    '- Trigger: `./photon sync` (`' + CODE + context.eventName + CODE + ')',
+    '- Trigger: `./photon sync` (' + CODE + context.eventName + CODE + ')',
     '- [GitHub Actions run](https://github.com/' + owner + '/' + repo + '/actions/runs/' + context.runId + ')',
     '',
     '## Manual integration review',
