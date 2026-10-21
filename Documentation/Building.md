@@ -1,6 +1,6 @@
 # Building Photon
 
-Use the `./photon` CLI for setup, formatting, linting, building, and running Photon. The toolchain requires Git, Rust/Cargo 1.85 or newer, a C++23-capable compiler, CMake 3.30 or newer, Ninja 1.10 or newer, Python 3 with pip, and the platform packages required by the pinned Engine. See [Ladybird build instructions](../Engine/Documentation/BuildInstructionsLadybird.md) for system packages.
+Use the `./photon` CLI for setup, formatting, linting, building, and running Photon. The toolchain requires Git, Rust/Cargo 1.85 or newer, a C++23-capable compiler, CMake 3.30 or newer, Ninja 1.10 or newer, Python 3 with pip, and the platform packages required by the pinned Engine. `./photon setup` checks these prerequisites but does not install OS packages; install those using your platform's package manager. See [Ladybird build instructions](../Engine/Documentation/BuildInstructionsLadybird.md) for system packages.
 
 ## Common commands
 
@@ -14,9 +14,10 @@ Use the `./photon` CLI for setup, formatting, linting, building, and running Pho
 ./photon run
 ```
 
-- `./photon format` formats Photon-owned Rust and native files. If `clang-format` 21 is not on `PATH`, Photon installs version 21.1.8 with pip under the ignored `build/tools/` directory for this checkout.
-- `./photon lint` runs Clippy with warnings treated as errors and checks C, C++, and Objective-C formatting.
-- `./photon check` checks Rust formatting, runs linting, compiles the Cargo workspace, and verifies architecture and dependency checkout rules.
+- `./photon setup` initializes pinned dependencies, checks system tools, and prepares clang-format 22 for Photon and Photon Engine sources. It uses a matching system formatter when available, otherwise it installs clang-format 22.1.8 under the ignored `build/tools/` directory for this checkout.
+- `./photon format` formats Rust and Photon-owned native code, including the Engine embedder with its matching style version.
+- `./photon lint` checks Rust formatting, runs Clippy with warnings treated as errors, and checks Photon and Engine embedder C++ formatting.
+- `./photon check` runs linting, compiles the Cargo workspace, and verifies architecture and dependency checkout rules.
 - `./photon test` runs the Rust workspace tests.
 - `./photon build` builds the Engine and the GPUI-CE application.
 - `./photon run` builds and launches the native app. Use `--url URL` to choose the initial page. Use `--shutdown-after-seconds N` to exit after a fixed interval; `--verbose` prints the final presentation frame counts.

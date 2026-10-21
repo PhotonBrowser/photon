@@ -1,5 +1,5 @@
 # Photon's native glue follows Ladybird's style, so it reads like the Engine code it sits next to.
-# Keep in step with Engine/.clang-format; Ladybird's linter uses clang-format 21.
+# Keep in step with Engine/.clang-format; Photon uses clang-format 22.
 ---
 AlignEscapedNewlines: Left
 AlignTrailingComments:

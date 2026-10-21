@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::support::{invoke, invoke_with_environment, output, stage, success, with_progress};
+use crate::support::{invoke_with_environment, output, success, with_progress};
 
 pub(crate) fn check(root: &Path, verbose: bool) -> Result<(), String> {
     match check_inner(root, verbose) {
@@ -13,8 +13,6 @@ pub(crate) fn check(root: &Path, verbose: bool) -> Result<(), String> {
 }
 
 fn check_inner(root: &Path, verbose: bool) -> Result<(), String> {
-    stage("Check Rust formatting");
-    invoke("cargo", &["fmt", "--all", "--", "--check"], root, verbose)?;
     crate::commands::lint::lint(root, verbose)?;
     let cargo_args = ["check", "--workspace"];
     let engine_dir = root.join("build/engine-release");

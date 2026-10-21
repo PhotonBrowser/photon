@@ -5,7 +5,8 @@ use std::path::{Component, Path, PathBuf};
 use serde::Deserialize;
 
 use crate::support::{
-    command, compiler_version, output, require_tool, require_tool_version, run_tool,
+    CLANG_FORMAT_VERSION, clang_format, command, compiler_version, output, require_tool,
+    require_tool_version, run_tool,
 };
 
 pub(crate) fn setup(root: &Path, verbose: bool) -> Result<(), String> {
@@ -119,9 +120,15 @@ pub(crate) fn setup(root: &Path, verbose: bool) -> Result<(), String> {
         std::fs::create_dir_all(root.join(path)).map_err(|e| e.to_string())?;
     }
     crate::commands::ide::setup(root, verbose)?;
+    clang_format(root, CLANG_FORMAT_VERSION)?;
     println!(
         "Setup ready. Existing dependency worktrees were preserved; Engine and GPUI-CE development branches are active."
     );
+    let clang_format_major = CLANG_FORMAT_VERSION
+        .split('.')
+        .next()
+        .unwrap_or(CLANG_FORMAT_VERSION);
+    println!("clang-format {clang_format_major} is ready for format and lint commands.");
     println!("The first engine build prepares Ladybird's pinned dependencies under build/.");
     Ok(())
 }
