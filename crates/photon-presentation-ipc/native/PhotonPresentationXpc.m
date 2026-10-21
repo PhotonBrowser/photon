@@ -408,7 +408,7 @@ bool photon_presentation_xpc_register_event(void* opaque_connection, char const*
         return false;
 
     NSXPCConnection* connection = ((PhotonPresentationConnection*)opaque_connection)->object_connection;
-    id<PhotonPresentationEventChannel> proxy = (id<PhotonPresentationEventChannel>)[connection remoteObjectProxyWithErrorHandler:^(__unused NSError* error) {}];
+    id<PhotonPresentationEventChannel> proxy = (id<PhotonPresentationEventChannel>)[connection remoteObjectProxyWithErrorHandler:^(__unused NSError* error) { }];
     id<MTLSharedEvent> event = (__bridge id<MTLSharedEvent>)opaque_event;
     MTLSharedEventHandle* handle = [event newSharedEventHandle];
     if (!handle)
@@ -437,7 +437,7 @@ void* photon_presentation_xpc_copy_event_handle(void* opaque_connection, char co
         return NULL;
 
     NSXPCConnection* connection = ((PhotonPresentationConnection*)opaque_connection)->object_connection;
-    id<PhotonPresentationEventChannel> proxy = (id<PhotonPresentationEventChannel>)[connection remoteObjectProxyWithErrorHandler:^(__unused NSError* error) {}];
+    id<PhotonPresentationEventChannel> proxy = (id<PhotonPresentationEventChannel>)[connection remoteObjectProxyWithErrorHandler:^(__unused NSError* error) { }];
     dispatch_semaphore_t completed = dispatch_semaphore_create(0);
     __block MTLSharedEventHandle* handle = nil;
     [proxy sharedEventHandleForChannel:channel
@@ -460,7 +460,7 @@ bool photon_presentation_xpc_wait_for_consumer_submission(void* opaque_connectio
     if (!channel)
         return false;
     NSXPCConnection* connection = ((PhotonPresentationConnection*)opaque_connection)->object_connection;
-    id<PhotonPresentationEventChannel> proxy = (id<PhotonPresentationEventChannel>)[connection remoteObjectProxyWithErrorHandler:^(__unused NSError* error) {}];
+    id<PhotonPresentationEventChannel> proxy = (id<PhotonPresentationEventChannel>)[connection remoteObjectProxyWithErrorHandler:^(__unused NSError* error) { }];
     dispatch_semaphore_t completed = dispatch_semaphore_create(0);
     [proxy producerWaitForConsumerSubmissionOnChannel:channel
                                               frameID:frame_id
@@ -478,7 +478,7 @@ bool photon_presentation_xpc_notify_consumer_submission(void* opaque_connection,
     if (!channel)
         return false;
     NSXPCConnection* connection = ((PhotonPresentationConnection*)opaque_connection)->object_connection;
-    id<PhotonPresentationEventChannel> proxy = (id<PhotonPresentationEventChannel>)[connection remoteObjectProxyWithErrorHandler:^(__unused NSError* error) {}];
+    id<PhotonPresentationEventChannel> proxy = (id<PhotonPresentationEventChannel>)[connection remoteObjectProxyWithErrorHandler:^(__unused NSError* error) { }];
     dispatch_semaphore_t completed = dispatch_semaphore_create(0);
     __block BOOL accepted = NO;
     [proxy consumerSubmittedWaitOnChannel:channel
@@ -530,7 +530,7 @@ bool photon_presentation_xpc_unregister_backing(void* opaque_connection, char co
     // depends on the outcome. Messages on the connection stay ordered behind
     // earlier registrations.
     xpc_connection_send_message_with_reply(pair->surface_connection, request,
-        dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^(xpc_object_t reply) { (void)reply; });
+                                           dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^(xpc_object_t reply) { (void)reply; });
     return true;
 }
 

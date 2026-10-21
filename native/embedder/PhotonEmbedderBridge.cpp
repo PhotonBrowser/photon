@@ -151,7 +151,7 @@ Photon::ViewCallbacks make_view_callbacks(
     };
     result.new_web_view_requested = [=](Photon::NewWebViewRequest const& request) {
         if (!new_web_view_callback)
-            return std::string {};
+            return std::string { };
         PhotonNewWebViewRequest bridge_request {
             request.popup,
             request.activate,
@@ -165,7 +165,7 @@ Photon::ViewCallbacks make_view_callbacks(
             request.screen_y,
             request.traversable,
         };
-        std::array<char, 256> window_handle {};
+        std::array<char, 256> window_handle { };
         new_web_view_callback(callback_data, runtime, parent_view,
             &bridge_request, window_handle.data(), window_handle.size());
         return std::string(window_handle.data());
@@ -522,7 +522,7 @@ extern "C" void photon_view_file_picker_closed(void* view, char const* const* pa
         return;
     auto& engine_view = *static_cast<ViewHandle*>(view)->view;
     if (!paths && count > 0) {
-        engine_view.file_picker_closed({});
+        engine_view.file_picker_closed({ });
         return;
     }
     std::vector<std::string> chosen;

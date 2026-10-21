@@ -34,7 +34,7 @@ SystemClipboardEntries photon_system_clipboard_read()
             NSData* data = [pasteboard dataForType:type.type];
             if (data)
                 entries.emplace_back(type.mime_type,
-                    std::string(static_cast<char const*>(data.bytes), data.length));
+                                     std::string(static_cast<char const*>(data.bytes), data.length));
         }
     }
     return entries;
