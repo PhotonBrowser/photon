@@ -172,11 +172,16 @@ fn strip_tab(
     let reorder_key = parts.reorder_key;
     let focus_handle = parts.focus_handle.clone();
     let closing = parts.closing;
+    let min_width = if parts.audio_control {
+        metrics::TAB_AUDIO_MIN_WIDTH
+    } else {
+        metrics::TAB_MIN_WIDTH
+    };
     let tab = parts
         .tab
         .flex_1()
         .flex_basis(px(metrics::TAB_MAX_WIDTH))
-        .min_w(px(metrics::TAB_MIN_WIDTH))
+        .min_w(px(min_width))
         .max_w(px(metrics::TAB_MAX_WIDTH))
         .gap(px(metrics::TAB_CLOSE_GAP))
         .h(px(metrics::TAB_HEIGHT))

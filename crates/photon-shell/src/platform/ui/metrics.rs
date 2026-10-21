@@ -5,8 +5,6 @@
 
 pub(super) const TITLEBAR_HEIGHT: f32 = 36.0;
 pub(super) const TAB_HEIGHT: f32 = 28.0;
-/// The narrowest unpinned tab that still fits its icon and close control.
-pub(super) const TAB_MIN_WIDTH: f32 = 64.0;
 /// A pinned tab in the strip, which shows only its icon.
 pub(super) const PINNED_TAB_WIDTH: f32 = 36.0;
 pub(super) const TAB_STRIP_GAP: f32 = 2.0;
@@ -22,12 +20,21 @@ pub(super) const TAB_DROP_SETTLE_DURATION_MS: u64 = 120;
 pub(super) const TAB_ENTRY_OFFSET: f32 = 5.0;
 pub(super) const TAB_MAX_WIDTH: f32 = 220.0;
 pub(super) const TAB_HORIZONTAL_PADDING: f32 = 10.0;
-pub(super) const TAB_CLOSE_BUTTON_SIZE: f32 = 22.0;
+pub(super) const TAB_CLOSE_BUTTON_SIZE: f32 = 24.0;
 pub(super) const TAB_ICON_SIZE: f32 = 12.0;
 pub(super) const TAB_FAVICON_SIZE: f32 = 16.0;
-pub(super) const TAB_AUDIO_BUTTON_SIZE: f32 = 22.0;
+pub(super) const TAB_AUDIO_BUTTON_SIZE: f32 = 24.0;
 pub(super) const TAB_AUDIO_ICON_SIZE: f32 = TAB_FAVICON_SIZE;
 pub(super) const TAB_FONT_SIZE: f32 = 12.0;
+/// The narrowest unpinned tab that fits its icon, close control, gaps, and
+/// horizontal padding without clipping when the strip is crowded.
+pub(super) const TAB_MIN_WIDTH: f32 =
+    TAB_FAVICON_SIZE + TAB_CLOSE_BUTTON_SIZE + 2.0 * TAB_CLOSE_GAP + 2.0 * TAB_HORIZONTAL_PADDING;
+/// Audio tabs replace the favicon with a larger control.
+pub(super) const TAB_AUDIO_MIN_WIDTH: f32 = TAB_AUDIO_BUTTON_SIZE
+    + TAB_CLOSE_BUTTON_SIZE
+    + 2.0 * TAB_CLOSE_GAP
+    + 2.0 * TAB_HORIZONTAL_PADDING;
 
 pub(super) const TOOLBAR_HEIGHT: f32 = 30.0;
 pub(super) const TOOLBAR_HORIZONTAL_INSET: f32 = 12.0;
@@ -78,7 +85,7 @@ pub(super) const CHIP_TRAILING_PADDING: f32 = 3.0;
 pub(super) const CHIP_GAP: f32 = 6.0;
 pub(super) const CHIP_ICON_SIZE: f32 = 12.0;
 pub(super) const CHIP_FONT_SIZE: f32 = 12.0;
-pub(super) const CHIP_CLOSE_SIZE: f32 = 20.0;
+pub(super) const CHIP_CLOSE_SIZE: f32 = 24.0;
 pub(super) const CHIP_CLOSE_ICON_SIZE: f32 = 10.0;
 
 pub(super) const BUTTON_HEIGHT: f32 = 30.0;
@@ -88,7 +95,7 @@ pub(super) const BUTTON_FONT_SIZE: f32 = 13.0;
 pub(super) const BUTTON_GAP: f32 = 8.0;
 pub(super) const ICON_BUTTON_SIZE: f32 = 24.0;
 pub(super) const ICON_BUTTON_ICON_SIZE: f32 = 13.0;
-pub(super) const SMALL_BUTTON_HEIGHT: f32 = 20.0;
+pub(super) const SMALL_BUTTON_HEIGHT: f32 = 24.0;
 pub(super) const SMALL_BUTTON_HORIZONTAL_PADDING: f32 = 9.0;
 pub(super) const SMALL_BUTTON_FONT_SIZE: f32 = 12.0;
 
