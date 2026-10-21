@@ -1,5 +1,7 @@
 //! Settings rows for Photon's own pages: a label with a switch or checkbox,
-//! the whole row clickable.
+//!
+
+// TODO: whole row should not be clickable, this was unintended :(
 
 use gpui::{
     ElementId, Role, SharedString, Stateful, StatefulInteractiveElement, prelude::*, px, rgb, rgba,
