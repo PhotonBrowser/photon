@@ -27,6 +27,7 @@ pub(crate) fn page_surface(
         .bg(rgb(palette.background))
         .child(
             div()
+                .id("linux-renderer-status")
                 .absolute()
                 .right(px(metrics::CHIP_INSET))
                 .bottom(px(metrics::CHIP_INSET))
