@@ -2,7 +2,7 @@
 
 Photon uses `./photon sync` to integrate Ladybird, GPUI-CE, and gpui-motion. After a successful sync that advances at least one persistent dependency branch, the command dispatches a GitHub Actions review workflow. `./photon pin` later records tested dependency revisions in the root repository.
 
-The workflow at `.github/workflows/upstream-sync-review.yml` listens for the `photon_upstream_sync` repository dispatch sent by top-level `./photon sync`. It opens one combined **Photon Upstream Sync #NNN** GitHub issue with before and after tips for Engine, GPUI-CE, and gpui-motion.
+The workflow at `.github/workflows/upstream-sync-review.yml` listens for the `photon_upstream_sync` repository dispatch sent by top-level `./photon sync`. GitHub only runs a `repository_dispatch` workflow when its workflow file exists on the repository's default branch, so merge this workflow there before the first `./photon sync`. It opens one combined **Photon Upstream Sync #NNN** GitHub issue with before and after tips for Engine, GPUI-CE, and gpui-motion.
 
 ## Setup
 
