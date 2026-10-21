@@ -1,47 +1,58 @@
 'use strict';
 
-const { execFileSync } = require('node:child_process');
-
 const SHA = /^[0-9a-f]{40}$/i;
 const CODE = String.fromCharCode(96);
 const DEPENDENCIES = [
-  { path: 'Engine', name: 'Ladybird / Photon Engine', repo: 'PhotonBrowser/photon-engine' },
-  { path: 'vendor/gpui-ce', name: 'GPUI-CE', repo: 'PhotonBrowser/gpui-ce' },
+  {
+    key: 'ENGINE',
+    name: 'Ladybird / Photon Engine',
+    repo: 'PhotonBrowser/photon-engine',
+  },
+  {
+    key: 'GPUI_CE',
+    name: 'GPUI-CE',
+    repo: 'PhotonBrowser/gpui-ce',
+  },
+  {
+    key: 'MOTION',
+    name: 'gpui-motion',
+    repo: 'PhotonBrowser/gpui-motion',
+  },
 ];
 
-function gitlink(rootSha, path) {
-  const line = execFileSync('git', ['ls-tree', rootSha, '--', path], {
-    encoding: 'utf8',
-    cwd: process.env.GITHUB_WORKSPACE,
-  }).trim();
-  if (!line) return null;
-  const match = /^160000 commit ([0-9a-f]{40})\t/.exec(line);
-  if (!match) throw new Error(path + ' is not a Git submodule at ' + rootSha);
-  return match[1];
+function commit(sha, repo) {
+  return '[' + CODE + sha.slice(0, 12) + CODE + '](https://github.com/' + repo + '/commit/' + sha + ')';
 }
 
 async function run({ github, context, core }) {
-  const from = (process.env.SYNC_FROM_SHA || '').trim();
-  const to = (process.env.SYNC_TO_SHA || '').trim();
-
-  if (!SHA.test(from) || !SHA.test(to) || /^0{40}$/.test(from) || /^0{40}$/.test(to)) {
-    core.warning('No valid before/after Photon commit pair. Use workflow_dispatch with explicit root SHAs.');
-    return;
+  const rootSha = (process.env.PHOTON_ROOT_SHA || '').trim();
+  if (!SHA.test(rootSha) || /^0{40}$/.test(rootSha)) {
+    throw new Error('The sync event has no valid Photon root SHA.');
   }
 
-  const changed = DEPENDENCIES.map(dep => {
-    const before = gitlink(from, dep.path);
-    const after = gitlink(to, dep.path);
-    return { ...dep, before, after, changed: before !== after };
+  const changed = DEPENDENCIES.map(dependency => {
+    const before = (process.env[dependency.key + '_BEFORE_SHA'] || '').trim();
+    const after = (process.env[dependency.key + '_AFTER_SHA'] || '').trim();
+    return {
+      ...dependency,
+      before,
+      after,
+      changed: before !== after,
+      valid: SHA.test(before) && SHA.test(after) && !/^0{40}$/.test(before) && !/^0{40}$/.test(after),
+    };
   });
 
-  if (!changed.some(dep => dep.changed)) {
-    core.info('Neither pinned dependency changed; no issue created.');
+  if (changed.some(dependency => !dependency.valid)) {
+    throw new Error('The sync event has an invalid dependency before/after commit pair.');
+  }
+  if (!changed.some(dependency => dependency.changed)) {
+    core.info('No dependency branch advanced during ./photon sync; no issue created.');
     return;
   }
 
   const { owner, repo } = context.repo;
-  const marker = '<!-- photon-upstream-sync:' + to.toLowerCase() + ' -->';
+  const marker = '<!-- photon-upstream-sync:' + rootSha.toLowerCase() + ':' +
+    changed.map(dependency => dependency.after.toLowerCase()).join(':') + ' -->';
   const issues = (await github.paginate(github.rest.issues.listForRepo, {
     owner, repo, state: 'all', per_page: 100,
   })).filter(issue => !issue.pull_request);
@@ -65,8 +76,11 @@ async function run({ github, context, core }) {
     if (error.status !== 404) throw error;
     try {
       await github.rest.issues.createLabel({
-        owner, repo, name: label, color: '7057ff',
-        description: 'Reviews of combined Ladybird and GPUI-CE dependency pin updates.',
+        owner,
+        repo,
+        name: label,
+        color: '7057ff',
+        description: 'Reviews of explicit Photon upstream sync runs.',
       });
     } catch (creationError) {
       if (creationError.status !== 422) throw creationError;
@@ -77,59 +91,57 @@ async function run({ github, context, core }) {
     marker,
     '## Photon upstream sync review',
     '',
-    'Automatically opened after a push changed one or both *tested dependency pins*.',
-    'This records the revisions pinned in Photon, which may differ from the upstream merge tips.',
+    'Opened by a successful `./photon sync` run that merged upstream commits.',
+    'This records the persistent Photon dependency branch tips at sync time. Update root submodule pins later with `./photon pin`, after testing.',
     '',
-    '| Dependency | Previous pinned commit | New pinned commit | Changed? |',
+    '| Dependency | Before sync | After sync | Changed? |',
     '| --- | --- | --- | --- |',
   ];
 
-  for (const dep of changed) {
-    const fmt = sha => sha
-      ? '[' + CODE + sha.slice(0, 12) + CODE + '](https://github.com/' + dep.repo + '/commit/' + sha + ')'
-      : '(not pinned)';
-    lines.push('| ' + dep.name + ' | ' + fmt(dep.before) + ' | ' + fmt(dep.after) +
-      ' | ' + (dep.changed ? '**Yes**' : 'No') + ' |');
+  for (const dependency of changed) {
+    lines.push('| ' + dependency.name + ' | ' + commit(dependency.before, dependency.repo) +
+      ' | ' + commit(dependency.after, dependency.repo) +
+      ' | ' + (dependency.changed ? '**Yes**' : 'No') + ' |');
   }
 
   lines.push('', '## Changes to review', '');
-  for (const dep of changed) {
-    if (!dep.changed) continue;
-    lines.push('- **' + dep.name + '**: ' + (
-      dep.before && dep.after
-        ? '[Compare commits](https://github.com/' + dep.repo + '/compare/' + dep.before + '...' + dep.after + ')'
-        : 'Initial or removed submodule pin; inspect the root commit'
-    ));
+  for (const dependency of changed) {
+    if (!dependency.changed) continue;
+    lines.push('- **' + dependency.name + '**: [Compare commits](https://github.com/' +
+      dependency.repo + '/compare/' + dependency.before + '...' + dependency.after + ')');
   }
 
-  const rootCompare = 'https://github.com/' + owner + '/' + repo + '/compare/' + from + '...' + to;
   lines.push(
     '',
     '## Provenance',
     '',
-    '- Photon root change: [compare pushed revisions](' + rootCompare + ')',
-    '- Recorded root commit: ' + CODE + to.slice(0, 12) + CODE,
-    '- Trigger: ' + CODE + context.eventName + CODE,
+    '- Photon root at sync time: ' + commit(rootSha, owner + '/' + repo),
+    '- Trigger: `./photon sync` (`' + CODE + context.eventName + CODE + ')',
     '- [GitHub Actions run](https://github.com/' + owner + '/' + repo + '/actions/runs/' + context.runId + ')',
     '',
     '## Manual integration review',
     '',
     '- [ ] Confirm relevant upstream changes were reviewed',
     '- [ ] Confirm merge conflicts and Photon-specific changes were resolved correctly',
-    '- [ ] Confirm Engine and GPUI-CE builds/tests passed where applicable',
-    '- [ ] Confirm ./photon check and ./photon test passed',
+    '- [ ] Confirm Engine, GPUI-CE, and gpui-motion checks passed where applicable',
+    '- [ ] Push tested dependency commits to Photon-owned remotes, then update pins with `./photon pin`',
+    '- [ ] Confirm `./photon check` and `./photon test` passed',
     '- [ ] Record any Velocity performance comparison (if relevant)',
     '- [ ] Link regressions or follow-up issues',
     '',
-    '**Review status:** Pending human verification. Do not assume a successful push proves all checks passed.',
+    '**Review status:** Pending human verification. A successful sync or push does not prove all checks passed.',
     '',
     'Generated by .github/workflows/upstream-sync-review.yml.',
   );
 
   const title = 'Photon Upstream Sync #' + String(number).padStart(3, '0') +
-    ' — Ladybird & GPUI-CE';
+    ' — Ladybird, GPUI-CE & gpui-motion';
   const issue = await github.rest.issues.create({
-    owner, repo, title, body: lines.join('\n'), labels: [label],
+    owner,
+    repo,
+    title,
+    body: lines.join('\n'),
+    labels: [label],
   });
   core.info('Created ' + issue.data.html_url);
 }
