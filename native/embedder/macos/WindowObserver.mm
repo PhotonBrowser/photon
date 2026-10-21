@@ -23,8 +23,8 @@ static bool window_is_visible(NSWindow* window)
 }
 
 extern "C" void* photon_window_observer_create(void* ns_view,
-    void* callback_data,
-    PhotonWindowChangedCallback callback)
+                                               void* callback_data,
+                                               PhotonWindowChangedCallback callback)
 {
     if (!ns_view || !callback)
         return nullptr;
@@ -51,7 +51,7 @@ extern "C" void* photon_window_observer_create(void* ns_view,
                         NSWindow* observed = weak_window;
                         if (observed && state->active.load(std::memory_order_acquire))
                             state->callback(state->callback_data, window_is_visible(observed),
-                                display_changed);
+                                            display_changed);
                     }];
         [observer->notification_observers addObject:notification_observer];
     };

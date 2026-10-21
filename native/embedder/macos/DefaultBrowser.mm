@@ -25,7 +25,7 @@ extern "C" bool photon_default_browser_is_current(void)
     auto* handler = [[NSWorkspace sharedWorkspace] URLForApplicationToOpenURL:[NSURL URLWithString:@"https://example.com"]];
     return handler != nil
         && [handler.URLByStandardizingPath.URLByResolvingSymlinksInPath
-            isEqual:app.URLByStandardizingPath.URLByResolvingSymlinksInPath];
+               isEqual:app.URLByStandardizingPath.URLByResolvingSymlinksInPath];
 }
 
 extern "C" void photon_default_browser_request(void)

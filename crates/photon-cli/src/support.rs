@@ -6,6 +6,8 @@ use std::time::Duration;
 use indicatif::{ProgressBar, ProgressStyle};
 use owo_colors::{OwoColorize, Stream};
 
+pub(crate) const CLANG_FORMAT_VERSION: &str = "22.1.8";
+
 pub(crate) fn path(value: &Path) -> String {
     value.to_string_lossy().into_owned()
 }
@@ -58,28 +60,52 @@ pub(crate) fn require_tool(tool: &str) -> Result<(), String> {
         .map_err(|_| format!("{tool} is missing; install it using your OS package manager"))
 }
 
-pub(crate) fn clang_format(root: &Path) -> Result<PathBuf, String> {
+pub(crate) fn clang_format(root: &Path, version: &str) -> Result<PathBuf, String> {
     let executable_name = if cfg!(windows) {
         "clang-format.exe"
     } else {
         "clang-format"
     };
-    if let Ok(executable_path) = find_on_path(executable_name)
-        && let Ok(version) = output(&path(&executable_path), &["--version"], root)
-        && version.contains("version 21.")
-    {
-        return Ok(executable_path);
+    let major = version
+        .split('.')
+        .next()
+        .and_then(|major| major.parse::<u32>().ok())
+        .ok_or_else(|| format!("invalid clang-format version: {version}"))?;
+
+    let versioned_executable = if cfg!(windows) {
+        format!("clang-format-{major}.exe")
+    } else {
+        format!("clang-format-{major}")
+    };
+    let candidates = [versioned_executable, executable_name.to_owned()];
+    for candidate in candidates {
+        if let Ok(executable_path) = find_on_path(&candidate)
+            && clang_format_major(&executable_path, root) == Some(major)
+        {
+            return Ok(executable_path);
+        }
     }
 
-    const VERSION: &str = "21.1.8";
-    let install_root = root.join("build/tools/clang-format").join(VERSION);
+    if cfg!(target_os = "macos") {
+        let formula = format!("llvm@{major}");
+        if let Ok(prefix) = output("brew", &["--prefix", &formula], root) {
+            let executable_path = PathBuf::from(prefix.trim())
+                .join("bin")
+                .join(executable_name);
+            if clang_format_major(&executable_path, root) == Some(major) {
+                return Ok(executable_path);
+            }
+        }
+    }
+
+    let install_root = root.join("build/tools/clang-format").join(version);
     let relative_bin = if cfg!(windows) { "Scripts" } else { "bin" };
     let executable = install_root.join(relative_bin).join(executable_name);
-    if executable.is_file() {
+    if executable.is_file() && clang_format_major(&executable, root) == Some(major) {
         return Ok(executable);
     }
 
-    stage("Install temporary clang-format tool");
+    stage(&format!("Install clang-format {version} for this checkout"));
     let python = if cfg!(windows) { "python" } else { "python3" };
     invoke(
         python,
@@ -91,25 +117,35 @@ pub(crate) fn clang_format(root: &Path) -> Result<PathBuf, String> {
             "--no-warn-script-location",
             "--prefix",
             &path(&install_root),
-            &format!("clang-format=={VERSION}"),
+            &format!("clang-format=={version}"),
         ],
         root,
         false,
     )
     .map_err(|error| {
         format!(
-            "could not install temporary clang-format {VERSION}; install Python 3 with pip or install clang-format manually: {error}"
+            "could not install clang-format {version}; install Python 3 with pip or install clang-format {major} using your OS package manager: {error}"
         )
     })?;
 
-    if executable.is_file() {
+    if executable.is_file() && clang_format_major(&executable, root) == Some(major) {
         Ok(executable)
     } else {
         Err(format!(
-            "temporary clang-format installation completed but {} was not found",
+            "clang-format {version} installation completed but a compatible executable was not found at {}",
             executable.display()
         ))
     }
+}
+
+fn clang_format_major(executable: &Path, root: &Path) -> Option<u32> {
+    let version = output(&path(executable), &["--version"], root).ok()?;
+    let number = version.split_whitespace().find(|part| {
+        part.chars()
+            .next()
+            .is_some_and(|character| character.is_ascii_digit())
+    })?;
+    number.split('.').next()?.parse().ok()
 }
 
 fn find_on_path(executable: &str) -> Result<PathBuf, String> {

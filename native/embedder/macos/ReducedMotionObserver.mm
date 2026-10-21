@@ -48,7 +48,7 @@ extern "C" void* photon_reduced_motion_observer_create(
     // Initialize the view immediately; later system changes arrive through the
     // workspace notification above.
     state->callback(state->callback_data,
-        workspace.accessibilityDisplayShouldReduceMotion);
+                    workspace.accessibilityDisplayShouldReduceMotion);
     return observer;
 }
 

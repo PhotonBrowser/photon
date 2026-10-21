@@ -49,6 +49,8 @@ fn main() {
         for source in [
             "native/embedder/PhotonEmbedderBridge.cpp",
             "native/embedder/PhotonEmbedderBridge.h",
+            "Engine/Libraries/LibPhotonEmbedder/include/LibPhotonEmbedder/PhotonEmbedder.h",
+            "Engine/Libraries/LibPhotonEmbedder/include/LibPhotonEmbedder/PhotonAutomation.h",
         ] {
             println!("cargo:rerun-if-changed={}", root.join(source).display());
         }
