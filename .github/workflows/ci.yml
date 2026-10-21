@@ -54,7 +54,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Check Photon
-        run: ./photon check
+        run: ./photon check --verbose
 
       - name: Test Photon
         run: ./photon test
