@@ -184,6 +184,7 @@ pub fn run() -> Result<(), String> {
             url,
             shutdown_after_seconds,
         }) => {
+            commands::build::warn_if_dependencies_are_behind(&root);
             if ui {
                 if url.is_some() {
                     return Err("--url cannot be used with --ui".into());

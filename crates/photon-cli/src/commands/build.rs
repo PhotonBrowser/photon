@@ -1,3 +1,4 @@
+use owo_colors::{OwoColorize, Stream};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Instant;
@@ -19,6 +20,145 @@ const HELPER_PROCESS_TARGETS: &[&str] = &[
     "MediaServer",
     "AudioServer",
 ];
+
+pub(crate) fn warn_if_dependencies_are_behind(root: &Path) {
+    let dependencies = [
+        ("Engine", "Engine", "upstream/master", 10),
+        ("GPUI-CE", "vendor/gpui-ce", "upstream/main", 1),
+        ("gpui-motion", "crates/gpui-motion", "upstream/main", 1),
+    ];
+
+    let mut behind = Vec::new();
+    for (name, repository, upstream, threshold) in dependencies {
+        let repository = root.join(repository);
+        let Some(count) = upstream_ahead_count(&repository, upstream) else {
+            continue;
+        };
+        if is_dependency_behind(count, threshold) {
+            behind.push(format!("{name}: {count}"));
+        }
+    }
+
+    if !behind.is_empty() {
+        let warning = format!(
+            "⚠ Dependency updates available (commits behind upstream): {}. Run `./photon sync --check` to review.",
+            behind.join(", ")
+        );
+        eprintln!(
+            "{}",
+            warning.if_supports_color(Stream::Stderr, |text| format!("{}", text.yellow()))
+        );
+    }
+}
+
+fn is_dependency_behind(count: usize, threshold: usize) -> bool {
+    count >= threshold
+}
+
+fn upstream_ahead_count(repository: &Path, upstream: &str) -> Option<usize> {
+    let result = Command::new("git")
+        .args(["rev-list", "--count", &format!("HEAD..{upstream}")])
+        .current_dir(repository)
+        .output()
+        .ok()?;
+    if !result.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&result.stdout)
+        .trim()
+        .parse::<usize>()
+        .ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        path::Path,
+        process::Command,
+        sync::atomic::{AtomicUsize, Ordering},
+    };
+
+    use super::{is_dependency_behind, warn_if_dependencies_are_behind};
+
+    static NEXT_TEMP_REPO: AtomicUsize = AtomicUsize::new(0);
+
+    #[test]
+    fn dependency_warning_thresholds_are_inclusive() {
+        assert!(!is_dependency_behind(9, 10));
+        assert!(is_dependency_behind(10, 10));
+        assert!(!is_dependency_behind(0, 1));
+        assert!(is_dependency_behind(1, 1));
+    }
+
+    #[test]
+    fn warning_displays_for_disposable_dependencies_at_thresholds() {
+        let root = temporary_repository();
+        for (path, branch, count) in [
+            ("Engine", "master", 10),
+            ("vendor/gpui-ce", "main", 1),
+            ("crates/gpui-motion", "main", 1),
+        ] {
+            let repository = root.join(path);
+            std::fs::create_dir_all(&repository).unwrap();
+            git(&repository, &["init", "-q"]);
+            git(&repository, &["config", "user.name", "Photon Test"]);
+            git(
+                &repository,
+                &["config", "user.email", "photon-test@example.invalid"],
+            );
+            std::fs::write(repository.join("file"), "0").unwrap();
+            git(&repository, &["add", "file"]);
+            git(&repository, &["commit", "-qm", "base"]);
+            let base = git_output(&repository, &["rev-parse", "HEAD"]);
+            for revision in 1..=count {
+                std::fs::write(repository.join("file"), revision.to_string()).unwrap();
+                git(
+                    &repository,
+                    &["commit", "-qam", &format!("revision {revision}")],
+                );
+            }
+            git(
+                &repository,
+                &[
+                    "update-ref",
+                    &format!("refs/remotes/upstream/{branch}"),
+                    "HEAD",
+                ],
+            );
+            git(&repository, &["reset", "-q", "--hard", &base]);
+        }
+
+        warn_if_dependencies_are_behind(&root);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    fn temporary_repository() -> std::path::PathBuf {
+        let sequence = NEXT_TEMP_REPO.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!("photon-cli-warning-test-{sequence}"));
+        let _ = std::fs::remove_dir_all(&path);
+        std::fs::create_dir_all(&path).unwrap();
+        path
+    }
+
+    fn git(repository: &Path, args: &[&str]) {
+        let status = Command::new("git")
+            .args(args)
+            .current_dir(repository)
+            .status()
+            .unwrap();
+        assert!(status.success(), "git {args:?} failed");
+    }
+
+    fn git_output(repository: &Path, args: &[&str]) -> String {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(repository)
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "git {args:?} failed");
+        String::from_utf8(output.stdout).unwrap().trim().to_owned()
+    }
+}
 
 pub(crate) fn build(root: &Path, release: bool, verbose: bool) -> Result<(), String> {
     let started = Instant::now();
