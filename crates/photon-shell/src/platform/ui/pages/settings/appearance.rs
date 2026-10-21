@@ -5,7 +5,9 @@ use photon_core::{ThemeMode, Transparency, WindowBackgroundStyle};
 use std::rc::Rc;
 
 use super::super::super::button::{ButtonKind, ButtonSize, button};
-use super::super::super::controls::{Choice, Pressable, choices, intensity_slider, toggled};
+use super::super::super::controls::{
+    Choice, FocusRing, Pressable, choices, intensity_slider, toggled,
+};
 use super::super::super::dropdown::dropdown;
 use super::super::super::layout::{form_field, h_stack, v_stack};
 use super::super::super::metrics;
@@ -414,6 +416,7 @@ fn theme_card(
         .min_w_0()
         .items_center()
         .gap(px(metrics::MENU_ITEM_GAP))
+        .focus_ring(palette)
         .focus_visible_style(|style| style.bg(rgba(palette.hover_surface)))
         .pressable()
         .on_click(on_choose)

@@ -149,7 +149,7 @@ impl BrowserWindow {
                     self.tab_entry_animations.borrow_mut().remove(&stable_id);
                     false
                 } else {
-                    self.tab_entry_appearing(stable_id, &animations)
+                    self.tab_entry_appearing(stable_id, &motion_settings)
                 };
                 let opacity = if dragging {
                     crate::platform::theme_config::theme()

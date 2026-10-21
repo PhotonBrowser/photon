@@ -234,7 +234,8 @@ impl Render for JavaScriptDialog {
                 text_field(
                     text_input("javascript-dialog-input")
                         .state(input.downgrade())
-                        .track_focus(&input.focus_handle(cx)),
+                        .track_focus(&input.focus_handle(cx))
+                        .aria_label("Response"),
                     palette,
                 )
                 .text_size(px(metrics::MENU_FONT_SIZE))

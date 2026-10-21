@@ -203,7 +203,7 @@ pub(super) trait FocusRing: InteractiveElement + Styled + Sized {
 
     /// The ring in `color`, for a control whose own colour is the accent.
     fn focus_ring_in(self, color: u32) -> Self {
-        self.border_1()
+        self.border_2()
             .border_color(gpui::transparent_black())
             .focus_visible_style(move |style| style.border_color(rgb(color)))
     }
@@ -333,8 +333,8 @@ impl RenderOnce for IntensitySlider {
         let thumb_is_pressed = *thumb_press.read(cx);
         let stretch = *elastic_stretch.read(cx);
         let direction = *thumb_direction.read(cx);
-        let animations_enabled = super::settings::Settings::get(cx).animations.enabled;
         let animations = super::settings::Settings::motion(cx);
+        let animations_enabled = animations.allows_motion();
         let press_start = thumb_press.clone();
         let press_end = thumb_press;
         let drag_sample_start = drag_sample.clone();

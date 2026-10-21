@@ -210,6 +210,7 @@ impl SettingsPage {
                 text_input("settings-preset-name")
                     .state(draft.name.downgrade())
                     .track_focus(&draft.name.focus_handle(cx))
+                    .aria_label("Preset name")
                     .placeholder("Preset name")
                     .placeholder_color(rgb(palette.text_secondary)),
                 palette,

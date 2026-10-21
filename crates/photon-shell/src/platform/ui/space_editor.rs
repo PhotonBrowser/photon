@@ -265,6 +265,7 @@ impl Render for SpaceEditor {
                     text_input("space-editor-preset-name")
                         .state(self.preset_name.downgrade())
                         .track_focus(&self.preset_name.focus_handle(cx))
+                        .aria_label("Preset name")
                         .placeholder("Name")
                         .placeholder_color(rgb(palette.text_secondary)),
                     palette,
@@ -330,6 +331,7 @@ impl Render for SpaceEditor {
                     text_input("space-editor-name")
                         .state(self.name.downgrade())
                         .track_focus(&self.name.focus_handle(cx))
+                        .aria_label("Space name")
                         .placeholder("Name")
                         .placeholder_color(rgb(palette.text_secondary)),
                     palette,

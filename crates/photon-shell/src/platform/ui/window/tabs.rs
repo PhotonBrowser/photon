@@ -2360,7 +2360,7 @@ impl BrowserWindow {
         .detach();
     }
 
-    /// Up and down arrows move between tabs from a focused tab.
+    /// The arrows along the tab layout's axis move between tabs.
     pub(super) fn tab_key_down(
         &mut self,
         tab_id: u64,
@@ -2377,10 +2377,9 @@ impl BrowserWindow {
         if event.keystroke.modifiers.modified() {
             return;
         }
-        let offset = match event.keystroke.key.as_str() {
-            "up" => -1,
-            "down" => 1,
-            _ => return,
+        let Some(offset) = tab_navigation_offset(event.keystroke.key.as_str(), self.tab_axis(cx))
+        else {
+            return;
         };
         if let Some(next_index) = self.listed_tab_after(index, offset, cx) {
             self.move_tab_focus(next_index, window, cx);
@@ -2416,14 +2415,22 @@ impl BrowserWindow {
     pub(super) fn tab_entry_appearing(
         &self,
         tab: u64,
-        animations: &photon_core::AnimationSettings,
+        animations: &super::super::motion::MotionConfig,
     ) -> bool {
         let mut entries = self.tab_entry_animations.borrow_mut();
-        if !animations.enabled {
+        if !animations.allows_motion() {
             entries.remove(&tab);
             return false;
         }
         entries.contains(&tab)
+    }
+}
+
+fn tab_navigation_offset(key: &str, axis: TabDragAxis) -> Option<isize> {
+    match (axis, key) {
+        (TabDragAxis::Horizontal, "left") | (TabDragAxis::Vertical, "up") => Some(-1),
+        (TabDragAxis::Horizontal, "right") | (TabDragAxis::Vertical, "down") => Some(1),
+        _ => None,
     }
 }
 
@@ -2574,8 +2581,27 @@ mod tab_drag_tests {
     use super::{
         ExternalDropTargetKind, animation_retarget_offset, external_drop_target_kind, insert_id_at,
         is_over_or_moving_toward_bounds, midpoint_insertion_index, plan_tab_transfer,
-        stable_slot_midpoint,
+        stable_slot_midpoint, tab_navigation_offset,
     };
+
+    #[test]
+    fn tab_navigation_uses_the_layout_axis() {
+        assert_eq!(
+            tab_navigation_offset("left", TabDragAxis::Horizontal),
+            Some(-1)
+        );
+        assert_eq!(
+            tab_navigation_offset("right", TabDragAxis::Horizontal),
+            Some(1)
+        );
+        assert_eq!(tab_navigation_offset("up", TabDragAxis::Vertical), Some(-1));
+        assert_eq!(
+            tab_navigation_offset("down", TabDragAxis::Vertical),
+            Some(1)
+        );
+        assert_eq!(tab_navigation_offset("up", TabDragAxis::Horizontal), None);
+        assert_eq!(tab_navigation_offset("left", TabDragAxis::Vertical), None);
+    }
 
     #[test]
     fn midpoint_insertion_tracks_both_directions_and_edges() {

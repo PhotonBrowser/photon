@@ -66,13 +66,6 @@ pub(super) fn button(
         .role(Role::Button)
         .aria_label(label.clone())
         .aria_disabled(!enabled)
-        .focus_visible_style(|style| {
-            style.border_color(rgb(if primary {
-                palette.on_chosen
-            } else {
-                palette.chosen
-            }))
-        })
         .flex_shrink_0()
         .items_center()
         .justify_center()
@@ -82,6 +75,11 @@ pub(super) fn button(
         .control_surface(palette)
         .rounded(px(radius))
         .text_size(px(font_size))
+        .focus_ring_in(if primary {
+            palette.on_chosen
+        } else {
+            palette.chosen
+        })
         .child(label);
     let button = match kind {
         ButtonKind::Primary => button

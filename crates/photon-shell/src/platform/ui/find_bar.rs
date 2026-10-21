@@ -135,6 +135,7 @@ impl Render for FindBar {
                 themed_text_input(text_input("find-bar-input"), palette)
                     .state(self.input.downgrade())
                     .track_focus(&self.input.focus_handle(cx))
+                    .aria_label("Find in page")
                     .placeholder("Find in page")
                     .placeholder_color(rgb(palette.text_secondary))
                     .w(px(metrics::FIND_FIELD_WIDTH))

@@ -90,6 +90,7 @@ impl NewTabPage {
                 text_input(id)
                     .state(state.downgrade())
                     .track_focus(&state.focus_handle(cx))
+                    .aria_label(placeholder)
                     .placeholder(placeholder)
                     .placeholder_color(rgb(palette.text_secondary)),
                 palette,
