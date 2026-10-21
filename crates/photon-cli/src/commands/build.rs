@@ -354,9 +354,24 @@ pub(crate) fn run_direct(
     url: Option<&str>,
     shutdown_after_seconds: Option<u64>,
 ) -> Result<(), String> {
-    if !cfg!(target_os = "macos") {
-        return Err("the direct GPUI-CE presentation path currently supports macOS only".into());
+    #[cfg(target_os = "macos")]
+    return run_direct_macos(root, release, verbose, url, shutdown_after_seconds);
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (root, release, verbose, url, shutdown_after_seconds);
+        Err("the direct GPUI-CE presentation path currently supports macOS only".into())
     }
+}
+
+#[cfg(target_os = "macos")]
+fn run_direct_macos(
+    root: &Path,
+    release: bool,
+    verbose: bool,
+    url: Option<&str>,
+    shutdown_after_seconds: Option<u64>,
+) -> Result<(), String> {
     build(root, release, verbose)?;
     let engine = root.join("build").join(if release {
         "engine-release"
@@ -424,10 +439,23 @@ pub(crate) fn run_ui(
     verbose: bool,
     shutdown_after_seconds: Option<u64>,
 ) -> Result<(), String> {
-    if !cfg!(target_os = "macos") {
-        return Err("the UI-only GPUI-CE shell currently supports macOS only".into());
-    }
+    #[cfg(target_os = "macos")]
+    return run_ui_macos(root, release, verbose, shutdown_after_seconds);
 
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (root, release, verbose, shutdown_after_seconds);
+        Err("the UI-only GPUI-CE shell currently supports macOS only".into())
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn run_ui_macos(
+    root: &Path,
+    release: bool,
+    verbose: bool,
+    shutdown_after_seconds: Option<u64>,
+) -> Result<(), String> {
     stage("Build Photon UI-only shell");
     let mut args = vec![
         "build",
