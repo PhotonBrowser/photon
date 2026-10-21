@@ -3,6 +3,93 @@ use std::process::Command;
 
 use crate::support::{command, output, stage, success};
 
+const PHOTON_REPOSITORY: &str = "PhotonBrowser/photon";
+const REVIEW_EVENT: &str = "photon_upstream_sync";
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SyncHeads {
+    root: String,
+    engine: String,
+    gpui_ce: String,
+    motion: String,
+}
+
+pub(crate) fn require_review_dispatch_auth(root: &Path) -> Result<(), String> {
+    output("gh", &["auth", "status"], root).map(|_| ()).map_err(|error| {
+        format!(
+            "`./photon sync` requires an authenticated GitHub CLI to dispatch its review workflow. Install `gh` and run `gh auth login` before syncing. No upstream merges have started. {error}"
+        )
+    })
+}
+
+pub(crate) fn capture_sync_heads(root: &Path) -> Result<SyncHeads, String> {
+    Ok(SyncHeads {
+        root: output("git", &["rev-parse", "HEAD"], root)?
+            .trim()
+            .to_owned(),
+        engine: branch_head(root, "Engine", "master")?,
+        gpui_ce: branch_head(root, "vendor/gpui-ce", "main")?,
+        motion: branch_head(root, "crates/gpui-motion", "main")?,
+    })
+}
+
+fn branch_head(root: &Path, repository: &str, branch: &str) -> Result<String, String> {
+    let reference = format!("refs/heads/{branch}");
+    output(
+        "git",
+        &["-C", repository, "rev-parse", "--verify", &reference],
+        root,
+    )
+    .map(|head| head.trim().to_owned())
+    .map_err(|_| format!("{repository} has no local {branch} branch; run `./photon setup` first"))
+}
+
+pub(crate) fn dispatch_review(
+    root: &Path,
+    before: &SyncHeads,
+    after: &SyncHeads,
+    verbose: bool,
+) -> Result<(), String> {
+    if before.engine == after.engine
+        && before.gpui_ce == after.gpui_ce
+        && before.motion == after.motion
+    {
+        success("No upstream commits merged; no review issue was dispatched");
+        return Ok(());
+    }
+
+    let mut args = vec![
+        "api".to_owned(),
+        "--method".to_owned(),
+        "POST".to_owned(),
+        format!("repos/{PHOTON_REPOSITORY}/dispatches"),
+        "-f".to_owned(),
+        format!("event_type={REVIEW_EVENT}"),
+        "-F".to_owned(),
+        format!("client_payload[root_sha]={}", after.root),
+    ];
+    for (name, before, after) in [
+        ("engine", &before.engine, &after.engine),
+        ("gpui_ce", &before.gpui_ce, &after.gpui_ce),
+        ("motion", &before.motion, &after.motion),
+    ] {
+        args.push("-F".to_owned());
+        args.push(format!("client_payload[{name}_before_sha]={before}"));
+        args.push("-F".to_owned());
+        args.push(format!("client_payload[{name}_after_sha]={after}"));
+    }
+    let display_args: Vec<_> = args.iter().map(String::as_str).collect();
+    stage("Dispatch review for the completed Photon upstream sync");
+    command("gh", &display_args, root, verbose).map_err(|error| {
+        format!(
+            "Upstream merges completed, but GitHub did not accept the review dispatch. Retry the `gh {}` request after fixing GitHub CLI access: {error}",
+            args.join(" ")
+        )
+    })?;
+    success("Photon upstream sync review dispatched");
+    Ok(())
+}
+
 fn fetch_upstream(
     repository: &Path,
     name: &str,
