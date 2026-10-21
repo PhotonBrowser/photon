@@ -112,6 +112,9 @@ pub(crate) fn clang_format(root: &Path, version: &str) -> Result<PathBuf, String
             return Ok(executable.clone());
         }
     }
+    if let Some(executable) = find_clang_format_in(&install_root, executable_name, major, root) {
+        return Ok(executable);
+    }
 
     stage(&format!("Install clang-format {version} for this checkout"));
     let python = if cfg!(windows) { "python" } else { "python3" };
@@ -141,11 +144,36 @@ pub(crate) fn clang_format(root: &Path, version: &str) -> Result<PathBuf, String
             return Ok(executable.clone());
         }
     }
+    if let Some(executable) = find_clang_format_in(&install_root, executable_name, major, root) {
+        return Ok(executable);
+    }
 
     Err(format!(
         "clang-format {version} installation completed but a compatible executable was not found under {}",
         install_root.display()
     ))
+}
+
+fn find_clang_format_in(
+    directory: &Path,
+    executable_name: &str,
+    major: u32,
+    root: &Path,
+) -> Option<PathBuf> {
+    for entry in std::fs::read_dir(directory).ok()?.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            if let Some(executable) = find_clang_format_in(&path, executable_name, major, root) {
+                return Some(executable);
+            }
+        } else if entry.file_name() == executable_name
+            && path.is_file()
+            && clang_format_major(&path, root) == Some(major)
+        {
+            return Some(path);
+        }
+    }
+    None
 }
 
 fn clang_format_major(executable: &Path, root: &Path) -> Option<u32> {
