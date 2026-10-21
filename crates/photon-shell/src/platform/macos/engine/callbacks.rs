@@ -1,6 +1,7 @@
 //! The Engine's C callbacks, which update the state in `callback_state`.
 
 use crate::platform::app_update::update_app;
+use gpui::CursorStyle;
 use mach2::port::mach_port_t;
 #[cfg(not(feature = "ui-only"))]
 use photon_core::EngineService;
@@ -99,7 +100,34 @@ pub(super) unsafe extern "C" fn on_engine_frame(
         callbacks.request_redraw();
     }
 }
-pub(super) unsafe extern "C" fn on_engine_cursor(_: *mut c_void, _: i32) {}
+pub(super) unsafe extern "C" fn on_engine_cursor(context: *mut c_void, cursor: i32) {
+    if context.is_null() {
+        return;
+    }
+
+    // Keep these discriminants aligned with Photon::Cursor in the embedder API.
+    // GPUI-CE has no hidden or wait cursor, so those fall back to Arrow.
+    let cursor = match cursor {
+        0 | 1 => CursorStyle::Arrow,
+        2 => CursorStyle::Crosshair,
+        3 => CursorStyle::IBeam,
+        4 => CursorStyle::ResizeLeftRight,
+        5 => CursorStyle::ResizeUpDown,
+        6 => CursorStyle::ResizeUpLeftDownRight,
+        7 => CursorStyle::ResizeUpRightDownLeft,
+        8 => CursorStyle::ResizeColumn,
+        9 => CursorStyle::ResizeRow,
+        10 => CursorStyle::PointingHand,
+        11 => CursorStyle::ContextualMenu,
+        12 => CursorStyle::OpenHand,
+        13 | 15 => CursorStyle::ClosedHand,
+        14 => CursorStyle::DragCopy,
+        17 => CursorStyle::OperationNotAllowed,
+        _ => CursorStyle::Arrow,
+    };
+    unsafe { &*context.cast::<CallbackState>() }
+        .update_webview(move |view, cx| view.set_page_cursor(cursor, cx));
+}
 pub(super) unsafe extern "C" fn on_engine_error(context: *mut c_void, message: *const c_char) {
     if !message.is_null() {
         let message = unsafe { CStr::from_ptr(message) }

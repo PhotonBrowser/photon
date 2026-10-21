@@ -4,9 +4,9 @@ use super::super::engine::{EngineSession, RequestedWebView};
 use super::input::{EditCommand, WebViewInput};
 use super::{metrics, settings::Settings, theme::palette};
 use gpui::{
-    AnyWindowHandle, Context, EventEmitter, FocusHandle, InteractiveElement, KeyDownEvent,
-    KeyUpEvent, MouseButton, NavigationDirection, Render, Subscription, Window, WindowAppearance,
-    div, prelude::*, px,
+    AnyWindowHandle, Context, CursorStyle, EventEmitter, FocusHandle, InteractiveElement,
+    KeyDownEvent, KeyUpEvent, MouseButton, NavigationDirection, Render, Subscription, Window,
+    WindowAppearance, div, prelude::*, px,
 };
 use gpui_elements::editable_text::actions::{Copy, Cut, Paste, Redo, SelectAll, Undo};
 use photon_core::{BrowserCommand, BrowserState, EngineEvent, PageCrashes, PageDialogs};
@@ -55,6 +55,8 @@ pub(in crate::platform) struct PhotonWebView {
     zoom_level: f64,
     /// Whether page input has gone unanswered by WebContent.
     pub(in crate::platform) page_unresponsive: bool,
+    /// The pointer style currently requested by the page.
+    page_cursor: CursorStyle,
     /// What the tab last recorded in the browsing history.
     recorded: history::Recorded,
     /// The context menu the page last asked for.
@@ -217,6 +219,18 @@ impl PhotonWebView {
         self.state_changed(cx);
     }
 
+    pub(in crate::platform) fn set_page_cursor(
+        &mut self,
+        cursor: CursorStyle,
+        cx: &mut Context<Self>,
+    ) {
+        if self.page_cursor == cursor {
+            return;
+        }
+        self.page_cursor = cursor;
+        cx.notify();
+    }
+
     pub(in crate::platform) fn set_audio_state(
         &mut self,
         playing: bool,
@@ -332,6 +346,7 @@ impl PhotonWebView {
             find_result: None,
             zoom_level: 1.0,
             page_unresponsive: false,
+            page_cursor: CursorStyle::Arrow,
             favicon: None,
             audio_playing: false,
             audio_muted: false,
@@ -492,6 +507,7 @@ impl Render for PhotonWebView {
             .size_full()
             .relative()
             .id("photon-webview-viewport")
+            .cursor(self.page_cursor)
             .on_prepaint(
                 cx.listener(|this, event: &gpui::InteractivityPrepaint, window, cx| {
                     // Resize from the laid-out WebView bounds, not the native window
