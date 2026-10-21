@@ -100,9 +100,17 @@ pub(crate) fn clang_format(root: &Path, version: &str) -> Result<PathBuf, String
 
     let install_root = root.join("build/tools/clang-format").join(version);
     let relative_bin = if cfg!(windows) { "Scripts" } else { "bin" };
-    let executable = install_root.join(relative_bin).join(executable_name);
-    if executable.is_file() && clang_format_major(&executable, root) == Some(major) {
-        return Ok(executable);
+    let executables = [
+        install_root.join(relative_bin).join(executable_name),
+        install_root
+            .join("local")
+            .join(relative_bin)
+            .join(executable_name),
+    ];
+    for executable in &executables {
+        if executable.is_file() && clang_format_major(executable, root) == Some(major) {
+            return Ok(executable.clone());
+        }
     }
 
     stage(&format!("Install clang-format {version} for this checkout"));
@@ -128,14 +136,16 @@ pub(crate) fn clang_format(root: &Path, version: &str) -> Result<PathBuf, String
         )
     })?;
 
-    if executable.is_file() && clang_format_major(&executable, root) == Some(major) {
-        Ok(executable)
-    } else {
-        Err(format!(
-            "clang-format {version} installation completed but a compatible executable was not found at {}",
-            executable.display()
-        ))
+    for executable in &executables {
+        if executable.is_file() && clang_format_major(executable, root) == Some(major) {
+            return Ok(executable.clone());
+        }
     }
+
+    Err(format!(
+        "clang-format {version} installation completed but a compatible executable was not found under {}",
+        install_root.display()
+    ))
 }
 
 fn clang_format_major(executable: &Path, root: &Path) -> Option<u32> {
