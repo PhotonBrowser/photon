@@ -11,6 +11,7 @@ mod macos;
 #[cfg_attr(target_os = "linux", allow(dead_code))]
 #[path = "ui/metrics.rs"]
 pub(crate) mod metrics;
+mod permission_coordinator;
 #[cfg_attr(target_os = "linux", allow(dead_code))]
 pub(crate) mod theme_config;
 #[cfg(target_os = "macos")]

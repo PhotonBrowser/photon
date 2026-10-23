@@ -2146,6 +2146,8 @@ impl BrowserWindow {
         let removed = self.tabs[index].clone();
         let closes_window = self.tabs.len() == 1 && Settings::get(cx).close_window_with_last_tab;
         if let Some(webview) = removed.content.webview() {
+            let permission_view_id = webview.read(cx).session.permission_view_id();
+            self.cancel_permissions_for_view(permission_view_id, window, cx);
             let favicon = webview.update(cx, |view, _| {
                 view.session.set_visible(false);
                 view.session.set_focus(false);

@@ -19,6 +19,7 @@ mod menu;
 mod open_urls;
 mod page_menu;
 mod peek;
+mod permissions;
 mod pinned;
 mod popup_window;
 mod popups;
@@ -62,9 +63,11 @@ use super::settings::Settings;
 use super::shortcuts_dialog::ShortcutsDialog;
 use super::tabs::{RevealedIcon, TabDragAxis, TabIcon, TabReorderGroups};
 use super::theme::{ThemeColors, palette};
+use crate::platform::permission_coordinator::PermissionCoordinator;
 use alerts::{AlertCenter, EngineNotice, NoticeExpiry};
 use content::{BrowserTab, TabContent, create_webview};
 use peek::PeekState;
+use permissions::PermissionPromptEntry;
 use popups::PendingPopup;
 use registry::BrowserWindowRegistry;
 use side_dock::SidebarState;
@@ -74,7 +77,7 @@ use tabs::ClosedTab;
 pub use alerts::show_alert;
 pub use app::run;
 
-struct BrowserWindow {
+pub(in crate::platform) struct BrowserWindow {
     tabs: Vec<BrowserTab>,
     /// One per tab, in `tabs` order: follows its web view or page.
     tab_subscriptions: Vec<Option<Subscription>>,
@@ -145,6 +148,10 @@ struct BrowserWindow {
     /// Keeps the pop-up confirmation drawn while it fades away.
     popup_presence: Presence<String>,
     popup_confirmation_focus: FocusHandle,
+    permission_coordinator: PermissionCoordinator,
+    permission_prompts: VecDeque<PermissionPromptEntry>,
+    permission_presence: Presence<u64>,
+    permission_focus: FocusHandle,
     /// The title last given to the window, so it changes only with the page.
     window_title: String,
     /// Whether the window was notified since it last followed its state in
@@ -419,6 +426,7 @@ impl BrowserWindow {
             // A JavaScript dialog is modal to the whole window.
             .children(dialog)
             .children(self.popup_confirmation(palette, cx))
+            .children(self.permission_prompt(palette, cx))
             .into_any_element()
     }
 }
@@ -549,6 +557,10 @@ fn open_browser_window(
                 pending_popups: VecDeque::new(),
                 popup_presence: Presence::default(),
                 popup_confirmation_focus: cx.focus_handle(),
+                permission_coordinator: PermissionCoordinator::default(),
+                permission_prompts: VecDeque::new(),
+                permission_presence: Presence::default(),
+                permission_focus: cx.focus_handle(),
                 root_focus: cx.focus_handle(),
                 window_title: photon_brand::NAME.to_owned(),
                 state_changed: true,
@@ -574,6 +586,7 @@ fn open_browser_window(
                 _window_release: {
                     let key = cx.entity_id().as_u64();
                     cx.on_release(move |this, cx| {
+                        this.deny_all_permission_requests(cx);
                         crate::platform::automation_lifecycle_trace(format_args!(
                             "window_release id={} tabs={} active_tab={:?} visible={}",
                             registry_window_id,

@@ -16,6 +16,7 @@ use super::super::presentation::MachPortGuard;
 pub(super) use super::callback_state::deliver_pending_releases;
 pub(super) use super::callback_state::{CallbackState, RuntimeCallbacks};
 use super::{EngineSession, RequestedWebView};
+use crate::platform::permission_coordinator::PermissionRequest;
 use crate::platform::trace;
 use crate::platform::ui::{Favicon, FindResult, PageMenuItem, SelectDropdown, SelectItem};
 use photon_core::PopupPolicy;
@@ -423,6 +424,55 @@ pub(super) unsafe extern "C" fn on_engine_audio_state(
     if !context.is_null() {
         unsafe { &*(context.cast::<CallbackState>()) }.set_audio_state(playing, muted);
     }
+}
+
+pub(super) unsafe extern "C" fn on_engine_permission_request(
+    context: *mut c_void,
+    request_id: u64,
+    document_id: *const c_char,
+    requesting_origin: *const c_char,
+    top_level_origin: *const c_char,
+    capability: *const c_char,
+) {
+    if context.is_null() {
+        return;
+    }
+    let (Some(document_id), Some(requesting_origin), Some(top_level_origin), Some(capability)) = (
+        unsafe { engine_string(document_id) },
+        unsafe { engine_string(requesting_origin) },
+        unsafe { engine_string(top_level_origin) },
+        unsafe { engine_string(capability) },
+    ) else {
+        return;
+    };
+    let callbacks = unsafe { &*(context.cast::<CallbackState>()) };
+    let request = PermissionRequest {
+        view_id: callbacks.task_id,
+        engine_request_id: request_id,
+        document_id,
+        requesting_origin,
+        top_level_origin,
+        capability,
+    };
+    callbacks.update_webview(move |view, cx| {
+        view.request_permission_prompt(request, cx);
+    });
+}
+
+pub(super) unsafe extern "C" fn on_engine_permission_cancelled(
+    context: *mut c_void,
+    request_id: u64,
+    document_id: *const c_char,
+) {
+    if context.is_null() {
+        return;
+    }
+    let Some(document_id) = (unsafe { engine_string(document_id) }) else {
+        return;
+    };
+    unsafe { &*(context.cast::<CallbackState>()) }.update_webview(move |view, cx| {
+        view.cancel_permission_prompt(request_id, &document_id, cx);
+    });
 }
 
 pub(super) unsafe extern "C" fn on_engine_navigation_committed(context: *mut c_void) {

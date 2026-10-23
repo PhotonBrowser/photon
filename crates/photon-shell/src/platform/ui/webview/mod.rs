@@ -28,6 +28,7 @@ mod find;
 mod form_controls;
 mod history;
 mod history_swipe;
+mod permissions;
 mod zoom;
 
 pub(in crate::platform) use context_menu::{PageMenu, PageMenuItem};

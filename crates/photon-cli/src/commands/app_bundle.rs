@@ -289,7 +289,8 @@ fn info_plist_for(
 <key>CFBundleTypeRole</key><string>Viewer</string>
 <key>LSHandlerRank</key><string>Alternate</string>
 <key>LSItemContentTypes</key><array><string>public.html</string><string>public.xhtml</string></array>
-</dict></array>"#
+</dict></array>
+<key>NSMicrophoneUsageDescription</key><string>Photon uses the microphone when you allow a website to make an audio or video call.</string>"#
     } else {
         ""
     };
@@ -329,6 +330,7 @@ mod tests {
         let plist = info_plist(&[("PHOTON_HELPER_DIRECTORY", "/a & b".to_owned())]);
         assert!(plist.contains("<string>https</string>"));
         assert!(plist.contains("<string>public.html</string>"));
+        assert!(plist.contains("<key>NSMicrophoneUsageDescription</key>"));
         assert!(plist.contains("<key>PHOTON_HELPER_DIRECTORY</key><string>/a &amp; b</string>"));
     }
 
@@ -339,5 +341,6 @@ mod tests {
         assert!(plist.contains("<key>CFBundleIconFile</key>"));
         assert!(!plist.contains("CFBundleURLTypes"));
         assert!(!plist.contains("CFBundleDocumentTypes"));
+        assert!(!plist.contains("NSMicrophoneUsageDescription"));
     }
 }

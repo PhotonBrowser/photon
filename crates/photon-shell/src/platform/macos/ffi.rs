@@ -125,6 +125,18 @@ pub(super) mod embedder {
         pub peek_callback: Option<unsafe extern "C" fn(*mut c_void, *const c_char)>,
         pub select_dropdown_callback: Option<SelectDropdownCallback>,
         pub file_picker_callback: Option<unsafe extern "C" fn(*mut c_void, bool)>,
+        pub permission_callback: Option<
+            unsafe extern "C" fn(
+                *mut c_void,
+                u64,
+                *const c_char,
+                *const c_char,
+                *const c_char,
+                *const c_char,
+            ),
+        >,
+        pub permission_cancelled_callback:
+            Option<unsafe extern "C" fn(*mut c_void, u64, *const c_char)>,
         #[cfg(target_os = "macos")]
         pub native_metal_presentation: bool,
         #[cfg(target_os = "macos")]
@@ -204,6 +216,12 @@ pub(super) mod embedder {
             view: *mut c_void,
             paths: *const *const c_char,
             count: usize,
+        );
+        pub fn photon_view_permission_decided(
+            view: *mut c_void,
+            request_id: u64,
+            document_id: *const c_char,
+            granted: bool,
         );
         pub fn photon_view_notify_state(view: *mut c_void);
         pub fn photon_view_copy_window_handle(

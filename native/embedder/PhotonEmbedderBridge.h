@@ -76,6 +76,8 @@ using PhotonSelectDropdownCallback = void (*)(void*, double, double, double,
 // Called when a file input asks for files, with whether it takes several.
 // Answer with photon_view_file_picker_closed, also when it is cancelled.
 using PhotonFilePickerCallback = void (*)(void*, bool);
+using PhotonPermissionCallback = void (*)(void*, uint64_t, char const*, char const*, char const*, char const*);
+using PhotonPermissionCancelledCallback = void (*)(void*, uint64_t, char const*);
 // Called with a URL a context menu action opens in a new tab, and whether to
 // switch to it.
 using PhotonOpenInNewTabCallback = void (*)(void*, char const*, bool);
@@ -135,6 +137,8 @@ struct PhotonViewCallbacks {
     PhotonPeekCallback peek_callback;
     PhotonSelectDropdownCallback select_dropdown_callback;
     PhotonFilePickerCallback file_picker_callback;
+    PhotonPermissionCallback permission_callback;
+    PhotonPermissionCancelledCallback permission_cancelled_callback;
 #if defined(__APPLE__)
     bool native_metal_presentation;
     PhotonNativeBackingCallback native_backing_callback;
@@ -206,6 +210,7 @@ void photon_view_select_dropdown_closed(void* view, bool chosen, uint32_t id);
 // Answers the open file picker with the chosen files' paths; none when it was
 // cancelled.
 void photon_view_file_picker_closed(void* view, char const* const* paths, size_t count);
+void photon_view_permission_decided(void* view, uint64_t request_id, char const* document_id, bool granted);
 void photon_view_notify_state(void* view);
 void photon_view_copy_window_handle(void* view, char* handle, size_t capacity);
 // 0 follows the engine default, 1 prefers dark, 2 prefers light.

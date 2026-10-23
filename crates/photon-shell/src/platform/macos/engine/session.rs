@@ -324,6 +324,8 @@ impl EngineSession {
             peek_callback: Some(on_engine_peek),
             select_dropdown_callback: Some(on_engine_select_dropdown),
             file_picker_callback: Some(on_engine_file_picker),
+            permission_callback: Some(on_engine_permission_request),
+            permission_cancelled_callback: Some(on_engine_permission_cancelled),
             #[cfg(target_os = "macos")]
             native_metal_presentation: true,
             #[cfg(target_os = "macos")]
@@ -549,6 +551,29 @@ impl EngineSession {
         unsafe {
             embedder::photon_view_file_picker_closed(self.view, pointers.as_ptr(), pointers.len())
         }
+    }
+
+    pub(in crate::platform) fn permission_request_completed(
+        &mut self,
+        request_id: u64,
+        document_id: &str,
+        granted: bool,
+    ) {
+        let Ok(document_id) = CString::new(document_id) else {
+            return;
+        };
+        unsafe {
+            embedder::photon_view_permission_decided(
+                self.view,
+                request_id,
+                document_id.as_ptr(),
+                granted,
+            )
+        }
+    }
+
+    pub(in crate::platform) fn permission_view_id(&self) -> u64 {
+        self.callbacks.task_id
     }
 
     /// Ends the search and removes its highlights.

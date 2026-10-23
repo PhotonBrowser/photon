@@ -148,7 +148,8 @@ impl CallbackState {
     }
 
     pub(super) fn navigation_committed(&self) {
-        self.update_webview(|view, _cx| {
+        self.update_webview(|view, cx| {
+            view.cancel_file_picker(cx);
             view.dialogs.navigation_committed();
             view.history_swipe_navigation_committed();
         });

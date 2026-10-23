@@ -57,6 +57,8 @@ Photon::ViewCallbacks make_view_callbacks(
     auto peek_callback = callbacks.peek_callback;
     auto select_dropdown_callback = callbacks.select_dropdown_callback;
     auto file_picker_callback = callbacks.file_picker_callback;
+    auto permission_callback = callbacks.permission_callback;
+    auto permission_cancelled_callback = callbacks.permission_cancelled_callback;
 
     Photon::ViewCallbacks result;
     result.state_changed = [=](Photon::ViewState const& state) {
@@ -219,6 +221,17 @@ Photon::ViewCallbacks make_view_callbacks(
     if (file_picker_callback) {
         result.file_picker_requested = [=](bool allow_multiple) {
             file_picker_callback(callback_data, allow_multiple);
+        };
+    }
+    if (permission_callback) {
+        result.permission_requested = [=](Photon::PermissionRequest const& request) {
+            permission_callback(callback_data, request.request_id, request.document_id.c_str(),
+                request.requesting_origin.c_str(), request.top_level_origin.c_str(), request.capability.c_str());
+        };
+    }
+    if (permission_cancelled_callback) {
+        result.permission_cancelled = [=](uint64_t request_id, std::string const& document_id) {
+            permission_cancelled_callback(callback_data, request_id, document_id.c_str());
         };
     }
     result.open_in_new_tab_requested = [=](std::string const& url, bool activate) {
@@ -531,6 +544,13 @@ extern "C" void photon_view_file_picker_closed(void* view, char const* const* pa
             chosen.emplace_back(paths[index]);
     }
     engine_view.file_picker_closed(chosen);
+}
+
+extern "C" void photon_view_permission_decided(void* view, uint64_t request_id, char const* document_id, bool granted)
+{
+    if (!view || !document_id)
+        return;
+    static_cast<ViewHandle*>(view)->view->permission_request_completed(request_id, document_id, granted);
 }
 
 extern "C" void photon_view_zoom(void* view, int step)
