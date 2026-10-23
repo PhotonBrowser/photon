@@ -3,6 +3,11 @@ name = "photon-cli"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+default-run = "photon"
+
+[[bin]]
+name = "photon"
+path = "src/main.rs"
 
 [dependencies]
 photon-brand = { path = "../photon-brand" }

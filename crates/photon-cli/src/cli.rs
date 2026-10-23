@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use clap::{Args, ColorChoice, Parser, Subcommand};
 
 use crate::commands;
+use crate::commands::deps::Dependency;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -35,6 +36,8 @@ struct GlobalOptions {
 enum Command {
     /// Check prerequisites and initialize configured pinned repositories.
     Setup,
+    /// Install this checkout's Photon command in Cargo's bin directory.
+    Install,
     /// Report toolchain, GPUI-CE, Engine, and build environment details.
     Doctor,
     /// Report Rust editor metadata.
@@ -84,6 +87,14 @@ enum Command {
         /// Fetch and preview commit counts and merge conflicts without merging.
         #[arg(long)]
         check: bool,
+        /// Skip GitHub review issue dispatch after merging all dependencies.
+        #[arg(long)]
+        no_review: bool,
+    },
+    /// Inspect and maintain all Photon dependency checkouts.
+    Deps {
+        #[command(subcommand)]
+        command: DepsCommand,
     },
     /// Maintain the vendored GPUI-CE checkout.
     Gpui {
@@ -138,6 +149,35 @@ enum MotionCommand {
     },
 }
 
+#[derive(Debug, Subcommand)]
+enum DepsCommand {
+    /// Show branch, pin, worktree, and upstream status for every dependency.
+    Status,
+    /// Switch clean dependency checkouts to their persistent Photon branches.
+    Edit {
+        #[arg(value_enum)]
+        dependency: Option<Dependency>,
+    },
+    /// Restore dependency checkouts to the commits pinned by this Photon root.
+    Restore {
+        #[arg(value_enum)]
+        dependency: Option<Dependency>,
+    },
+    /// Validate and commit the current dependency branch tips as Photon pins.
+    Pin,
+    /// Fetch and merge upstream changes for one dependency or all of them.
+    Sync {
+        #[arg(value_enum)]
+        dependency: Option<Dependency>,
+        /// Preview commit counts and conflicts without switching or merging.
+        #[arg(long)]
+        check: bool,
+        /// Dispatch a GitHub review issue after syncing all dependencies.
+        #[arg(long)]
+        review: bool,
+    },
+}
+
 #[derive(Clone, Copy, Debug, clap::ValueEnum)]
 enum CleanScope {
     Engine,
@@ -173,6 +213,7 @@ pub fn run() -> Result<(), String> {
     match cli.command {
         None => print_help(),
         Some(Command::Setup) => commands::setup::setup(&root, verbose),
+        Some(Command::Install) => commands::install::install(&root, verbose),
         Some(Command::Doctor) => commands::setup::doctor(&root),
         Some(Command::Ide { command }) => match command {
             IdeCommand::Setup => commands::ide::setup(&root, verbose),
@@ -217,21 +258,22 @@ pub fn run() -> Result<(), String> {
         }
         Some(Command::Format) => commands::format::format(&root, verbose),
         Some(Command::Pin) => commands::pin::pin(&root, verbose),
-        Some(Command::Sync { check }) => {
-            if check {
-                commands::engine::check_upstream(&root, verbose)?;
-                commands::gpui::check_upstream(&root, verbose)?;
-                commands::motion::check_upstream(&root, verbose)
-            } else {
-                commands::sync::require_review_dispatch_auth(&root)?;
-                let before = commands::sync::capture_sync_heads(&root)?;
-                commands::engine::engine(&root, Some("sync"), false, verbose)?;
-                commands::gpui::sync(&root, verbose)?;
-                commands::motion::sync(&root, verbose)?;
-                let after = commands::sync::capture_sync_heads(&root)?;
-                commands::sync::dispatch_review(&root, &before, &after, verbose)
-            }
+        Some(Command::Sync { check, no_review }) => {
+            commands::deps::sync(&root, None, check, no_review, verbose)
         }
+        Some(Command::Deps { command }) => match command {
+            DepsCommand::Status => commands::deps::status(&root),
+            DepsCommand::Edit { dependency } => commands::deps::edit(&root, dependency, verbose),
+            DepsCommand::Restore { dependency } => {
+                commands::deps::restore(&root, dependency, verbose)
+            }
+            DepsCommand::Pin => commands::pin::pin(&root, verbose),
+            DepsCommand::Sync {
+                dependency,
+                check,
+                review,
+            } => commands::deps::sync(&root, dependency, check, !review, verbose),
+        },
         Some(Command::Gpui { command }) => match command {
             GpuiCommand::Edit => commands::gpui::edit(&root, verbose),
             GpuiCommand::Pin => commands::gpui::pin(&root, verbose),
@@ -276,6 +318,14 @@ pub fn run() -> Result<(), String> {
 }
 
 fn workspace_root() -> Result<PathBuf, String> {
+    if let Ok(current_dir) = std::env::current_dir()
+        && let Some(root) = current_dir
+            .ancestors()
+            .find(|path| path.join("photon.toml").is_file() && path.join(".git").exists())
+    {
+        return Ok(root.to_path_buf());
+    }
+
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     manifest
         .ancestors()
@@ -304,4 +354,55 @@ fn help_styles() -> clap::builder::Styles {
         .error(AnsiColor::BrightRed.on_default().bold())
         .valid(AnsiColor::Green.on_default())
         .invalid(AnsiColor::BrightRed.on_default())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Cli, Command, Dependency, DepsCommand};
+    use clap::Parser;
+
+    #[test]
+    fn dependency_sync_defaults_to_local_all_dependency_sync() {
+        let cli = Cli::try_parse_from(["photon", "deps", "sync"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Some(Command::Deps {
+                command: DepsCommand::Sync {
+                    dependency: None,
+                    check: false,
+                    review: false,
+                }
+            })
+        ));
+    }
+
+    #[test]
+    fn dependency_sync_accepts_one_dependency_and_preview() {
+        let cli = Cli::try_parse_from(["photon", "deps", "sync", "gpui", "--check"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Some(Command::Deps {
+                command: DepsCommand::Sync {
+                    dependency: Some(Dependency::Gpui),
+                    check: true,
+                    review: false,
+                }
+            })
+        ));
+    }
+
+    #[test]
+    fn dependency_sync_can_request_review_dispatch() {
+        let cli = Cli::try_parse_from(["photon", "deps", "sync", "--review"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Some(Command::Deps {
+                command: DepsCommand::Sync {
+                    dependency: None,
+                    check: false,
+                    review: true,
+                }
+            })
+        ));
+    }
 }

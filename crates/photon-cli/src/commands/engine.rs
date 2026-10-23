@@ -28,7 +28,7 @@ pub(crate) fn edit(root: &Path, verbose: bool) -> Result<(), String> {
         verbose,
     )?;
     println!("Engine edit mode: {ENGINE_PATH}/{ENGINE_BRANCH}.");
-    println!("Run `./photon engine pin` to return to this checkout's saved revision.");
+    println!("Run `photon engine pin` to return to this checkout's saved revision.");
     Ok(())
 }
 
@@ -101,10 +101,10 @@ pub(crate) fn engine(
                 return Err("Engine working tree must be clean before sync".into());
             }
             crate::commands::sync::merge_upstream(&engine, "Engine", ENGINE_BRANCH, verbose)?;
-            println!("Push the tested Engine branch, then run `./photon pin`.");
+            println!("Push the tested Engine branch, then run `photon pin`.");
             Ok(())
         }
-        _ => Err("usage: ./photon engine [status|edit|pin|build|sync]".into()),
+        _ => Err("usage: photon engine [status|edit|pin|build|sync]".into()),
     }
 }
 
@@ -139,7 +139,7 @@ fn require_repository(engine: &Path) -> Result<(), String> {
     if engine.join(".git").exists() {
         Ok(())
     } else {
-        Err("Engine is not initialized; run `./photon setup` first".into())
+        Err("Engine is not initialized; run `photon setup` first".into())
     }
 }
 

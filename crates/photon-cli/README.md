@@ -2,17 +2,24 @@
 
 # `photon-cli`
 
-The command-line interface behind the repository’s `./photon` script. It sets up the pinned checkouts, builds and runs Photon, and provides the project’s format, check, test, and upstream maintenance commands.
+The command-line interface for setting up pinned checkouts, building and running Photon, and maintaining upstream dependencies.
 
 ## Use
 
-Run commands from the Photon repository root:
+Install the command once from the Photon repository root:
 
 ```sh
-./photon setup
-./photon run --url https://ladybird.org
-./photon check
-./photon test
+cargo install --path crates/photon-cli --bin photon --locked
 ```
 
-The shell script at the repository root builds and invokes this crate. Command behavior lives in one module per command under [`src/commands`](src/commands/).
+Then use it from anywhere inside the checkout:
+
+```sh
+photon setup
+photon run --url https://ladybird.org
+photon check
+photon test
+photon deps status
+```
+
+Use `photon install` to refresh the installed command after changing it. `photon deps status`, `photon deps sync`, `photon deps restore`, and `photon deps pin` cover the common submodule workflow. Command behavior lives in one module per command under [`src/commands`](src/commands/).

@@ -41,7 +41,7 @@ pub(crate) fn warn_if_dependencies_are_behind(root: &Path) {
 
     if !behind.is_empty() {
         let warning = format!(
-            "⚠ Dependency updates available (commits behind upstream): {}. Run `./photon sync --check` to review.",
+            "⚠ Dependency updates available (commits behind upstream): {}. Run `photon sync --check` to review.",
             behind.join(", ")
         );
         eprintln!(

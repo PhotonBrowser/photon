@@ -874,7 +874,7 @@ fn photon_runtime_paths(
         .is_file()
     {
         return Err(ProcessError(format!(
-            "Photon Engine libraries are missing under {}; run ./photon build first",
+            "Photon Engine libraries are missing under {}; run photon build first",
             engine_directory.display()
         )));
     }
@@ -896,7 +896,7 @@ fn photon_runtime_paths(
         })?;
     if !service_status.success() {
         return Err(ProcessError(
-            "Photon's presentation service is not registered; run './photon run' once to initialize this development build".to_owned(),
+            "Photon's presentation service is not registered; run 'photon run' once to initialize this development build".to_owned(),
         ));
     }
     Ok((root, helper_directory, service, engine_directory))

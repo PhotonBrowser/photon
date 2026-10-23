@@ -15,4 +15,4 @@ command stages and registers that executable. It transports IOSurface Mach
 ports and shared-event handles between the Engine and Photon processes. GPUI-CE
 itself contains only generic external Metal surface rendering APIs.
 
-`./photon run --verbose --shutdown-after-seconds 5` provides a fixed-window trace. The latest verified run reported `submitted=4 completed=4 released=4 outstanding=0 gpu-in-flight=0`. The compositor profile reported zero GPU-to-CPU bitmap readback time, and repeated frames reused backing IDs 13–15. AppKit titlebar and window material styling remain separate work after interaction and resize validation.
+`photon run --verbose --shutdown-after-seconds 5` provides a fixed-window trace. The latest verified run reported `submitted=4 completed=4 released=4 outstanding=0 gpu-in-flight=0`. The compositor profile reported zero GPU-to-CPU bitmap readback time, and repeated frames reused backing IDs 13–15. AppKit titlebar and window material styling remain separate work after interaction and resize validation.

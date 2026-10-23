@@ -48,7 +48,7 @@ pub(crate) fn sync(root: &Path, verbose: bool) -> Result<(), String> {
     require_clean_source(&gpui_ce)?;
     crate::commands::sync::merge_upstream(&gpui_ce, "GPUI-CE", GPUI_CE_BRANCH, verbose)?;
     println!(
-        "Run `cargo check -p gpui_ce_apple` and `cargo test -p gpui_ce_apple`, push the branch, then run `./photon pin`."
+        "Run `cargo check -p gpui_ce_apple` and `cargo test -p gpui_ce_apple`, push the branch, then run `photon pin`."
     );
     Ok(())
 }
@@ -58,7 +58,7 @@ fn require_repository(path: &Path) -> Result<(), String> {
         Ok(())
     } else {
         Err(format!(
-            "{} is not initialized; run `./photon setup` first",
+            "{} is not initialized; run `photon setup` first",
             path.display()
         ))
     }

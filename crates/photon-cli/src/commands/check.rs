@@ -28,7 +28,7 @@ fn check_inner(root: &Path, verbose: bool) -> Result<(), String> {
     let engine = output("git", &["submodule", "status", "Engine"], root)?;
     if engine.starts_with('-') {
         return Err(format!(
-            "Engine submodule is not initialized: {}. Run `./photon setup`.",
+            "Engine submodule is not initialized: {}. Run `photon setup`.",
             engine.trim()
         ));
     }
@@ -36,7 +36,7 @@ fn check_inner(root: &Path, verbose: bool) -> Result<(), String> {
         let engine_branch = output("git", &["branch", "--show-current"], &root.join("Engine"))?;
         if !crate::commands::engine::edit_mode(root) || engine_branch.trim() != "master" {
             return Err(format!(
-                "Engine pin differs from the checkout: {}. Run `./photon engine edit` to use Engine/master, or `./photon engine pin` to restore the saved pin.",
+                "Engine pin differs from the checkout: {}. Run `photon engine edit` to use Engine/master, or `photon engine pin` to restore the saved pin.",
                 engine.trim()
             ));
         }
@@ -65,7 +65,7 @@ pub(crate) fn print_fix_prompt(root: &Path, diagnostics: &str) {
     let instructions = std::fs::read_to_string(root.join("AGENTS.md")).unwrap_or_default();
     println!("\n--- Copy the prompt below into your AI agent ---\n");
     println!(
-        "Fix the failing Photon check in this repository. Inspect the relevant files, make the smallest correct change, and rerun `./photon check`. Explain what you changed and report the check result. Preserve the project architecture and avoid unrelated edits.\n"
+        "Fix the failing Photon check in this repository. Inspect the relevant files, make the smallest correct change, and rerun `photon check`. Explain what you changed and report the check result. Preserve the project architecture and avoid unrelated edits.\n"
     );
     println!("Project instructions:\n{instructions}");
     println!("Check failure / diagnostics:\n{diagnostics}");

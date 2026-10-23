@@ -1,4 +1,4 @@
-# `./photon setup` initializes these pinned submodules from .gitmodules.
+# `photon setup` initializes these pinned submodules from .gitmodules.
 # Recursive entries initialize nested submodules where present.
 [[submodules]]
 path = "Engine"

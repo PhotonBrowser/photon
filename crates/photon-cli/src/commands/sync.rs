@@ -17,7 +17,7 @@ pub(crate) struct SyncHeads {
 pub(crate) fn require_review_dispatch_auth(root: &Path) -> Result<(), String> {
     output("gh", &["auth", "status"], root).map(|_| ()).map_err(|error| {
         format!(
-            "`./photon sync` requires an authenticated GitHub CLI to dispatch its review workflow. Install `gh` and run `gh auth login` before syncing. No upstream merges have started. {error}"
+            "`photon deps sync --review` requires an authenticated GitHub CLI to dispatch its review workflow. Install `gh` and run `gh auth login` before syncing, or omit `--review` to merge locally without dispatching an issue. No upstream merges have started. {error}"
         )
     })
 }
@@ -41,7 +41,7 @@ fn branch_head(root: &Path, repository: &str, branch: &str) -> Result<String, St
         root,
     )
     .map(|head| head.trim().to_owned())
-    .map_err(|_| format!("{repository} has no local {branch} branch; run `./photon setup` first"))
+    .map_err(|_| format!("{repository} has no local {branch} branch; run `photon setup` first"))
 }
 
 pub(crate) fn dispatch_review(
@@ -116,7 +116,7 @@ pub(crate) fn check_upstream(
     let upstream = fetch_upstream(repository, name, branch, verbose)?;
     let source = format!("refs/heads/{branch}");
     output("git", &["rev-parse", "--verify", &source], repository)
-        .map_err(|_| format!("{name} has no local {branch} branch; run `./photon setup` first"))?;
+        .map_err(|_| format!("{name} has no local {branch} branch; run `photon setup` first"))?;
     let counts = output(
         "git",
         &[

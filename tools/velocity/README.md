@@ -854,7 +854,7 @@ Helium run scored 457.71. One-run smoke results also completed on Chrome at
 424.11 and 457.14. These measurements are local validation results, not a
 cross-machine target or a basis for comparing different browser versions.
 
-For a fresh Photon development build, run `./photon run` once to register the
+For a fresh Photon development build, run `photon run` once to register the
 development app's presentation service before using Velocity. Until registered,
 Photon automation returns a structured service-not-registered failure.
 

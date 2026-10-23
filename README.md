@@ -15,9 +15,14 @@
 ```sh
 git clone --recurse-submodules https://github.com/PhotonBrowser/photon.git
 cd photon
-./photon setup
-./photon run
+cargo install --path crates/photon-cli --bin photon --locked
+photon setup
+photon run
 ```
+
+After installation, `photon` works from anywhere inside the checkout. Re-run
+`cargo install --path crates/photon-cli --bin photon --locked --force` to update
+the installed command after changing the CLI.
 
 ## Develop Photon
 

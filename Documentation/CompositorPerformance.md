@@ -109,7 +109,7 @@ Each scroll frame re-rasterizes the whole viewport, so GPU time scales with pixe
 
 ## 9. Slow first paint on heavy pages — fixed
 
-A verbose run (`./photon run --verbose`) searching Google on a 60 Hz display, 2026-10-09. While the results page first painted, the Compositor's Skia flush was very slow:
+A verbose run (`photon run --verbose`) searching Google on a 60 Hz display, 2026-10-09. While the results page first painted, the Compositor's Skia flush was very slow:
 
 | | Value |
 |---|---|

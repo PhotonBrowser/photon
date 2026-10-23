@@ -8,8 +8,8 @@ authenticated automation socket.
 Build Photon and initialize the development presentation service once:
 
 ```sh
-./photon build
-./photon run --shutdown-after-seconds 2
+photon build
+photon run --shutdown-after-seconds 2
 ```
 
 Run the scenario with the release executable:

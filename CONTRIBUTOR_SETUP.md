@@ -7,19 +7,24 @@ Install Git, Rust/Cargo 1.85 or newer, a C++23-capable compiler, CMake 3.30 or n
 ```bash
 git clone --recurse-submodules https://github.com/PhotonBrowser/photon.git
 cd photon
-./photon setup
-./photon doctor
+cargo install --path crates/photon-cli --bin photon --locked
+photon setup
+photon doctor
 ```
 
-`./photon setup` initializes the pinned Engine and GPUI-CE submodules, configures their Photon `origin` and upstream remotes from `photon.toml`, then switches both to their persistent development branches. Setup preserves initialized worktrees and does not advance dependency pins.
+The Cargo bin directory (`~/.cargo/bin` by default) must be on `PATH`. After the one-time install, `photon` works from anywhere inside this checkout. Run `photon install` after changing the CLI to refresh the installed command.
+
+`photon setup` initializes the pinned Engine and GPUI-CE submodules, configures their Photon `origin` and upstream remotes from `photon.toml`, then switches both to their persistent development branches. Setup preserves initialized worktrees and does not advance dependency pins.
 
 Continue with [Building Photon](Documentation/Building.md) for build, run, and development commands.
 
 ## Existing checkout
 
+If `photon` is not installed yet, run `cargo install --path crates/photon-cli --bin photon --locked` from the checkout root.
+
 ```bash
 git submodule sync --recursive
-./photon setup
+photon setup
 git submodule status --recursive
 ```
 

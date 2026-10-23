@@ -2,15 +2,8 @@ name: Photon CI
 
 on:
   push:
-    paths-ignore:
-      - "Engine/**"
-      - "vendor/gpui-ce/**"
-      - "crates/gpui-motion/**"
   pull_request:
-    paths-ignore:
-      - "Engine/**"
-      - "vendor/gpui-ce/**"
-      - "crates/gpui-motion/**"
+  workflow_dispatch:
 
 permissions:
   contents: read

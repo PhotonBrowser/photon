@@ -2,10 +2,12 @@
 pub(super) mod app_bundle;
 pub(super) mod build;
 pub(super) mod check;
+pub(super) mod deps;
 pub(super) mod engine;
 pub(super) mod format;
 pub(super) mod gpui;
 pub(super) mod ide;
+pub(super) mod install;
 pub(super) mod lint;
 pub(super) mod motion;
 pub(super) mod pin;

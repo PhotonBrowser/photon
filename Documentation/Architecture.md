@@ -178,7 +178,7 @@ window and page renderer adapters.
 | `photon-ffi` | `photon_browser_*` C ABI and static library | `photon-core` |
 | `photon-shortcuts` | Browser actions, shortcut registry, and default key bindings | GPUI-CE, `photon-core` |
 | `photon-tab-sleep` | Tab sleep modes and adaptive idle timeout policy | serde |
-| `photon-cli` | `./photon` developer and runtime commands | CLI and command-line support libraries |
+| `photon-cli` | `photon` developer and runtime commands | CLI and command-line support libraries |
 | `photon-presentation-ipc` | XPC protocol, client channel, descriptor transport, service entry point | macOS frameworks |
 | `photon-presentation-broker` | macOS XPC service executable | `photon-presentation-ipc` |
 
@@ -223,8 +223,8 @@ inside `photon-presentation-ipc`.
 | Omnibox suggestions and their panel | [`photon-omnibox/src/suggest.rs`](../crates/photon-omnibox/src/suggest.rs), and [`ui/omnibox/`](../crates/photon-shell/src/platform/ui/omnibox/mod.rs) |
 | Browser commands and their availability | [`photon-core/src/commands.rs`](../crates/photon-core/src/commands.rs), [`ui/command_palette.rs`](../crates/photon-shell/src/platform/ui/command_palette.rs), and [`ui/window/commands.rs`](../crates/photon-shell/src/platform/ui/window/commands.rs) |
 | History, saved data, and clearing it | [`photon-core/src/history.rs`](../crates/photon-core/src/history.rs), [`photon-storage`](../crates/photon-storage/src/lib.rs), and [`ui/history.rs`](../crates/photon-shell/src/platform/ui/history.rs) |
-| `./photon` command behavior | [`photon-cli/src/commands/`](../crates/photon-cli/src/commands/) |
-| The development `Photon.app` bundle `./photon run` builds in `~/Library/Application Support/Photon/Development/`: Info.plist, icon, web-link registration | [`photon-cli/src/commands/app_bundle.rs`](../crates/photon-cli/src/commands/app_bundle.rs) |
+| `photon` command behavior | [`photon-cli/src/commands/`](../crates/photon-cli/src/commands/) |
+| The development `Photon.app` bundle `photon run` builds in `~/Library/Application Support/Photon/Development/`: Info.plist, icon, web-link registration | [`photon-cli/src/commands/app_bundle.rs`](../crates/photon-cli/src/commands/app_bundle.rs) |
 
 Keep macOS window policy in `platform/macos/window_settings.rs`, Linux window
 policy in `platform/linux/window_settings.rs`, shared measurements in

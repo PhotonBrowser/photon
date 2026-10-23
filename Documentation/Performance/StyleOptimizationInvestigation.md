@@ -139,10 +139,10 @@ The timer queue p95 observed during these fixtures was roughly 0.05–0.08 ms. T
 
 Validation completed on this checkout:
 
-- `./photon format` — passed.
-- `./photon check` — passed.
-- `./photon test` — passed.
-- `./photon build` — passed; the release Photon executable used for the live captures was built before those captures.
+- `photon format` — passed.
+- `photon check` — passed.
+- `photon test` — passed.
+- `photon build` — passed; the release Photon executable used for the live captures was built before those captures.
 - `cargo fmt --all -- --check` in `tools/velocity/` — passed.
 - `cargo test --workspace` in `tools/velocity/` — 165 tests passed (43 browser, 92 CLI, 17 core, 13 metrics); doc tests passed with no tests defined.
 
