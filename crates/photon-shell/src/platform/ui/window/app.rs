@@ -5,8 +5,10 @@ use gpui_elements::editable_text::actions::{DEFAULT_INPUT_CONTEXT, default_bindi
 use gpui_platform::application;
 use photon_core::{BrowserSettings, Command, History, Session};
 use photon_shortcuts::{NewWindow, browser_shortcuts};
+#[cfg(all(target_os = "macos", not(feature = "ui-only")))]
+use std::cell::RefCell;
 use std::rc::Rc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use super::super::super::app_update::update_app;
 use super::super::super::engine::EngineRuntime;
@@ -20,7 +22,7 @@ use super::open_urls::{open_received_urls, receive_opened_urls};
 use super::page_menu::ActivatePageMenuItem;
 use super::session::load_session;
 #[cfg(not(feature = "ui-only"))]
-use super::session::restore_session;
+use super::session::{reopen_session, restore_session};
 use super::{BrowserWindow, BrowserWindowRegistry, open_browser_window};
 use photon_storage::Profile;
 
@@ -41,13 +43,34 @@ pub fn run() {
         }
     };
     let application = application();
+    #[cfg(all(target_os = "macos", not(feature = "ui-only")))]
+    let reopen_runtime = Rc::new(RefCell::new(None));
+    #[cfg(all(target_os = "macos", not(feature = "ui-only")))]
+    {
+        let runtime = reopen_runtime.clone();
+        application.on_reopen(move |cx| {
+            if cx.windows().is_empty()
+                && let Some(runtime) = runtime.borrow().as_ref()
+            {
+                reopen_session(runtime, cx);
+            }
+        });
+    }
     #[cfg(not(feature = "ui-only"))]
     let opened_urls = receive_opened_urls(&application);
     let automation_mode = automation_launch.is_some();
     application.run(move |cx: &mut App| {
         cx.set_global(BrowserWindowRegistry::default());
-        // Quit when the last browser window closes so the shell can stop its
-        // Engine runtime and release native resources.
+        // Keep the Engine runtime warm for its configured idle period after a
+        // normal last-window close. Automation still exits with its last window.
+        #[cfg(target_os = "macos")]
+        if automation_mode {
+            cx.set_quit_mode(QuitMode::LastWindowClosed);
+        } else {
+            cx.set_quit_mode(QuitMode::Explicit);
+            keep_engine_warm_briefly(cx);
+        }
+        #[cfg(not(target_os = "macos"))]
         cx.set_quit_mode(QuitMode::LastWindowClosed);
         if automation_mode {
             cx.on_app_quit(|cx| {
@@ -103,6 +126,10 @@ pub fn run() {
                 announce_service_restarts(&runtime, cx);
 
                 let new_window_runtime = runtime.clone();
+                #[cfg(all(target_os = "macos", not(feature = "ui-only")))]
+                if !automation_mode {
+                    *reopen_runtime.borrow_mut() = Some(runtime.clone());
+                }
                 cx.on_action(move |_: &NewWindow, cx| {
                     cx.activate(true);
                     if let Some(window) = cx
@@ -194,6 +221,41 @@ pub fn run() {
         })
         .detach();
     });
+}
+
+/// Retains the process and shared Engine runtime for a short idle window so a
+/// newly opened browser window can reuse them. Closing a window destroys its
+/// page views; after the grace period, quit if no window has reopened.
+#[cfg(target_os = "macos")]
+fn keep_engine_warm_briefly(cx: &mut App) {
+    use crate::platform::app_update::update_app;
+    use std::cell::Cell;
+
+    let idle_deadline = Rc::new(Cell::new(None::<Instant>));
+    let deadline_for_close = idle_deadline.clone();
+    let app = cx.to_async();
+    cx.on_window_closed(move |cx, _| {
+        let timeout = Duration::from_secs(u64::from(Settings::get(cx).engine_idle_timeout_seconds));
+        if timeout.is_zero() {
+            cx.quit();
+            return;
+        }
+        let deadline = Instant::now() + timeout;
+        deadline_for_close.set(Some(deadline));
+        let deadline_for_timer = deadline_for_close.clone();
+        let app = app.clone();
+        app.spawn(async move |cx| {
+            cx.background_executor().timer(timeout).await;
+            let _ = update_app(cx, move |cx| {
+                if deadline_for_timer.get() == Some(deadline) && cx.windows().is_empty() {
+                    cx.quit();
+                }
+            })
+            .await;
+        })
+        .detach();
+    })
+    .detach();
 }
 
 fn load_profile_state() -> LoadedProfileState {

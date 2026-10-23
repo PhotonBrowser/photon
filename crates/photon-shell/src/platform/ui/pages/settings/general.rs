@@ -1,6 +1,7 @@
 //! The general section: whether the browser opens links from other apps,
 //! and reopens its windows from last time.
 
+use super::super::super::controls::{Choice, choices};
 use gpui::{App, prelude::*, px, rgb};
 use std::time::Duration;
 
@@ -24,7 +25,38 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
         .child(default_browser(palette))
         .child(config_file(palette, cx))
         .child(restore_session(palette, cx))
+        .child(engine_idle_timeout(palette, cx))
         .child(elastic_scroll(palette, cx))
+}
+
+fn engine_idle_timeout(palette: ThemeColors, cx: &App) -> impl IntoElement {
+    let timeout = Settings::get(cx).engine_idle_timeout_seconds;
+    let options = [
+        (0_u16, "Immediately"),
+        (60, "1 min"),
+        (300, "5 min"),
+        (600, "10 min"),
+    ]
+    .into_iter()
+    .map(|(seconds, label)| Choice {
+        label: label.into(),
+        chosen: timeout == seconds,
+        on_choose: change(move |settings| settings.engine_idle_timeout_seconds = seconds),
+    })
+    .collect();
+
+    v_stack()
+        .gap(px(metrics::MENU_ITEM_GAP))
+        .child(group(palette).child(choices(
+            "settings-engine-idle-timeout",
+            "Keep browser ready",
+            options,
+            palette,
+        )))
+        .child(secondary_text(
+            "Keep the browser engine running after closing the last window. Pages close with the window; the engine quits when this time expires.",
+            palette,
+        ))
 }
 
 fn config_file(palette: ThemeColors, cx: &App) -> impl IntoElement {

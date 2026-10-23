@@ -144,6 +144,16 @@ pub(super) fn restore_session(
     opened
 }
 
+/// Reopens the current in-memory session when the user returns to an app that
+/// stayed alive after its last window closed.
+#[cfg(not(feature = "ui-only"))]
+pub(super) fn reopen_session(runtime: &Rc<EngineRuntime>, cx: &mut App) {
+    let saved = cx.update_global::<BrowsingSession, _>(|session, _| session.session());
+    if !restore_session(&saved, runtime, cx) {
+        let _ = open_browser_window(runtime.clone(), None, true, false, cx);
+    }
+}
+
 impl BrowserWindow {
     /// Records this window's tabs in the session when they have changed.
     pub(super) fn record_session(&self, cx: &mut Context<Self>) {

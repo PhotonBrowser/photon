@@ -150,6 +150,9 @@ pub struct BrowserSettings {
     pub tab_sleep_mode: TabSleepMode,
     /// Whether the browser reopens its windows and tabs from last time.
     pub restore_session: bool,
+    /// Seconds to keep the shared browser engine running after the last
+    /// window closes. Zero quits immediately.
+    pub engine_idle_timeout_seconds: u16,
     /// Whether page scrolling can stretch past the viewport edge on macOS.
     pub elastic_scroll: bool,
     /// Timing and effect strengths for shell animations.
@@ -243,6 +246,7 @@ impl Default for BrowserSettings {
             archive_tabs: false,
             tab_sleep_mode: TabSleepMode::default(),
             restore_session: true,
+            engine_idle_timeout_seconds: 300,
             elastic_scroll: false,
             animations: AnimationSettings::default(),
         }
