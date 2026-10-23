@@ -1,11 +1,12 @@
 # Building Photon
 
-Use the `photon` CLI for setup, formatting, linting, building, and running Photon. The toolchain requires Git, Rust/Cargo 1.85 or newer, a C++23-capable compiler, CMake 3.30 or newer, Ninja 1.10 or newer, Python 3 with pip, and the platform packages required by the pinned Engine. `photon setup` checks these prerequisites but does not install OS packages; install those using your platform's package manager. See [Ladybird build instructions](../Engine/Documentation/BuildInstructionsLadybird.md) for system packages.
+Use the `photon` CLI for setup, formatting, linting, building, and running Photon. The toolchain requires Git, Rust/Cargo 1.85 or newer, a C++23-capable compiler, CMake 3.30 or newer, Ninja 1.10 or newer, Python 3 with pip, and the platform packages required by the pinned Engine. On macOS, `photon setup --install-system-deps` installs native build packages with Homebrew. On Linux/WSL2, install packages from [Ladybird's build guide](../Engine/Documentation/BuildInstructionsLadybird.md), then run `photon setup`. See [contributor setup](../CONTRIBUTOR_SETUP.md) for the full first-checkout sequence.
 
 ## Common commands
 
 ```sh
 photon setup
+photon doctor
 photon format
 photon lint
 photon check
@@ -14,7 +15,8 @@ photon build
 photon run
 ```
 
-- `photon setup` initializes pinned dependencies, checks system tools, and prepares clang-format 22 for Photon and Photon Engine sources. It uses a matching system formatter when available, otherwise it installs clang-format 22.1.8 under the ignored `build/tools/` directory for this checkout.
+- `photon setup` checks required tools, initializes pinned dependencies, and prepares Rust formatting/lint tools and clang-format 22. On macOS, add `--install-system-deps` to install the required Homebrew packages. The pinned clang-format 22.1.8 stays under the ignored `build/tools/` directory.
+- `photon doctor` reports tool versions, Rust components, dependency revisions, and build directories. `photon setup` is the strict prerequisite check.
 - `photon format` formats Rust and Photon-owned native code, including the Engine embedder with its matching style version.
 - `photon lint` checks Rust formatting, runs Clippy with warnings treated as errors, and checks Photon and Engine embedder C++ formatting.
 - `photon check` runs linting, compiles the Cargo workspace, and verifies architecture and dependency checkout rules.

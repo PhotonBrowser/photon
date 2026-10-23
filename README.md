@@ -12,11 +12,14 @@
 
 ## Run from source
 
+Install the platform prerequisites in [contributor setup](CONTRIBUTOR_SETUP.md) first.
+
 ```sh
-git clone --recurse-submodules https://github.com/PhotonBrowser/photon.git
+git clone https://github.com/PhotonBrowser/photon.git
 cd photon
 cargo install --path crates/photon-cli --bin photon --locked
-photon setup
+photon setup --install-system-deps
+photon check
 photon run
 ```
 

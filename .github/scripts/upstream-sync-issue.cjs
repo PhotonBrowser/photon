@@ -46,7 +46,7 @@ async function run({ github, context, core }) {
     throw new Error('The sync event has an invalid dependency before/after commit pair.');
   }
   if (!changed.some(dependency => dependency.changed)) {
-    core.info('No dependency branch advanced during ./photon sync; no issue created.');
+    core.info('No dependency branch advanced during Photon dependency sync; no issue created.');
     return;
   }
 
@@ -91,8 +91,8 @@ async function run({ github, context, core }) {
     marker,
     '## Photon upstream sync review',
     '',
-    'Opened by a successful `./photon sync` run that merged upstream commits.',
-    'This records the persistent Photon dependency branch tips at sync time. Update root submodule pins later with `./photon pin`, after testing.',
+    'Opened after an all-dependency sync merged upstream commits. The current command is `photon deps sync --review`.',
+    'This records the persistent Photon dependency branch tips at sync time. Update root submodule pins later with `photon deps pin`, after testing.',
     '',
     '| Dependency | Before sync | After sync | Changed? |',
     '| --- | --- | --- | --- |',
@@ -116,7 +116,7 @@ async function run({ github, context, core }) {
     '## Provenance',
     '',
     '- Photon root at sync time: ' + commit(rootSha, owner + '/' + repo),
-    '- Trigger: `./photon sync` (' + CODE + context.eventName + CODE + ')',
+    '- Trigger: Photon CLI dependency-sync dispatch (' + CODE + context.eventName + CODE + ')',
     '- [GitHub Actions run](https://github.com/' + owner + '/' + repo + '/actions/runs/' + context.runId + ')',
     '',
     '## Manual integration review',
@@ -124,8 +124,8 @@ async function run({ github, context, core }) {
     '- [ ] Confirm relevant upstream changes were reviewed',
     '- [ ] Confirm merge conflicts and Photon-specific changes were resolved correctly',
     '- [ ] Confirm Engine, GPUI-CE, and gpui-motion checks passed where applicable',
-    '- [ ] Push tested dependency commits to Photon-owned remotes, then update pins with `./photon pin`',
-    '- [ ] Confirm `./photon check` and `./photon test` passed',
+    '- [ ] Push tested dependency commits to Photon-owned remotes, then update pins with `photon deps pin`',
+    '- [ ] Confirm `photon check` and `photon test` passed',
     '- [ ] Record any Velocity performance comparison (if relevant)',
     '- [ ] Link regressions or follow-up issues',
     '',

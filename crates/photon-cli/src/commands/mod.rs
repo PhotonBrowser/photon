@@ -15,4 +15,5 @@ pub(super) mod pin;
 pub(super) mod presentation_broker;
 pub(super) mod setup;
 pub(super) mod sync;
+pub(super) mod system_deps;
 pub(super) mod tests;

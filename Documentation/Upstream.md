@@ -10,6 +10,8 @@ A Git submodule entry in the Photon repository records a **commit ID**, never a 
 | `vendor/gpui-ce/` | `PhotonBrowser/gpui-ce` | `gpui-ce/gpui-ce` (`main`) | `main` |
 | `crates/gpui-motion/` | `PhotonBrowser/gpui-motion` | `1bye/gpui-motion` (`main`) | `main` |
 
+Setup configures the Photon remotes to use HTTPS so fresh clones and submodule updates work without SSH keys. Before pushing through HTTPS, run `gh auth login` and `gh auth setup-git`; contributors who prefer SSH can configure SSH URLs in `photon.toml`.
+
 GPUI-CE is a standalone submodule. Keep generic externally-produced Metal surface support in `PhotonBrowser/gpui-ce`; keep Photon frame ordering, broker policy, Engine ownership and release translation in this repository. Do not add Photon or Ladybird types to GPUI-CE.
 
 The `gpui-motion` fork is based on upstream `1bye/gpui-motion` commit

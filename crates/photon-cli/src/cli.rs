@@ -34,11 +34,15 @@ struct GlobalOptions {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    /// Check prerequisites and initialize configured pinned repositories.
-    Setup,
+    /// Verify tools, initialize dependencies, and prepare formatting/lint tools.
+    Setup {
+        /// Install macOS build packages with Homebrew before setup.
+        #[arg(long)]
+        install_system_deps: bool,
+    },
     /// Install this checkout's Photon command in Cargo's bin directory.
     Install,
-    /// Report toolchain, GPUI-CE, Engine, and build environment details.
+    /// Report tool versions, installed Rust tools, and dependency checkout state.
     Doctor,
     /// Report Rust editor metadata.
     Ide {
@@ -81,8 +85,10 @@ enum Command {
     /// Format Photon-owned Rust and C++ files.
     Format,
     /// Verify and commit the current dependency branch tips as Photon pins.
+    #[command(hide = true)]
     Pin,
     /// Merge upstream changes and dispatch a review when dependency branches advance.
+    #[command(hide = true)]
     Sync {
         /// Fetch and preview commit counts and merge conflicts without merging.
         #[arg(long)]
@@ -97,18 +103,20 @@ enum Command {
         command: DepsCommand,
     },
     /// Maintain the vendored GPUI-CE checkout.
+    #[command(hide = true)]
     Gpui {
         #[command(subcommand)]
         command: GpuiCommand,
     },
     /// Maintain Photon’s gpui-motion fork.
+    #[command(hide = true)]
     Motion {
         #[command(subcommand)]
         command: MotionCommand,
     },
     /// Run Rust workspace tests.
     Test,
-    /// Inspect or maintain the Photon Engine checkout.
+    /// Inspect or build Photon Engine.
     Engine {
         #[command(subcommand)]
         command: Option<EngineCommand>,
@@ -188,8 +196,10 @@ enum EngineCommand {
     /// Show repository state and upstream commit counts.
     Status,
     /// Switch Engine to Photon’s persistent master development branch.
+    #[command(hide = true)]
     Edit,
     /// Return Engine to the commit pinned by this Photon checkout.
+    #[command(hide = true)]
     Pin,
     /// Build Photon Engine libraries and services.
     Build {
@@ -198,6 +208,7 @@ enum EngineCommand {
         release: bool,
     },
     /// Fetch and merge upstream/master into the Engine checkout.
+    #[command(hide = true)]
     Sync {
         /// Fetch and preview commit counts and merge conflicts without merging.
         #[arg(long)]
@@ -212,7 +223,9 @@ pub fn run() -> Result<(), String> {
 
     match cli.command {
         None => print_help(),
-        Some(Command::Setup) => commands::setup::setup(&root, verbose),
+        Some(Command::Setup {
+            install_system_deps,
+        }) => commands::setup::setup(&root, verbose, install_system_deps),
         Some(Command::Install) => commands::install::install(&root, verbose),
         Some(Command::Doctor) => commands::setup::doctor(&root),
         Some(Command::Ide { command }) => match command {
@@ -402,6 +415,17 @@ mod tests {
                     check: false,
                     review: true,
                 }
+            })
+        ));
+    }
+
+    #[test]
+    fn setup_can_opt_in_to_macos_system_packages() {
+        let cli = Cli::try_parse_from(["photon", "setup", "--install-system-deps"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Some(Command::Setup {
+                install_system_deps: true,
             })
         ));
     }

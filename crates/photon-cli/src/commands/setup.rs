@@ -9,33 +9,17 @@ use crate::support::{
     require_tool_version, run_tool,
 };
 
-pub(crate) fn setup(root: &Path, verbose: bool) -> Result<(), String> {
+pub(crate) fn setup(root: &Path, verbose: bool, install_system_deps: bool) -> Result<(), String> {
     let config = SetupConfig::load(root)?;
-    for submodule in &config.submodules {
-        let path = submodule.path.as_str();
-        // Updating an initialized submodule checks out the root gitlink and can
-        // detach a development branch. Only initialize it here; retain existing
-        // worktrees and their commits.
-        if root.join(path).join(".git").exists() {
-            continue;
-        }
-        let mut sync_args = vec!["submodule", "sync"];
-        if submodule.recursive {
-            sync_args.push("--recursive");
-        }
-        sync_args.extend(["--", path]);
-        command("git", &sync_args, root, verbose)?;
-
-        let mut args = vec!["submodule", "update", "--init"];
-        if submodule.recursive {
-            args.push("--recursive");
-        }
-        args.extend(["--", path]);
-        command("git", &args, root, verbose)?;
-    }
-    for tool in ["git", "cargo", "rustc", "python3"] {
+    for tool in ["git", "cargo", "rustc", "rustup"] {
         require_tool(tool)?;
     }
+    if install_system_deps {
+        crate::commands::system_deps::install(root, verbose)?;
+    }
+    require_tool("python3")?;
+    run_tool("python3", &["-m", "pip", "--version"], root)
+        .map_err(|_| "Python pip is missing; install pip for Python 3 before setup".to_owned())?;
     if compiler_version(root).is_none() {
         return Err(
             "a C++ compiler is missing; install Clang or your platform's C++ build tools".into(),
@@ -43,6 +27,40 @@ pub(crate) fn setup(root: &Path, verbose: bool) -> Result<(), String> {
     }
     for (tool, minimum) in [("cmake", (3, 30)), ("ninja", (1, 10)), ("rustc", (1, 85))] {
         require_tool_version(tool, minimum, root)?;
+    }
+    for component in ["fmt", "clippy"] {
+        run_tool("cargo", &[component, "--version"], root).map_err(|_| {
+            format!(
+                "Cargo {component} is missing; install it with `rustup component add {}`",
+                match component {
+                    "fmt" => "rustfmt",
+                    _ => "clippy",
+                }
+            )
+        })?;
+    }
+
+    for submodule in &config.submodules {
+        let path = submodule.path.as_str();
+        let mut sync_args = vec!["submodule", "sync"];
+        if submodule.recursive {
+            sync_args.push("--recursive");
+        }
+        sync_args.extend(["--", path]);
+        command("git", &sync_args, root, verbose)?;
+
+        // Updating an initialized submodule checks out the root gitlink and can
+        // detach a development branch. Sync URLs, but initialize only missing
+        // worktrees so existing branches and commits remain in place.
+        if root.join(path).join(".git").exists() {
+            continue;
+        }
+        let mut args = vec!["submodule", "update", "--init"];
+        if submodule.recursive {
+            args.push("--recursive");
+        }
+        args.extend(["--", path]);
+        command("git", &args, root, verbose)?;
     }
     if !root.join("Engine/CMakeLists.txt").is_file() {
         return Err(
@@ -121,9 +139,13 @@ pub(crate) fn setup(root: &Path, verbose: bool) -> Result<(), String> {
     }
     crate::commands::ide::setup(root, verbose)?;
     clang_format(root, CLANG_FORMAT_VERSION)?;
-    println!(
-        "Setup ready. Existing dependency worktrees were preserved; Engine and GPUI-CE development branches are active."
-    );
+    println!("Setup ready. Existing dependency worktrees were preserved.");
+    println!("Rust formatting, Clippy, and native formatting tools are ready.");
+    if install_system_deps {
+        println!("macOS build packages are ready.");
+    } else {
+        println!("Install OS packages separately; see CONTRIBUTOR_SETUP.md.");
+    }
     let clang_format_major = CLANG_FORMAT_VERSION
         .split('.')
         .next()
@@ -295,8 +317,11 @@ pub(crate) fn doctor(root: &Path) -> Result<(), String> {
     for (name, args) in [
         ("Rust", vec!["rustc", "--version"]),
         ("Cargo", vec!["cargo", "--version"]),
-        ("CMake", vec!["cmake", "--version"]),
-        ("Ninja", vec!["ninja", "--version"]),
+        ("Rustfmt", vec!["cargo", "fmt", "--version"]),
+        ("Clippy", vec!["cargo", "clippy", "--version"]),
+        ("Python pip", vec!["python3", "-m", "pip", "--version"]),
+        ("CMake (3.30+)", vec!["cmake", "--version"]),
+        ("Ninja (1.10+)", vec!["ninja", "--version"]),
     ] {
         let line = run_tool(args[0], &args[1..], root).unwrap_or_else(|_| "not found".into());
         println!("  {name:10} {}", line.lines().next().unwrap_or("unknown"));
@@ -378,6 +403,21 @@ pub(crate) fn doctor(root: &Path) -> Result<(), String> {
         .unwrap_or_else(|_| "missing".into())
         .trim()
     );
+    println!(
+        "  gpui-motion {}",
+        output(
+            "git",
+            &["rev-parse", "--short", "HEAD"],
+            &root.join("crates/gpui-motion")
+        )
+        .unwrap_or_else(|_| "missing".into())
+        .trim()
+    );
+    println!(
+        "  System package instructions: {}",
+        root.join("Engine/Documentation/BuildInstructionsLadybird.md")
+            .display()
+    );
     crate::commands::ide::doctor(root);
     Ok(())
 }
@@ -385,6 +425,41 @@ pub(crate) fn doctor(root: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn checkout_setup_config_loads_https_remotes() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let root = root.ancestors().nth(2).unwrap();
+        let config = SetupConfig::load(root).unwrap();
+
+        assert_eq!(config.submodules.len(), 3);
+        assert!(
+            config
+                .repositories
+                .iter()
+                .flat_map(|repo| &repo.remotes)
+                .all(|remote| remote.url.starts_with("https://"))
+        );
+        let submodule_urls = output(
+            "git",
+            &[
+                "config",
+                "--file",
+                ".gitmodules",
+                "--get-regexp",
+                r"^submodule\..*\.url$",
+            ],
+            root,
+        )
+        .unwrap();
+        assert_eq!(submodule_urls.lines().count(), 3);
+        assert!(submodule_urls.lines().all(|line| {
+            line.split_whitespace()
+                .last()
+                .unwrap()
+                .starts_with("https://")
+        }));
+    }
 
     #[test]
     fn setup_config_accepts_multiple_remotes_and_recursive_submodules() {
