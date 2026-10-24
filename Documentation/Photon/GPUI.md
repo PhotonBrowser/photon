@@ -42,3 +42,9 @@ the generic AppKit integration stays in the GPUI-CE submodule.
 Photon owns XPC presentation, frame ordering, generations, retirement, release
 forwarding, Engine thread affinity, browser input, and application startup.
 `photon run` starts the GPUI-CE application directly.
+
+For UI iteration, `photon run --hot-reload` enables GPUI-CE's experimental
+Subsecond hot patching and launches the app with Dioxus CLI 0.7.10. It patches
+GPUI render code in the existing process; it does not cover every Rust code
+path. Changes to indirect workspace dependencies or startup code still need a
+rebuild or restart. Use `photon run --hot-reload --ui` to skip the Engine build.

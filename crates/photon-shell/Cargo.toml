@@ -7,6 +7,7 @@ build = "build.rs"
 
 [features]
 ui-only = []
+hot-reload = ["gpui/hot-patching"]
 
 [dependencies]
 photon-brand = { path = "../photon-brand" }

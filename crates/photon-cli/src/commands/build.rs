@@ -504,6 +504,182 @@ pub(crate) fn run_direct(
     }
 }
 
+/// Builds and launches Photon under Dioxus CLI so GPUI-CE can apply Subsecond patches.
+pub(crate) fn run_hot_reload(
+    root: &Path,
+    ui_only: bool,
+    verbose: bool,
+    url: Option<&str>,
+    shutdown_after_seconds: Option<u64>,
+) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    return run_hot_reload_macos(root, ui_only, verbose, url, shutdown_after_seconds);
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (root, ui_only, verbose, url, shutdown_after_seconds);
+        Err("GPUI hot reloading currently supports the macOS Photon shell only".into())
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn run_hot_reload_macos(
+    root: &Path,
+    ui_only: bool,
+    verbose: bool,
+    url: Option<&str>,
+    shutdown_after_seconds: Option<u64>,
+) -> Result<(), String> {
+    if shutdown_after_seconds.is_some() {
+        return Err("--shutdown-after-seconds cannot be used with --hot-reload".into());
+    }
+    let dioxus_cli = require_dioxus_cli(root)?;
+
+    let engine = root.join("build/engine-debug");
+    let helper_directory = if ui_only {
+        None
+    } else {
+        engine_build(root, false, verbose)?;
+        let service = super::presentation_broker::ensure(root, verbose)?;
+        Some((helper_process_dir(root, &engine, false), service))
+    };
+
+    stage("Start Photon with GPUI hot reloading");
+    let features = if ui_only {
+        "ui-only,hot-reload"
+    } else {
+        "hot-reload"
+    };
+    let mut process = Command::new(dioxus_cli);
+    process
+        .args([
+            "serve",
+            "--hot-patch",
+            "--package",
+            "photon-app",
+            "--bin",
+            "Photon",
+            "--features",
+            features,
+        ])
+        .current_dir(root)
+        .env("PHOTON_ENGINE_BUILD_DIR", &engine);
+    if let Some((helper_directory, service)) = helper_directory {
+        process
+            .env("PHOTON_HELPER_DIRECTORY", helper_directory)
+            .env("PHOTON_PRESENTATION_XPC_SERVICE", service)
+            .env(
+                "PHOTON_PRESENTATION_CHANNEL_ID",
+                format!(
+                    "photon-gpui-hot-reload-{}-{}",
+                    std::process::id(),
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_nanos()
+                ),
+            )
+            .env("DYLD_LIBRARY_PATH", runtime_library_path(&engine));
+    }
+    if verbose {
+        process.env("PHOTON_VERBOSE", "1");
+        process.env("GPUI_EXTERNAL_SURFACE_TRACE", "1");
+    }
+    if let Some(url) = url {
+        process.env("PHOTON_URL", url);
+    }
+
+    let status = process
+        .status()
+        .map_err(|error| format!("cannot start Dioxus CLI: {error}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("Dioxus hot-reload server exited with {status}"))
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn require_dioxus_cli(root: &Path) -> Result<PathBuf, String> {
+    const REQUIRED_VERSION: &str = "0.7.10";
+    let path_command = PathBuf::from("dx");
+    if dioxus_cli_version(&path_command, root)
+        .is_some_and(|version| has_dioxus_cli_version(&version, REQUIRED_VERSION))
+    {
+        return Ok(path_command);
+    }
+
+    let install_path = dioxus_cli_install_path();
+    if let Some(path) = &install_path
+        && dioxus_cli_version(path, root)
+            .is_some_and(|version| has_dioxus_cli_version(&version, REQUIRED_VERSION))
+    {
+        return Ok(path.clone());
+    }
+
+    stage(&format!("Install Dioxus CLI {REQUIRED_VERSION}"));
+    let status = Command::new("cargo")
+        .args([
+            "install",
+            "dioxus-cli",
+            "--version",
+            REQUIRED_VERSION,
+            "--locked",
+            "--force",
+        ])
+        .current_dir(root)
+        .status()
+        .map_err(|error| format!("cannot install Dioxus CLI with Cargo: {error}"))?;
+    if !status.success() {
+        return Err(format!(
+            "Cargo could not install Dioxus CLI {REQUIRED_VERSION}"
+        ));
+    }
+
+    for candidate in [Some(path_command), install_path].into_iter().flatten() {
+        if dioxus_cli_version(&candidate, root)
+            .is_some_and(|version| has_dioxus_cli_version(&version, REQUIRED_VERSION))
+        {
+            return Ok(candidate);
+        }
+    }
+
+    Err(format!(
+        "Dioxus CLI {REQUIRED_VERSION} installed, but its executable was not found on PATH or in Cargo's install directory"
+    ))
+}
+
+#[cfg(target_os = "macos")]
+fn dioxus_cli_version(executable: &Path, root: &Path) -> Option<String> {
+    let output = Command::new(executable)
+        .arg("--version")
+        .current_dir(root)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    Some(format!(
+        "{} {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    ))
+}
+
+#[cfg(target_os = "macos")]
+fn has_dioxus_cli_version(version: &str, required: &str) -> bool {
+    version.split_whitespace().any(|part| part == required)
+}
+
+#[cfg(target_os = "macos")]
+fn dioxus_cli_install_path() -> Option<PathBuf> {
+    let root = std::env::var_os("CARGO_INSTALL_ROOT")
+        .or_else(|| std::env::var_os("CARGO_HOME"))
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cargo")))?;
+    Some(root.join("bin/dx"))
+}
+
 #[cfg(target_os = "macos")]
 fn run_direct_macos(
     root: &Path,

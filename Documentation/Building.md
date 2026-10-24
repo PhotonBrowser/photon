@@ -23,6 +23,7 @@ photon run
 - `photon test` runs the Rust workspace tests.
 - `photon build` builds the Engine and the GPUI-CE application.
 - `photon run` builds and launches the native app. Use `--url URL` to choose the initial page. Use `--shutdown-after-seconds N` to exit after a fixed interval; `--verbose` prints the final presentation frame counts.
+- `photon run --hot-reload` launches the debug shell through Dioxus CLI and hot-patches GPUI rendering code without restarting the app. Photon installs Dioxus CLI 0.7.10 with Cargo on first use if it is missing or has an incompatible version. This experimental mode currently supports macOS only. Use `--ui` to hot-patch the UI-only shell without building Photon Engine, or `--url URL` to choose the initial page when using the Engine.
 - `photon run --ui` builds and launches the same browser window with the New Tab page, without building, linking, or starting Photon Engine. Shell-owned pages remain available; web pages cannot be opened in this mode. This path currently supports macOS only.
 - `photon clean` removes generated build trees and stops the checkout-specific presentation broker.
 
@@ -37,6 +38,8 @@ Zed uses clangd with the root `.clangd` configuration for Photon C++, Objective-
 The first Engine build configures Ladybird dependencies under `build/` and compiles Photon Engine helper processes plus LibPhotonEmbedder. Incremental builds use an Engine fingerprint to rebuild Ladybird only when Engine sources or configuration change. Rust app or GPUI-CE changes rebuild the application. Build products and downloaded tools stay under ignored build directories.
 
 On macOS, `photon run` starts the Photon-owned presentation broker before opening the native window. Set `PHOTON_WINDOW_BACKGROUND` to `opaque`, `blurred` (the default), or `liquid-glass` before launching to choose the window background. Liquid Glass uses AppKit's regular glass effect on macOS 26 and later and falls back to blurred material on earlier versions.
+
+Hot reloading uses GPUI-CE's experimental Subsecond integration. Changes to GPUI render functions and direct workspace dependencies can be patched into the running process. Changes to indirect workspace dependencies, application startup, and unsupported code paths require a rebuild or restart. `--shutdown-after-seconds` is unavailable in hot-reload mode because Dioxus CLI keeps the development server running.
 
 ## Release channels (planned)
 

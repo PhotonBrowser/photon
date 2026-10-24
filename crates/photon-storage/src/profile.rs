@@ -151,6 +151,9 @@ impl Profile {
         if let Some(settings_path) = settings_path {
             profile.settings_path = settings_path;
         }
+        if let Some(parent) = profile.settings_path.parent() {
+            atomic::ensure_private_dir(parent)?;
+        }
         super::migrations::run(&profile)?;
         profile.ensure_settings()?;
         Ok(profile)
@@ -163,8 +166,9 @@ impl Profile {
             root,
             writes: Arc::new(ProfileWrites::default()),
         };
-        fs::create_dir_all(profile.favicons_dir())?;
-        fs::create_dir_all(profile.engine_dir())?;
+        atomic::ensure_private_dir(&profile.root)?;
+        atomic::ensure_private_dir(&profile.favicons_dir())?;
+        atomic::ensure_private_dir(&profile.engine_dir())?;
         Ok(profile)
     }
 
