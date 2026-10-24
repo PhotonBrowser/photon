@@ -269,17 +269,26 @@ impl EngineSession {
             runtime.is_available(),
             "web pages are unavailable in the UI-only build"
         );
+        #[cfg(target_os = "macos")]
         let leases = Arc::new(Mutex::new(LeaseLedger::default()));
+        #[cfg(not(target_os = "macos"))]
+        let leases = Arc::new(Mutex::new(LeaseLedger));
+        #[cfg(target_os = "macos")]
         let gpu_activity = Arc::new(GpuActivity::default());
+        #[cfg(not(target_os = "macos"))]
+        let gpu_activity = Arc::new(GpuActivity);
         let performance = Arc::new(PerformanceMonitor::default());
         let navigation_timing =
             navigation_profile_enabled().then(|| Arc::new(NavigationTimingProfiler::default()));
         // Engine threads reach both through raw callback contexts and touch
         // only their mutex- and atomic-guarded state; the main-thread-only
         // fields (pixel buffers, the UI wake) are used on the main thread.
-        #[expect(
-            clippy::arc_with_non_send_sync,
-            reason = "shared with Engine callbacks through a raw context pointer"
+        #[cfg_attr(
+            target_os = "macos",
+            expect(
+                clippy::arc_with_non_send_sync,
+                reason = "shared with Engine callbacks through a raw context pointer"
+            )
         )]
         let presentation = Arc::new(PresentationRuntime::new(
             leases.clone(),
