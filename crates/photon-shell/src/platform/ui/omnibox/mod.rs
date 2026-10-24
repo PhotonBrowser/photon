@@ -343,6 +343,8 @@ impl Render for Omnibox {
             .border_1()
             .border_color(if self.invalid {
                 rgb_to_hsla(rgba(palette.field_error_border))
+            } else if editing {
+                rgb_to_hsla(rgba(palette.chosen))
             } else {
                 gpui::transparent_black()
             })
