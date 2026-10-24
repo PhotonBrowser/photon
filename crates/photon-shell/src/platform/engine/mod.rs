@@ -44,6 +44,22 @@ pub(crate) struct RegisteredEngineProcess {
     pub(crate) parent_start_time_in_microseconds: Option<u64>,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct EngineProcessSnapshot {
+    pub(crate) child_id: u64,
+    pub(crate) pid: u32,
+    pub(crate) role: String,
+    pub(crate) title: Option<String>,
+    pub(crate) cpu_percent: Option<f64>,
+    pub(crate) memory_bytes: Option<u64>,
+    pub(crate) disk_read_bytes: Option<u64>,
+    pub(crate) disk_write_bytes: Option<u64>,
+    pub(crate) download_bytes_per_second: Option<u64>,
+    pub(crate) upload_bytes_per_second: Option<u64>,
+    pub(crate) page_url: Option<String>,
+    pub(crate) page_is_frame: bool,
+}
+
 #[derive(Clone)]
 pub(in crate::platform) struct UiWake {
     pub(in crate::platform) app: AsyncApp,
@@ -238,6 +254,99 @@ impl EngineRuntime {
 
     pub(in crate::platform) fn performance_dashboard_active(&self) -> bool {
         self.performance_dashboard_users.get() > 0
+    }
+
+    pub(in crate::platform) fn process_snapshots(&self) -> Vec<EngineProcessSnapshot> {
+        if !self.is_available() {
+            return Vec::new();
+        }
+
+        #[cfg(feature = "ui-only")]
+        {
+            Vec::new()
+        }
+
+        #[cfg(not(feature = "ui-only"))]
+        {
+            unsafe extern "C" fn collect(
+                context: *mut c_void,
+                child_id: u64,
+                pid: i32,
+                role: *const std::ffi::c_char,
+                title: *const std::ffi::c_char,
+                _has_owner_child_id: bool,
+                _owner_child_id: u64,
+                has_cpu_percent: bool,
+                cpu_percent: f64,
+                has_memory_bytes: bool,
+                memory_bytes: u64,
+                has_disk_read_bytes: bool,
+                disk_read_bytes: u64,
+                has_disk_write_bytes: bool,
+                disk_write_bytes: u64,
+                has_download_bytes_per_second: bool,
+                download_bytes_per_second: u64,
+                has_upload_bytes_per_second: bool,
+                upload_bytes_per_second: u64,
+                has_page_url: bool,
+                page_url: *const std::ffi::c_char,
+                page_is_frame: bool,
+            ) {
+                if context.is_null() || pid <= 0 || role.is_null() {
+                    return;
+                }
+                // SAFETY: the embedder invokes this callback synchronously with
+                // the Vec pointer and C strings supplied for the duration of
+                // this call.
+                let processes = unsafe { &mut *context.cast::<Vec<EngineProcessSnapshot>>() };
+                let copy_string = |value: *const std::ffi::c_char| {
+                    if value.is_null() {
+                        None
+                    } else {
+                        Some(
+                            unsafe { CStr::from_ptr(value) }
+                                .to_string_lossy()
+                                .into_owned(),
+                        )
+                    }
+                };
+                let Some(role) = copy_string(role) else {
+                    return;
+                };
+                processes.push(EngineProcessSnapshot {
+                    child_id,
+                    pid: pid as u32,
+                    role,
+                    title: copy_string(title),
+                    cpu_percent: has_cpu_percent.then_some(cpu_percent),
+                    memory_bytes: has_memory_bytes.then_some(memory_bytes),
+                    disk_read_bytes: has_disk_read_bytes.then_some(disk_read_bytes),
+                    disk_write_bytes: has_disk_write_bytes.then_some(disk_write_bytes),
+                    download_bytes_per_second: has_download_bytes_per_second
+                        .then_some(download_bytes_per_second),
+                    upload_bytes_per_second: has_upload_bytes_per_second
+                        .then_some(upload_bytes_per_second),
+                    page_url: if has_page_url {
+                        copy_string(page_url)
+                    } else {
+                        None
+                    },
+                    page_is_frame,
+                });
+            }
+
+            let mut processes = Vec::new();
+            // SAFETY: the runtime is owned by `self`, and the callback context
+            // remains valid because the embedder invokes the callback synchronously.
+            unsafe {
+                embedder::photon_runtime_list_process_snapshots(
+                    self.runtime,
+                    (&mut processes as *mut Vec<EngineProcessSnapshot>).cast(),
+                    Some(collect),
+                );
+            }
+            processes
+        }
     }
 }
 

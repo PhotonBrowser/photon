@@ -68,6 +68,30 @@ pub(super) mod embedder {
 
     pub(crate) type SelectDropdownCallback =
         unsafe extern "C" fn(*mut c_void, f64, f64, f64, *const SelectItem, usize);
+    pub(crate) type EngineProcessCallback = unsafe extern "C" fn(
+        *mut c_void,
+        u64,
+        i32,
+        *const c_char,
+        *const c_char,
+        bool,
+        u64,
+        bool,
+        f64,
+        bool,
+        u64,
+        bool,
+        u64,
+        bool,
+        u64,
+        bool,
+        u64,
+        bool,
+        u64,
+        bool,
+        *const c_char,
+        bool,
+    );
     pub(crate) type FrameCallback = unsafe extern "C" fn(
         *mut c_void,
         i32,
@@ -285,6 +309,12 @@ pub(super) mod embedder {
                     u64,
                 ),
             >,
+        );
+        #[cfg(not(feature = "ui-only"))]
+        pub fn photon_runtime_list_process_snapshots(
+            runtime: *mut c_void,
+            callback_data: *mut c_void,
+            callback: Option<EngineProcessCallback>,
         );
         pub fn photon_view_pointer(
             view: *mut c_void,

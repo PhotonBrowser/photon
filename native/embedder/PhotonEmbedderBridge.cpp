@@ -698,6 +698,26 @@ extern "C" void photon_runtime_list_registered_processes(void* runtime,
     }
 }
 
+extern "C" void photon_runtime_list_process_snapshots(void* runtime,
+    void* callback_data, PhotonEngineProcessCallback callback)
+{
+    if (!runtime || !callback)
+        return;
+    for (auto const& process : static_cast<RuntimeHandle*>(runtime)->runtime->process_snapshots()) {
+        callback(callback_data, process.child_id, process.pid, process.role.c_str(),
+            process.title.has_value() ? process.title->c_str() : nullptr,
+            process.owner_child_id.has_value(), process.owner_child_id.value_or(0),
+            process.cpu_percent.has_value(), process.cpu_percent.value_or(0),
+            process.memory_bytes.has_value(), process.memory_bytes.value_or(0),
+            process.disk_read_bytes.has_value(), process.disk_read_bytes.value_or(0),
+            process.disk_write_bytes.has_value(), process.disk_write_bytes.value_or(0),
+            process.network_download_bytes_per_second.has_value(), process.network_download_bytes_per_second.value_or(0),
+            process.network_upload_bytes_per_second.has_value(), process.network_upload_bytes_per_second.value_or(0),
+            process.page_url.has_value(), process.page_url.has_value() ? process.page_url->c_str() : nullptr,
+            process.page_is_frame);
+    }
+}
+
 extern "C" void photon_view_pointer(void* view, int kind, double x, double y,
     int button, uint8_t buttons, bool shift,
     bool control, bool alt, bool meta,

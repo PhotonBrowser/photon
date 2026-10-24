@@ -47,6 +47,10 @@ impl BrowserWindow {
             Command::NextSpace => self.switch_space_by(1, cx),
             Command::PreviousSpace => self.switch_space_by(-1, cx),
             Command::OpenSettings => self.open_page_tab(SETTINGS, window, cx),
+            Command::OpenTaskManager => {
+                let runtime = self.runtime.clone();
+                cx.defer(move |cx| super::task_manager::open_task_manager(runtime, cx));
+            }
             Command::ShowKeyboardShortcuts => self.show_keyboard_shortcuts(window, cx),
             Command::StopLoading => self.dispatch_command(BrowserCommand::StopLoading, window, cx),
             Command::GoBack => self.dispatch_command(BrowserCommand::Back, window, cx),

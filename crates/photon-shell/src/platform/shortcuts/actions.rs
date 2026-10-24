@@ -58,6 +58,8 @@ gpui::actions!(
         ToggleZenMode,
         /// Open the browser's settings in a tab.
         OpenSettings,
+        /// Open the Engine and browser task manager.
+        OpenTaskManager,
         /// Show or hide the active page's performance details.
         ToggleDebugInfo,
         /// List the browser's keyboard shortcuts.

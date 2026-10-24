@@ -101,6 +101,9 @@ using PhotonNewWebViewCallback = void (*)(void*, void*, void*,
 // restarted (true) or has just stopped (false).
 using PhotonServiceCallback = void (*)(void*, int, bool);
 using PhotonRegisteredProcessCallback = void (*)(void*, int32_t, char const*, bool, uint64_t, bool, int32_t, bool, uint64_t);
+using PhotonEngineProcessCallback = void (*)(void*, uint64_t, int32_t, char const*, char const*,
+    bool, uint64_t, bool, double, bool, uint64_t, bool, uint64_t, bool, uint64_t, bool, uint64_t,
+    bool, uint64_t, bool, char const*, bool);
 #if defined(__APPLE__)
 using PhotonReducedMotionChangedCallback = void (*)(void*, bool);
 // Called with whether the window is visible and whether its display or the
@@ -239,6 +242,8 @@ void photon_runtime_set_service_callback(void* runtime, void* callback_data,
     PhotonServiceCallback callback);
 void photon_runtime_list_registered_processes(void* runtime, void* callback_data,
     PhotonRegisteredProcessCallback callback);
+void photon_runtime_list_process_snapshots(void* runtime, void* callback_data,
+    PhotonEngineProcessCallback callback);
 void photon_view_pointer(void* view, int kind, double x, double y, int button,
     uint8_t buttons, bool shift, bool control, bool alt,
     bool meta, double wheel_x, double wheel_y,

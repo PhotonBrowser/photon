@@ -38,6 +38,15 @@ pub(crate) const POPUP_MIN_HEIGHT: f32 = 320.0;
 /// Largest requested popup height after clamping.
 pub(crate) const POPUP_MAX_HEIGHT: f32 = 1000.0;
 
+/// First size for the standalone task manager window.
+pub(crate) const TASK_MANAGER_WIDTH: f32 = 1080.0;
+/// First size for the standalone task manager window.
+pub(crate) const TASK_MANAGER_HEIGHT: f32 = 680.0;
+/// Smallest width allowed when resizing the task manager.
+pub(crate) const TASK_MANAGER_MIN_WIDTH: f32 = 900.0;
+/// Smallest height allowed when resizing the task manager.
+pub(crate) const TASK_MANAGER_MIN_HEIGHT: f32 = 420.0;
+
 /// Whether macOS should draw the titlebar as transparent.
 #[cfg(target_os = "macos")]
 pub(crate) const MACOS_TRANSPARENT_TITLEBAR: bool = true;

@@ -33,6 +33,7 @@ mod tab_items;
 mod tab_menu;
 mod tab_summary;
 mod tabs;
+mod task_manager;
 mod title;
 mod workspace;
 mod zoom;

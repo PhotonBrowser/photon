@@ -30,6 +30,7 @@ pub enum Command {
     NextSpace,
     PreviousSpace,
     OpenSettings,
+    OpenTaskManager,
     ShowKeyboardShortcuts,
 }
 
@@ -205,6 +206,12 @@ const BUILT_IN_COMMANDS: &[CommandDefinition] = &[
         command: Command::OpenSettings,
         name: "Settings",
         keywords: "preferences options",
+        requirement: CommandRequirement::Always,
+    },
+    CommandDefinition {
+        command: Command::OpenTaskManager,
+        name: "Task Manager",
+        keywords: "processes cpu memory ram disk network performance",
         requirement: CommandRequirement::Always,
     },
     CommandDefinition {

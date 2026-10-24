@@ -56,6 +56,7 @@ pub(super) enum ShortcutAction {
     ZoomOut,
     ResetZoom,
     OpenSettings,
+    OpenTaskManager,
     ShowKeyboardShortcuts,
     ToggleSidebar,
     ToggleSidebarIcons,
@@ -99,6 +100,7 @@ impl ShortcutAction {
             Self::ZoomOut => Box::new(ZoomOut),
             Self::ResetZoom => Box::new(ResetZoom),
             Self::OpenSettings => Box::new(OpenSettings),
+            Self::OpenTaskManager => Box::new(OpenTaskManager),
             Self::ShowKeyboardShortcuts => Box::new(ShowKeyboardShortcuts),
             Self::ToggleSidebar => Box::new(ToggleSidebar),
             Self::ToggleSidebarIcons => Box::new(ToggleSidebarIcons),
@@ -320,6 +322,12 @@ const SHORTCUTS: &[ShortcutSpec] = &[
         label: ShortcutLabel::Command(Command::OpenSettings),
         keys: &["secondary-,"],
         action: ShortcutAction::OpenSettings,
+    },
+    ShortcutSpec {
+        group: "Window",
+        label: ShortcutLabel::Command(Command::OpenTaskManager),
+        keys: &["shift-escape"],
+        action: ShortcutAction::OpenTaskManager,
     },
     ShortcutSpec {
         group: "Window",

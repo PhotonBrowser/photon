@@ -2,10 +2,11 @@
 
 use crate::platform::shortcuts::{
     CloseTab, FindInPage, FindNext, FindPrevious, FocusOmnibox, GoBack, GoForward, MinimizeWindow,
-    NewTab, NextSpace, OpenCommandPalette, OpenSettings, PreviousSpace, Reload, ReopenClosedTab,
-    ResetZoom, SelectLastTab, SelectNextTab, SelectPreviousTab, SelectTab1, SelectTab2, SelectTab3,
-    SelectTab4, SelectTab5, SelectTab6, SelectTab7, SelectTab8, ShowKeyboardShortcuts, StopLoading,
-    ToggleDebugInfo, ToggleSidebar, ToggleSidebarIcons, ToggleZenMode, ZoomIn, ZoomOut, ZoomWindow,
+    NewTab, NextSpace, OpenCommandPalette, OpenSettings, OpenTaskManager, PreviousSpace, Reload,
+    ReopenClosedTab, ResetZoom, SelectLastTab, SelectNextTab, SelectPreviousTab, SelectTab1,
+    SelectTab2, SelectTab3, SelectTab4, SelectTab5, SelectTab6, SelectTab7, SelectTab8,
+    ShowKeyboardShortcuts, StopLoading, ToggleDebugInfo, ToggleSidebar, ToggleSidebarIcons,
+    ToggleZenMode, ZoomIn, ZoomOut, ZoomWindow,
 };
 use gpui::{Context, Div, KeyDownEvent, Window, prelude::*};
 use photon_core::Command;
@@ -36,6 +37,9 @@ impl BrowserWindow {
             }))
             .on_action(cx.listener(|this, _: &OpenSettings, window, cx| {
                 this.execute_command(Command::OpenSettings, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &OpenTaskManager, window, cx| {
+                this.execute_command(Command::OpenTaskManager, window, cx);
             }))
             .on_action(cx.listener(|this, _: &ShowKeyboardShortcuts, window, cx| {
                 this.execute_command(Command::ShowKeyboardShortcuts, window, cx);
