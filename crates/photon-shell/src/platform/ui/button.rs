@@ -10,6 +10,21 @@ use super::motion::{icon_pressable, pressable};
 use super::{metrics, theme::ThemeColors};
 use gpui_motion::PressScaleElement;
 
+fn jiggle_button(
+    button: PressScaleElement<Stateful<Div>>,
+    enabled: bool,
+) -> PressScaleElement<Stateful<Div>> {
+    if enabled {
+        button.scale(1.0).jiggle(
+            metrics::BUTTON_JIGGLE_RANGE,
+            metrics::BUTTON_JIGGLE_RESISTANCE,
+            super::motion::button_jiggle_spring(),
+        )
+    } else {
+        button
+    }
+}
+
 /// A button's size.
 #[derive(Clone, Copy)]
 pub(super) enum ButtonSize {
@@ -98,17 +113,25 @@ pub(super) fn button(
                 .disabled_control,
         )
     };
-    let button = pressable(button).enabled(enabled);
+    let button = jiggle_button(pressable(button).enabled(enabled), enabled);
     match kind {
-        ButtonKind::Primary => button.hover_style(|style| {
-            style
-                .bg(rgb(palette.chosen_hover))
-                .border_color(rgb(palette.chosen_hover))
-        }),
-        ButtonKind::Secondary => button.hover_style(|style| style.bg(rgba(palette.surface_hover))),
-        ButtonKind::Destructive => {
-            button.hover_style(|style| style.bg(rgba(palette.error_hover_surface)))
-        }
+        ButtonKind::Primary => button
+            .hover_style(|style| {
+                style
+                    .bg(rgb(palette.chosen_hover))
+                    .border_color(rgb(palette.chosen_hover))
+            })
+            .active_style(|style| {
+                style
+                    .bg(rgb(palette.chosen_hover))
+                    .border_color(rgb(palette.chosen_hover))
+            }),
+        ButtonKind::Secondary => button
+            .hover_style(|style| style.bg(rgba(palette.surface_hover)))
+            .active_style(|style| style.bg(rgba(palette.surface_hover))),
+        ButtonKind::Destructive => button
+            .hover_style(|style| style.bg(rgba(palette.error_hover_surface)))
+            .active_style(|style| style.bg(rgba(palette.error_hover_surface))),
     }
 }
 
@@ -146,12 +169,13 @@ pub(super) fn icon_button(
         button
             .tab_index(0)
             .hover_style(|style| style.bg(rgba(palette.hover_surface)))
+            .active_style(|style| style.bg(rgba(palette.hover_surface)))
             .owns_clicks()
             .on_click(on_click)
     } else {
         button
     };
-    icon_pressable(button).enabled(enabled)
+    jiggle_button(icon_pressable(button).enabled(enabled), enabled)
 }
 
 /// A square toolbar button showing an icon, dimmed and inert while disabled.
@@ -180,6 +204,7 @@ pub(super) fn toolbar_button(
         button
             .tab_index(tab_index)
             .hover_style(|style| style.bg(rgba(palette.hover_surface)))
+            .active_style(|style| style.bg(rgba(palette.hover_surface)))
             .owns_clicks()
             .on_click(on_click)
     } else {
@@ -189,7 +214,7 @@ pub(super) fn toolbar_button(
                 .disabled_control,
         )
     };
-    icon_pressable(button).enabled(enabled)
+    jiggle_button(icon_pressable(button).enabled(enabled), enabled)
 }
 
 /// The button that opens the browser menu.
@@ -211,9 +236,13 @@ pub(super) fn menu_button(
         .size(px(metrics::TOOLBAR_BUTTON_SIZE))
         .rounded(px(metrics::control_radius()))
         .hover_style(|style| style.bg(rgba(palette.hover_surface)))
+        .active_style(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks();
-    icon_pressable(button).on_click(on_click).child(more_icon(
-        palette.text_secondary,
-        metrics::TOOLBAR_ICON_SIZE,
-    ))
+    jiggle_button(
+        icon_pressable(button).on_click(on_click).child(more_icon(
+            palette.text_secondary,
+            metrics::TOOLBAR_ICON_SIZE,
+        )),
+        true,
+    )
 }

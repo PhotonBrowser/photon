@@ -738,13 +738,35 @@ fn slider_drag_feedback(
     let speed_factor = ((speed - SLIDER_EDGE_STRETCH_SPEED_THRESHOLD)
         / SLIDER_EDGE_STRETCH_SPEED_RANGE)
         .clamp(0.0, 1.0);
-    let extension = if animations_enabled {
+    let fling_extension = if animations_enabled {
         metrics::INTENSITY_SLIDER_THUMB_WIDTH
             * SLIDER_EDGE_STRETCH_MAX
             * speed_factor
             * edge_proximity
     } else {
         0.0
+    };
+    let overshoot = if position < min_center {
+        f32::from(min_center - position)
+    } else if position > max_center {
+        f32::from(position - max_center)
+    } else {
+        0.0
+    };
+    let overshoot_extension = if animations_enabled {
+        rubberband_distance(
+            overshoot,
+            metrics::INTENSITY_SLIDER_RUBBERBAND_RANGE,
+            metrics::INTENSITY_SLIDER_RUBBERBAND_RESISTANCE,
+        )
+    } else {
+        0.0
+    };
+    let extension = fling_extension.max(overshoot_extension);
+    let stretch_direction = if overshoot > 0.0 {
+        if position < min_center { -1.0 } else { 1.0 }
+    } else {
+        edge_direction
     };
     let content_width =
         (f32::from(bounds.size.width) - metrics::INTENSITY_SLIDER_THUMB_WIDTH).max(1.0);
@@ -753,9 +775,13 @@ fn slider_drag_feedback(
         direction,
         stretch: SliderStretch {
             scale: extension / content_width,
-            offset: edge_direction * extension * 0.5,
+            offset: stretch_direction * extension * 0.5,
         },
     }
+}
+
+fn rubberband_distance(distance: f32, range: f32, resistance: f32) -> f32 {
+    distance * range * resistance / (range + resistance * distance)
 }
 
 #[cfg(test)]

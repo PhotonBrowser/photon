@@ -667,6 +667,10 @@ fn press_spring() -> Spring {
     Spring::new(480.0, 44.0, 1.0).expect("Photon press spring parameters are positive")
 }
 
+pub(super) fn button_jiggle_spring() -> Spring {
+    Spring::new(1_600.0, 80.0, 1.0).expect("Photon button jiggle spring parameters are positive")
+}
+
 fn press_scale<E: StatefulInteractiveElement + Styled + IntoElement + 'static>(
     mut element: E,
     scale: f32,
@@ -718,13 +722,21 @@ pub(super) fn control_scale_transition<E: Styled + IntoElement + 'static>(
     config: &MotionConfig,
 ) -> impl IntoElement {
     let motion = Motion::new(Target::default().x(offset).scale(scale_x))
-        .transition(control_transition(tracking, config));
+        .transition(elastic_control_transition(tracking, config));
     MotionElement::new(id, element, motion).map(|element: E, frame: Frame| {
         let target = frame.target();
         element
             .left(gpui::px(target.x_px()))
             .scale_xy(target.scale_factor().unwrap_or(1.0), 1.0)
     })
+}
+
+fn elastic_control_transition(tracking: bool, config: &MotionConfig) -> gpui_motion::Transition {
+    if tracking || !config.allows_motion() {
+        gpui_motion::Transition::Instant
+    } else {
+        SIDEBAR_RESIZE_SPRING.transition(config.duration(Speed::Quick))
+    }
 }
 
 pub(super) fn control_thumb_transition<E: Styled + IntoElement + 'static>(
