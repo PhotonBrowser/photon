@@ -113,6 +113,12 @@ impl BrowserWindow {
         let content = self.new_page(NEW_TAB, cx);
         self._empty_page_subscription = self.subscribe_to_content(&content, window, cx);
         self.empty_page = Some(content);
+        self.omnibox
+            .update(cx, |omnibox, cx| omnibox.focus(window, cx));
+        let omnibox = self.omnibox.clone();
+        cx.defer_in(window, move |_, window, cx| {
+            omnibox.update(cx, |omnibox, cx| omnibox.focus(window, cx));
+        });
         cx.notify();
     }
 

@@ -1542,6 +1542,11 @@ impl BrowserWindow {
         } else if self.shows_spaces(cx) && self.tabs[index].space != current {
             self.switch_space(self.tabs[index].space, cx);
         }
+        let focus_internal_page = focus_contents
+            && matches!(
+                &self.tabs[index].content,
+                TabContent::Page(page) if !page.definition.is(NEW_TAB)
+            );
         let webview = self.tabs[index].content.webview();
         if let Some(webview) = webview.as_ref() {
             let window_visible = self.window_visible;
@@ -1555,10 +1560,18 @@ impl BrowserWindow {
         }
         self.omnibox.update(cx, |omnibox, cx| {
             omnibox.set_content(webview, self.tabs[index].content.page_address(), window, cx);
-            if focus_contents && self.tabs[index].content.webview().is_none() {
+            if focus_contents
+                && matches!(
+                    &self.tabs[index].content,
+                    TabContent::Page(page) if page.definition.is(NEW_TAB)
+                )
+            {
                 omnibox.focus(window, cx);
             }
         });
+        if focus_internal_page {
+            window.focus(&self.root_focus, cx);
+        }
         self.sync_dialog(window, cx);
         cx.notify();
         self.wake_tab_sleep_scheduler();
@@ -1680,6 +1693,10 @@ impl BrowserWindow {
 
     pub(super) fn open_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.insert_page(self.new_tab_index(cx), NEW_TAB, window, cx);
+        let omnibox = self.omnibox.clone();
+        cx.defer_in(window, move |_, window, cx| {
+            omnibox.update(cx, |omnibox, cx| omnibox.focus(window, cx));
+        });
     }
 
     pub(super) fn insert_tab(
