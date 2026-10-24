@@ -22,7 +22,7 @@ use crate::platform::app_update::update_app;
 use super::super::super::trace;
 use super::super::settings::Settings;
 use super::BrowserWindow;
-use super::content::{BrowserTab, SleepingTab, TabContent};
+use super::content::{SleepingTab, TabContent};
 use super::registry::BrowserWindowRegistry;
 
 #[cfg(target_os = "macos")]
@@ -403,7 +403,7 @@ impl BrowserWindow {
         self.tabs
             .iter()
             .enumerate()
-            .filter(|(index, tab)| self.is_sleep_candidate(*index, tab))
+            .filter(|(index, _)| self.is_sleep_candidate(*index))
             .filter_map(|(_, tab)| {
                 let TabContent::Web(webview) = &tab.content else {
                     return None;
@@ -434,7 +434,7 @@ impl BrowserWindow {
             if !matches!(&tab.content, TabContent::Web(_)) {
                 continue;
             }
-            let candidate = self.is_sleep_candidate(index, tab);
+            let candidate = self.is_sleep_candidate(index);
             if !candidate || tab.last_active.elapsed() < timeout {
                 continue;
             }
@@ -454,7 +454,7 @@ impl BrowserWindow {
         self.tabs
             .iter()
             .enumerate()
-            .filter(|(index, tab)| self.is_pressure_candidate(*index, tab))
+            .filter(|(index, _)| self.is_pressure_candidate(*index))
             .filter_map(|(index, tab)| {
                 let webview = tab.content.webview()?;
                 let view = webview.read(cx);
@@ -472,7 +472,7 @@ impl BrowserWindow {
                             .or(view.diagnostics.managed_heap_bytes)
                             .unwrap_or_default(),
                         tab.last_active,
-                        self.is_sleep_candidate(index, tab)
+                        self.is_sleep_candidate(index)
                             && !view.state.can_go_back
                             && !view.state.can_go_forward,
                     )
@@ -490,13 +490,10 @@ impl BrowserWindow {
         let Some(index) = self.tabs.iter().position(|tab| tab.id == id) else {
             return false;
         };
-        if !self.is_pressure_candidate(index, &self.tabs[index]) {
+        if !self.is_pressure_candidate(index) {
             return false;
         }
-        if discard_if_safe
-            && self.is_sleep_candidate(index, &self.tabs[index])
-            && self.discard_tab(index, cx)
-        {
+        if discard_if_safe && self.is_sleep_candidate(index) && self.discard_tab(index, cx) {
             cx.notify();
             return true;
         }
@@ -548,12 +545,11 @@ impl BrowserWindow {
         true
     }
 
-    fn is_sleep_candidate(&self, index: usize, tab: &BrowserTab) -> bool {
-        self.active_tab != Some(index) && !self.closing_tabs.contains(&tab.id)
+    fn is_sleep_candidate(&self, index: usize) -> bool {
+        self.active_tab != Some(index)
     }
 
-    fn is_pressure_candidate(&self, index: usize, tab: &BrowserTab) -> bool {
-        !self.closing_tabs.contains(&tab.id)
-            && (self.active_tab != Some(index) || !self.window_visible)
+    fn is_pressure_candidate(&self, index: usize) -> bool {
+        self.active_tab != Some(index) || !self.window_visible
     }
 }

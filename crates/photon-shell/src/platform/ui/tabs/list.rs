@@ -40,7 +40,7 @@ pub(in super::super) fn tab_list(
 ) -> impl IntoElement {
     let spacing = metrics::SidebarSpacing::new(collapsed);
     let suppress_tooltips = tabs.iter().any(|tab| tab.suppress_tooltips);
-    let has_live_pinned = tabs.iter().any(|tab| tab.pinned && !tab.closing);
+    let has_live_pinned = tabs.iter().any(|tab| tab.pinned);
     sync_reorder_order(&pinned_reorder, &tabs, true);
     sync_reorder_order(&today_reorder, &tabs, false);
     let tabs = reorder_tab_items(tabs, &pinned_reorder, &today_reorder);
@@ -173,7 +173,6 @@ fn tab_row(parts: TabParts, palette: ThemeColors, reorder: &ReorderGroup<u64>) -
     let position_offset = parts.position_offset;
     let reorder_key = parts.reorder_key;
     let focus_handle = parts.focus_handle.clone();
-    let closing = parts.closing;
     let reorder_transition = parts.reorder_transition;
     let row = parts
         .tab
@@ -208,14 +207,7 @@ fn tab_row(parts: TabParts, palette: ThemeColors, reorder: &ReorderGroup<u64>) -
         TabDragAxis::Vertical,
         position_offset,
     );
-    super::measured_tab(
-        row,
-        reorder_key,
-        focus_handle,
-        closing,
-        reorder_transition,
-        reorder,
-    )
+    super::measured_tab(row, reorder_key, focus_handle, reorder_transition, reorder)
 }
 
 /// A square holding only the tab's icon, for the collapsed sidebar. The
@@ -225,7 +217,6 @@ fn tab_tile(parts: TabParts, palette: ThemeColors, reorder: &ReorderGroup<u64>) 
     let position_offset = parts.position_offset;
     let reorder_key = parts.reorder_key;
     let focus_handle = parts.focus_handle.clone();
-    let closing = parts.closing;
     let reorder_transition = parts.reorder_transition;
     let tooltip = (!parts.suppress_tooltips).then(|| label_tooltip(parts.label.clone(), palette));
     let tile = collapsed_tile(parts.tab)
@@ -243,14 +234,7 @@ fn tab_tile(parts: TabParts, palette: ThemeColors, reorder: &ReorderGroup<u64>) 
         TabDragAxis::Vertical,
         position_offset,
     );
-    super::measured_tab(
-        tile,
-        reorder_key,
-        focus_handle,
-        closing,
-        reorder_transition,
-        reorder,
-    )
+    super::measured_tab(tile, reorder_key, focus_handle, reorder_transition, reorder)
 }
 
 /// "+ New Tab", above the tabs; collapsed, only "+".

@@ -1048,7 +1048,7 @@ fn close_tab(tab_id: u64, cx: &mut App) -> DispatchResult {
             Ok::<_, (&'static str, String)>(())
         })
         .map_err(|error| ("window_unavailable", error.to_string()))??;
-    Ok(json!({"tab_id": tab_id, "state": "closing"}))
+    Ok(json!({"tab_id": tab_id, "state": "closed"}))
 }
 
 fn activate_tab(tab_id: u64, cx: &mut App) -> DispatchResult {

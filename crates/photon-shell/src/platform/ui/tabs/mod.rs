@@ -19,7 +19,7 @@ use super::controls::{OwnsClicks, Pressable};
 use super::icons::{
     audio_icon, close_icon, globe_icon, loading_spinner, photon_logo, sleeping_icon,
 };
-use super::layout::{h_stack, v_stack};
+use super::layout::h_stack;
 use super::motion::{
     AnimateIn, AnimateSpring, Entrance, ReorderAxis, ReorderGroup, SpringSpec, pop,
 };
@@ -27,7 +27,7 @@ use super::{
     ClickHandler, KeyDownHandler, MouseDownHandler, MouseUpHandler, metrics, theme::ThemeColors,
 };
 pub(super) use list::tab_list;
-use std::{rc::Rc, time::Duration};
+use std::rc::Rc;
 pub(super) use strip::tab_strip;
 
 pub(super) type TabPointerDown =
@@ -171,21 +171,15 @@ impl TabIcon {
 /// How a tab icon appears.
 pub(super) const ICON_ENTRANCE: Entrance = pop(metrics::TAB_FAVICON_SIZE);
 
-/// A closing tab settles out of its slot.
-const TAB_MOTION_SPRING: SpringConfig = SpringConfig::new(1_800.0, 84.85, 1.0);
 /// New rows settle quickly so the list clears space as they arrive.
 const TAB_ENTRY_SPRING: SpringConfig = SpringConfig::new(7_200.0, 169.71, 1.0);
 const TAB_MOTION_EPSILON: f32 = 0.001;
-pub(super) const TAB_CLOSE_DURATION: Duration = Duration::from_millis(260);
 
 #[derive(Clone)]
 pub(super) struct TabMotion {
     pub id: ElementId,
     pub from: f32,
     pub target: f32,
-    pub closing: bool,
-    pub extent: f32,
-    pub trailing_gap: f32,
     pub opacity: f32,
     pub offset_scale: f32,
 }
@@ -202,84 +196,30 @@ where
     let Some(motion) = motion else {
         return element.into_any_element();
     };
-    let element = if motion.closing {
-        match axis {
-            TabDragAxis::Horizontal => element
-                .absolute()
-                .flex_none()
-                .min_w_0()
-                .w(px(motion.extent))
-                .top(px(0.0))
-                .h(px(metrics::TAB_HEIGHT)),
-            TabDragAxis::Vertical => element
-                .absolute()
-                .flex_none()
-                .min_h_0()
-                .left(px(0.0))
-                .w_full()
-                .h(px(motion.extent)),
-        }
-    } else {
-        element
-    };
-    let element = element.animate_spring(
-        motion.id,
-        motion.from,
-        motion.target,
-        SpringSpec {
-            config: if motion.closing {
-                TAB_MOTION_SPRING
-            } else {
-                TAB_ENTRY_SPRING
+    element
+        .animate_spring(
+            motion.id,
+            motion.from,
+            motion.target,
+            SpringSpec {
+                config: TAB_ENTRY_SPRING,
+                epsilon: TAB_MOTION_EPSILON,
             },
-            epsilon: TAB_MOTION_EPSILON,
-        },
-        move |element, value| {
-            let progress = value.clamp(0.0, 1.0);
-            let leaving = 1.0 - progress;
-            let offset = match axis {
-                TabDragAxis::Horizontal => {
-                    -metrics::TAB_ENTRY_OFFSET * leaving * motion.offset_scale
-                }
-                TabDragAxis::Vertical if motion.closing => {
-                    metrics::TAB_ENTRY_OFFSET * leaving * motion.offset_scale
-                }
-                TabDragAxis::Vertical => -metrics::TAB_ENTRY_OFFSET * leaving * motion.offset_scale,
-            };
-            element
-                .opacity(motion.opacity * progress)
-                .when(axis == TabDragAxis::Horizontal, |element| {
-                    element.left(px(position_offset + offset))
-                })
-                .when(axis == TabDragAxis::Vertical, |element| {
-                    element.top(px(position_offset + offset))
-                })
-        },
-    );
-    if !motion.closing {
-        return element.into_any_element();
-    }
-
-    match axis {
-        TabDragAxis::Horizontal => h_stack()
-            .relative()
-            .flex_none()
-            .min_w_0()
-            .w(px(0.0))
-            .h(px(metrics::TAB_HEIGHT))
-            .mr(px(-motion.trailing_gap))
-            .child(element)
-            .into_any_element(),
-        TabDragAxis::Vertical => v_stack()
-            .relative()
-            .flex_none()
-            .min_h_0()
-            .w_full()
-            .h(px(0.0))
-            .mb(px(-motion.trailing_gap))
-            .child(element)
-            .into_any_element(),
-    }
+            move |element, value| {
+                let progress = value.clamp(0.0, 1.0);
+                let leaving = 1.0 - progress;
+                let offset = -metrics::TAB_ENTRY_OFFSET * leaving * motion.offset_scale;
+                element
+                    .opacity(motion.opacity * progress)
+                    .when(axis == TabDragAxis::Horizontal, |element| {
+                        element.left(px(position_offset + offset))
+                    })
+                    .when(axis == TabDragAxis::Vertical, |element| {
+                        element.top(px(position_offset + offset))
+                    })
+            },
+        )
+        .into_any_element()
 }
 
 /// Sizes an icon image, growing it in from a smaller size while
@@ -310,13 +250,11 @@ where
 pub(super) struct TabItem {
     pub id: String,
     pub reorder_key: u64,
-    /// The tab's entrance or in-place closing spring.
+    /// The tab's entrance motion.
     pub motion: Option<TabMotion>,
     /// Prevents the reorder group from adding a second position animation
     /// while a measured tab insertion transition is in progress.
     pub reorder_transition: gpui_motion::Transition,
-    /// The tab is leaving and should no longer respond to input.
-    pub closing: bool,
     pub label: String,
     pub icon: TabIcon,
     /// Whether the icon is still growing in after it first appeared.
@@ -362,7 +300,6 @@ struct TabParts {
     position_offset: f32,
     reorder_key: u64,
     focus_handle: FocusHandle,
-    closing: bool,
 }
 
 impl TabParts {
@@ -393,22 +330,18 @@ impl TabParts {
         let motion = tab.motion.clone();
         let reorder_transition = tab.reorder_transition;
         let dragged = tab.dragging;
-        let closing = tab.closing;
         let sleeping = tab.sleeping;
         let suppress_tooltips = tab.suppress_tooltips;
-        let focus_handle = tab
-            .focus_handle
-            .tab_index(focus_index)
-            .tab_stop(tab.active && !tab.closing);
+        let focus_handle = tab.focus_handle.tab_index(focus_index).tab_stop(tab.active);
         let element = h_stack()
             .id(tab.id.clone())
             .group(tab.id.clone())
             .role(Role::Tab)
             .aria_label(tab_label)
-            .aria_selected(tab.active && !tab.closing)
+            .aria_selected(tab.active)
             .aria_position_in_set(position + 1)
             .aria_size_of_set(tab_count)
-            .when(!tab.closing, |element| element.track_focus(&focus_handle))
+            .track_focus(&focus_handle)
             .focus_ring(palette)
             .items_center()
             .text_color(rgb(if sleeping {
@@ -481,7 +414,6 @@ impl TabParts {
                 focus_index + 1,
                 icon_color,
                 !suppress_tooltips,
-                !tab.closing,
                 palette,
             ),
             TabIcon::Logo => sized_icon(
@@ -499,11 +431,6 @@ impl TabParts {
             focus_index + 1 + if audio_control { 1 } else { 0 },
             palette,
         );
-        let close = if tab.closing {
-            close.tab_stop(false)
-        } else {
-            close
-        };
         Self {
             tab: element,
             icon,
@@ -519,7 +446,6 @@ impl TabParts {
             position_offset,
             reorder_key,
             focus_handle,
-            closing,
         }
     }
 
@@ -538,13 +464,9 @@ fn measured_tab(
     element: AnyElement,
     key: u64,
     focus_handle: FocusHandle,
-    closing: bool,
     transition: gpui_motion::Transition,
     reorder: &ReorderGroup<u64>,
 ) -> AnyElement {
-    if closing {
-        return element;
-    }
     reorder
         .item_with_focus(
             format!("browser-tab-reorder-{key}"),
@@ -565,7 +487,7 @@ pub(super) fn sync_reorder_order(reorder: &ReorderGroup<u64>, tabs: &[TabItem], 
     let current = reorder.order();
     if current.iter().copied().eq(tabs
         .iter()
-        .filter(|tab| tab.pinned == pinned && !tab.closing)
+        .filter(|tab| tab.pinned == pinned)
         .map(|tab| tab.reorder_key))
     {
         return;
@@ -575,7 +497,7 @@ pub(super) fn sync_reorder_order(reorder: &ReorderGroup<u64>, tabs: &[TabItem], 
     reorder
         .set_order(
             tabs.iter()
-                .filter(|tab| tab.pinned == pinned && !tab.closing)
+                .filter(|tab| tab.pinned == pinned)
                 .map(|tab| tab.reorder_key)
                 .collect(),
         )
@@ -607,7 +529,7 @@ pub(super) fn reorder_tab_items(
 fn reorder_order_matches(reorder: &ReorderGroup<u64>, tabs: &[TabItem], pinned: bool) -> bool {
     reorder.order().iter().copied().eq(tabs
         .iter()
-        .filter(|tab| tab.pinned == pinned && !tab.closing)
+        .filter(|tab| tab.pinned == pinned)
         .map(|tab| tab.reorder_key))
 }
 
@@ -617,27 +539,23 @@ fn reorder_section(tabs: &mut [TabItem], reorder: &ReorderGroup<u64>, pinned: bo
     }
 
     let order = reorder.order();
-    let count = tabs
-        .iter()
-        .filter(|tab| tab.pinned == pinned && !tab.closing)
-        .count();
+    let count = tabs.iter().filter(|tab| tab.pinned == pinned).count();
     if count != order.len()
         || order.iter().any(|key| {
             !tabs
                 .iter()
-                .any(|tab| tab.pinned == pinned && !tab.closing && tab.reorder_key == *key)
+                .any(|tab| tab.pinned == pinned && tab.reorder_key == *key)
         })
     {
         return;
     }
 
-    // Swap only live slots in place: closing tabs keep their exit geometry and
-    // pointer-driven order changes need no temporary allocations.
+    // Pointer-driven order changes need no temporary allocations.
     for (target_index, key) in order.iter().enumerate() {
         let target = tabs
             .iter()
             .enumerate()
-            .filter(|(_, tab)| tab.pinned == pinned && !tab.closing)
+            .filter(|(_, tab)| tab.pinned == pinned)
             .nth(target_index)
             .map(|(index, _)| index)
             .expect("reorder group matches rendered tabs");
@@ -646,7 +564,7 @@ fn reorder_section(tabs: &mut [TabItem], reorder: &ReorderGroup<u64>, pinned: bo
         }
         let source = tabs
             .iter()
-            .position(|tab| tab.pinned == pinned && !tab.closing && tab.reorder_key == *key)
+            .position(|tab| tab.pinned == pinned && tab.reorder_key == *key)
             .expect("tab key belongs to reorder group");
         tabs.swap(target, source);
     }
@@ -679,7 +597,6 @@ fn audio_control_button(
     focus_index: isize,
     icon_color: u32,
     show_tooltip: bool,
-    tab_stop: bool,
     palette: ThemeColors,
 ) -> AnyElement {
     let label = if muted {
@@ -693,7 +610,7 @@ fn audio_control_button(
         .role(Role::Button)
         .aria_label(label)
         .tab_index(focus_index)
-        .tab_stop(tab_stop)
+        .tab_stop(true)
         .focus_ring(palette)
         .flex_shrink_0()
         .relative()

@@ -62,7 +62,7 @@ use super::omnibox::{Omnibox, OmniboxEvent};
 use super::pages::find_page;
 use super::settings::Settings;
 use super::shortcuts_dialog::ShortcutsDialog;
-use super::tabs::{RevealedIcon, TabDragAxis, TabIcon, TabReorderGroups};
+use super::tabs::{RevealedIcon, TabDragAxis, TabReorderGroups};
 use super::theme::{ThemeColors, palette};
 use crate::platform::permission_coordinator::PermissionCoordinator;
 use alerts::{AlertCenter, EngineNotice, NoticeExpiry};
@@ -175,21 +175,8 @@ pub(in crate::platform) struct BrowserWindow {
     /// The icon each tab last revealed and when, so an icon animates in once
     /// rather than whenever the tab redraws it after a spinner.
     revealed_icons: RefCell<HashMap<u64, (RevealedIcon, Instant)>>,
-    /// Tabs that should keep their entry wrapper mounted so GPUI owns the full
-    /// animation lifecycle and can retarget it smoothly when they close.
+    /// Tabs that should keep their entry wrapper mounted through its animation.
     tab_entry_animations: RefCell<HashSet<u64>>,
-    /// The latest rendered appearance of each tab, frozen while it closes.
-    tab_visuals: RefCell<HashMap<u64, (String, TabIcon)>>,
-    /// Tabs that remain mounted while their actual element animates out.
-    closing_tabs: HashSet<u64>,
-    /// Which closing tabs were active when their exit began.
-    closing_tab_active: HashSet<u64>,
-    /// Their original layout extents, used to size their absolute exit visuals.
-    closing_tab_extents: HashMap<u64, f32>,
-    /// The gap removed with each closing tab's zero-size layout slot.
-    closing_tab_gaps: HashMap<u64, f32>,
-    /// Finalizes each close after its spring has settled.
-    tab_close_tasks: HashMap<u64, Task<()>>,
     /// Whether any part of the window is on screen. Engine renders the active
     /// tab only while it is, since GPUI-CE stops drawing an occluded window.
     window_visible: bool,
@@ -592,12 +579,6 @@ fn open_browser_window(
                 zoom_shown_at: None,
                 revealed_icons: RefCell::default(),
                 tab_entry_animations: RefCell::default(),
-                tab_visuals: RefCell::default(),
-                closing_tabs: HashSet::new(),
-                closing_tab_active: HashSet::new(),
-                closing_tab_extents: HashMap::new(),
-                closing_tab_gaps: HashMap::new(),
-                tab_close_tasks: HashMap::new(),
                 window_visible: true,
                 _appearance_subscription: appearance_subscription,
                 _activation_subscription: activation_subscription,
