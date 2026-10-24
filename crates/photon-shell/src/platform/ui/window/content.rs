@@ -127,10 +127,17 @@ impl BrowserWindow {
     ) {
         if self.active_tab.is_none() {
             match find_page(url) {
-                Some(page) => self.insert_page(self.tabs.len(), page, window, cx),
+                Some(page) => self.insert_page(self.new_tab_index(cx), page, window, cx),
                 None => {
                     if let Some(webview) = create_webview(cx, self.runtime.clone(), url) {
-                        self.insert_webview(self.tabs.len(), webview, None, true, window, cx);
+                        self.insert_webview(
+                            self.new_tab_index(cx),
+                            webview,
+                            None,
+                            true,
+                            window,
+                            cx,
+                        );
                     }
                 }
             }

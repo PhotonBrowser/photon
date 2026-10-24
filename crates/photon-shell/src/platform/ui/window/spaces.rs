@@ -135,9 +135,9 @@ impl BrowserWindow {
         match latest {
             Some(index) => self.activate_tab(index, true, window, cx),
             None if shows_spaces => {
-                self.insert_page_immediately(self.tabs.len(), NEW_TAB, window, cx);
+                self.insert_page_immediately(self.new_tab_index(cx), NEW_TAB, window, cx);
             }
-            None => self.insert_page(self.tabs.len(), NEW_TAB, window, cx),
+            None => self.insert_page(self.new_tab_index(cx), NEW_TAB, window, cx),
         }
     }
 

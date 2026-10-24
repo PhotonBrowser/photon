@@ -1569,8 +1569,22 @@ impl BrowserWindow {
         window.focus(&self.tab_focus_handles[index], cx);
     }
 
+    /// The new tab's position: at the top of today's tabs in a vertical
+    /// sidebar, and at the end of the horizontal strip.
+    pub(super) fn new_tab_index(&self, cx: &App) -> usize {
+        if self.tab_axis(cx) != TabDragAxis::Vertical {
+            return self.tabs.len();
+        }
+
+        let space = self.shows_spaces(cx).then(|| self.current_space(cx));
+        self.tabs
+            .iter()
+            .position(|tab| tab.pin.is_none() && space.is_none_or(|space| tab.space == space))
+            .unwrap_or_else(|| self.pinned_count())
+    }
+
     pub(super) fn open_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.insert_page(self.tabs.len(), NEW_TAB, window, cx);
+        self.insert_page(self.new_tab_index(cx), NEW_TAB, window, cx);
     }
 
     pub(super) fn insert_tab(
@@ -1596,10 +1610,22 @@ impl BrowserWindow {
         address: &str,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) {
+    ) -> Option<u64> {
+        let previous_count = self.tabs.len();
+        let existing_single_tab = find_page(address).is_some_and(|page| {
+            page.single_tab
+                && self.tabs.iter().any(|tab| {
+                    matches!(&tab.content, TabContent::Page(shown) if shown.definition.is(page))
+                })
+        });
         match find_page(address) {
             Some(page) => self.open_page_tab(page, window, cx),
-            None => self.insert_tab(self.tabs.len(), Some(address), window, cx),
+            None => self.insert_tab(self.new_tab_index(cx), Some(address), window, cx),
+        }
+        if self.tabs.len() > previous_count || existing_single_tab {
+            self.active_tab.map(|index| self.tabs[index].id)
+        } else {
+            None
         }
     }
 
@@ -1621,7 +1647,7 @@ impl BrowserWindow {
             .flatten();
         match open {
             Some(index) => self.activate_tab(index, true, window, cx),
-            None => self.insert_page(self.tabs.len(), page, window, cx),
+            None => self.insert_page(self.new_tab_index(cx), page, window, cx),
         }
     }
 
@@ -1665,7 +1691,14 @@ impl BrowserWindow {
             request.activate
         ));
         let webview = create_webview_from_session(cx, self.runtime.clone(), request.session);
-        self.insert_webview(self.tabs.len(), webview, None, request.activate, window, cx);
+        self.insert_webview(
+            self.new_tab_index(cx),
+            webview,
+            None,
+            request.activate,
+            window,
+            cx,
+        );
     }
 
     /// Inserts a tab showing `webview`, pinned at `pin` or one of today's
@@ -1868,6 +1901,9 @@ impl BrowserWindow {
             // Keep `active_tab` naming the same page until the switch below.
             self.active_tab = self.active_tab.map(|active_tab| active_tab + 1);
         }
+        if options.animate_appearance {
+            self.animate_tabs_after_insert(id, cx);
+        }
         let activate = options.activate || (self.active_tab.is_none() && self.tabs.len() == 1);
         if activate {
             self.empty_page = None;
@@ -1882,6 +1918,63 @@ impl BrowserWindow {
             }
             cx.notify();
             self.wake_tab_sleep_scheduler();
+        }
+    }
+
+    /// Move the tabs after a newly inserted vertical row from their old
+    /// positions into the slots the new row has pushed them into.
+    fn animate_tabs_after_insert(&mut self, inserted_id: u64, cx: &mut Context<Self>) {
+        let axis = self.tab_axis(cx);
+        let animations = Settings::motion(cx);
+        if axis != TabDragAxis::Vertical || !animations.allows_motion() || self.tab_drag_active() {
+            return;
+        }
+
+        let listed = self.listed_tabs(cx);
+        let Some(inserted_position) = listed
+            .iter()
+            .position(|&index| self.tabs[index].id == inserted_id)
+        else {
+            return;
+        };
+        let displaced: Vec<u64> = listed
+            .iter()
+            .skip(inserted_position + 1)
+            .filter_map(|&index| {
+                let tab = &self.tabs[index];
+                (tab.pin.is_none() && !self.closing_tabs.contains(&tab.id)).then_some(tab.id)
+            })
+            .collect();
+        let Some(first_id) = displaced.first().copied() else {
+            return;
+        };
+
+        let collapsed = self.sidebar.shows_icons();
+        let spacing = super::super::metrics::SidebarSpacing::new(collapsed);
+        let extent = self
+            .tab_geometry
+            .get(&first_id)
+            .map(|bounds| axis_size(*bounds, axis))
+            .unwrap_or_else(|| {
+                if collapsed {
+                    super::super::metrics::SIDEBAR_COLLAPSED_ITEM_SIZE
+                } else {
+                    super::super::metrics::SIDEBAR_TAB_HEIGHT
+                }
+            });
+        let shift = extent + spacing.item_gap;
+        let duration = Duration::from_millis(super::super::metrics::TAB_REORDER_DURATION_MS);
+
+        for id in displaced {
+            let from = self.tab_offset(id, axis) - shift;
+            if let Some(from) = animation_retarget_offset(true, from) {
+                self.tab_position_animations.insert(
+                    id,
+                    super::TabPositionAnimation::new(axis, from, duration, &animations),
+                );
+            } else {
+                self.tab_position_animations.remove(&id);
+            }
         }
     }
 
@@ -2216,12 +2309,12 @@ impl BrowserWindow {
                 // The space has no other tab; show it a new tab page, as an
                 // empty space does when switched to.
                 None if self.closing_tabs.is_empty() => {
-                    self.insert_page(self.tabs.len(), NEW_TAB, window, cx)
+                    self.insert_page(self.new_tab_index(cx), NEW_TAB, window, cx)
                 }
                 None => {}
             }
         } else if self.active_tab.is_none() && self.closing_tabs.is_empty() {
-            self.insert_page(self.tabs.len(), NEW_TAB, window, cx);
+            self.insert_page(self.new_tab_index(cx), NEW_TAB, window, cx);
         } else {
             cx.notify();
         }

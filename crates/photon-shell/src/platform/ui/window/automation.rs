@@ -1029,18 +1029,12 @@ fn new_tab(window_id: u64, url: &str, cx: &mut App) -> DispatchResult {
     let handle = find_window(window_id, cx)?;
     let tab_id = handle
         .update(cx, |browser, window, cx| {
-            let previous_count = browser.tabs.len();
-            browser.open_in_new_tab(url, window, cx);
-            browser
-                .tabs
-                .get(previous_count)
-                .map(|tab| tab.id)
-                .ok_or_else(|| {
-                    (
-                        "tab_creation_failed",
-                        "Photon could not create a tab".to_owned(),
-                    )
-                })
+            browser.open_in_new_tab(url, window, cx).ok_or_else(|| {
+                (
+                    "tab_creation_failed",
+                    "Photon could not create a tab".to_owned(),
+                )
+            })
         })
         .map_err(|error| ("window_unavailable", error.to_string()))??;
     Ok(json!({"tab_id": tab_id, "window_id": window_id}))

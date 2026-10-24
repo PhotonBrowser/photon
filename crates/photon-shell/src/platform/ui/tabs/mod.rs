@@ -235,7 +235,10 @@ where
                 TabDragAxis::Horizontal => {
                     -metrics::TAB_ENTRY_OFFSET * leaving * motion.offset_scale
                 }
-                TabDragAxis::Vertical => metrics::TAB_ENTRY_OFFSET * leaving * motion.offset_scale,
+                TabDragAxis::Vertical if motion.closing => {
+                    metrics::TAB_ENTRY_OFFSET * leaving * motion.offset_scale
+                }
+                TabDragAxis::Vertical => -metrics::TAB_ENTRY_OFFSET * leaving * motion.offset_scale,
             };
             element
                 .opacity(motion.opacity * progress)

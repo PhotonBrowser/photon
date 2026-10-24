@@ -61,8 +61,21 @@ fn open_urls(urls: &[String], runtime: &Rc<EngineRuntime>, cx: &mut App) {
     };
     window
         .update(cx, |browser, window, cx| {
-            for url in rest {
-                browser.open_in_new_tab(url, window, cx);
+            let mut ordered = rest.iter().enumerate().collect::<Vec<_>>();
+            let vertical = browser.tab_axis(cx) == super::TabDragAxis::Vertical;
+            if vertical {
+                ordered.reverse();
+            }
+            let last_index = rest.len().checked_sub(1);
+            let mut last_tab = None;
+            for (index, url) in ordered {
+                let tab = browser.open_in_new_tab(url, window, cx);
+                if last_index == Some(index) {
+                    last_tab = tab;
+                }
+            }
+            if vertical && let Some(index) = last_tab.and_then(|id| browser.tab_index_by_id(id)) {
+                browser.activate_tab(index, true, window, cx);
             }
             window.activate();
         })
