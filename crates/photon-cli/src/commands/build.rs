@@ -497,10 +497,53 @@ pub(crate) fn run_direct(
     #[cfg(target_os = "macos")]
     return run_direct_macos(root, release, verbose, url, shutdown_after_seconds);
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    return run_direct_portable(root, release, verbose, url, shutdown_after_seconds);
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
     {
         let _ = (root, release, verbose, url, shutdown_after_seconds);
-        Err("the direct GPUI-CE presentation path currently supports macOS only".into())
+        Err("the direct Photon shell supports macOS, Linux, and Windows".into())
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+fn run_direct_portable(
+    root: &Path,
+    release: bool,
+    verbose: bool,
+    url: Option<&str>,
+    shutdown_after_seconds: Option<u64>,
+) -> Result<(), String> {
+    build(root, release, verbose)?;
+    let engine = root.join("build").join(if release {
+        "engine-release"
+    } else {
+        "engine-debug"
+    });
+    let helper_directory = helper_process_dir(root, &engine, release);
+    let executable = photon_executable(root, release);
+    let mut process = Command::new(executable);
+    process
+        .current_dir(root)
+        .env("PHOTON_HELPER_DIRECTORY", helper_directory)
+        .env(runtime_library_variable(), runtime_library_path(&engine));
+    if verbose {
+        process.env("PHOTON_VERBOSE", "1");
+    }
+    if let Some(url) = url {
+        process.env("PHOTON_URL", url);
+    }
+    if let Some(seconds) = shutdown_after_seconds {
+        process.env("PHOTON_SHUTDOWN_AFTER_SECONDS", seconds.to_string());
+    }
+    let status = process
+        .status()
+        .map_err(|error| format!("cannot start direct Photon application: {error}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("Photon shell exited with {status}"))
     }
 }
 
@@ -758,11 +801,66 @@ pub(crate) fn run_ui(
     #[cfg(target_os = "macos")]
     return run_ui_macos(root, release, verbose, shutdown_after_seconds);
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    return run_ui_portable(root, release, verbose, shutdown_after_seconds);
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
     {
         let _ = (root, release, verbose, shutdown_after_seconds);
-        Err("the UI-only GPUI-CE shell currently supports macOS only".into())
+        Err("the Photon UI shell supports macOS, Linux, and Windows".into())
     }
+}
+
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+fn run_ui_portable(
+    root: &Path,
+    release: bool,
+    verbose: bool,
+    shutdown_after_seconds: Option<u64>,
+) -> Result<(), String> {
+    stage("Build Photon UI-only shell");
+    let mut args = vec![
+        "build",
+        "-p",
+        "photon-app",
+        "--bin",
+        "Photon",
+        "--features",
+        "ui-only",
+    ];
+    if release {
+        args.push("--release");
+    }
+    invoke_cargo(&args, root, None, verbose)?;
+
+    let mut process = Command::new(photon_executable(root, release));
+    process.current_dir(root);
+    if verbose {
+        process.env("PHOTON_VERBOSE", "1");
+    }
+    if let Some(seconds) = shutdown_after_seconds {
+        process.env("PHOTON_SHUTDOWN_AFTER_SECONDS", seconds.to_string());
+    }
+    let status = process
+        .status()
+        .map_err(|error| format!("cannot start UI-only Photon shell: {error}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("UI-only Photon shell exited with {status}"))
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+fn photon_executable(root: &Path, release: bool) -> PathBuf {
+    let filename = if cfg!(target_os = "windows") {
+        "Photon.exe"
+    } else {
+        "Photon"
+    };
+    root.join("target")
+        .join(if release { "release" } else { "debug" })
+        .join(filename)
 }
 
 #[cfg(target_os = "macos")]
@@ -811,23 +909,34 @@ fn run_ui_macos(
 }
 
 pub(crate) fn runtime_library_path(engine: &Path) -> String {
-    let mut paths = vec![path(&engine.join("lib64")), path(&engine.join("lib"))];
+    let mut paths = vec![engine.join("lib64"), engine.join("lib")];
     if cfg!(target_os = "linux") {
         for triplet in ["x64-linux-dynamic", "x64-linux-dynamic/debug"] {
-            paths.push(path(
-                &engine.join("vcpkg_installed").join(triplet).join("lib"),
-            ));
+            paths.push(engine.join("vcpkg_installed").join(triplet).join("lib"));
         }
     }
-    let variable = if cfg!(target_os = "macos") {
+    if cfg!(target_os = "windows") {
+        paths.push(engine.join("bin"));
+        paths.push(engine.join("vcpkg_installed/x64-windows/bin"));
+    }
+    let variable = runtime_library_variable();
+    if let Some(existing) = std::env::var_os(variable) {
+        paths.extend(std::env::split_paths(&existing));
+    }
+    std::env::join_paths(paths)
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned()
+}
+
+pub(crate) fn runtime_library_variable() -> &'static str {
+    if cfg!(target_os = "macos") {
         "DYLD_LIBRARY_PATH"
+    } else if cfg!(target_os = "windows") {
+        "PATH"
     } else {
         "LD_LIBRARY_PATH"
-    };
-    if let Some(existing) = std::env::var_os(variable) {
-        paths.push(existing.to_string_lossy().into_owned());
     }
-    paths.join(":")
 }
 
 pub(crate) fn clean(root: &Path, scope: Option<&str>) -> Result<(), String> {
