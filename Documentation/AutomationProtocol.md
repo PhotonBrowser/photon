@@ -4,6 +4,10 @@ Photon has an optional, local automation interface for isolated testing and
 Velocity resource and responsiveness workloads. It is not enabled in normal
 browser sessions and is not a remote debugging service.
 
+The authenticated socket transport is available on macOS and Linux. Windows
+shell builds reject `--automation-socket`; the Windows browser UI does not
+depend on this test-only interface.
+
 ## Enable an isolated session
 
 Launch the Photon executable with:

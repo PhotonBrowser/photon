@@ -15,13 +15,12 @@
 
 | Component | Responsibility | Boundary |
 | --- | --- | --- |
-| `photon-omnibox` | Address and search rules | Do not move omnibox policy into views. |
-| `photon-core` | Browser state, commands, and application logic | Must remain independent of UI frameworks, native handles, and Ladybird classes. |
+| `photon-core` | Browser state, commands, address/search rules, tab-sleep policy, and application logic | Must remain independent of UI frameworks, native handles, and Ladybird classes. |
 | `photon-ffi` | Exported Rust C ABI | Keep C ABI adaptation here rather than in core. |
-| `photon-shell` | GPUI views and browser/window lifecycle integration | Shell adapter owns browser and window lifecycle; avoid arbitrary Engine internals. |
+| `photon-shell` | Shared GPUI views, browser/window lifecycle, Engine adapter, and target OS adapters | Shell calls the explicit Engine embedder API; keep target OS behavior under `platform/<target>/`. |
 | `photon-presentation-ipc` | Presentation XPC transport | Owns transport, not browser policy. |
 | `photon-presentation-broker` | Presentation broker service executable | Keep service-executable responsibilities here. |
-| `Engine/` | Ladybird engine and Photon Engine embedder implementation | Engine changes belong here; shell calls the explicit embedder API. |
+| `Engine/` | Ladybird engine and Photon Engine embedder implementation | Engine changes belong here; shell calls the explicit embedder API in `LibPhotonEmbedder`. |
 | `PhotonBrowser/gpui-ce` | Generic GPUI-CE changes in the pinned submodule | Keep Photon-specific native integrations in Photon crates. |
 
 ### Native and engine integration
