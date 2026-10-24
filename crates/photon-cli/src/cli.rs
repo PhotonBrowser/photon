@@ -63,7 +63,7 @@ enum Command {
         /// Build and launch the shell without building, linking, or starting Photon Engine.
         #[arg(long)]
         ui: bool,
-        /// Hot-patch GPUI rendering code via Dioxus CLI (the default on macOS without ra-jit).
+        /// Hot-patch GPUI rendering code via Dioxus CLI (the default on macOS unless ra-jit is enabled).
         #[arg(long, conflicts_with = "no_hot_reload")]
         hot_reload: bool,
         /// Use the direct launch path instead of GPUI hot reloading.
@@ -250,11 +250,7 @@ pub fn run() -> Result<(), String> {
             if ui && url.is_some() {
                 return Err("--url cannot be used with --ui".into());
             }
-            if should_use_hot_reload(
-                hot_reload,
-                no_hot_reload,
-                commands::build::ra_jit_available(),
-            ) {
+            if should_use_hot_reload(hot_reload, no_hot_reload, commands::build::ra_jit_enabled()) {
                 return commands::build::run_hot_reload(
                     &root,
                     release,
@@ -369,8 +365,8 @@ fn workspace_root() -> Result<PathBuf, String> {
         .ok_or_else(|| "cannot locate Photon workspace".into())
 }
 
-fn should_use_hot_reload(explicit: bool, disabled: bool, ra_jit_available: bool) -> bool {
-    explicit || (cfg!(target_os = "macos") && !disabled && !ra_jit_available)
+fn should_use_hot_reload(explicit: bool, disabled: bool, ra_jit_enabled: bool) -> bool {
+    explicit || (cfg!(target_os = "macos") && !disabled && !ra_jit_enabled)
 }
 
 fn print_help() -> Result<(), String> {

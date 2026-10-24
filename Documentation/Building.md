@@ -22,7 +22,8 @@ photon run
 - `photon check` runs linting, compiles the Cargo workspace, and verifies architecture and dependency checkout rules.
 - `photon test` runs the Rust workspace tests.
 - `photon build` builds the Engine and the GPUI-CE application.
-- `photon run` builds and launches the native app. Direct app builds use `cargo ra-jit build` when ra-jit is installed with the pinned toolchain. On macOS, ra-jit selects the direct path by default when installed; Photon uses full-link mode (`RA_JIT_SPLICE=0`) unless you set that variable, because the crates.io 0.1.0 Mach-O splice path panicked on Photon edits. Changed functions still use ra-jit's compiler, then the app is relinked. Pass `--hot-reload` to use Dioxus, which reuses the existing Engine build without building Engine. Run `photon build` first if that Engine build is missing or out of date. Hot reloading currently supports macOS only. Use `--url URL` to choose the initial page. `--shutdown-after-seconds N` works on the direct path; pass `--no-hot-reload` if hot reload would otherwise be selected. `--verbose` prints the final presentation frame counts.
+- `photon run` builds and launches the native app. Direct app builds use plain Cargo by default. On macOS, `photon run` uses Dioxus hot reloading by default; pass `--no-hot-reload` for a direct build. Hot reloading reuses the existing Engine build without building Engine; run `photon build` first if that Engine build is missing or out of date. It currently supports macOS only. Use `--url URL` to choose the initial page. `--shutdown-after-seconds N` works on the direct path, and `--verbose` prints the final presentation frame counts.
+- `PHOTON_USE_RA_JIT=1 photon build` opts direct app builds into `cargo ra-jit`; `PHOTON_USE_RA_JIT=1 photon run --no-hot-reload` opts the direct run path in too. Photon leaves it off by default because the current macOS ra-jit build exited with `SIGBUS` during launch. On macOS, Photon sets `RA_JIT_SPLICE=0` unless already configured because the crates.io 0.1.0 Mach-O splice path panicked on Photon edits.
 - Hot reload launches the debug shell through Dioxus CLI and patches GPUI rendering code without restarting the app. Photon installs Dioxus CLI 0.7.10 with Cargo on first use if it is missing or has an incompatible version. Use `--hot-reload` to enable it explicitly, or `--ui` to hot-patch the UI-only shell without requiring Photon Engine.
 - `photon run --ui` builds and launches the shared browser window with the New Tab page, without building, linking, or starting Photon Engine. Shell-owned pages remain available; web pages cannot be opened in this mode. The path is available on macOS, Linux, and Windows.
 - `photon clean` removes generated build trees and stops the checkout-specific presentation broker.
@@ -30,7 +31,9 @@ photon run
 Photon currently uses ra-jit upstream commit
 [`c48ca3f`](https://github.com/indexable-inc/ra-jit/commit/c48ca3f800a1a4ce6a7e1ce9f9d7d05f26eced2f).
 The crates.io `ra-jit` 0.1.0 build segfaulted during Photon startup; this source
-build passed a Photon launch and a warm edited-function build on macOS arm64.
+build previously passed a Photon launch and a warm edited-function build on
+macOS arm64. With the current Photon code, a direct ra-jit launch exited with
+`SIGBUS`, so ra-jit remains opt-in.
 The checkout pins Rust 1.99.0 and includes `rust-src`, which ra-jit requires.
 
 ```sh

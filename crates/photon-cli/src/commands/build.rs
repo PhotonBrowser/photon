@@ -236,7 +236,7 @@ fn invoke_cargo(
     verbose: bool,
 ) -> Result<(), String> {
     // ra-jit can treat a target as current after Cargo's feature set changes.
-    let use_ra_jit = should_use_ra_jit(args, ra_jit_available());
+    let use_ra_jit = should_use_ra_jit(args, ra_jit_enabled());
     let mut command = Command::new("cargo");
     if use_ra_jit {
         command.arg("ra-jit");
@@ -310,6 +310,10 @@ fn ra_jit_is_on_path(path: &std::ffi::OsStr) -> bool {
 
 pub(crate) fn ra_jit_available() -> bool {
     std::env::var_os("PATH").is_some_and(|path| ra_jit_is_on_path(&path))
+}
+
+pub(crate) fn ra_jit_enabled() -> bool {
+    ra_jit_available() && matches!(std::env::var("PHOTON_USE_RA_JIT").as_deref(), Ok("1"))
 }
 
 pub(crate) fn engine_build(root: &Path, release: bool, verbose: bool) -> Result<(), String> {
