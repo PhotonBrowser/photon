@@ -63,7 +63,7 @@ enum Command {
         /// Build and launch the shell without building, linking, or starting Photon Engine.
         #[arg(long)]
         ui: bool,
-        /// Hot-patch GPUI rendering code in place with Dioxus CLI (debug builds only).
+        /// Hot-patch GPUI rendering code via Dioxus CLI, reusing the existing Engine build.
         #[arg(long)]
         hot_reload: bool,
         /// Navigate the PhotonWebView to this URL after launch.
@@ -249,6 +249,7 @@ pub fn run() -> Result<(), String> {
             if hot_reload {
                 return commands::build::run_hot_reload(
                     &root,
+                    release,
                     ui,
                     verbose,
                     url.as_deref(),

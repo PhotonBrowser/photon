@@ -23,7 +23,7 @@ photon run
 - `photon test` runs the Rust workspace tests.
 - `photon build` builds the Engine and the GPUI-CE application.
 - `photon run` builds and launches the native app. Use `--url URL` to choose the initial page. Use `--shutdown-after-seconds N` to exit after a fixed interval; `--verbose` prints the final presentation frame counts.
-- `photon run --hot-reload` launches the debug shell through Dioxus CLI and hot-patches GPUI rendering code without restarting the app. Photon installs Dioxus CLI 0.7.10 with Cargo on first use if it is missing or has an incompatible version. This experimental mode currently supports macOS only. Use `--ui` to hot-patch the UI-only shell without building Photon Engine, or `--url URL` to choose the initial page when using the Engine.
+- `photon run --hot-reload` launches the debug shell through Dioxus CLI and hot-patches GPUI rendering code without restarting the app. It reuses the existing Engine build for the selected profile and does not build Engine; run `photon build` first if that build is missing or out of date. Photon installs Dioxus CLI 0.7.10 with Cargo on first use if it is missing or has an incompatible version. This experimental mode currently supports macOS only. Use `--ui` to hot-patch the UI-only shell without requiring Photon Engine, or `--url URL` to choose the initial page when using the Engine.
 - `photon run --ui` builds and launches the shared browser window with the New Tab page, without building, linking, or starting Photon Engine. Shell-owned pages remain available; web pages cannot be opened in this mode. The path is available on macOS, Linux, and Windows.
 - `photon clean` removes generated build trees and stops the checkout-specific presentation broker.
 

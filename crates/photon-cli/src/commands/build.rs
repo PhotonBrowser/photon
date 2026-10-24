@@ -550,17 +550,18 @@ fn run_direct_portable(
 /// Builds and launches Photon under Dioxus CLI so GPUI-CE can apply Subsecond patches.
 pub(crate) fn run_hot_reload(
     root: &Path,
+    release: bool,
     ui_only: bool,
     verbose: bool,
     url: Option<&str>,
     shutdown_after_seconds: Option<u64>,
 ) -> Result<(), String> {
     #[cfg(target_os = "macos")]
-    return run_hot_reload_macos(root, ui_only, verbose, url, shutdown_after_seconds);
+    return run_hot_reload_macos(root, release, ui_only, verbose, url, shutdown_after_seconds);
 
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = (root, ui_only, verbose, url, shutdown_after_seconds);
+        let _ = (root, release, ui_only, verbose, url, shutdown_after_seconds);
         Err("GPUI hot reloading currently supports the macOS Photon shell only".into())
     }
 }
@@ -568,6 +569,7 @@ pub(crate) fn run_hot_reload(
 #[cfg(target_os = "macos")]
 fn run_hot_reload_macos(
     root: &Path,
+    release: bool,
     ui_only: bool,
     verbose: bool,
     url: Option<&str>,
@@ -578,13 +580,17 @@ fn run_hot_reload_macos(
     }
     let dioxus_cli = require_dioxus_cli(root)?;
 
-    let engine = root.join("build/engine-debug");
+    let engine = root.join("build").join(if release {
+        "engine-release"
+    } else {
+        "engine-debug"
+    });
     let helper_directory = if ui_only {
         None
     } else {
-        engine_build(root, false, verbose)?;
+        require_existing_engine_build(root, &engine, release)?;
         let service = super::presentation_broker::ensure(root, verbose)?;
-        Some((helper_process_dir(root, &engine, false), service))
+        Some((helper_process_dir(root, &engine, release), service))
     };
 
     stage("Start Photon with GPUI hot reloading");
@@ -640,6 +646,47 @@ fn run_hot_reload_macos(
     } else {
         Err(format!("Dioxus hot-reload server exited with {status}"))
     }
+}
+
+#[cfg(target_os = "macos")]
+fn require_existing_engine_build(root: &Path, engine: &Path, release: bool) -> Result<(), String> {
+    let mut required_outputs = vec![embedder_library_output(engine)];
+    required_outputs.extend(
+        HELPER_PROCESS_TARGETS
+            .iter()
+            .map(|name| helper_process_executable(root, engine, release, name)),
+    );
+    required_outputs.extend([
+        helper_process_executable(root, engine, release, "ProcessReaper"),
+        root.join("build/Resources/fonts/NotoEmoji.ttf"),
+        root.join("build/Resources/fonts/SerenitySans-Regular.ttf"),
+        root.join("build/Resources/ladybird/site-compatibility/cnn.com.json"),
+    ]);
+
+    let fingerprint = engine_fingerprint(root, release)?;
+    let fingerprint_path = engine.join(".photon-build-fingerprint");
+    let fingerprint_matches =
+        std::fs::read_to_string(&fingerprint_path).ok().as_deref() == Some(fingerprint.as_str());
+    let missing_outputs: Vec<_> = required_outputs
+        .into_iter()
+        .filter(|output| !output.is_file())
+        .collect();
+    if !fingerprint_matches || !missing_outputs.is_empty() {
+        let profile = if release { "release" } else { "debug" };
+        let missing = missing_outputs
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect::<Vec<_>>();
+        let detail = if missing.is_empty() {
+            format!("the {profile} build is out of date")
+        } else {
+            format!("missing {}", missing.join(", "))
+        };
+        return Err(format!(
+            "--hot-reload reuses the existing {profile} Photon Engine build and will not build it; {detail}. Run `photon build` first."
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(target_os = "macos")]

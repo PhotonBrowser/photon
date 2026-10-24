@@ -47,4 +47,6 @@ For UI iteration, `photon run --hot-reload` enables GPUI-CE's experimental
 Subsecond hot patching and launches the app with Dioxus CLI 0.7.10. It patches
 GPUI render code in the existing process; it does not cover every Rust code
 path. Changes to indirect workspace dependencies or startup code still need a
-rebuild or restart. Use `photon run --hot-reload --ui` to skip the Engine build.
+rebuild or restart. Hot reload reuses the selected existing Engine build and
+does not build Engine; run `photon build` first if it is missing or out of date.
+Use `photon run --hot-reload --ui` to run without requiring Engine.
