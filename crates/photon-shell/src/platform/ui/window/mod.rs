@@ -113,6 +113,8 @@ pub(in crate::platform) struct BrowserWindow {
     tab_drag_layout: Option<TabDragLayout>,
     tab_geometry: HashMap<u64, Bounds<Pixels>>,
     tab_container_bounds: Option<Bounds<Pixels>>,
+    /// Moves the sidebar's trailing New Tab row as tabs are added or removed.
+    new_tab_button_animation: Option<NewTabButtonAnimation>,
     tab_strip_scroll: ScrollHandle,
     tab_auto_scroll_at: Option<Instant>,
     favourites_bounds: Option<Bounds<Pixels>>,
@@ -261,6 +263,14 @@ enum TabDragPhase {
 struct TabPositionAnimation {
     axis: TabDragAxis,
     tween: Tween,
+}
+
+#[derive(Clone, Debug)]
+struct NewTabButtonAnimation {
+    id: String,
+    from: f32,
+    duration: Duration,
+    position: TabPositionAnimation,
 }
 
 impl TabPositionAnimation {
@@ -541,6 +551,7 @@ fn open_browser_window(
                 tab_drag_layout: None,
                 tab_geometry: HashMap::new(),
                 tab_container_bounds: None,
+                new_tab_button_animation: None,
                 tab_strip_scroll: ScrollHandle::new(),
                 tab_auto_scroll_at: None,
                 favourites_bounds: None,

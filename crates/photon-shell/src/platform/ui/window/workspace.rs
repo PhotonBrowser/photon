@@ -24,6 +24,9 @@ impl Render for BrowserWindow {
         self.sidebar.settle_if_motion_disabled(&animations);
         if !animations.allows_motion() {
             self.tab_position_animations.clear();
+            self.new_tab_button_animation = None;
+        } else if self.tab_axis(cx) != super::super::tabs::TabDragAxis::Vertical {
+            self.new_tab_button_animation = None;
         }
         let find_bar = self.find_bar_presence.sync(
             self.find_bar.as_ref().map(|(bar, _)| bar.clone()),

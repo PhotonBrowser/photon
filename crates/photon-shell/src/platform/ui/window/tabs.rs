@@ -34,6 +34,7 @@ pub(super) struct ClosedTab {
 /// How many closed tabs a window remembers.
 const CLOSED_TAB_LIMIT: usize = 25;
 static NEXT_TAB_ID: AtomicU64 = AtomicU64::new(1);
+static NEXT_TAB_BUTTON_MOTION_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Copy)]
 struct TabInsertionOptions {
@@ -1102,13 +1103,57 @@ impl BrowserWindow {
     pub(super) fn tab_container_bounds_handler(&self, cx: &Context<Self>) -> TabPrepaint {
         let browser = cx.entity().downgrade();
         Box::new(move |bounds, window, cx| {
-            browser
+            let animate_button = browser
                 .update(cx, |this, cx| {
                     this.tab_container_bounds = Some(bounds);
                     this.auto_scroll_tab_strip(window, cx);
+                    let running = this
+                        .new_tab_button_animation
+                        .as_ref()
+                        .is_some_and(|animation| animation.position.is_running());
+                    if !running {
+                        this.new_tab_button_animation = None;
+                    }
+                    running
                 })
-                .ok();
+                .unwrap_or(false);
+            if animate_button {
+                window.request_animation_frame();
+            }
         })
+    }
+
+    pub(super) fn new_tab_button_motion(&self) -> Option<(String, f32, Duration)> {
+        self.new_tab_button_animation
+            .as_ref()
+            .map(|animation| (animation.id.clone(), animation.from, animation.duration))
+    }
+
+    fn new_tab_button_position_offset(&self) -> f32 {
+        self.new_tab_button_animation
+            .as_ref()
+            .map_or(0.0, |animation| animation.position.value())
+    }
+
+    fn start_new_tab_button_animation(
+        &mut self,
+        from: f32,
+        duration: Duration,
+        settings: &super::super::motion::MotionConfig,
+    ) {
+        let id = NEXT_TAB_BUTTON_MOTION_ID.fetch_add(1, Ordering::Relaxed);
+        self.new_tab_button_animation = Some(super::NewTabButtonAnimation {
+            id: format!("browser-new-tab-position-{id}"),
+            from,
+            duration,
+            position: super::TabPositionAnimation::with_curve(
+                TabDragAxis::Vertical,
+                from,
+                duration,
+                settings,
+                super::super::motion::TweenCurve::EaseOut,
+            ),
+        });
     }
 
     fn auto_scroll_tab_strip(&mut self, window: &mut Window, cx: &Context<Self>) {
@@ -1644,6 +1689,21 @@ impl BrowserWindow {
             && (at_top || at_end);
         let duration = Duration::from_millis(super::super::metrics::TAB_INSERT_PUSH_DURATION_MS);
 
+        if animate
+            && at_end
+            && !pinned
+            && Settings::get(cx).new_tab_position == photon_core::NewTabPosition::AfterLast
+        {
+            let button_shift = extent
+                + if last_index.is_some() {
+                    spacing.item_gap
+                } else {
+                    0.0
+                };
+            let current_offset = self.new_tab_button_position_offset();
+            self.start_new_tab_button_animation(current_offset - button_shift, duration, &settings);
+        }
+
         for tab_index in section.into_iter().filter(|&tab_index| tab_index >= index) {
             let tab_id = self.tabs[tab_index].id;
             let current_offset = super::tab_position_animation_offset(
@@ -1675,7 +1735,9 @@ impl BrowserWindow {
         }
 
         if animate {
-            let from = if at_top { -shift } else { shift };
+            // At either edge, the new row enters from above and settles down
+            // into its slot. The trailing button follows the same movement.
+            let from = -shift;
             self.tab_position_animations.insert(
                 id,
                 super::TabPositionAnimation::with_curve(
@@ -2159,7 +2221,36 @@ impl BrowserWindow {
         } else {
             0.0
         };
+        let button_shift = if pinned {
+            today_shift
+        } else {
+            let extent = self
+                .closing_tab_extents
+                .get(&closing_id)
+                .copied()
+                .unwrap_or_default();
+            let has_live_today = today_ids
+                .iter()
+                .any(|&index| !self.closing_tabs.contains(&self.tabs[index].id));
+            extent + if has_live_today { gap } else { 0.0 }
+        };
+        self.animate_new_tab_button_close_shift(button_shift, cx);
         animate_group(self, &today_ids, today_shift);
+    }
+
+    fn animate_new_tab_button_close_shift(&mut self, shift: f32, cx: &App) {
+        if shift <= 0.0
+            || Settings::get(cx).new_tab_position != photon_core::NewTabPosition::AfterLast
+        {
+            return;
+        }
+
+        let current_offset = self.new_tab_button_position_offset();
+        self.start_new_tab_button_animation(
+            current_offset + shift,
+            Duration::from_millis(super::super::metrics::TAB_REORDER_DURATION_MS),
+            &Settings::motion(cx),
+        );
     }
 
     pub(super) fn close_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {

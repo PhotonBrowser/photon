@@ -429,6 +429,24 @@ pub(super) trait AnimateSpring: Styled + gpui::IntoElement + Sized + 'static {
 
 impl<E: Styled + gpui::IntoElement + Sized + 'static> AnimateSpring for E {}
 
+/// Animates a vertical position offset with a retained element motion channel.
+pub(super) fn animate_vertical_position<E>(
+    element: E,
+    id: impl Into<ElementId>,
+    from: f32,
+    duration: Duration,
+) -> gpui::AnyElement
+where
+    E: Styled + gpui::IntoElement + 'static,
+{
+    let motion = Motion::new(Target::default().y(0.0))
+        .initial(Target::default().y(from))
+        .transition(TweenCurve::EaseOut.transition(duration));
+    MotionElement::new(id, element, motion)
+        .map(|element: E, frame: Frame| element.top(gpui::px(frame.target().y_px())))
+        .into_any_element()
+}
+
 /// A continuously retargetable scalar backed by the fork's analytic MotionValue.
 #[derive(Clone, Debug)]
 pub(super) struct Tween {

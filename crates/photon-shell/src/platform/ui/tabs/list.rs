@@ -16,9 +16,10 @@ use super::{
     animate_tab_motion, insertion_marker, is_foreign_tab_drag, reorder_tab_items,
     sync_reorder_order,
 };
+use std::time::Duration;
 
-/// The tabs, one row each: pinned tabs above a divider, then a row that
-/// opens a new tab and today's tabs. Collapsed, each row is only its icon.
+/// The tabs, one row each: pinned tabs above a divider, then today's tabs
+/// and a row that opens a new tab. Collapsed, each row is only its icon.
 #[expect(
     clippy::too_many_arguments,
     reason = "passes the distinct drag, focus, and layout callbacks for this list"
@@ -31,6 +32,8 @@ pub(in super::super) fn tab_list(
     on_drop: TabDrop,
     on_bounds: TabPrepaint,
     collapsed: bool,
+    new_tab_at_end: bool,
+    new_tab_button_motion: Option<(String, f32, Duration)>,
     palette: ThemeColors,
     pinned_reorder: ReorderGroup<u64>,
     today_reorder: ReorderGroup<u64>,
@@ -42,7 +45,7 @@ pub(in super::super) fn tab_list(
     sync_reorder_order(&today_reorder, &tabs, false);
     let tabs = reorder_tab_items(tabs, &pinned_reorder, &today_reorder);
     let tab_count = tabs.len();
-    let mut focus_index = 1;
+    let mut focus_index = if new_tab_at_end { 0 } else { 1 };
     let (mut pinned, mut today) = (Vec::new(), Vec::new());
     for (index, tab) in tabs.into_iter().enumerate() {
         let stops = TabParts::focus_stops(&tab.icon);
@@ -111,7 +114,23 @@ pub(in super::super) fn tab_list(
                     .bg(rgba(palette.menu_border)),
             )
     });
-    v_stack()
+    let new_tab = new_tab_row(
+        on_new_tab,
+        collapsed,
+        suppress_tooltips,
+        if new_tab_at_end { focus_index } else { 0 },
+        palette,
+    )
+    .on_drag_over::<DraggedTab>(move |style, _, _, _| style.bg(rgba(palette.hover_surface)))
+    .on_drop(move |dragged: &DraggedTab, window, cx| on_drop_into_today(dragged, window, cx));
+    let new_tab = match new_tab_button_motion {
+        Some((id, from, duration)) => {
+            super::super::motion::animate_vertical_position(new_tab, id, from, duration)
+        }
+        None => new_tab.into_any_element(),
+    };
+    let today = section("browser-tab-list", "Browser tabs", today, false);
+    let list = v_stack()
         .id("sidebar-tab-list-drag-target")
         .w_full()
         .h_full()
@@ -125,30 +144,25 @@ pub(in super::super) fn tab_list(
                 !has_live_pinned,
             ))
         })
-        .children(divider)
-        .child(
-            new_tab_row(on_new_tab, collapsed, suppress_tooltips, palette)
-                .on_drag_over::<DraggedTab>(move |style, _, _, _| {
-                    style.bg(rgba(palette.hover_surface))
-                })
-                .on_drop(move |dragged: &DraggedTab, window, cx| {
-                    on_drop_into_today(dragged, window, cx)
-                }),
-        )
-        .child(section("browser-tab-list", "Browser tabs", today, false))
-        .on_mouse_move_all(move |event, phase, hitbox, window, cx| {
-            on_drag_move(event, phase, hitbox, window, cx);
-        })
-        .on_prepaint(move |prepaint, window, cx| {
-            on_bounds(prepaint.bounds, window, cx);
-        })
-        .on_drag_over::<DraggedTab>(move |style, _, _, _| {
-            style
-                .border_1()
-                .border_color(rgba(palette.soft_accent_border))
-        })
-        .can_drop(|value, window, _| is_foreign_tab_drag(value, window))
-        .on_drop(move |dragged: &DraggedTab, window, cx| on_drop(dragged, window, cx))
+        .children(divider);
+    let list = if new_tab_at_end {
+        list.child(today).child(new_tab)
+    } else {
+        list.child(new_tab).child(today)
+    };
+    list.on_mouse_move_all(move |event, phase, hitbox, window, cx| {
+        on_drag_move(event, phase, hitbox, window, cx);
+    })
+    .on_prepaint(move |prepaint, window, cx| {
+        on_bounds(prepaint.bounds, window, cx);
+    })
+    .on_drag_over::<DraggedTab>(move |style, _, _, _| {
+        style
+            .border_1()
+            .border_color(rgba(palette.soft_accent_border))
+    })
+    .can_drop(|value, window, _| is_foreign_tab_drag(value, window))
+    .on_drop(move |dragged: &DraggedTab, window, cx| on_drop(dragged, window, cx))
 }
 
 /// A full-width row: icon, title, and a close button on the active tab and
@@ -244,13 +258,14 @@ fn new_tab_row(
     on_click: ClickHandler,
     collapsed: bool,
     suppress_tooltip: bool,
+    focus_index: isize,
     palette: ThemeColors,
 ) -> gpui_motion::PressScaleElement<gpui::Stateful<gpui::Div>> {
     let row = h_stack()
         .id("browser-new-tab")
         .role(Role::Button)
         .aria_label("New tab")
-        .tab_index(0)
+        .tab_index(focus_index)
         .focus_ring(palette)
         .items_center()
         .rounded(px(metrics::sidebar_item_radius()))
@@ -260,6 +275,7 @@ fn new_tab_row(
         .owns_clicks()
         .pressable()
         .on_click(on_click)
+        .relative()
         .child(add_icon(
             palette.text_secondary,
             metrics::SidebarSpacing::new(collapsed).icon_size,

@@ -312,6 +312,13 @@ impl BrowserWindow {
         let space = self.current_space(cx);
         let listed = self.listed_tabs(cx);
         let items = self.tab_items_for_indices(listed, cx);
+        let new_tab_at_end =
+            Settings::get(cx).new_tab_position == photon_core::NewTabPosition::AfterLast;
+        let new_tab_button_motion = if new_tab_at_end {
+            self.new_tab_button_motion()
+        } else {
+            None
+        };
         let browser = cx.entity().downgrade();
         let on_drag_move: TabDragMove =
             std::rc::Rc::new(move |event, phase, hitbox, window, cx| {
@@ -332,6 +339,8 @@ impl BrowserWindow {
             self.tab_drop_handler(cx),
             self.tab_container_bounds_handler(cx),
             collapsed,
+            new_tab_at_end,
+            new_tab_button_motion,
             palette,
             self.tab_reorder_groups
                 .group(TabDragAxis::Vertical, true)
