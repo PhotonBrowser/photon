@@ -33,7 +33,7 @@ photon test
 
 Setup installs or refreshes `photon` in Cargo's bin directory. Make sure `~/.cargo/bin` is on `PATH` to use `photon` without the `./` prefix. Run `photon install` to refresh the installed command after changing the CLI without rerunning setup.
 
-The first `photon check` verifies formatting, linting, Rust compilation, and architecture rules. `photon test` runs the workspace tests. Use `photon run` to build and launch the app after those checks pass.
+The first `photon check` verifies formatting, linting, Rust compilation, and architecture rules. `photon test` runs the workspace tests. On macOS, run `photon build` before `photon run`; the default hot-reload path reuses Engine and does not build it. On Linux and Windows, `photon run` builds and launches the app directly.
 
 Continue with [Building Photon](Documentation/Building.md) for build, run, and development commands.
 

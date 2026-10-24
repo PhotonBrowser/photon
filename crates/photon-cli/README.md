@@ -18,6 +18,7 @@ Setup installs or refreshes `photon` in Cargo's bin directory. Make sure `~/.car
 photon setup
 photon doctor
 photon run --url https://ladybird.org
+photon run --no-hot-reload
 photon check
 photon test
 photon deps status

@@ -55,7 +55,7 @@ enum Command {
         #[arg(long, default_value_t = true)]
         release: bool,
     },
-    /// Build and launch the direct GPUI-CE application.
+    /// Build and launch Photon.
     Run {
         /// Build with optimizations (the default).
         #[arg(long, default_value_t = true)]
@@ -63,9 +63,12 @@ enum Command {
         /// Build and launch the shell without building, linking, or starting Photon Engine.
         #[arg(long)]
         ui: bool,
-        /// Hot-patch GPUI rendering code via Dioxus CLI, reusing the existing Engine build.
-        #[arg(long)]
+        /// Hot-patch GPUI rendering code via Dioxus CLI (the default on macOS).
+        #[arg(long, conflicts_with = "no_hot_reload")]
         hot_reload: bool,
+        /// Use the direct launch path instead of GPUI hot reloading.
+        #[arg(long, conflicts_with = "hot_reload")]
+        no_hot_reload: bool,
         /// Navigate the PhotonWebView to this URL after launch.
         #[arg(long)]
         url: Option<String>,
@@ -239,6 +242,7 @@ pub fn run() -> Result<(), String> {
             release,
             ui,
             hot_reload,
+            no_hot_reload,
             url,
             shutdown_after_seconds,
         }) => {
@@ -246,7 +250,7 @@ pub fn run() -> Result<(), String> {
             if ui && url.is_some() {
                 return Err("--url cannot be used with --ui".into());
             }
-            if hot_reload {
+            if should_use_hot_reload(hot_reload, no_hot_reload) {
                 return commands::build::run_hot_reload(
                     &root,
                     release,
@@ -361,6 +365,10 @@ fn workspace_root() -> Result<PathBuf, String> {
         .ok_or_else(|| "cannot locate Photon workspace".into())
 }
 
+fn should_use_hot_reload(explicit: bool, disabled: bool) -> bool {
+    explicit || (cfg!(target_os = "macos") && !disabled)
+}
+
 fn print_help() -> Result<(), String> {
     use clap::CommandFactory;
     Cli::command()
@@ -385,7 +393,7 @@ fn help_styles() -> clap::builder::Styles {
 
 #[cfg(test)]
 mod tests {
-    use super::{Cli, Command, Dependency, DepsCommand};
+    use super::{Cli, Command, Dependency, DepsCommand, should_use_hot_reload};
     use clap::Parser;
 
     #[test]
@@ -442,5 +450,48 @@ mod tests {
                 install_system_deps: true,
             })
         ));
+    }
+
+    #[test]
+    fn run_uses_hot_reload_by_default_on_macos() {
+        let cli = Cli::try_parse_from(["photon", "run"]).unwrap();
+        let Some(Command::Run {
+            hot_reload,
+            no_hot_reload,
+            ..
+        }) = cli.command
+        else {
+            panic!("expected run command");
+        };
+
+        assert_eq!(
+            should_use_hot_reload(hot_reload, no_hot_reload),
+            cfg!(target_os = "macos")
+        );
+    }
+
+    #[test]
+    fn run_can_explicitly_enable_or_disable_hot_reload() {
+        let enabled = Cli::try_parse_from(["photon", "run", "--hot-reload"]).unwrap();
+        let disabled = Cli::try_parse_from(["photon", "run", "--no-hot-reload"]).unwrap();
+        let Some(Command::Run {
+            hot_reload,
+            no_hot_reload,
+            ..
+        }) = enabled.command
+        else {
+            panic!("expected run command");
+        };
+        assert!(should_use_hot_reload(hot_reload, no_hot_reload));
+
+        let Some(Command::Run {
+            hot_reload,
+            no_hot_reload,
+            ..
+        }) = disabled.command
+        else {
+            panic!("expected run command");
+        };
+        assert!(!should_use_hot_reload(hot_reload, no_hot_reload));
     }
 }
