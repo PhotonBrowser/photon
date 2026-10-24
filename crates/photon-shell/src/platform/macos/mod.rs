@@ -1,6 +1,7 @@
 //! macOS Engine adapter, native controls, and page renderer.
 
 pub(crate) mod app_menus;
+pub(crate) mod appkit;
 pub(crate) mod default_browser;
 pub(crate) mod display;
 pub(crate) mod motion_observer;

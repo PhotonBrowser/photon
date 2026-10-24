@@ -39,6 +39,10 @@ pub(crate) use linux::{
     supports_elastic_scroll, window_observer, window_settings,
 };
 #[cfg(target_os = "macos")]
+pub use macos::appkit::{
+    AppKitButton, AppKitButtonStyle, AppKitTabBar, AppKitView, AppKitViewElement,
+};
+#[cfg(target_os = "macos")]
 pub(crate) use macos::{
     app_menus, default_browser, is_dark_appearance, keyboard_notation, motion_observer, renderer,
     supports_elastic_scroll, window_observer, window_settings,

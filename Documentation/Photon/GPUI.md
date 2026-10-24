@@ -39,6 +39,14 @@ behavior in
 [`platform/macos/window_settings.rs`](../../crates/photon-shell/src/platform/macos/window_settings.rs);
 the generic AppKit integration stays in the GPUI-CE submodule.
 
+Photon's AppKit extension in `photon-shell` also hosts retained `NSView`s as
+GPUI layout elements. It owns frame synchronization and view attachment
+lifetime; AppKit continues to draw and handle input for each native control.
+The macOS 26+ button style uses AppKit's Liquid Glass bezel, with a native
+toolbar-button fallback on older macOS. See
+[`NativeAppKit.md`](NativeAppKit.md) for the API and native-view composition
+limits.
+
 Photon owns XPC presentation, frame ordering, generations, retirement, release
 forwarding, Engine thread affinity, browser input, and application startup.
 On macOS, `photon run` uses GPUI hot reloading by default; pass

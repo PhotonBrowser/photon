@@ -95,7 +95,7 @@ state, and navigation timing. The Rust declaration of the bridge C ABI is in
 
 | Target | Window/system adapter | Page presentation |
 | --- | --- | --- |
-| macOS | `platform/macos/`: AppKit controls, display and visibility observers, clipboard, reduced motion, menus, and default-browser calls | `platform/macos/presentation.rs` handles XPC descriptors, IOSurface leases and Metal completion; `renderer.rs` gives GPUI-CE an external Metal surface. |
+| macOS | `platform/macos/`: AppKit view hosting and controls, display and visibility observers, clipboard, reduced motion, menus, and default-browser calls | `platform/macos/presentation.rs` handles XPC descriptors, IOSurface leases and Metal completion; `renderer.rs` gives GPUI-CE an external Metal surface. |
 | Linux | `platform/linux/`: client-side window controls and Linux system-service adapter points | `renderer.rs` selects the CPU-frame adapter. Engine callbacks are pumped on the UI event loop. |
 | Windows | `platform/windows/`: client-side window controls and Windows system-service adapter points | `renderer.rs` selects the CPU-frame adapter. Engine callbacks are pumped on the UI event loop. |
 

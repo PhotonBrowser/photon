@@ -6,6 +6,10 @@ mod platform;
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 pub use platform::show_alert;
 
+/// Native AppKit views that participate in GPUI layout on macOS.
+#[cfg(target_os = "macos")]
+pub use platform::{AppKitButton, AppKitButtonStyle, AppKitTabBar, AppKitView, AppKitViewElement};
+
 /// Run the native Photon browser shell.
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 pub fn run() {
