@@ -1,7 +1,7 @@
 use owo_colors::{OwoColorize, Stream};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
@@ -593,58 +593,88 @@ fn run_hot_reload_macos(
         Some((helper_process_dir(root, &engine, release), service))
     };
 
+    let bundle_environment = helper_directory
+        .as_ref()
+        .map(|(directory, service)| {
+            vec![
+                (
+                    "PHOTON_HELPER_DIRECTORY",
+                    directory.to_string_lossy().into_owned(),
+                ),
+                ("PHOTON_PRESENTATION_XPC_SERVICE", service.clone()),
+            ]
+        })
+        .unwrap_or_default();
+    let (bundle, bundle_executable) =
+        super::app_bundle::prepare_hot_reload(root, ui_only, &bundle_environment)?;
+
     stage("Start Photon with GPUI hot reloading");
     let features = if ui_only {
         "ui-only,hot-reload"
     } else {
         "hot-reload"
     };
-    let mut process = Command::new(dioxus_cli);
-    process
-        .args([
-            "serve",
-            "--hot-patch",
-            "--package",
-            "photon-app",
-            "--bin",
-            "Photon",
-            "--features",
-            features,
-        ])
-        .current_dir(root)
-        .env("PHOTON_ENGINE_BUILD_DIR", &engine);
-    if let Some((helper_directory, service)) = helper_directory {
+    let mut retry_delay = Duration::from_secs(1);
+    let maximum_retry_delay = Duration::from_secs(8);
+    loop {
+        let mut process = Command::new(&dioxus_cli);
         process
-            .env("PHOTON_HELPER_DIRECTORY", helper_directory)
-            .env("PHOTON_PRESENTATION_XPC_SERVICE", service)
-            .env(
-                "PHOTON_PRESENTATION_CHANNEL_ID",
-                format!(
-                    "photon-gpui-hot-reload-{}-{}",
-                    std::process::id(),
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_nanos()
-                ),
-            )
-            .env("DYLD_LIBRARY_PATH", runtime_library_path(&engine));
-    }
-    if verbose {
-        process.env("PHOTON_VERBOSE", "1");
-        process.env("GPUI_EXTERNAL_SURFACE_TRACE", "1");
-    }
-    if let Some(url) = url {
-        process.env("PHOTON_URL", url);
-    }
+            .args([
+                "serve",
+                "--hot-patch",
+                "--exit-on-error",
+                "--package",
+                "photon-app",
+                "--bin",
+                "Photon",
+                "--features",
+                features,
+            ])
+            .current_dir(root)
+            .env("PHOTON_ENGINE_BUILD_DIR", &engine)
+            .env("PHOTON_HOT_RELOAD_BUNDLE_EXECUTABLE", &bundle_executable)
+            .env("PHOTON_HOT_RELOAD_BUNDLE", &bundle);
+        if !ui_only {
+            process.env("PHOTON_HOT_RELOAD_REGISTER_BUNDLE", "1");
+        }
+        if let Some((helper_directory, service)) = &helper_directory {
+            process
+                .env("PHOTON_HELPER_DIRECTORY", helper_directory)
+                .env("PHOTON_PRESENTATION_XPC_SERVICE", service)
+                .env(
+                    "PHOTON_PRESENTATION_CHANNEL_ID",
+                    format!(
+                        "photon-gpui-hot-reload-{}-{}",
+                        std::process::id(),
+                        std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_nanos()
+                    ),
+                )
+                .env("DYLD_LIBRARY_PATH", runtime_library_path(&engine));
+        }
+        if verbose {
+            process.env("PHOTON_VERBOSE", "1");
+            process.env("GPUI_EXTERNAL_SURFACE_TRACE", "1");
+        }
+        if let Some(url) = url {
+            process.env("PHOTON_URL", url);
+        }
 
-    let status = process
-        .status()
-        .map_err(|error| format!("cannot start Dioxus CLI: {error}"))?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(format!("Dioxus hot-reload server exited with {status}"))
+        let status = process
+            .status()
+            .map_err(|error| format!("cannot start Dioxus CLI: {error}"))?;
+        if status.success() {
+            return Ok(());
+        }
+
+        eprintln!(
+            "Dioxus hot-reload server exited with {status}; retrying in {}s",
+            retry_delay.as_secs()
+        );
+        std::thread::sleep(retry_delay);
+        retry_delay = (retry_delay * 2).min(maximum_retry_delay);
     }
 }
 

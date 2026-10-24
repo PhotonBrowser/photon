@@ -51,6 +51,10 @@ Photon owns XPC presentation, frame ordering, generations, retirement, release
 forwarding, Engine thread affinity, browser input, and application startup.
 On macOS, `photon run` uses GPUI hot reloading by default; pass
 `--no-hot-reload` to build and launch the application directly.
+Hot-reload launches from the same development app bundle as the direct path,
+so the Dock icon, app identity, and browser link metadata are available there
+too. If a build fails or the patched app crashes, `photon run` restarts Dioxus
+with a short backoff and retries until a build launches successfully.
 
 GPUI-CE's experimental Subsecond hot patching launches the app with Dioxus CLI
 0.7.10 and patches GPUI render code in the existing process; it does not cover

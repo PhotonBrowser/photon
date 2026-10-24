@@ -57,16 +57,39 @@ pub(super) fn ensure_ui(root: &Path, built: &Path) -> Result<PathBuf, String> {
     write_bundle(root, built, &bundle, ui_info_plist())
 }
 
+/// Prepares the app bundle that the hot-reload executable will enter when it
+/// starts. Dioxus owns and replaces the built executable, so the app copies
+/// each version into this bundle immediately before launching it.
+pub(super) fn prepare_hot_reload(
+    root: &Path,
+    ui_only: bool,
+    environment: &[(&str, String)],
+) -> Result<(PathBuf, PathBuf), String> {
+    stage("Prepare Photon hot-reload app bundle");
+    let bundle = if ui_only {
+        bundle_path()?
+            .with_file_name("UI-only")
+            .join(format!("{NAME}.app"))
+    } else {
+        bundle_path()?
+    };
+    let plist = if ui_only {
+        ui_info_plist()
+    } else {
+        info_plist(environment)
+    };
+    let executable = prepare_bundle(root, &bundle, plist)?;
+    Ok((bundle, executable))
+}
+
 fn write_bundle(
     root: &Path,
     built: &Path,
     bundle: &Path,
     plist: String,
 ) -> Result<PathBuf, String> {
-    let contents = bundle.join("Contents");
-    let macos = contents.join("MacOS");
-    std::fs::create_dir_all(&macos).map_err(|error| error.to_string())?;
-    let executable = macos.join(NAME);
+    let executable = prepare_bundle(root, bundle, plist)?;
+    let macos = executable.parent().expect("bundle executable has a parent");
     // Replace the executable by renaming a copy over it, so an instance
     // still running keeps the file it started from.
     let staged = macos.join(format!(".{NAME}.new"));
@@ -79,9 +102,16 @@ fn write_bundle(
                 bundle.display()
             )
         })?;
+    Ok(executable)
+}
+
+fn prepare_bundle(root: &Path, bundle: &Path, plist: String) -> Result<PathBuf, String> {
+    let contents = bundle.join("Contents");
+    let macos = contents.join("MacOS");
+    std::fs::create_dir_all(&macos).map_err(|error| error.to_string())?;
     std::fs::write(contents.join("Info.plist"), plist).map_err(|error| error.to_string())?;
     write_icon(root, &contents.join("Resources"))?;
-    Ok(executable)
+    Ok(macos.join(NAME))
 }
 
 /// The icon's sizes in an `.iconset`, each also drawn at twice the size.
