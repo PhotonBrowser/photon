@@ -4,6 +4,8 @@ use gpui::{AnyElement, AnyView, App};
 use photon_core::internal_page_name;
 
 use super::PageContext;
+#[cfg(target_os = "macos")]
+use super::appkit;
 use super::{new_tab, performance, settings};
 
 /// What the shell needs to know about one of its pages.
@@ -35,8 +37,13 @@ pub(in super::super) enum PageIcon {
 pub(in super::super) const NEW_TAB: &PageDefinition = &new_tab::PAGE;
 pub(in super::super) const PERFORMANCE: &PageDefinition = &performance::PAGE;
 pub(in super::super) const SETTINGS: &PageDefinition = &settings::PAGE;
+#[cfg(target_os = "macos")]
+pub(in super::super) const APPKIT: &PageDefinition = &appkit::PAGE;
 
 /// Every page, found by name.
+#[cfg(target_os = "macos")]
+const PAGES: [&PageDefinition; 4] = [NEW_TAB, PERFORMANCE, SETTINGS, APPKIT];
+#[cfg(not(target_os = "macos"))]
 const PAGES: [&PageDefinition; 3] = [NEW_TAB, PERFORMANCE, SETTINGS];
 
 /// The page `url` names, if it is one of Photon's.

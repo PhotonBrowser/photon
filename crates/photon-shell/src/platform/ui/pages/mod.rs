@@ -9,6 +9,8 @@
 //! [`PageDefinition`], and list it in [`registry`]. Build it from the shared
 //! [`layout`] and [`controls`].
 
+#[cfg(target_os = "macos")]
+mod appkit;
 mod controls;
 mod layout;
 mod new_tab;

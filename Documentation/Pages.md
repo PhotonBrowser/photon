@@ -57,6 +57,13 @@ while the page is open, and shows rolling CPU and memory charts. Shared Engine
 services and GPU allocations are not attributed to those totals. UI loop delay
 events are measured separately from page frame gaps.
 
+## AppKit showcase
+
+On macOS, `photon://appkit` opens a live showcase of native AppKit buttons in
+the GPUI layout tree. It demonstrates a native segmented tab bar, SF Symbol
+controls, Liquid Glass and toolbar bezels, borderless and disabled buttons,
+and native action callbacks.
+
 ## New tab page
 
 [`pages/new_tab/`](../crates/photon-shell/src/platform/ui/pages/new_tab/mod.rs)
