@@ -1,7 +1,7 @@
 //! macOS default-browser system integration.
 
-use super::ffi::embedder;
 use crate::platform::DefaultBrowserStatus;
+use crate::platform::engine_ffi::embedder;
 
 pub(crate) fn status() -> DefaultBrowserStatus {
     if !unsafe { embedder::photon_default_browser_available() } {

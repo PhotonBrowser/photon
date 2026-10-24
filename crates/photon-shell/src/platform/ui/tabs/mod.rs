@@ -171,8 +171,10 @@ impl TabIcon {
 /// How a tab icon appears.
 pub(super) const ICON_ENTRANCE: Entrance = pop(metrics::TAB_FAVICON_SIZE);
 
-/// A closing tab settles out of its slot with the same spring used by its entry.
+/// A closing tab settles out of its slot.
 const TAB_MOTION_SPRING: SpringConfig = SpringConfig::new(1_800.0, 84.85, 1.0);
+/// New rows settle quickly so the list clears space as they arrive.
+const TAB_ENTRY_SPRING: SpringConfig = SpringConfig::new(7_200.0, 169.71, 1.0);
 const TAB_MOTION_EPSILON: f32 = 0.001;
 pub(super) const TAB_CLOSE_DURATION: Duration = Duration::from_millis(260);
 
@@ -225,7 +227,11 @@ where
         motion.from,
         motion.target,
         SpringSpec {
-            config: TAB_MOTION_SPRING,
+            config: if motion.closing {
+                TAB_MOTION_SPRING
+            } else {
+                TAB_ENTRY_SPRING
+            },
             epsilon: TAB_MOTION_EPSILON,
         },
         move |element, value| {
@@ -306,6 +312,9 @@ pub(super) struct TabItem {
     pub reorder_key: u64,
     /// The tab's entrance or in-place closing spring.
     pub motion: Option<TabMotion>,
+    /// Prevents the reorder group from adding a second position animation
+    /// while a measured tab insertion transition is in progress.
+    pub reorder_transition: gpui_motion::Transition,
     /// The tab is leaving and should no longer respond to input.
     pub closing: bool,
     pub label: String,
@@ -349,6 +358,7 @@ struct TabParts {
     suppress_tooltips: bool,
     group: String,
     motion: Option<TabMotion>,
+    reorder_transition: gpui_motion::Transition,
     position_offset: f32,
     reorder_key: u64,
     focus_handle: FocusHandle,
@@ -381,6 +391,7 @@ impl TabParts {
         let position_offset = tab.position_offset;
         let animations = tab.animations;
         let motion = tab.motion.clone();
+        let reorder_transition = tab.reorder_transition;
         let dragged = tab.dragging;
         let closing = tab.closing;
         let sleeping = tab.sleeping;
@@ -504,6 +515,7 @@ impl TabParts {
             suppress_tooltips,
             group: tab_id,
             motion,
+            reorder_transition,
             position_offset,
             reorder_key,
             focus_handle,
@@ -527,6 +539,7 @@ fn measured_tab(
     key: u64,
     focus_handle: FocusHandle,
     closing: bool,
+    transition: gpui_motion::Transition,
     reorder: &ReorderGroup<u64>,
 ) -> AnyElement {
     if closing {
@@ -539,6 +552,7 @@ fn measured_tab(
             focus_handle,
             element,
         )
+        .transition(transition)
         .drag_listener(false)
         .into_any_element()
 }

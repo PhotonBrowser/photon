@@ -3,6 +3,7 @@
 //! hover, chosen and focus the same way with the theme's roles. The dropdown
 //! is in `dropdown`.
 
+use crate::platform::haptics::Feedback;
 use gpui::{
     AccessibleAction, App, Bounds, ClickEvent, Context, DispatchPhase, Div, DragMoveEvent,
     ElementId, FocusHandle, FontWeight, InteractiveElement, KeyDownEvent, MouseButton,
@@ -10,7 +11,6 @@ use gpui::{
     StatefulInteractiveElement, Toggled, Window, div, prelude::*, px, rgb, rgb_to_hsla, rgba,
 };
 use gpui_elements::editable_text::EditableTextElement;
-use photon_haptics::Feedback;
 
 use super::icons::check_icon;
 use super::layout::v_stack;
@@ -36,7 +36,7 @@ pub(super) fn haptic_switch_toggle(
             return;
         }
         on_toggle(event, window, cx);
-        photon_haptics::play(cx, Feedback::StateChange);
+        crate::platform::haptics::play(cx, Feedback::StateChange);
     }))
 }
 
@@ -1060,7 +1060,7 @@ impl RenderOnce for Switch {
                     .clamp(0.0, travel);
                     let next_on = position >= travel / 2.0;
                     if feedback_state.unwrap_or(on) != next_on {
-                        photon_haptics::play(cx, Feedback::StateChange);
+                        crate::platform::haptics::play(cx, Feedback::StateChange);
                     }
                     if next_on != on {
                         drag_toggle(
@@ -1117,7 +1117,7 @@ impl RenderOnce for Switch {
                     }
                 });
                 if feedback_changed {
-                    photon_haptics::play(cx, Feedback::StateChange);
+                    crate::platform::haptics::play(cx, Feedback::StateChange);
                 }
             })
             .on_click(move |event, window, cx| {

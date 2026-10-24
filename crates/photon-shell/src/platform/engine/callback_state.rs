@@ -15,10 +15,13 @@ use std::{
     },
 };
 
-use super::super::ffi::embedder;
-use super::super::presentation::{LeaseLedger, PresentationRuntime};
+#[cfg(target_os = "macos")]
+use super::super::presentation::LeaseLedger;
+use super::super::presentation::PresentationRuntime;
 use super::UiWake;
 use super::navigation_timing::NavigationTimingProfiler;
+use crate::platform::engine_ffi::embedder;
+#[cfg(target_os = "macos")]
 use crate::platform::trace;
 use crate::platform::ui::{Favicon, FindResult, PhotonWebView};
 
@@ -32,6 +35,7 @@ pub(super) struct PageDetails {
 pub(super) struct CallbackState {
     pub(super) task_id: u64,
     pub(super) presentation: Arc<PresentationRuntime>,
+    #[cfg(target_os = "macos")]
     pub(super) leases: Arc<Mutex<LeaseLedger>>,
     pub(super) engine_view: AtomicPtr<c_void>,
     pub(super) ui_wake: Mutex<Option<UiWake>>,
@@ -208,6 +212,7 @@ impl CallbackState {
         );
     }
 
+    #[cfg(target_os = "macos")]
     pub(super) fn record_native_frame(&self) {
         self.performance
             .record_frame_with_presentation(PresentationMode::NativeMetal, None, None);
@@ -312,6 +317,7 @@ impl CallbackState {
     }
 }
 
+#[cfg(target_os = "macos")]
 pub(super) fn deliver_pending_releases(callbacks: &CallbackState) {
     let view = callbacks.engine_view.load(Ordering::Acquire);
     if view.is_null() {

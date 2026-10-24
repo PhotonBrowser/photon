@@ -1,8 +1,8 @@
 //! The page's right-click menu, built from the items the Engine offers and
 //! shown as a native menu.
 
+use crate::platform::shortcuts::ToggleZenMode;
 use gpui::{Context, MenuItem, Window};
-use photon_shortcuts::ToggleZenMode;
 
 use super::super::PageMenuItem;
 use super::BrowserWindow;

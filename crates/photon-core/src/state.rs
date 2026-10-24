@@ -1,6 +1,6 @@
 //! Framework-independent browser state and commands.
 
-use photon_omnibox::{OmniboxError, resolve as resolve_omnibox_input};
+use crate::omnibox::{OmniboxError, resolve as resolve_omnibox_input};
 
 /// The single active view's persistent browser state.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -58,7 +58,7 @@ impl BrowserState {
 /// Resolves omnibox text into the address the engine loads.
 ///
 /// Address-shaped text opens an address. Anything else is a search query, which
-/// becomes a URL on the default engine. The rules live in `photon-omnibox` so
+/// becomes a URL on the default engine. The rules live in the `omnibox` module so
 /// the address field, the engine adapter and any future surface cannot each
 /// invent their own.
 pub fn normalize_url(input: &str) -> Result<String, &'static str> {

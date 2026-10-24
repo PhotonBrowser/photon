@@ -1,11 +1,11 @@
 //! A dialog listing the browser's keyboard shortcuts by group, each with
 //! the keys bound to it now. Escape or its close button dismisses it.
 
+use crate::platform::shortcuts::{ShortcutGroup, shortcut_groups};
 use gpui::{
     Context, EventEmitter, FocusHandle, Focusable, KeyDownEvent, Render, Role, Window, div,
     prelude::*, px, rgb, rgba,
 };
-use photon_shortcuts::{ShortcutGroup, shortcut_groups};
 
 use super::button::icon_button;
 use super::icons::close_icon;

@@ -1,8 +1,9 @@
 # Omnibox
 
 The address field in the titlebar is an omnibox: it takes text and decides what
-it means. `crates/photon-omnibox` owns that decision, and nothing else in Photon
-re-implements it.
+it means. The framework-free rules live in
+[`photon-core/src/omnibox/`](../crates/photon-core/src/omnibox/mod.rs), and
+nothing else in Photon re-implements them.
 
 ## Rules
 
@@ -52,7 +53,7 @@ The browser's own page scheme comes from `photon-brand`; see
 
 While you type, the field opens into a panel over the page with the field as
 its first row and suggestions under it. `suggest` in
-[`suggest.rs`](../crates/photon-omnibox/src/suggest.rs) decides them from the
+[`suggest.rs`](../crates/photon-core/src/omnibox/suggest.rs) decides them from the
 [history](Profile.md#history):
 
 - Visited pages match when every typed word starts a word in their title or
@@ -93,7 +94,7 @@ and [`ui/window/command_palette.rs`](../crates/photon-shell/src/platform/ui/wind
   resolves submitted text with the chosen search engine and asks its window
   to open the result, which loads a web page or one of the browser's own
   pages in the active tab. Startup addresses use the same rule.
-- `crates/photon-core` re-exports the shared resolution rules and exposes
+- `photon-core` exposes the shared resolution rules and
   `normalize_url` with errors flattened for native callers.
 - `crates/photon-ffi` implements `photon_browser_navigate` on top of core and
   owns the C string and output-buffer boundary.

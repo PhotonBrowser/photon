@@ -4,7 +4,7 @@ use gpui::Window;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use std::ffi::c_void;
 
-use super::ffi::embedder;
+use crate::platform::engine_ffi::embedder;
 
 type OnChange = Box<dyn Fn(bool, bool)>;
 

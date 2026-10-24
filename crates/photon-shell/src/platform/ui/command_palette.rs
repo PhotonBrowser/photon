@@ -1,5 +1,6 @@
 //! A keyboard-first launcher for registered browser commands.
 
+use crate::platform::shortcuts::action_for_command;
 use gpui::{
     App, Context, Entity, EventEmitter, FocusHandle, Focusable, FontWeight, HighlightStyle,
     MouseButton, Render, Role, StyledText, Subscription, Window, div, prelude::*, px, rgb, rgba,
@@ -10,7 +11,6 @@ use gpui_elements::editable_text::{
     text_input,
 };
 use photon_core::{COMMAND_REGISTRY, Command, CommandAvailability, CommandMatch};
-use photon_shortcuts::action_for_command;
 
 use super::controls::{OwnsClicks, themed_text_input};
 use super::icons::search_icon_sized;

@@ -19,7 +19,7 @@ use gpui_elements::editable_text::{
     actions::{Enter, Escape},
 };
 use photon_core::Suggestion;
-use photon_omnibox::{OmniboxTarget, display_address, display_domain, resolve_with};
+use photon_core::{OmniboxTarget, display_address, display_domain, resolve_with};
 
 use super::history::BrowsingHistory;
 use super::layout::h_stack;

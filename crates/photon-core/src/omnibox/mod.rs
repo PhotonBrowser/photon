@@ -1,8 +1,4 @@
-//! Framework-independent address and search resolution for browser omniboxes.
-//!
-//! Search engine configuration lives in [`engines`]. [`resolve`] classifies
-//! typed input and produces either an address or a search URL, and
-//! [`suggest`] lists what the omnibox offers while typing.
+//! Address and search resolution, suggestion matching, and search engines.
 
 mod engines;
 mod resolve;

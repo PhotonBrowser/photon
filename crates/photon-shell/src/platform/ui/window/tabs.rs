@@ -1576,11 +1576,106 @@ impl BrowserWindow {
             return self.tabs.len();
         }
 
-        let space = self.shows_spaces(cx).then(|| self.current_space(cx));
-        self.tabs
-            .iter()
-            .position(|tab| tab.pin.is_none() && space.is_none_or(|space| tab.space == space))
-            .unwrap_or_else(|| self.pinned_count())
+        match Settings::get(cx).new_tab_position {
+            photon_core::NewTabPosition::Top => {
+                let space = self.shows_spaces(cx).then(|| self.current_space(cx));
+                self.tabs
+                    .iter()
+                    .position(|tab| {
+                        tab.pin.is_none() && space.is_none_or(|space| tab.space == space)
+                    })
+                    .unwrap_or_else(|| self.pinned_count())
+            }
+            photon_core::NewTabPosition::AfterLast => self
+                .listed_tabs(cx)
+                .last()
+                .map_or_else(|| self.pinned_count(), |index| index + 1),
+        }
+    }
+
+    /// Gives vertical insertions one shared positional transition. At either
+    /// edge, every moving row follows the same path so their spacing stays
+    /// constant throughout the animation.
+    fn prepare_vertical_tab_entry(
+        &mut self,
+        id: u64,
+        index: usize,
+        pinned: bool,
+        animate_appearance: bool,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let section: Vec<_> = self
+            .listed_tabs(cx)
+            .into_iter()
+            .filter(|&tab_index| {
+                self.tabs[tab_index].pin.is_some() == pinned
+                    && !self.closing_tabs.contains(&self.tabs[tab_index].id)
+            })
+            .collect();
+        let first_index = section.first().copied();
+        let last_index = section.last().copied();
+        let at_top = first_index.is_none_or(|first| index <= first);
+        let at_end = last_index.is_none_or(|last| index > last);
+        let collapsed = self.sidebar.shows_icons();
+        let spacing = super::super::metrics::SidebarSpacing::new(collapsed);
+        let extent = if collapsed {
+            super::super::metrics::SIDEBAR_COLLAPSED_ITEM_SIZE
+        } else {
+            super::super::metrics::SIDEBAR_TAB_HEIGHT
+        };
+        let shift = extent + spacing.item_gap;
+        let settings = Settings::motion(cx);
+        let animate = animate_appearance
+            && settings.allows_motion()
+            && !cx.reduce_motion()
+            && (at_top || at_end);
+        let duration = Duration::from_millis(super::super::metrics::TAB_INSERT_PUSH_DURATION_MS);
+
+        for tab_index in section.into_iter().filter(|&tab_index| tab_index >= index) {
+            let tab_id = self.tabs[tab_index].id;
+            let current_offset = super::tab_position_animation_offset(
+                self.tab_position_animations.get(&tab_id),
+                TabDragAxis::Vertical,
+            );
+            let from = if animate && at_top {
+                current_offset - shift
+            } else {
+                0.0
+            };
+            let animation = if animate && at_top {
+                super::TabPositionAnimation::with_curve(
+                    TabDragAxis::Vertical,
+                    from,
+                    duration,
+                    &settings,
+                    super::super::motion::TweenCurve::EaseOut,
+                )
+            } else {
+                super::TabPositionAnimation::new(
+                    TabDragAxis::Vertical,
+                    0.0,
+                    Duration::ZERO,
+                    &settings,
+                )
+            };
+            self.tab_position_animations.insert(tab_id, animation);
+        }
+
+        if animate {
+            let from = if at_top { -shift } else { shift };
+            self.tab_position_animations.insert(
+                id,
+                super::TabPositionAnimation::with_curve(
+                    TabDragAxis::Vertical,
+                    from,
+                    duration,
+                    &settings,
+                    super::super::motion::TweenCurve::EaseOut,
+                ),
+            );
+        }
+
+        animate
     }
 
     pub(super) fn open_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1605,6 +1700,7 @@ impl BrowserWindow {
 
     /// Opens `address` in a new tab at the end: one of Photon's pages for a
     /// page's address, otherwise a web page.
+    #[cfg_attr(feature = "ui-only", allow(dead_code))]
     pub(super) fn open_in_new_tab(
         &mut self,
         address: &str,
@@ -1885,7 +1981,12 @@ impl BrowserWindow {
         ));
         let subscription = self.subscribe_to_content(&content, window, cx);
         let id = Self::allocate_tab_id();
-        if options.animate_appearance {
+        let pinned = pin.is_some();
+        if self.tab_axis(cx) == TabDragAxis::Vertical {
+            if self.prepare_vertical_tab_entry(id, index, pinned, options.animate_appearance, cx) {
+                self.tab_entry_animations.borrow_mut().insert(id);
+            }
+        } else if options.animate_appearance {
             self.tab_entry_animations.borrow_mut().insert(id);
         }
         let space = self.current_space(cx);
@@ -1901,9 +2002,6 @@ impl BrowserWindow {
             // Keep `active_tab` naming the same page until the switch below.
             self.active_tab = self.active_tab.map(|active_tab| active_tab + 1);
         }
-        if options.animate_appearance {
-            self.animate_tabs_after_insert(id, cx);
-        }
         let activate = options.activate || (self.active_tab.is_none() && self.tabs.len() == 1);
         if activate {
             self.empty_page = None;
@@ -1918,63 +2016,6 @@ impl BrowserWindow {
             }
             cx.notify();
             self.wake_tab_sleep_scheduler();
-        }
-    }
-
-    /// Move the tabs after a newly inserted vertical row from their old
-    /// positions into the slots the new row has pushed them into.
-    fn animate_tabs_after_insert(&mut self, inserted_id: u64, cx: &mut Context<Self>) {
-        let axis = self.tab_axis(cx);
-        let animations = Settings::motion(cx);
-        if axis != TabDragAxis::Vertical || !animations.allows_motion() || self.tab_drag_active() {
-            return;
-        }
-
-        let listed = self.listed_tabs(cx);
-        let Some(inserted_position) = listed
-            .iter()
-            .position(|&index| self.tabs[index].id == inserted_id)
-        else {
-            return;
-        };
-        let displaced: Vec<u64> = listed
-            .iter()
-            .skip(inserted_position + 1)
-            .filter_map(|&index| {
-                let tab = &self.tabs[index];
-                (tab.pin.is_none() && !self.closing_tabs.contains(&tab.id)).then_some(tab.id)
-            })
-            .collect();
-        let Some(first_id) = displaced.first().copied() else {
-            return;
-        };
-
-        let collapsed = self.sidebar.shows_icons();
-        let spacing = super::super::metrics::SidebarSpacing::new(collapsed);
-        let extent = self
-            .tab_geometry
-            .get(&first_id)
-            .map(|bounds| axis_size(*bounds, axis))
-            .unwrap_or_else(|| {
-                if collapsed {
-                    super::super::metrics::SIDEBAR_COLLAPSED_ITEM_SIZE
-                } else {
-                    super::super::metrics::SIDEBAR_TAB_HEIGHT
-                }
-            });
-        let shift = extent + spacing.item_gap;
-        let duration = Duration::from_millis(super::super::metrics::TAB_REORDER_DURATION_MS);
-
-        for id in displaced {
-            let from = self.tab_offset(id, axis) - shift;
-            if let Some(from) = animation_retarget_offset(true, from) {
-                self.tab_position_animations.insert(
-                    id,
-                    super::TabPositionAnimation::new(axis, from, duration, &animations),
-                );
-            } else {
-                self.tab_position_animations.remove(&id);
-            }
         }
     }
 

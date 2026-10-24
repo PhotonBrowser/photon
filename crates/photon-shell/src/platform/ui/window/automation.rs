@@ -3,7 +3,7 @@
 use futures::StreamExt;
 use gpui::{App, BorrowAppContext, Global, WindowHandle};
 use photon_core::BrowserCommand;
-use photon_tab_sleep::MemoryPressure;
+use photon_core::MemoryPressure;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{

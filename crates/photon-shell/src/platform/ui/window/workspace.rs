@@ -129,6 +129,7 @@ impl Render for BrowserWindow {
                 if phase == gpui::DispatchPhase::Capture && event.button == MouseButton::Left {
                     browser
                         .update(cx, |this, cx| {
+                            this.finish_sidebar_resize(cx);
                             this.finish_tab_drag(event.position, window, cx);
                         })
                         .ok();

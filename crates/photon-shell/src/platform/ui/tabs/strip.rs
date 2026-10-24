@@ -147,6 +147,7 @@ fn strip_tab(
         let reorder_key = parts.reorder_key;
         let focus_handle = parts.focus_handle.clone();
         let closing = parts.closing;
+        let reorder_transition = parts.reorder_transition;
         let tab = parts
             .tab
             .flex_shrink_0()
@@ -165,13 +166,21 @@ fn strip_tab(
             TabDragAxis::Horizontal,
             position_offset,
         );
-        return super::measured_tab(tab, reorder_key, focus_handle, closing, reorder);
+        return super::measured_tab(
+            tab,
+            reorder_key,
+            focus_handle,
+            closing,
+            reorder_transition,
+            reorder,
+        );
     }
     let motion = parts.motion;
     let position_offset = parts.position_offset;
     let reorder_key = parts.reorder_key;
     let focus_handle = parts.focus_handle.clone();
     let closing = parts.closing;
+    let reorder_transition = parts.reorder_transition;
     let min_width = if parts.audio_control {
         metrics::TAB_AUDIO_MIN_WIDTH
     } else {
@@ -201,7 +210,14 @@ fn strip_tab(
         TabDragAxis::Horizontal,
         position_offset,
     );
-    super::measured_tab(tab, reorder_key, focus_handle, closing, reorder)
+    super::measured_tab(
+        tab,
+        reorder_key,
+        focus_handle,
+        closing,
+        reorder_transition,
+        reorder,
+    )
 }
 
 fn new_tab_button(

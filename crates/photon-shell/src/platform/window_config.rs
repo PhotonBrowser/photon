@@ -12,12 +12,9 @@
 //! title/appearance. Bounds are centered by default.
 //!
 //! Other native window details that can be centralized here later include the
-//! macOS traffic-light size, gap, position and insets (currently constants in
-//! macos/window_settings.rs), and Linux control-group spacing (in
-//! ui/metrics.rs). The macOS material is currently a user preference, with
-//! PHOTON_WINDOW_BACKGROUND as a development override, so it is intentionally
-//! selected at runtime rather than fixed by these defaults. Linux currently
-//! uses opaque windows.
+//! macOS traffic-light metrics (currently in macos/window_settings.rs) and
+//! shared client-side control spacing (in ui/metrics.rs). The macOS material is
+//! a user preference, with PHOTON_WINDOW_BACKGROUND as a development override.
 
 /// First size for a normal browser window, in logical pixels.
 pub(crate) const INITIAL_WIDTH: f32 = 1200.0;
@@ -50,3 +47,6 @@ pub(crate) const MACOS_APP_OWNS_TITLEBAR_DRAG: bool = true;
 /// Whether Linux windows use client-side decorations, which host Photon controls.
 #[cfg(target_os = "linux")]
 pub(crate) const LINUX_CLIENT_DECORATIONS: bool = true;
+/// Whether Windows should draw the titlebar as client-side decorations.
+#[cfg(target_os = "windows")]
+pub(crate) const WINDOWS_CLIENT_DECORATIONS: bool = true;

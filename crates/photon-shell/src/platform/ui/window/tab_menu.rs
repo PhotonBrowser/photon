@@ -1,9 +1,9 @@
 //! A tab's and a favourite's right-click menus, and the tab actions behind
 //! them.
 
+use crate::platform::shortcuts::CloseTab;
 use gpui::{Context, MenuItem, Window};
 use photon_core::BrowserCommand;
-use photon_shortcuts::CloseTab;
 
 use super::BrowserWindow;
 use super::content::TabContent;

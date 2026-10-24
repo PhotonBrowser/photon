@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 //! BrowserBench hooks used by the authenticated automation endpoint.
 
 use super::PhotonWebView;

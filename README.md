@@ -33,8 +33,8 @@ Start with [contributor setup](CONTRIBUTOR_SETUP.md), then use the [build guide]
 <summary>Rust crate guides</summary>
 
 - [photon-app](crates/photon-app/README.md) · [photon-brand](crates/photon-brand/README.md) · [photon-cli](crates/photon-cli/README.md) · [photon-core](crates/photon-core/README.md)
-- [photon-ffi](crates/photon-ffi/README.md) · [photon-haptics](crates/photon-haptics/README.md) · [photon-omnibox](crates/photon-omnibox/README.md) · [photon-performance](crates/photon-performance/README.md)
+- [photon-ffi](crates/photon-ffi/README.md) · [photon-performance](crates/photon-performance/README.md)
 - [photon-presentation-broker](crates/photon-presentation-broker/README.md) · [photon-presentation-ipc](crates/photon-presentation-ipc/README.md) · [photon-shell](crates/photon-shell/README.md)
-- [photon-shortcuts](crates/photon-shortcuts/README.md) · [photon-storage](crates/photon-storage/README.md) · [photon-tab-sleep](crates/photon-tab-sleep/README.md) · [gpui-motion](crates/gpui-motion/README.md)
+- [photon-storage](crates/photon-storage/README.md) · [gpui-motion](crates/gpui-motion/README.md)
 
 </details>

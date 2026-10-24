@@ -24,7 +24,7 @@ photon run
 - `photon build` builds the Engine and the GPUI-CE application.
 - `photon run` builds and launches the native app. Use `--url URL` to choose the initial page. Use `--shutdown-after-seconds N` to exit after a fixed interval; `--verbose` prints the final presentation frame counts.
 - `photon run --hot-reload` launches the debug shell through Dioxus CLI and hot-patches GPUI rendering code without restarting the app. Photon installs Dioxus CLI 0.7.10 with Cargo on first use if it is missing or has an incompatible version. This experimental mode currently supports macOS only. Use `--ui` to hot-patch the UI-only shell without building Photon Engine, or `--url URL` to choose the initial page when using the Engine.
-- `photon run --ui` builds and launches the same browser window with the New Tab page, without building, linking, or starting Photon Engine. Shell-owned pages remain available; web pages cannot be opened in this mode. This path currently supports macOS only.
+- `photon run --ui` builds and launches the shared browser window with the New Tab page, without building, linking, or starting Photon Engine. Shell-owned pages remain available; web pages cannot be opened in this mode. The path is available on macOS, Linux, and Windows.
 - `photon clean` removes generated build trees and stops the checkout-specific presentation broker.
 
 `photon check` includes the lint checks, so run it before sharing a change. Build and test commands use release mode by default; `--release` is accepted for compatibility.
@@ -37,7 +37,7 @@ Zed uses clangd with the root `.clangd` configuration for Photon C++, Objective-
 
 The first Engine build configures Ladybird dependencies under `build/` and compiles Photon Engine helper processes plus LibPhotonEmbedder. Incremental builds use an Engine fingerprint to rebuild Ladybird only when Engine sources or configuration change. Rust app or GPUI-CE changes rebuild the application. Build products and downloaded tools stay under ignored build directories.
 
-On macOS, `photon run` starts the Photon-owned presentation broker before opening the native window. Set `PHOTON_WINDOW_BACKGROUND` to `opaque`, `blurred` (the default), or `liquid-glass` before launching to choose the window background. Liquid Glass uses AppKit's regular glass effect on macOS 26 and later and falls back to blurred material on earlier versions.
+On macOS, `photon run` starts the Photon-owned presentation broker before opening the native window. Set `PHOTON_WINDOW_BACKGROUND` to `opaque`, `blurred` (the default), or `liquid-glass` before launching to choose the window background. Liquid Glass uses AppKit's regular glass effect on macOS 26 and later and falls back to blurred material on earlier versions. Linux and Windows use the shared GPUI browser shell and CPU-backed Engine frame path; their native system-service adapters are still being filled in. Native Windows Engine builds follow Ladybird's experimental Clang-CL path; WSL2 remains Ladybird's supported Windows build route.
 
 Hot reloading uses GPUI-CE's experimental Subsecond integration. Changes to GPUI render functions and direct workspace dependencies can be patched into the running process. Changes to indirect workspace dependencies, application startup, and unsupported code paths require a rebuild or restart. `--shutdown-after-seconds` is unavailable in hot-reload mode because Dioxus CLI keeps the development server running.
 
@@ -52,7 +52,7 @@ describes a build workflow, while canary identifies a distributed update
 channel. A local canary build may be useful for validating channel-specific
 behavior, but it should be selected explicitly.
 
-Linux shell work belongs under `crates/photon-shell/src/platform/linux/`, and native integration belongs under `native/embedder/linux/`. Those adapters are not implemented yet.
+Platform-specific behavior belongs under `crates/photon-shell/src/platform/<target>/`. Keep the GPUI views in `platform/ui/`, the shared Engine adapter in `platform/engine/`, and the Apple-only XPC/IOSurface presentation path in `platform/macos/`. Linux and Windows currently use the portable CPU frame adapter; future DMA-BUF or DXGI imports belong in their target renderers without changing shared WebView code.
 
 ## Upstream dependencies
 

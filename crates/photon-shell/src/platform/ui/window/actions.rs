@@ -1,14 +1,14 @@
 //! Keyboard shortcuts and Escape handling for the browser window.
 
-use gpui::{Context, Div, KeyDownEvent, Window, prelude::*};
-use photon_core::Command;
-use photon_shortcuts::{
+use crate::platform::shortcuts::{
     CloseTab, FindInPage, FindNext, FindPrevious, FocusOmnibox, GoBack, GoForward, MinimizeWindow,
     NewTab, NextSpace, OpenCommandPalette, OpenSettings, PreviousSpace, Reload, ReopenClosedTab,
     ResetZoom, SelectLastTab, SelectNextTab, SelectPreviousTab, SelectTab1, SelectTab2, SelectTab3,
     SelectTab4, SelectTab5, SelectTab6, SelectTab7, SelectTab8, ShowKeyboardShortcuts, StopLoading,
     ToggleDebugInfo, ToggleSidebar, ToggleSidebarIcons, ToggleZenMode, ZoomIn, ZoomOut, ZoomWindow,
 };
+use gpui::{Context, Div, KeyDownEvent, Window, prelude::*};
+use photon_core::Command;
 
 use super::BrowserWindow;
 

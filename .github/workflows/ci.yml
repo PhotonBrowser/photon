@@ -36,6 +36,7 @@ jobs:
             libfreetype6-dev \
             libx11-dev \
             libxkbcommon-dev \
+            libxkbcommon-x11-dev \
             libwayland-dev
 
       - name: Install Rust toolchain

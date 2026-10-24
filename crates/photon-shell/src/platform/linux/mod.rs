@@ -1,11 +1,8 @@
-//! Linux shell adapter landing point.
-#![allow(dead_code)] // These adapter contracts are pending Linux shell wiring.
+//! Linux shell adapter: desktop integration and CPU-backed page renderer.
 //!
-//! Linux window integration, system services, Engine bindings, and page
-//! presentation belong here. The browser chrome and WebView component are
-//! shared from `platform/ui`; this adapter supplies client-side window
-//! decorations and a placeholder page renderer, which stays blank and shows a
-//! notice until a Linux Engine surface is connected.
+//! The browser chrome, Engine session and WebView component are shared from
+//! `platform/ui` and `platform/engine`. This adapter owns Linux-specific window
+//! settings and system services.
 
 pub(crate) mod app_menus;
 pub(crate) mod default_browser;
@@ -16,14 +13,6 @@ pub(crate) mod window_settings;
 
 pub(crate) fn supports_elastic_scroll() -> bool {
     false
-}
-
-pub(crate) fn run() {
-    super::trace(format_args!("Linux shell adapter is not implemented"));
-    eprintln!(
-        "the Linux Photon shell adapter is not implemented yet; its code belongs in crates/photon-shell/src/platform/linux"
-    );
-    std::process::exit(1);
 }
 
 pub(crate) fn keyboard_notation() -> super::KeyboardNotation {

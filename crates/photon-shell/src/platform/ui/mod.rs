@@ -47,6 +47,7 @@ pub(super) type MouseUpHandler =
 pub(super) type KeyDownHandler =
     Box<dyn Fn(&gpui::KeyDownEvent, &mut gpui::Window, &mut gpui::App)>;
 
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 pub(in crate::platform) fn window_background_style(
     cx: &gpui::App,
 ) -> photon_core::WindowBackgroundStyle {

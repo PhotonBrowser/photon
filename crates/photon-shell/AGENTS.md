@@ -6,11 +6,14 @@ performance diagnostics and the reusable overlay, and use
 `photon-presentation-ipc` for XPC messages and descriptor transport. Keep
 Engine behavior in `Engine/` and generic GPUI-CE behavior in `vendor/gpui-ce/`.
 
-Keep shared GPUI views under `src/platform/ui/` so macOS and Linux use the same
-browser chrome and WebView component. Keep native window controls, system
-services, Engine adapters, and page renderers under `src/platform/<target>/`. The
-macOS adapter lives in `src/platform/macos/`; Linux integration belongs in
-`src/platform/linux/` and native Linux glue in `native/embedder/linux/`.
+Keep shared GPUI views under `src/platform/ui/` so macOS, Linux, and Windows use
+the same browser chrome and WebView component. Keep native window controls,
+system services, and renderer selection under `src/platform/<target>/`. The
+shared Engine runtime/session adapter lives in `src/platform/engine/`; the
+private Rust bridge declarations live in `src/platform/engine_ffi.rs`. Keep
+Apple-only IOSurface, XPC, Metal, and AppKit code in `src/platform/macos/`.
+Linux and Windows native integration belongs in their respective adapter
+directories; do not add OS-specific behavior throughout `platform/ui/`.
 
 Use `theme.toml` for shared semantic color values, opacity tokens, and corner
 radii. `platform/ui/theme.rs` resolves semantic color roles; get them with
@@ -28,8 +31,9 @@ through `BrowsingHistory`; observe `Settings` to follow changes made in other
 windows. Add the browser's own pages under `platform/ui/pages/` and list them in
 `platform/ui/pages/registry.rs` (see `Documentation/Pages.md`).
 
-Keep the Rust exported browser C ABI in `photon-ffi`; `platform/macos/ffi.rs` only
-declares the native embedder functions consumed by the shell.
+Keep the public Rust browser-model C ABI in `photon-ffi`. The shell's Rust
+declarations for its private Engine bridge live in `platform/engine_ffi.rs`; the
+Engine's public C++ embedder contract remains `PhotonEmbedder.h`.
 
-Use `photon-haptics` for semantic haptic feedback and keep GPUI's platform
-haptic API behind that crate.
+Keep semantic haptic feedback behind `src/platform/haptics.rs` and browser
+keyboard bindings behind `src/platform/shortcuts/`.

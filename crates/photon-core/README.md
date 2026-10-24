@@ -2,7 +2,7 @@
 
 # `photon-core`
 
-Framework-independent browser state and rules: navigation commands, settings, tabs, history, spaces, workspace layouts, internal pages, and browsing-data requests. It contains no GPUI, native window handles, or Ladybird types.
+Framework-independent browser state and rules: navigation commands, settings, tabs, history, spaces, workspace layouts, internal pages, browsing-data requests, address/search resolution, suggestions, and tab-sleep policy. It contains no GPUI, native window handles, or Ladybird types.
 
 ## Use
 
@@ -14,4 +14,4 @@ use photon_core::normalize_url;
 assert_eq!(normalize_url("example.com").unwrap(), "https://example.com/");
 ```
 
-Time and persistence are supplied by callers. See [`photon-storage`](../photon-storage/README.md) for profile files and [`photon-omnibox`](../photon-omnibox/README.md) for address and search rules.
+Time and persistence are supplied by callers. See [`photon-storage`](../photon-storage/README.md) for profile files.

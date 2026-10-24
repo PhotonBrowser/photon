@@ -2,7 +2,7 @@
 
 use gpui::{DummyKeyboardMapper, KeyBinding};
 
-use crate::catalog::shortcut_specs;
+use super::catalog::shortcut_specs;
 
 /// Returns the browser's default keyboard shortcuts.
 pub fn browser_shortcuts() -> Vec<KeyBinding> {

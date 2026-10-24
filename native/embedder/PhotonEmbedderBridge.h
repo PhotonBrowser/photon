@@ -162,6 +162,7 @@ void photon_runtime_set_native_release_drain_callback(
 void photon_runtime_schedule_native_release_drain(void* runtime);
 #endif
 void photon_runtime_destroy(void* runtime);
+void photon_runtime_pump(void* runtime);
 #if defined(__APPLE__)
 // Copy and paste through the macOS pasteboard.
 void photon_runtime_use_system_clipboard(void* runtime);
