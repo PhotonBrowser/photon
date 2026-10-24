@@ -63,6 +63,9 @@ enum Command {
         /// Build and launch the shell without building, linking, or starting Photon Engine.
         #[arg(long)]
         ui: bool,
+        /// Hot-patch GPUI rendering code in place with Dioxus CLI (debug builds only).
+        #[arg(long)]
+        hot_reload: bool,
         /// Navigate the PhotonWebView to this URL after launch.
         #[arg(long)]
         url: Option<String>,
@@ -235,14 +238,24 @@ pub fn run() -> Result<(), String> {
         Some(Command::Run {
             release,
             ui,
+            hot_reload,
             url,
             shutdown_after_seconds,
         }) => {
             commands::build::warn_if_dependencies_are_behind(&root);
+            if ui && url.is_some() {
+                return Err("--url cannot be used with --ui".into());
+            }
+            if hot_reload {
+                return commands::build::run_hot_reload(
+                    &root,
+                    ui,
+                    verbose,
+                    url.as_deref(),
+                    shutdown_after_seconds,
+                );
+            }
             if ui {
-                if url.is_some() {
-                    return Err("--url cannot be used with --ui".into());
-                }
                 commands::build::run_ui(&root, release, verbose, shutdown_after_seconds)
             } else {
                 commands::build::run_direct(
