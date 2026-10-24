@@ -163,13 +163,20 @@ pub(super) mod embedder {
             callback_data: *mut c_void,
             callback: Option<unsafe extern "C" fn(*mut c_void)>,
         );
+        #[cfg(target_os = "macos")]
         pub fn photon_runtime_set_native_release_drain_callback(
             runtime: *mut c_void,
             context: *mut c_void,
             callback: Option<unsafe extern "C" fn(*mut c_void)>,
         );
+        #[cfg(target_os = "macos")]
         pub fn photon_runtime_schedule_native_release_drain(runtime: *mut c_void);
         pub fn photon_runtime_destroy(runtime: *mut c_void);
+        #[cfg(all(
+            not(feature = "ui-only"),
+            any(target_os = "linux", target_os = "windows")
+        ))]
+        pub fn photon_runtime_pump(runtime: *mut c_void);
         #[cfg(target_os = "macos")]
         #[cfg(not(feature = "ui-only"))]
         pub fn photon_runtime_use_system_clipboard(runtime: *mut c_void);
@@ -192,10 +199,12 @@ pub(super) mod embedder {
         pub fn photon_view_resize(view: *mut c_void, width: i32, height: i32, dpr: f64);
         pub fn photon_view_set_performance_monitor_enabled(view: *mut c_void, enabled: bool);
         pub fn photon_view_set_residency_monitor_enabled(view: *mut c_void, enabled: bool);
+        #[cfg(unix)]
         pub fn photon_view_set_task_queue_diagnostics_enabled(
             view: *mut c_void,
             enabled: bool,
         ) -> bool;
+        #[cfg(unix)]
         pub fn photon_view_copy_task_queue_diagnostics(
             view: *mut c_void,
             output: *mut c_char,
@@ -246,7 +255,7 @@ pub(super) mod embedder {
             accepted: bool,
             text: *const c_char,
         );
-        #[cfg(not(feature = "ui-only"))]
+        #[cfg(all(not(feature = "ui-only"), target_os = "macos"))]
         pub fn photon_runtime_set_system_reduced_motion_preference(
             runtime: *mut c_void,
             reduce_motion: bool,
@@ -259,6 +268,7 @@ pub(super) mod embedder {
             callback_data: *mut c_void,
             callback: Option<unsafe extern "C" fn(*mut c_void, i32, bool)>,
         );
+        #[cfg(unix)]
         pub fn photon_runtime_list_registered_processes(
             runtime: *mut c_void,
             callback_data: *mut c_void,
@@ -308,38 +318,52 @@ pub(super) mod embedder {
             repeat: bool,
             insert_text: bool,
         );
+        #[cfg(target_os = "macos")]
         pub fn photon_view_release_native_frame(
             view: *mut c_void,
             backing: u64,
             generation: u64,
             frame: u64,
         );
+        #[cfg(target_os = "macos")]
         pub fn photon_view_set_native_metal_presentation(view: *mut c_void, enabled: bool) -> bool;
+        #[cfg(target_os = "macos")]
         pub fn photon_reduced_motion_observer_create(
             callback_data: *mut c_void,
             callback: Option<unsafe extern "C" fn(*mut c_void, bool)>,
         ) -> *mut c_void;
+        #[cfg(target_os = "macos")]
         pub fn photon_reduced_motion_observer_destroy(observer: *mut c_void);
+        #[cfg(target_os = "macos")]
         pub fn photon_window_observer_create(
             ns_view: *mut c_void,
             callback_data: *mut c_void,
             callback: Option<unsafe extern "C" fn(*mut c_void, bool, bool)>,
         ) -> *mut c_void;
+        #[cfg(target_os = "macos")]
         pub fn photon_window_observer_destroy(observer: *mut c_void);
+        #[cfg(target_os = "macos")]
         pub fn photon_default_browser_available() -> bool;
+        #[cfg(target_os = "macos")]
         pub fn photon_default_browser_is_current() -> bool;
+        #[cfg(target_os = "macos")]
         pub fn photon_default_browser_request();
         pub fn photon_view_navigate(view: *mut c_void, url: *const c_char);
+        #[cfg(unix)]
         pub fn photon_automation_view_has_completed_document_load(view: *mut c_void) -> bool;
+        #[cfg(unix)]
         pub fn photon_automation_view_document_generation(view: *mut c_void) -> u64;
+        #[cfg(unix)]
         pub fn photon_automation_view_install_speedometer_result_observer(
             view: *mut c_void,
             expected_document_generation: u64,
         ) -> bool;
+        #[cfg(unix)]
         pub fn photon_automation_view_install_jetstream_result_observer(
             view: *mut c_void,
             expected_document_generation: u64,
         ) -> bool;
+        #[cfg(unix)]
         pub fn photon_automation_view_request_jetstream_start(
             view: *mut c_void,
             expected_document_generation: u64,

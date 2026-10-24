@@ -1,9 +1,9 @@
 //! The tabs section: inactive page sleeping, closing the last tab, and
 //! closing tabs left unused.
 
+use crate::platform::shortcuts::ReopenClosedTab;
 use gpui::{App, SharedString, prelude::*, px};
-use photon_core::TabSleepMode;
-use photon_shortcuts::ReopenClosedTab;
+use photon_core::{NewTabPosition, TabSleepMode};
 
 use super::super::super::controls::{Choice, choices};
 use super::super::super::kbd::action_keys;
@@ -19,6 +19,7 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
     let close_window = current.close_window_with_last_tab;
     let archive = current.archive_tabs;
     let sleep_mode = current.tab_sleep_mode;
+    let new_tab_position = current.new_tab_position;
     let setting = |row, note: SharedString, panel: gpui::Div| {
         v_stack()
             .gap(px(metrics::MENU_ITEM_GAP))
@@ -27,6 +28,28 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
     };
     v_stack()
         .gap(px(metrics::INTERNAL_PAGE_SECTION_GAP))
+        .child(setting(
+            choices(
+                "settings-new-tab-position",
+                "New tab position",
+                [
+                    (NewTabPosition::Top, "At top"),
+                    (NewTabPosition::AfterLast, "After last"),
+                ]
+                .into_iter()
+                .map(|(position, label)| Choice {
+                    label: label.into(),
+                    chosen: new_tab_position == position,
+                    on_choose: change(move |settings| settings.new_tab_position = position),
+                })
+                .collect(),
+                palette,
+            )
+            .into_any_element(),
+            "In the vertical tab list, choose where new tabs appear. Their slide animation stays on."
+                .into(),
+            group_with_choices(palette),
+        ))
         .child(setting(
             choices(
                 "settings-tab-sleep",

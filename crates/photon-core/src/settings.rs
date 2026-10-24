@@ -6,7 +6,7 @@ use super::new_tab::NewTabSettings;
 use super::sidebar::SidebarSettings;
 use super::spaces::Spaces;
 use super::workspace::WorkspaceSettings;
-use photon_tab_sleep::TabSleepMode;
+use crate::tab_sleep::TabSleepMode;
 
 /// Maximum selectable strength for the window background's static noise.
 pub const BACKGROUND_NOISE_INTENSITY_MAX: u8 = 20;
@@ -101,6 +101,17 @@ pub enum TabLayout {
     Vertical,
 }
 
+/// Where a new tab is inserted in the vertical tab list.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum NewTabPosition {
+    /// Insert before the other unpinned tabs.
+    #[default]
+    Top,
+    /// Insert after the last tab in the current space.
+    AfterLast,
+}
+
 /// How Photon handles pages that ask to open a separate window.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[repr(u8)]
@@ -128,6 +139,8 @@ pub struct BrowserSettings {
     )]
     pub background_noise_intensity: u8,
     pub tab_layout: TabLayout,
+    /// Where new tabs enter the vertical tab list.
+    pub new_tab_position: NewTabPosition,
     /// Saved workspace presets and the profile default used by spaces without
     /// their own preset assignment.
     pub workspace: WorkspaceSettings,
@@ -235,6 +248,7 @@ impl Default for BrowserSettings {
             window_background_style: WindowBackgroundStyle::default(),
             background_noise_intensity: 5,
             tab_layout: TabLayout::Vertical,
+            new_tab_position: NewTabPosition::default(),
             workspace: WorkspaceSettings::default(),
             default_search_engine: "google".to_owned(),
             show_full_address: false,

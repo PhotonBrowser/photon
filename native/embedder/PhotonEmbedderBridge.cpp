@@ -288,6 +288,12 @@ extern "C" void photon_runtime_destroy(void* runtime)
     delete static_cast<RuntimeHandle*>(runtime);
 }
 
+extern "C" void photon_runtime_pump(void* runtime)
+{
+    if (runtime)
+        static_cast<RuntimeHandle*>(runtime)->runtime->pump();
+}
+
 extern "C" void* photon_view_create(void* runtime, int width, int height,
     double dpr, PhotonViewCallbacks const* callbacks)
 {

@@ -2,6 +2,7 @@
 
 use crate::platform::app_update::update_app;
 use gpui::CursorStyle;
+#[cfg(target_os = "macos")]
 use mach2::port::mach_port_t;
 #[cfg(not(feature = "ui-only"))]
 use photon_core::EngineService;
@@ -11,11 +12,13 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-use super::super::ffi::embedder;
+#[cfg(target_os = "macos")]
 use super::super::presentation::MachPortGuard;
+#[cfg(target_os = "macos")]
 pub(super) use super::callback_state::deliver_pending_releases;
 pub(super) use super::callback_state::{CallbackState, RuntimeCallbacks};
 use super::{EngineSession, RequestedWebView};
+use crate::platform::engine_ffi::embedder;
 use crate::platform::permission_coordinator::PermissionRequest;
 use crate::platform::trace;
 use crate::platform::ui::{Favicon, FindResult, PageMenuItem, SelectDropdown, SelectItem};
@@ -83,12 +86,12 @@ pub(super) unsafe extern "C" fn on_engine_navigation_timing(
 }
 pub(super) unsafe extern "C" fn on_engine_frame(
     context: *mut c_void,
-    _: i32,
-    _: i32,
-    _: usize,
+    _width: i32,
+    _height: i32,
+    _stride: usize,
     _: f64,
-    _: *const u8,
-    _: usize,
+    _pixels: *const u8,
+    _length: usize,
     _: u64,
     _: u64,
     buffer_allocation_microseconds: u64,
@@ -97,7 +100,21 @@ pub(super) unsafe extern "C" fn on_engine_frame(
 ) {
     if !context.is_null() {
         let callbacks = unsafe { &*(context.cast::<CallbackState>()) };
+        #[cfg(target_os = "macos")]
         callbacks.record_cpu_fallback_frame(buffer_allocation_microseconds, copy_microseconds);
+        #[cfg(any(target_os = "linux", target_os = "windows"))]
+        let Some((_, _, local_allocation_microseconds, local_copy_microseconds)) = (unsafe {
+            callbacks
+                .presentation
+                .publish_cpu_frame(_width, _height, _stride, _pixels, _length)
+        }) else {
+            return;
+        };
+        #[cfg(any(target_os = "linux", target_os = "windows"))]
+        callbacks.record_cpu_fallback_frame(
+            buffer_allocation_microseconds.saturating_add(local_allocation_microseconds),
+            copy_microseconds.saturating_add(local_copy_microseconds),
+        );
         callbacks.request_redraw();
     }
 }
@@ -518,6 +535,7 @@ pub(super) unsafe extern "C" fn on_engine_dialog(
     });
 }
 
+#[cfg(target_os = "macos")]
 pub(super) unsafe extern "C" fn on_engine_backing(
     context: *mut c_void,
     backing: u64,
@@ -550,6 +568,7 @@ pub(super) unsafe extern "C" fn on_engine_backing(
         }
     }
 }
+#[cfg(target_os = "macos")]
 pub(super) unsafe extern "C" fn on_engine_native_frame(
     context: *mut c_void,
     backing: u64,
@@ -576,7 +595,7 @@ pub(super) unsafe extern "C" fn on_engine_native_frame(
     callbacks.request_redraw();
 }
 
-#[cfg(not(feature = "ui-only"))]
+#[cfg(all(target_os = "macos", not(feature = "ui-only")))]
 pub(super) unsafe extern "C" fn on_native_release_drain(context: *mut c_void) {
     if context.is_null() {
         return;

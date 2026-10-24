@@ -3,7 +3,7 @@
 use gpui::Action;
 use photon_core::Command;
 
-use crate::actions::*;
+use super::actions::*;
 
 const GROUPS: [&str; 4] = ["Tabs", "Page", "Window", "App"];
 
@@ -375,6 +375,7 @@ pub fn action_for_command(command: Command) -> Option<Box<dyn Action>> {
 
 /// Returns the registry's label for an action, for native menus and other
 /// surfaces that display the same command.
+#[cfg(target_os = "macos")]
 pub fn shortcut_name_for_action(action: &dyn Action) -> Option<&'static str> {
     shortcut_specs()
         .iter()
@@ -403,7 +404,7 @@ pub fn shortcut_groups() -> Vec<ShortcutGroup> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::browser_shortcuts;
+    use crate::platform::shortcuts::browser_shortcuts;
 
     #[test]
     fn every_listed_shortcut_has_a_binding() {

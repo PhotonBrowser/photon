@@ -3,17 +3,17 @@
 //! the app-wide ones are handled here, without a window. The menu bar
 //! follows the frontmost window: its checkmarks, and Reload or Stop.
 
-use gpui::{App, Global, Menu, MenuItem, OsAction, SystemMenuType};
-use gpui_elements::editable_text::actions::{Copy, Cut, Paste, Redo, SelectAll, Undo};
-use photon_brand::NAME;
-use photon_core::Command;
-use photon_shortcuts::{
+use crate::platform::shortcuts::{
     CloseTab, FindInPage, FindNext, FindPrevious, GoBack, GoForward, HideApp, HideOtherApps,
     MinimizeWindow, NewTab, NewWindow, NextSpace, OpenCommandPalette, OpenSettings, PreviousSpace,
     Quit, Reload, ReopenClosedTab, ResetZoom, SelectNextTab, SelectPreviousTab, ShowAllApps,
     ShowKeyboardShortcuts, StopLoading, ToggleSidebar, ToggleSidebarIcons, ToggleZenMode, ZoomIn,
     ZoomOut, ZoomWindow, shortcut_name_for_action,
 };
+use gpui::{App, Global, Menu, MenuItem, OsAction, SystemMenuType};
+use gpui_elements::editable_text::actions::{Copy, Cut, Paste, Redo, SelectAll, Undo};
+use photon_brand::NAME;
+use photon_core::Command;
 
 use crate::platform::MenuBarState;
 

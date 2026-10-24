@@ -17,7 +17,7 @@ use gpui::{App, Task};
 use photon_core::DockRegion;
 
 use super::super::metrics;
-use super::super::motion::{MotionConfig, Speed, Tween, mix};
+use super::super::motion::{MotionConfig, SIDEBAR_RESIZE_SPRING, Speed, Tween, mix};
 use super::super::settings::Settings;
 use super::super::workspace_layout::WorkspaceLayout;
 
@@ -53,6 +53,10 @@ pub(super) struct SidebarState {
     _hide_check: Option<Task<()>>,
     /// The width while its edge is dragged, until it is saved.
     dragged_width: Option<f32>,
+    /// Temporary width beyond the maximum, which springs back after a drag.
+    resize_overshoot: Tween,
+    /// Whether the resize edge is currently being dragged.
+    resize_dragging: bool,
     _save_width: Option<Task<()>>,
     /// The target window control layout, so it changes only when needed.
     window_controls: Option<WindowControls>,
@@ -74,6 +78,8 @@ impl SidebarState {
             pointer_on_sidebar: false,
             _hide_check: None,
             dragged_width: None,
+            resize_overshoot: Tween::at_with_curve(0.0, SIDEBAR_RESIZE_SPRING),
+            resize_dragging: false,
             _save_width: None,
             window_controls: None,
         }
@@ -85,7 +91,7 @@ impl SidebarState {
             WorkspaceLayout::current(cx)
                 .sidebar_extent()
                 .unwrap_or_else(|| Settings::get(cx).sidebar.width()) as f32
-        })
+        }) + self.resize_overshoot.value()
     }
 
     /// How wide it is beside the page, between icons and labels.
@@ -155,9 +161,15 @@ impl SidebarState {
     }
 
     pub(super) fn is_moving(&self) -> bool {
-        [&self.shown, &self.expanded, &self.tucked, &self.reveal]
-            .into_iter()
-            .any(Tween::is_running)
+        [
+            &self.shown,
+            &self.expanded,
+            &self.tucked,
+            &self.reveal,
+            &self.resize_overshoot,
+        ]
+        .into_iter()
+        .any(Tween::is_running)
     }
 
     /// Finishes decorative tweens if the application or platform disables motion.
@@ -170,6 +182,7 @@ impl SidebarState {
             &mut self.expanded,
             &mut self.tucked,
             &mut self.reveal,
+            &mut self.resize_overshoot,
         ] {
             tween.jump_to(tween.target());
         }

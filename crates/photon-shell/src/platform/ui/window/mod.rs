@@ -4,6 +4,7 @@ mod actions;
 #[cfg_attr(feature = "ui-only", allow(dead_code))]
 mod alerts;
 mod app;
+#[cfg(unix)]
 mod automation;
 mod background_noise;
 mod chrome;
@@ -269,7 +270,17 @@ impl TabPositionAnimation {
         duration: Duration,
         settings: &super::motion::MotionConfig,
     ) -> Self {
-        let mut tween = Tween::at_with_curve(from, TweenCurve::SmoothStep);
+        Self::with_curve(axis, from, duration, settings, TweenCurve::SmoothStep)
+    }
+
+    fn with_curve(
+        axis: TabDragAxis,
+        from: f32,
+        duration: Duration,
+        settings: &super::motion::MotionConfig,
+        curve: TweenCurve,
+    ) -> Self {
+        let mut tween = Tween::at_with_curve(from, curve);
         tween.animate_to_for(0.0, duration, settings);
         Self { axis, tween }
     }

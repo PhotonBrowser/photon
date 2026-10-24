@@ -5,7 +5,7 @@
 //! independent of clocks and storage. `photon-storage` saves a history and
 //! loads it back with [`History::from_parts`].
 
-use photon_omnibox::{
+use crate::omnibox::{
     IndexedVisitedPage, PastSearch, SearchEngines, Suggestions, normalized_display_address,
     normalized_match_text, suggest_with_indexed,
 };

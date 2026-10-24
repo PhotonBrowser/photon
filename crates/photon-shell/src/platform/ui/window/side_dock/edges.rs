@@ -2,13 +2,14 @@
 //! it or snaps it shut, and pointing at the window's outer edge reveals it
 //! while hidden.
 
+use crate::platform::haptics::Feedback;
 use gpui::{AnyElement, App, Context, DragMoveEvent, Render, Window, div, prelude::*, px};
-use photon_core::{DockRegion, SidebarResize};
-use photon_haptics::Feedback;
+use photon_core::{DockRegion, SIDEBAR_MAX_WIDTH, SidebarResize};
 use std::time::Duration;
 
 use super::super::super::controls::OwnsClicks;
 use super::super::super::metrics;
+use super::super::super::motion::Speed;
 use super::super::super::settings::Settings;
 use super::super::super::workspace_layout::WorkspaceLayout;
 use super::super::BrowserWindow;
@@ -66,35 +67,67 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.sidebar.resize_dragging = true;
         let x = event.event.position.x;
         let edge = match WorkspaceLayout::current(cx).sidebar_region() {
             Some(DockRegion::Trailing) => window.viewport_size().width - x,
             _ => x,
         };
+        let edge = f32::from(edge);
         let before = (self.sidebar.docked(), self.sidebar.collapsed());
-        match SidebarResize::to(f32::from(edge)) {
+        let mut needs_render = false;
+        match SidebarResize::to(edge) {
             SidebarResize::Hide => {
+                needs_render |= self.set_resize_overshoot(0.0);
                 self.set_sidebar_visible(false, cx);
                 window.focus(&self.root_focus, cx);
             }
             SidebarResize::Collapse => {
+                needs_render |= self.set_resize_overshoot(0.0);
                 self.set_sidebar_visible(true, cx);
                 self.set_sidebar_collapsed(true, cx);
             }
             SidebarResize::Width(width) => {
+                needs_render |=
+                    self.set_resize_overshoot(rubberband(edge - SIDEBAR_MAX_WIDTH as f32));
                 self.set_sidebar_visible(true, cx);
                 self.set_sidebar_collapsed(false, cx);
                 if self.sidebar.dragged_width != Some(width as f32) {
                     self.sidebar.dragged_width = Some(width as f32);
                     self.save_sidebar_width_soon(width, cx);
-                    cx.notify();
+                    needs_render = true;
                 }
             }
         }
+        if needs_render {
+            cx.notify();
+        }
         // Snapping between hidden, icons and labels taps the trackpad.
         if (self.sidebar.docked(), self.sidebar.collapsed()) != before {
-            photon_haptics::play(cx, Feedback::Alignment);
+            crate::platform::haptics::play(cx, Feedback::Alignment);
         }
+    }
+
+    /// Returns the temporary stretch to the maximum width after the pointer
+    /// releases the resize edge.
+    pub(in super::super) fn finish_sidebar_resize(&mut self, cx: &mut Context<Self>) {
+        if !self.sidebar.resize_dragging {
+            return;
+        }
+        self.sidebar.resize_dragging = false;
+        let animations = Settings::motion(cx);
+        self.sidebar
+            .resize_overshoot
+            .animate_to(0.0, Speed::Standard, &animations);
+        cx.notify();
+    }
+
+    fn set_resize_overshoot(&mut self, overshoot: f32) -> bool {
+        if (self.sidebar.resize_overshoot.value() - overshoot).abs() < 0.01 {
+            return false;
+        }
+        self.sidebar.resize_overshoot.jump_to(overshoot);
+        true
     }
 
     fn save_sidebar_width_soon(&mut self, width: u32, cx: &mut Context<Self>) {
@@ -185,4 +218,12 @@ impl BrowserWindow {
             .await;
         }));
     }
+}
+
+/// Damps the sidebar's temporary stretch as it is pulled past its maximum.
+fn rubberband(overshoot: f32) -> f32 {
+    let overshoot = overshoot.max(0.0);
+    let range = metrics::SIDEBAR_RESIZE_RUBBERBAND_RANGE;
+    let resistance = metrics::SIDEBAR_RESIZE_RUBBERBAND_RESISTANCE;
+    overshoot * range * resistance / (range + resistance * overshoot)
 }

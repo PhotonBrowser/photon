@@ -147,7 +147,7 @@ impl Omnibox {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let site = photon_omnibox::display_domain(&self.page_url(cx));
+        let site = photon_core::display_domain(&self.page_url(cx));
         let secure = self
             .webview
             .as_ref()

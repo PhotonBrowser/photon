@@ -2,7 +2,7 @@
 
 use std::ops::Range;
 
-use photon_omnibox::match_words;
+use crate::omnibox::match_words;
 
 /// A command the browser window can execute.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]

@@ -6,6 +6,5 @@ license.workspace = true
 
 [dependencies]
 photon-brand = { path = "../photon-brand" }
-photon-omnibox = { path = "../photon-omnibox" }
-photon-tab-sleep = { path = "../photon-tab-sleep" }
 serde = { version = "1", features = ["derive"] }
+url = "2"

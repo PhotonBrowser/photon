@@ -1,9 +1,0 @@
-[package]
-name = "photon-shortcuts"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-
-[dependencies]
-photon-core = { path = "../photon-core" }
-gpui = { package = "gpui-ce", path = "../../vendor/gpui-ce/crates/gpui", default-features = false }

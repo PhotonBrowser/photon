@@ -11,7 +11,7 @@ use futures::channel::mpsc::{Sender, channel};
 use futures::future::{Either, select};
 use futures::{FutureExt, StreamExt, pin_mut};
 use gpui::{App, Context, Global, Task, Window};
-use photon_tab_sleep::MemoryPressure;
+use photon_core::MemoryPressure;
 use std::collections::HashSet;
 #[cfg(target_os = "macos")]
 use std::sync::Mutex;
@@ -36,6 +36,7 @@ pub(super) type TabSleepWaker = Sender<SleepWake>;
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub(super) enum SleepWake {
     Recheck,
+    #[cfg(target_os = "macos")]
     MemoryPressure,
     MemoryPressureRetry,
     Deadline,
@@ -95,25 +96,31 @@ impl Drop for MemoryPressureMonitor {
     }
 }
 
+#[cfg(unix)]
 #[derive(Default)]
 struct MemoryPressureOverride(Option<MemoryPressure>);
 
+#[cfg(unix)]
 impl Global for MemoryPressureOverride {}
 
 /// Returns an injected level for isolated automation sessions, otherwise
 /// reading the operating system's current pressure state.
 pub(super) fn current_memory_pressure(cx: &App) -> MemoryPressure {
+    #[cfg(unix)]
     if cx.has_global::<MemoryPressureOverride>()
         && let Some(pressure) = cx.global::<MemoryPressureOverride>().0
     {
         return pressure;
     }
+    #[cfg(not(unix))]
+    let _ = cx;
 
     current_os_memory_pressure()
 }
 
 /// Allows the isolated automation harness to exercise pressure cleanup without
 /// creating artificial machine-wide memory pressure.
+#[cfg(unix)]
 pub(super) fn set_test_memory_pressure(
     pressure: Option<MemoryPressure>,
     cx: &mut App,
@@ -349,6 +356,7 @@ impl BrowserWindow {
 
                 match work {
                     Some(SleepWake::Recheck) => continue,
+                    #[cfg(target_os = "macos")]
                     Some(SleepWake::MemoryPressure) => {
                         let Some(retry_at) = update_app(cx, relieve_memory_pressure).await else {
                             break;
@@ -390,7 +398,7 @@ impl BrowserWindow {
     }
 
     fn next_sleep_check_delay(&self, cx: &gpui::App) -> Option<Duration> {
-        let timeout = photon_tab_sleep::idle_timeout(Settings::get(cx).tab_sleep_mode)?;
+        let timeout = photon_core::idle_timeout(Settings::get(cx).tab_sleep_mode)?;
         let now = Instant::now();
         self.tabs
             .iter()
@@ -416,7 +424,7 @@ impl BrowserWindow {
 
     pub(super) fn sleep_idle_tabs(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         let mode = Settings::get(cx).tab_sleep_mode;
-        let Some(timeout) = photon_tab_sleep::idle_timeout(mode) else {
+        let Some(timeout) = photon_core::idle_timeout(mode) else {
             return;
         };
 

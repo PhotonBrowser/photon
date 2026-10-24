@@ -1,9 +1,0 @@
-[package]
-name = "photon-omnibox"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-
-[dependencies]
-photon-brand = { path = "../photon-brand" }
-url = "2"

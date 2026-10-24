@@ -13,9 +13,11 @@ use photon_core::{ClearBrowsingData, PopupPolicy};
 use photon_performance::PerformanceTask;
 #[cfg(not(feature = "ui-only"))]
 use std::cell::RefCell;
+#[cfg(any(unix, not(feature = "ui-only")))]
+use std::ffi::CStr;
 use std::{
     cell::Cell,
-    ffi::{CStr, c_void},
+    ffi::c_void,
     rc::Rc,
     sync::{
         Mutex,
@@ -25,13 +27,14 @@ use std::{
 #[cfg(not(feature = "ui-only"))]
 use std::{ffi::CString, path::Path};
 
-use super::ffi::embedder;
+use crate::platform::engine_ffi::embedder;
 use crate::platform::ui::PhotonWebView;
 use callbacks::*;
 #[cfg(not(feature = "ui-only"))]
 use photon_core::EngineService;
 pub(in crate::platform) use session::{EngineSession, RequestedWebView};
 
+#[cfg(unix)]
 #[derive(Clone, Debug)]
 pub(crate) struct RegisteredEngineProcess {
     pub(crate) pid: u32,
@@ -50,6 +53,7 @@ pub(in crate::platform) struct UiWake {
 
 pub(in crate::platform) struct EngineRuntime {
     runtime: *mut c_void,
+    #[cfg(target_os = "macos")]
     reduced_motion_observer: *mut c_void,
     callbacks: Box<RuntimeCallbacks>,
     #[cfg(not(feature = "ui-only"))]
@@ -85,9 +89,11 @@ impl EngineRuntime {
             "Photon Engine runtime failed: {}",
             unsafe { CStr::from_ptr(error.as_ptr()) }.to_string_lossy()
         );
+        #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
         let mut callbacks = Box::new(RuntimeCallbacks {
             views: Mutex::new(Vec::new()),
         });
+        #[cfg(target_os = "macos")]
         let reduced_motion_observer = unsafe {
             embedder::photon_reduced_motion_observer_create(
                 runtime,
@@ -98,6 +104,7 @@ impl EngineRuntime {
         unsafe {
             embedder::photon_runtime_use_system_clipboard(runtime);
         }
+        #[cfg(target_os = "macos")]
         unsafe {
             embedder::photon_runtime_set_native_release_drain_callback(
                 runtime,
@@ -107,6 +114,7 @@ impl EngineRuntime {
         }
         Ok(Self {
             runtime,
+            #[cfg(target_os = "macos")]
             reduced_motion_observer,
             callbacks,
             #[cfg(not(feature = "ui-only"))]
@@ -121,6 +129,7 @@ impl EngineRuntime {
     pub(in crate::platform) fn without_engine() -> Self {
         Self {
             runtime: std::ptr::null_mut(),
+            #[cfg(target_os = "macos")]
             reduced_motion_observer: std::ptr::null_mut(),
             callbacks: Box::new(RuntimeCallbacks {
                 views: Mutex::new(Vec::new()),
@@ -132,6 +141,18 @@ impl EngineRuntime {
 
     pub(in crate::platform) fn is_available(&self) -> bool {
         !self.runtime.is_null()
+    }
+
+    /// Services Engine callbacks on targets whose embedder runtime is pumped
+    /// by the shell event loop instead of the native run loop.
+    #[cfg(all(
+        not(feature = "ui-only"),
+        any(target_os = "linux", target_os = "windows")
+    ))]
+    pub(in crate::platform) fn pump(&self) {
+        if self.is_available() {
+            unsafe { embedder::photon_runtime_pump(self.runtime) };
+        }
     }
 
     pub(in crate::platform) fn set_memory_pressure(&self, pressured: bool) {
@@ -254,6 +275,7 @@ impl EngineRuntime {
         self.service_callback.replace(Some(callback));
     }
 
+    #[cfg(unix)]
     pub(in crate::platform) fn registered_processes(&self) -> Vec<RegisteredEngineProcess> {
         if !self.is_available() {
             return Vec::new();
@@ -330,6 +352,7 @@ impl EngineRuntime {
 impl Drop for EngineRuntime {
     fn drop(&mut self) {
         unsafe {
+            #[cfg(target_os = "macos")]
             if !self.runtime.is_null() {
                 embedder::photon_runtime_set_native_release_drain_callback(
                     self.runtime,
@@ -337,6 +360,7 @@ impl Drop for EngineRuntime {
                     None,
                 );
             }
+            #[cfg(target_os = "macos")]
             if !self.reduced_motion_observer.is_null() {
                 embedder::photon_reduced_motion_observer_destroy(self.reduced_motion_observer);
                 self.reduced_motion_observer = std::ptr::null_mut();
@@ -357,7 +381,7 @@ pub(in crate::platform) enum ZoomStep {
     Reset,
 }
 
-#[cfg(not(feature = "ui-only"))]
+#[cfg(all(not(feature = "ui-only"), target_os = "macos"))]
 unsafe extern "C" fn on_system_reduced_motion_changed(runtime: *mut c_void, reduce_motion: bool) {
     if !runtime.is_null() {
         unsafe {

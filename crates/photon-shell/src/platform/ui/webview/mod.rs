@@ -19,6 +19,7 @@ use std::time::{Duration, Instant};
 
 use super::super::trace;
 
+#[cfg(unix)]
 mod automation;
 mod context_menu;
 mod crashes;
@@ -49,6 +50,7 @@ pub(in crate::platform) struct PhotonWebView {
     pub(in crate::platform) state: BrowserState,
     pub(in crate::platform) diagnostics: PerformanceDiagnostics,
     pub(in crate::platform) performance_overlay_enabled: bool,
+    #[cfg(unix)]
     performance_diagnostics_session_active: bool,
     /// What the tab's crash chip says, if anything.
     pub(in crate::platform) crash_notice: Option<CrashNotice>,
@@ -121,6 +123,7 @@ impl Drop for PhotonWebView {
 }
 
 impl PhotonWebView {
+    #[cfg(unix)]
     pub(in crate::platform) fn registered_engine_processes(
         &self,
     ) -> Vec<super::super::engine::RegisteredEngineProcess> {
@@ -308,6 +311,7 @@ impl PhotonWebView {
             state: BrowserState::default(),
             diagnostics: PerformanceDiagnostics::default(),
             performance_overlay_enabled: false,
+            #[cfg(unix)]
             performance_diagnostics_session_active: false,
             crash_notice: None,
             crashes: PageCrashes::default(),
@@ -386,6 +390,7 @@ impl PhotonWebView {
         self.session.set_diagnostics_enabled(enabled);
     }
 
+    #[cfg(unix)]
     pub(super) fn start_task_queue_diagnostics(&mut self) -> Result<(), String> {
         if self.performance_diagnostics_session_active {
             return Err("task queue diagnostics are already active for this tab".to_owned());
@@ -400,6 +405,7 @@ impl PhotonWebView {
         Ok(())
     }
 
+    #[cfg(unix)]
     pub(super) fn task_queue_diagnostics_json(&self) -> Result<String, String> {
         if !self.performance_diagnostics_session_active {
             return Err("task queue diagnostics are not active for this tab".to_owned());
@@ -409,6 +415,7 @@ impl PhotonWebView {
             .map_err(|error| format!("cannot read Engine task queue diagnostics: {error:#}"))
     }
 
+    #[cfg(unix)]
     pub(super) fn stop_task_queue_diagnostics(&mut self) -> Result<String, String> {
         self.session.stop_frame_timing_diagnostics();
         let snapshot = self.task_queue_diagnostics_json();
@@ -417,6 +424,7 @@ impl PhotonWebView {
         snapshot
     }
 
+    #[cfg(unix)]
     pub(super) fn frame_timing_diagnostics_json(&self) -> Result<String, String> {
         serde_json::to_string(&self.session.frame_timing_diagnostics_json())
             .map_err(|error| format!("cannot serialize Photon frame diagnostics: {error}"))
@@ -602,9 +610,6 @@ impl Render for PhotonWebView {
                 self.external.as_ref(),
                 crate::platform::PageSurfacePalette {
                     background: palette.page_background,
-                    notice_surface: palette.menu_surface,
-                    notice_border: palette.menu_border,
-                    notice_text: palette.text_primary,
                 },
             );
             webview = webview.child(page_surface);

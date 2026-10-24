@@ -2,12 +2,12 @@
 //! titlebar or sidebar space. Its items dispatch the browser's actions, so
 //! they show their shortcuts and behave as the shortcuts do.
 
-use gpui::{
-    App, Context, Div, Menu, MenuItem, MouseButton, MouseDownEvent, Window, point, prelude::*, px,
-};
-use photon_shortcuts::{
+use crate::platform::shortcuts::{
     FindInPage, NewTab, NewWindow, OpenSettings, ResetZoom, ShowKeyboardShortcuts, ToggleDebugInfo,
     ToggleSidebarIcons, ToggleZenMode, ZoomIn, ZoomOut,
+};
+use gpui::{
+    App, Context, Div, Menu, MenuItem, MouseButton, MouseDownEvent, Window, point, prelude::*, px,
 };
 
 use super::super::workspace_layout::WorkspaceLayout;

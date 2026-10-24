@@ -182,6 +182,8 @@ impl BrowserWindow {
                         opacity,
                         offset_scale,
                     })
+                } else if entry_appearing && axis == super::super::tabs::TabDragAxis::Vertical {
+                    None
                 } else if entry_appearing {
                     Some(TabMotion {
                         id: format!("browser-tab-{stable_id}-motion").into(),
@@ -195,6 +197,17 @@ impl BrowserWindow {
                     })
                 } else {
                     None
+                };
+                let position_animation = self
+                    .tab_position_animations
+                    .get(&stable_id)
+                    .is_some_and(|animation| animation.axis == axis);
+                let reorder_transition = if position_animation
+                    || (entry_appearing && axis == super::super::tabs::TabDragAxis::Vertical)
+                {
+                    gpui_motion::Transition::Instant
+                } else {
+                    gpui_motion::Transition::default()
                 };
                 let icon_appearing =
                     !closing && self.icon_appearing(stable_id, &icon, &motion_settings);
@@ -210,6 +223,7 @@ impl BrowserWindow {
                     id: format!("browser-tab-{stable_id}"),
                     reorder_key: stable_id,
                     motion,
+                    reorder_transition,
                     closing,
                     label,
                     icon_appearing: icon_appearing && !entry_appearing,
@@ -297,11 +311,14 @@ impl BrowserWindow {
                     },
                     on_prepaint: {
                         let browser = browser.clone();
+                        let clear_entry_when_settled =
+                            entry_appearing && axis == super::super::tabs::TabDragAxis::Vertical;
                         Box::new(move |bounds, window, cx| {
                             let running = browser
                                 .update(cx, |this, _| {
                                     this.tab_geometry.insert(stable_id, bounds);
-                                    match this.tab_position_animations.get(&stable_id) {
+                                    let running = match this.tab_position_animations.get(&stable_id)
+                                    {
                                         Some(animation)
                                             if animation.axis == axis && animation.is_running() =>
                                         {
@@ -312,7 +329,11 @@ impl BrowserWindow {
                                             false
                                         }
                                         None => false,
+                                    };
+                                    if clear_entry_when_settled && !running {
+                                        this.tab_entry_animations.borrow_mut().remove(&stable_id);
                                     }
+                                    running
                                 })
                                 .unwrap_or(false);
                             if running {

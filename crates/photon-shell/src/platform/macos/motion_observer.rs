@@ -4,7 +4,7 @@ use std::ffi::c_void;
 
 use gpui::{App, Global};
 
-use super::ffi::embedder;
+use crate::platform::engine_ffi::embedder;
 
 type OnChange = Box<dyn Fn(bool)>;
 

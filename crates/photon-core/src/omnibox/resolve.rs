@@ -284,8 +284,8 @@ fn collapse_whitespace(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::super::engines::{DUCKDUCKGO, GOOGLE, SearchEngineError};
     use super::*;
-    use crate::engines::{DUCKDUCKGO, GOOGLE, SearchEngineError};
     use std::borrow::Cow;
 
     fn url_of(input: &str) -> String {

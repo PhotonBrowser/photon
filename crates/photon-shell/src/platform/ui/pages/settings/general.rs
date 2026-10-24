@@ -78,6 +78,10 @@ fn config_file(palette: ThemeColors, cx: &App) -> impl IntoElement {
                 {
                     let _ = std::process::Command::new(program).args(args).spawn();
                 }
+                #[cfg(target_os = "windows")]
+                {
+                    let _ = std::process::Command::new("explorer.exe").arg(path).spawn();
+                }
             }
         }),
     );

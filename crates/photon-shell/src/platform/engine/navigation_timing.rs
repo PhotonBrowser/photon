@@ -13,13 +13,13 @@ const DOCUMENT_COMMITTED: i32 = 1;
 const LOAD_FINISHED: i32 = 2;
 const FIRST_FRAME_READY: i32 = 3;
 
-pub(in crate::platform::macos) fn navigation_profile_enabled() -> bool {
+pub(in crate::platform) fn navigation_profile_enabled() -> bool {
     static ENABLED: OnceLock<bool> = OnceLock::new();
     *ENABLED.get_or_init(|| std::env::var_os("PHOTON_NAVIGATION_PROFILE").is_some())
 }
 
 #[derive(Default)]
-pub(in crate::platform::macos) struct NavigationTimingProfiler {
+pub(in crate::platform) struct NavigationTimingProfiler {
     next_id: AtomicU64,
     current: Mutex<Option<NavigationTimeline>>,
 }
@@ -34,11 +34,12 @@ struct NavigationTimeline {
     first_frame_ready: Option<Instant>,
     surface_installed: Option<Instant>,
     surface_rendered: Option<Instant>,
+    #[cfg(target_os = "macos")]
     surface_gpu_complete: Option<Instant>,
 }
 
 impl NavigationTimingProfiler {
-    pub(in crate::platform::macos) fn record_event(&self, event: i32, url: &str) {
+    pub(in crate::platform) fn record_event(&self, event: i32, url: &str) {
         let now = Instant::now();
         let mut current = self.current.lock().unwrap();
         match event {
@@ -85,7 +86,7 @@ impl NavigationTimingProfiler {
         }
     }
 
-    pub(in crate::platform::macos) fn navigation_id_for_first_surface(&self) -> Option<u64> {
+    pub(in crate::platform) fn navigation_id_for_first_surface(&self) -> Option<u64> {
         let current = self.current.lock().unwrap();
         let timeline = current.as_ref()?;
         (timeline.committed.is_some()
@@ -94,7 +95,7 @@ impl NavigationTimingProfiler {
         .then_some(timeline.id)
     }
 
-    pub(in crate::platform::macos) fn record_surface_installed(&self, navigation_id: u64) {
+    pub(in crate::platform) fn record_surface_installed(&self, navigation_id: u64) {
         let now = Instant::now();
         let mut current = self.current.lock().unwrap();
         let Some(timeline) = current.as_mut() else {
@@ -110,7 +111,7 @@ impl NavigationTimingProfiler {
         self.log_event(timeline, "surface_installed", now);
     }
 
-    pub(in crate::platform::macos) fn record_surface_rendered(&self, navigation_id: u64) {
+    pub(in crate::platform) fn record_surface_rendered(&self, navigation_id: u64) {
         let now = Instant::now();
         let mut current = self.current.lock().unwrap();
         let Some(timeline) = current.as_mut() else {
@@ -126,7 +127,8 @@ impl NavigationTimingProfiler {
         self.log_event(timeline, "first_gpui_render", now);
     }
 
-    pub(in crate::platform::macos) fn record_surface_gpu_complete(&self, navigation_id: u64) {
+    #[cfg(target_os = "macos")]
+    pub(in crate::platform) fn record_surface_gpu_complete(&self, navigation_id: u64) {
         let now = Instant::now();
         let mut current = self.current.lock().unwrap();
         let Some(timeline) = current.as_mut() else {

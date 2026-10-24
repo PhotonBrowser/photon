@@ -535,25 +535,41 @@ impl Tween {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[allow(dead_code)] // Matches the legacy TweenCurve options for downstream Photon UI.
 pub(super) enum TweenCurve {
     Linear,
+    EaseOut,
     SmoothStep,
     #[default]
     EaseInOutCubic,
+    Spring(SpringConfig),
 }
+
+pub(super) const SIDEBAR_RESIZE_SPRING: TweenCurve =
+    TweenCurve::Spring(SpringConfig::new(520.0, 30.0, 1.0));
 
 impl TweenCurve {
     fn transition(self, duration: Duration) -> gpui_motion::Transition {
+        let easing = match self {
+            Self::Linear => Easing::Linear,
+            Self::EaseOut => custom_ease_out(),
+            Self::SmoothStep => Easing::EaseInOut,
+            Self::EaseInOutCubic => custom_ease_in_out_cubic(),
+            Self::Spring(config) => {
+                return gpui_motion::Transition::Spring(
+                    Spring::new(
+                        config.stiffness,
+                        config.damping.max(f32::MIN_POSITIVE),
+                        config.mass,
+                    )
+                    .expect("Photon spring parameters are positive"),
+                );
+            }
+        };
         if duration.is_zero() {
             return gpui_motion::Transition::Instant;
         }
-        let easing = match self {
-            Self::Linear => Easing::Linear,
-            Self::SmoothStep => Easing::EaseInOut,
-            Self::EaseInOutCubic => custom_ease_in_out_cubic(),
-        };
         gpui_motion::Transition::Tween(duration, easing)
     }
 }

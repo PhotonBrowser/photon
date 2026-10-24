@@ -147,6 +147,7 @@ pub(super) fn restore_session(
 /// Reopens the current in-memory session when the user returns to an app that
 /// stayed alive after its last window closed.
 #[cfg(not(feature = "ui-only"))]
+#[cfg(target_os = "macos")]
 pub(super) fn reopen_session(runtime: &Rc<EngineRuntime>, cx: &mut App) {
     let saved = cx.update_global::<BrowsingSession, _>(|session, _| session.session());
     if !restore_session(&saved, runtime, cx) {

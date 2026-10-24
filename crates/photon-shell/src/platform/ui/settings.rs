@@ -7,8 +7,8 @@
 //! Edits to the profile's config file are picked up while the app is running.
 
 use gpui::{App, BorrowAppContext, Global, Task, WindowAppearance};
+use photon_core::SearchEngines;
 use photon_core::{BrowserSettings, ThemeMode};
-use photon_omnibox::SearchEngines;
 use photon_storage::{Profile, ProfileWriteTicket};
 use std::cell::OnceCell;
 use std::rc::Rc;

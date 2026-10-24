@@ -16,6 +16,7 @@ pub(super) const TAB_DRAG_THRESHOLD: f32 = 4.0;
 pub(super) const TAB_DRAG_SCROLL_EDGE: f32 = 28.0;
 pub(super) const TAB_DRAG_SCROLL_SPEED: f32 = 720.0;
 pub(super) const TAB_REORDER_DURATION_MS: u64 = 150;
+pub(super) const TAB_INSERT_PUSH_DURATION_MS: u64 = 120;
 pub(super) const TAB_DROP_SETTLE_DURATION_MS: u64 = 120;
 pub(super) const TAB_ENTRY_OFFSET: f32 = 5.0;
 pub(super) const TAB_MAX_WIDTH: f32 = 220.0;
@@ -231,6 +232,10 @@ pub(super) const SETTINGS_SIDEBAR_ICON_SIZE: f32 = 14.0;
 // The sidebar: navigation, address field, favourites, tabs and its footer.
 /// Width of the hit area centred on the sidebar's resize edge.
 pub(super) const SIDEBAR_RESIZE_HANDLE_WIDTH: f32 = 36.0;
+/// Distance used to dampen a temporary stretch beyond the sidebar's maximum.
+pub(super) const SIDEBAR_RESIZE_RUBBERBAND_RANGE: f32 = 56.0;
+/// Resistance applied as the sidebar is pulled beyond its maximum width.
+pub(super) const SIDEBAR_RESIZE_RUBBERBAND_RESISTANCE: f32 = 0.55;
 /// The sidebar collapsed to a column of icons.
 pub(super) const SIDEBAR_COLLAPSED_WIDTH: f32 = photon_core::SIDEBAR_COLLAPSED_WIDTH as f32;
 /// Space between the collapsed sidebar's edges and its icons.

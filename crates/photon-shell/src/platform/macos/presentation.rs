@@ -1,6 +1,7 @@
 //! IOSurface frame acceptance, presentation, and lease bookkeeping.
 #![allow(deprecated)]
 
+use anyhow::Context as _;
 use core_video::pixel_buffer::CVPixelBuffer;
 use gpui::{
     ExternalMetalSurface, ExternalSurfaceDescriptor, ExternalTextureIdentity, MetalSharedEventWait,
@@ -20,12 +21,12 @@ use std::{
     time::Instant,
 };
 
-use super::engine::navigation_timing::NavigationTimingProfiler;
-use super::ffi::embedder;
+use super::super::engine::navigation_timing::NavigationTimingProfiler;
+use crate::platform::engine_ffi::embedder;
 use crate::platform::trace;
 use photon_presentation_ipc::{BackingDescriptor, Channel};
 
-pub(in crate::platform) struct MachPortGuard(pub(super) mach_port_t);
+pub(in crate::platform) struct MachPortGuard(pub(in crate::platform) mach_port_t);
 impl Drop for MachPortGuard {
     fn drop(&mut self) {
         unsafe { mach2::mach_port::mach_port_deallocate(mach_task_self(), self.0) };
@@ -34,22 +35,22 @@ impl Drop for MachPortGuard {
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(in crate::platform) struct FrameKey {
-    pub(super) backing: u64,
-    pub(super) generation: u64,
-    pub(super) frame: u64,
+    pub(in crate::platform) backing: u64,
+    pub(in crate::platform) generation: u64,
+    pub(in crate::platform) frame: u64,
 }
 
 #[derive(Clone, Copy)]
 pub(in crate::platform) struct FrameReady {
-    pub(super) key: FrameKey,
-    pub(super) signal: u64,
-    pub(super) width: i32,
-    pub(super) height: i32,
+    pub(in crate::platform) key: FrameKey,
+    pub(in crate::platform) signal: u64,
+    pub(in crate::platform) width: i32,
+    pub(in crate::platform) height: i32,
 }
 
 #[derive(Clone, Copy)]
 pub(in crate::platform) struct Release {
-    pub(super) key: FrameKey,
+    pub(in crate::platform) key: FrameKey,
 }
 
 /// Where a frame lease the Engine handed over has got to.
@@ -128,12 +129,12 @@ impl LeaseLedger {
 
 #[derive(Clone, Copy, Default)]
 pub(in crate::platform) struct LeaseCounts {
-    pub(super) received: usize,
-    pub(super) accepted: usize,
-    pub(super) presented: usize,
-    pub(super) completed: usize,
-    pub(super) released: usize,
-    pub(super) outstanding: usize,
+    pub(in crate::platform) received: usize,
+    pub(in crate::platform) accepted: usize,
+    pub(in crate::platform) presented: usize,
+    pub(in crate::platform) completed: usize,
+    pub(in crate::platform) released: usize,
+    pub(in crate::platform) outstanding: usize,
 }
 
 #[derive(Default)]
@@ -238,25 +239,26 @@ pub(in crate::platform) struct PresentationRuntime {
     backings: Mutex<HashMap<(u64, u64), Backing>>,
     latest: Mutex<Option<FrameReady>>,
     latest_order: Mutex<(u64, u64)>,
-    pub(super) leases: Arc<Mutex<LeaseLedger>>,
-    pub(super) gpu_activity: Arc<GpuActivity>,
-    pub(super) release_scheduler: Arc<AtomicPtr<c_void>>,
+    pub(in crate::platform) leases: Arc<Mutex<LeaseLedger>>,
+    pub(in crate::platform) gpu_activity: Arc<GpuActivity>,
+    pub(in crate::platform) release_scheduler: Arc<AtomicPtr<c_void>>,
     navigation_timing: Option<Arc<NavigationTimingProfiler>>,
     performance: Arc<PerformanceMonitor>,
     accepting_frames: AtomicBool,
 }
 
 impl PresentationRuntime {
-    pub(super) fn new(
-        service: &str,
-        channel_id: String,
+    pub(in crate::platform) fn new(
         leases: Arc<Mutex<LeaseLedger>>,
         gpu_activity: Arc<GpuActivity>,
         navigation_timing: Option<Arc<NavigationTimingProfiler>>,
         performance: Arc<PerformanceMonitor>,
     ) -> anyhow::Result<Self> {
+        let service = std::env::var("PHOTON_PRESENTATION_XPC_SERVICE")
+            .context("presentation broker service is not set")?;
+        let channel_id = presentation_channel_id();
         Ok(Self {
-            channel: Channel::connect(service)?,
+            channel: Channel::connect(&service)?,
             channel_id,
             consumer_event: Mutex::new(None),
             backings: Mutex::new(HashMap::new()),
@@ -642,4 +644,21 @@ impl PresentationRuntime {
     pub(in crate::platform) fn has_pending_frame(&self) -> bool {
         self.latest.lock().unwrap().is_some()
     }
+}
+
+/// Uses the channel named by `photon run`, or creates a process-local channel
+/// when macOS launches Photon from another app.
+fn presentation_channel_id() -> String {
+    static CHANNEL: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    CHANNEL
+        .get_or_init(|| {
+            std::env::var("PHOTON_PRESENTATION_CHANNEL_ID").unwrap_or_else(|_| {
+                let started = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_nanos();
+                format!("photon-gpui-ce-{}-{started}", std::process::id())
+            })
+        })
+        .clone()
 }

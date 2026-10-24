@@ -13,16 +13,28 @@ use std::{
     },
 };
 
-use super::super::ffi::embedder;
 use super::super::presentation::{
     GpuActivity, LeaseLedger, PresentationRuntime, PresentedSurface, RetiredSurface,
 };
 use super::callbacks::*;
 use super::navigation_timing::{NavigationTimingProfiler, navigation_profile_enabled};
 use super::{EngineRuntime, UiWake, ZoomStep};
+use crate::platform::engine_ffi::embedder;
 use crate::platform::trace;
 
 static NEXT_PERFORMANCE_TASK_ID: AtomicU64 = AtomicU64::new(1);
+
+#[cfg(unix)]
+fn path_to_cstring(path: &std::path::Path) -> Option<CString> {
+    use std::os::unix::ffi::OsStrExt;
+
+    CString::new(path.as_os_str().as_bytes()).ok()
+}
+
+#[cfg(windows)]
+fn path_to_cstring(path: &std::path::Path) -> Option<CString> {
+    CString::new(path.to_str()?.as_bytes()).ok()
+}
 
 pub(in crate::platform) struct EngineSession {
     _runtime: Rc<EngineRuntime>,
@@ -57,12 +69,14 @@ impl EngineSession {
         !self.view.is_null() && unsafe { embedder::photon_view_needs_beforeunload_check(self.view) }
     }
 
+    #[cfg(unix)]
     pub(in crate::platform) fn registered_engine_processes(
         &self,
     ) -> Vec<super::RegisteredEngineProcess> {
         self._runtime.registered_processes()
     }
 
+    #[cfg(unix)]
     pub(in crate::platform) fn set_task_queue_diagnostics_enabled(&self, enabled: bool) -> bool {
         !self.view.is_null()
             && unsafe {
@@ -70,6 +84,7 @@ impl EngineSession {
             }
     }
 
+    #[cfg(unix)]
     pub(in crate::platform) fn task_queue_diagnostics_json(&self) -> anyhow::Result<String> {
         if self.view.is_null() {
             anyhow::bail!("Engine view is unavailable");
@@ -90,6 +105,7 @@ impl EngineSession {
         Ok(json.to_str()?.to_owned())
     }
 
+    #[cfg(unix)]
     pub(in crate::platform) fn start_frame_timing_diagnostics(&self) {
         self.callbacks.performance.start_frame_timing(
             self.display
@@ -97,6 +113,7 @@ impl EngineSession {
         );
     }
 
+    #[cfg(unix)]
     pub(in crate::platform) fn stop_frame_timing_diagnostics(&self) {
         self.callbacks.performance.stop_frame_timing();
     }
@@ -107,6 +124,7 @@ impl EngineSession {
             .record_surface_install(generation, frame_id);
     }
 
+    #[cfg(unix)]
     pub(in crate::platform) fn frame_timing_diagnostics_json(&self) -> serde_json::Value {
         let diagnostics = self.callbacks.performance.frame_timing_snapshot();
         let frames = diagnostics
@@ -158,10 +176,10 @@ impl EngineSession {
         serde_json::json!({
             "schema_version": 1,
             "scope": "photon_tab_engine_surface_frames",
-            "surface_identity_semantics": "generation is the IOSurface backing-pool epoch; engine_frame_id is the monotonic Photon embedder publication sequence within this WebView; the pair identifies a surface update, not a content generation or proof of changed pixels",
+            "surface_identity_semantics": "generation is the target renderer resource epoch; engine_frame_id is the monotonic publication sequence within this WebView; the pair identifies a surface update, not a content generation or proof of changed pixels",
             "duration_clock_domain": "photon_process_monotonic_elapsed_ns",
-            "presentation_clock_domain": "metal_host_time_seconds",
-            "presentation_timestamp_source": "MTLDrawable.presentedTime",
+            "presentation_clock_domain": "host_backend_defined",
+            "presentation_timestamp_source": "available only when the target renderer reports native drawable feedback",
             "measurement_window_ms": diagnostics.measurement_window_ms,
             "display_refresh_rate_hz": diagnostics.display_refresh_rate_hz,
             "display_refresh_rate_change_count": diagnostics.display_refresh_rate_change_count,
@@ -251,9 +269,6 @@ impl EngineSession {
             runtime.is_available(),
             "web pages are unavailable in the UI-only build"
         );
-        let service = std::env::var("PHOTON_PRESENTATION_XPC_SERVICE")
-            .context("presentation broker service is not set")?;
-        let channel_id = presentation_channel_id();
         let leases = Arc::new(Mutex::new(LeaseLedger::default()));
         let gpu_activity = Arc::new(GpuActivity::default());
         let performance = Arc::new(PerformanceMonitor::default());
@@ -267,8 +282,6 @@ impl EngineSession {
             reason = "shared with Engine callbacks through a raw context pointer"
         )]
         let presentation = Arc::new(PresentationRuntime::new(
-            &service,
-            channel_id,
             leases.clone(),
             gpu_activity.clone(),
             navigation_timing.clone(),
@@ -284,6 +297,7 @@ impl EngineSession {
         let callbacks = Arc::new(CallbackState {
             task_id: NEXT_PERFORMANCE_TASK_ID.fetch_add(1, Ordering::Relaxed),
             presentation: presentation.clone(),
+            #[cfg(target_os = "macos")]
             leases: leases.clone(),
             engine_view: AtomicPtr::new(std::ptr::null_mut()),
             ui_wake: Mutex::new(None),
@@ -362,6 +376,7 @@ impl EngineSession {
             drop(session);
             return Err(error);
         }
+        #[cfg(target_os = "macos")]
         if !unsafe { embedder::photon_view_set_native_metal_presentation(view, true) } {
             drop(session);
             anyhow::bail!("Photon Engine rejected native Metal presentation");
@@ -378,14 +393,17 @@ impl EngineSession {
         }
     }
 
+    #[cfg(unix)]
     pub(in crate::platform) fn has_completed_document_load(&self) -> bool {
         unsafe { embedder::photon_automation_view_has_completed_document_load(self.view) }
     }
 
+    #[cfg(unix)]
     pub(in crate::platform) fn document_generation(&self) -> u64 {
         unsafe { embedder::photon_automation_view_document_generation(self.view) }
     }
 
+    #[cfg(unix)]
     pub(in crate::platform) fn install_speedometer_result_observer(
         &mut self,
         expected_document_generation: u64,
@@ -398,6 +416,7 @@ impl EngineSession {
         }
     }
 
+    #[cfg(unix)]
     pub(in crate::platform) fn install_jetstream_result_observer(
         &mut self,
         expected_document_generation: u64,
@@ -410,6 +429,7 @@ impl EngineSession {
         }
     }
 
+    #[cfg(unix)]
     pub(in crate::platform) fn request_jetstream_start(
         &mut self,
         expected_document_generation: u64,
@@ -542,10 +562,9 @@ impl EngineSession {
     /// Answers the open file picker with the chosen files; none when it was
     /// cancelled.
     pub(in crate::platform) fn file_picker_closed(&mut self, paths: &[std::path::PathBuf]) {
-        use std::os::unix::ffi::OsStrExt;
         let paths: Vec<CString> = paths
             .iter()
-            .filter_map(|path| CString::new(path.as_os_str().as_bytes()).ok())
+            .filter_map(|path| path_to_cstring(path))
             .collect();
         let pointers: Vec<*const c_char> = paths.iter().map(|path| path.as_ptr()).collect();
         unsafe {
@@ -699,6 +718,7 @@ impl EngineSession {
     }
 
     pub(in crate::platform) fn drain_releases(&mut self) {
+        #[cfg(target_os = "macos")]
         deliver_pending_releases(&self.callbacks);
     }
 
@@ -737,6 +757,7 @@ impl EngineSession {
         if self.shutdown_started {
             return;
         }
+        #[cfg(target_os = "macos")]
         if !self.view.is_null() {
             unsafe {
                 embedder::photon_view_set_native_metal_presentation(self.view, false);
@@ -779,7 +800,7 @@ impl EngineSession {
             && gpu_in_flight == 0;
         if !balanced {
             trace(format_args!(
-                "warning: shutdown accounting is unbalanced; presentation frames or Metal work were left over"
+                "warning: shutdown accounting is unbalanced; presentation frames or native GPU work were left over"
             ));
         }
         self.presentation
@@ -815,22 +836,4 @@ impl Drop for EngineSession {
             self.finish_shutdown();
         }
     }
-}
-
-/// This process's presentation channel: the one `photon run` names, or,
-/// when macOS launches the app, as for a link from another app, one made
-/// for this process alone.
-fn presentation_channel_id() -> String {
-    static CHANNEL: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-    CHANNEL
-        .get_or_init(|| {
-            std::env::var("PHOTON_PRESENTATION_CHANNEL_ID").unwrap_or_else(|_| {
-                let started = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_nanos();
-                format!("photon-gpui-ce-{}-{started}", std::process::id())
-            })
-        })
-        .clone()
 }

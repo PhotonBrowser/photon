@@ -10,10 +10,8 @@ fn main() {
     let out = PathBuf::from(env::var_os("OUT_DIR").unwrap());
     generate_background_noise(&out);
 
-    // macOS Engine builds add the embedder bridge and link inputs. Both macOS
-    // modes build the native window helpers; Linux will get its own sources
-    // and Engine link inputs under native/embedder/linux/ when that adapter is built.
-    if env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("macos") {
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    if !matches!(target_os.as_str(), "macos" | "linux" | "windows") {
         return;
     }
 
@@ -32,20 +30,28 @@ fn main() {
             std::fs::create_dir_all(fallback.parent().unwrap()).unwrap();
             std::fs::write(&fallback, "#pragma once\n#define PHOTONEMBEDDER_API\n").unwrap();
         }
-        cc::Build::new()
+        let mut bridge = cc::Build::new();
+        bridge
             .cpp(true)
             .std("c++20")
             .file(root.join("native/embedder/PhotonEmbedderBridge.cpp"))
             .include(root.join("native/embedder"))
-            .include(root.join("native/embedder/macos"))
             .include(root.join("Engine/Libraries/LibPhotonEmbedder/include"))
             .include(root.join("Engine/Libraries"))
             .include(if generated.join("LibPhotonEmbedder/Export.h").is_file() {
                 generated
             } else {
                 out.join("include")
-            })
-            .compile("photon_embedder_bridge_direct");
+            });
+        if target_os == "macos" {
+            bridge.include(root.join("native/embedder/macos"));
+            println!(
+                "cargo:rerun-if-changed={}",
+                root.join("native/embedder/macos/SystemClipboard.h")
+                    .display()
+            );
+        }
+        bridge.compile("photon_embedder_bridge_direct");
         for source in [
             "native/embedder/PhotonEmbedderBridge.cpp",
             "native/embedder/PhotonEmbedderBridge.h",
@@ -54,17 +60,30 @@ fn main() {
         ] {
             println!("cargo:rerun-if-changed={}", root.join(source).display());
         }
+        let link_directory = if engine_build.join("lib64").exists() {
+            engine_build.join("lib64")
+        } else {
+            engine_build.join("lib")
+        };
         println!(
             "cargo:rustc-link-search=native={}",
-            engine_build.join("lib64").display()
+            link_directory.display()
         );
-        if !engine_build.join("lib64").exists() {
+        if target_os == "windows" {
             println!(
                 "cargo:rustc-link-search=native={}",
-                engine_build.join("lib").display()
+                engine_build.join("bin").display()
             );
         }
-        println!("cargo:rustc-link-lib=dylib=lagom-photonembedder");
+        if target_os == "windows" {
+            // CMake produces an MSVC import library for the engine DLL.
+            println!("cargo:rustc-link-lib=static=lagom-photonembedder");
+        } else {
+            println!("cargo:rustc-link-lib=dylib=lagom-photonembedder");
+        }
+    }
+    if target_os != "macos" {
+        return;
     }
     for source in [
         "native/embedder/macos/DefaultBrowser.mm",

@@ -4367,9 +4367,8 @@ name = "photon-core"
 version = "0.1.0"
 dependencies = [
  "photon-brand",
- "photon-omnibox",
- "photon-tab-sleep",
  "serde",
+ "url",
 ]
 
 [[package]]
@@ -4377,21 +4376,6 @@ name = "photon-ffi"
 version = "0.1.0"
 dependencies = [
  "photon-core",
-]
-
-[[package]]
-name = "photon-haptics"
-version = "0.1.0"
-dependencies = [
- "gpui-ce",
-]
-
-[[package]]
-name = "photon-omnibox"
-version = "0.1.0"
-dependencies = [
- "photon-brand",
- "url",
 ]
 
 [[package]]
@@ -4446,25 +4430,13 @@ dependencies = [
  "objc",
  "photon-brand",
  "photon-core",
- "photon-haptics",
- "photon-omnibox",
  "photon-performance",
  "photon-presentation-ipc",
- "photon-shortcuts",
  "photon-storage",
- "photon-tab-sleep",
  "raw-window-handle",
  "serde",
  "serde_json",
  "toml 0.8.23",
-]
-
-[[package]]
-name = "photon-shortcuts"
-version = "0.1.0"
-dependencies = [
- "gpui-ce",
- "photon-core",
 ]
 
 [[package]]
@@ -4476,13 +4448,6 @@ dependencies = [
  "serde",
  "serde_json",
  "toml 0.8.23",
-]
-
-[[package]]
-name = "photon-tab-sleep"
-version = "0.1.0"
-dependencies = [
- "serde",
 ]
 
 [[package]]

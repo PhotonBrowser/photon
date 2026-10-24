@@ -6,8 +6,8 @@
 //! it through the functions here.
 
 use gpui::{App, BorrowAppContext, Global, Task};
+use photon_core::SearchEngines;
 use photon_core::{ClearBrowsingData, History, HistoryEntry, Suggestions};
-use photon_omnibox::SearchEngines;
 use photon_storage::{DataUsage, Profile, ProfileWriteTicket};
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};

@@ -4,6 +4,14 @@ use photon_core::CommandAvailability;
 
 #[cfg_attr(target_os = "linux", allow(dead_code))]
 mod app_update;
+#[allow(dead_code)]
+mod cpu_presentation;
+#[allow(dead_code)]
+mod cpu_renderer;
+pub(crate) mod display;
+pub(crate) mod engine;
+mod engine_ffi;
+pub(crate) mod haptics;
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "macos")]
@@ -12,11 +20,17 @@ mod macos;
 #[path = "ui/metrics.rs"]
 pub(crate) mod metrics;
 mod permission_coordinator;
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+mod portable_display;
+pub(crate) mod presentation;
+pub(crate) mod shortcuts;
 #[cfg_attr(target_os = "linux", allow(dead_code))]
 pub(crate) mod theme_config;
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 mod ui;
 pub(crate) mod window_config;
+#[cfg(target_os = "windows")]
+mod windows;
 
 #[cfg(target_os = "linux")]
 #[allow(unused_imports)]
@@ -26,15 +40,18 @@ pub(crate) use linux::{
 };
 #[cfg(target_os = "macos")]
 pub(crate) use macos::{
-    app_menus, default_browser, engine, is_dark_appearance, keyboard_notation, motion_observer,
-    renderer, supports_elastic_scroll, window_observer, window_settings,
+    app_menus, default_browser, is_dark_appearance, keyboard_notation, motion_observer, renderer,
+    supports_elastic_scroll, window_observer, window_settings,
+};
+#[cfg(target_os = "windows")]
+pub(crate) use windows::{
+    app_menus, default_browser, is_dark_appearance, keyboard_notation, motion_observer, renderer,
+    supports_elastic_scroll, window_observer, window_settings,
 };
 
-#[cfg(target_os = "linux")]
-pub(crate) use linux::run;
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 pub(crate) use ui::run;
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 pub use ui::show_alert;
 
 /// State the shared browser UI sends to its native menu adapter.
@@ -60,6 +77,7 @@ pub(crate) struct KeyboardNotation {
 #[cfg_attr(target_os = "linux", allow(dead_code))]
 pub(crate) enum DefaultBrowserStatus {
     Unavailable,
+    #[cfg_attr(target_os = "windows", allow(dead_code))]
     NotDefault,
     Default,
 }
@@ -67,12 +85,6 @@ pub(crate) enum DefaultBrowserStatus {
 #[derive(Clone, Copy)]
 pub(crate) struct PageSurfacePalette {
     pub(crate) background: u32,
-    #[cfg_attr(target_os = "macos", allow(dead_code))]
-    pub(crate) notice_surface: u32,
-    #[cfg_attr(target_os = "macos", allow(dead_code))]
-    pub(crate) notice_border: u32,
-    #[cfg_attr(target_os = "macos", allow(dead_code))]
-    pub(crate) notice_text: u32,
 }
 
 fn trace(args: std::fmt::Arguments<'_>) {

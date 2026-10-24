@@ -160,6 +160,7 @@ fn tab_row(parts: TabParts, palette: ThemeColors, reorder: &ReorderGroup<u64>) -
     let reorder_key = parts.reorder_key;
     let focus_handle = parts.focus_handle.clone();
     let closing = parts.closing;
+    let reorder_transition = parts.reorder_transition;
     let row = parts
         .tab
         .w_full()
@@ -193,7 +194,14 @@ fn tab_row(parts: TabParts, palette: ThemeColors, reorder: &ReorderGroup<u64>) -
         TabDragAxis::Vertical,
         position_offset,
     );
-    super::measured_tab(row, reorder_key, focus_handle, closing, reorder)
+    super::measured_tab(
+        row,
+        reorder_key,
+        focus_handle,
+        closing,
+        reorder_transition,
+        reorder,
+    )
 }
 
 /// A square holding only the tab's icon, for the collapsed sidebar. The
@@ -204,6 +212,7 @@ fn tab_tile(parts: TabParts, palette: ThemeColors, reorder: &ReorderGroup<u64>) 
     let reorder_key = parts.reorder_key;
     let focus_handle = parts.focus_handle.clone();
     let closing = parts.closing;
+    let reorder_transition = parts.reorder_transition;
     let tooltip = (!parts.suppress_tooltips).then(|| label_tooltip(parts.label.clone(), palette));
     let tile = collapsed_tile(parts.tab)
         .relative()
@@ -220,7 +229,14 @@ fn tab_tile(parts: TabParts, palette: ThemeColors, reorder: &ReorderGroup<u64>) 
         TabDragAxis::Vertical,
         position_offset,
     );
-    super::measured_tab(tile, reorder_key, focus_handle, closing, reorder)
+    super::measured_tab(
+        tile,
+        reorder_key,
+        focus_handle,
+        closing,
+        reorder_transition,
+        reorder,
+    )
 }
 
 /// "+ New Tab", above the tabs; collapsed, only "+".

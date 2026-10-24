@@ -1,28 +1,38 @@
 //! App startup: key bindings, the Engine runtime and the first window.
 
+use crate::platform::shortcuts::{NewWindow, browser_shortcuts};
+#[cfg(all(
+    not(feature = "ui-only"),
+    any(target_os = "linux", target_os = "windows")
+))]
+use gpui::AsyncApp;
 use gpui::{App, QuitMode};
 use gpui_elements::editable_text::actions::{DEFAULT_INPUT_CONTEXT, default_bindings};
 use gpui_platform::application;
 use photon_core::{BrowserSettings, Command, History, Session};
-use photon_shortcuts::{NewWindow, browser_shortcuts};
 #[cfg(all(target_os = "macos", not(feature = "ui-only")))]
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+#[cfg(target_os = "macos")]
+use std::time::Instant;
 
 use super::super::super::app_update::update_app;
 use super::super::super::engine::EngineRuntime;
 use super::super::history::load_browsing_history;
 use super::super::install_form_controls;
 use super::super::settings::{Settings, load_settings};
+#[cfg(unix)]
 use super::automation::AutomationLaunch;
 use super::menu::RunMenuCommand;
 #[cfg(not(feature = "ui-only"))]
 use super::open_urls::{open_received_urls, receive_opened_urls};
 use super::page_menu::ActivatePageMenuItem;
 use super::session::load_session;
+#[cfg(all(target_os = "macos", not(feature = "ui-only")))]
+use super::session::reopen_session;
 #[cfg(not(feature = "ui-only"))]
-use super::session::{reopen_session, restore_session};
+use super::session::restore_session;
 use super::{BrowserWindow, BrowserWindowRegistry, open_browser_window};
 use photon_storage::Profile;
 
@@ -35,12 +45,27 @@ struct LoadedProfileState {
 }
 
 pub fn run() {
+    #[cfg(unix)]
     let automation_launch = match AutomationLaunch::from_process_arguments() {
         Ok(launch) => launch,
         Err(error) => {
             eprintln!("Photon automation startup: {error}");
             std::process::exit(2);
         }
+    };
+    #[cfg(unix)]
+    let automation_mode = automation_launch.is_some();
+    #[cfg(windows)]
+    let automation_mode = {
+        let requested = std::env::args_os().any(|argument| {
+            let argument = argument.to_string_lossy();
+            argument == "--automation-socket" || argument.starts_with("--automation-socket=")
+        });
+        if requested {
+            eprintln!("Photon automation sockets are not supported on Windows");
+            std::process::exit(2);
+        }
+        false
     };
     let application = application();
     #[cfg(all(target_os = "macos", not(feature = "ui-only")))]
@@ -58,7 +83,6 @@ pub fn run() {
     }
     #[cfg(not(feature = "ui-only"))]
     let opened_urls = receive_opened_urls(&application);
-    let automation_mode = automation_launch.is_some();
     application.run(move |cx: &mut App| {
         cx.set_global(BrowserWindowRegistry::default());
         // Keep the Engine runtime warm for its configured idle period after a
@@ -121,6 +145,11 @@ pub fn run() {
                     )
                     .unwrap_or_else(|error| panic!("could not start Photon Engine: {error:#}")),
                 );
+                #[cfg(all(
+                    not(feature = "ui-only"),
+                    any(target_os = "linux", target_os = "windows")
+                ))]
+                start_engine_pump(&runtime, cx.to_async());
                 follow_settings(&runtime, cx);
                 #[cfg(not(feature = "ui-only"))]
                 announce_service_restarts(&runtime, cx);
@@ -211,6 +240,7 @@ pub fn run() {
                             .expect("open GPUI-CE Photon window");
                     }
                 }
+                #[cfg(unix)]
                 if let Some(launch) = automation_launch {
                     super::automation::install(launch, cx).unwrap_or_else(|error| {
                         panic!("could not start Photon automation server: {error}")
@@ -221,6 +251,35 @@ pub fn run() {
         })
         .detach();
     });
+}
+
+/// Pumps Engine events on platforms without the Apple run-loop callback path.
+#[cfg(all(
+    not(feature = "ui-only"),
+    any(target_os = "linux", target_os = "windows")
+))]
+fn start_engine_pump(runtime: &Rc<EngineRuntime>, app: AsyncApp) {
+    let runtime = Rc::downgrade(runtime);
+    app.spawn(async move |cx| {
+        loop {
+            cx.background_executor()
+                .timer(Duration::from_millis(8))
+                .await;
+            let runtime = runtime.clone();
+            let pumped = update_app(cx, move |_| {
+                let Some(runtime) = runtime.upgrade() else {
+                    return false;
+                };
+                runtime.pump();
+                true
+            })
+            .await;
+            if pumped != Some(true) {
+                break;
+            }
+        }
+    })
+    .detach();
 }
 
 /// Retains the process and shared Engine runtime for a short idle window so a

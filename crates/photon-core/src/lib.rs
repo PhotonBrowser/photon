@@ -9,11 +9,13 @@ mod dialogs;
 mod history;
 mod internal_pages;
 mod new_tab;
+mod omnibox;
 mod session;
 mod settings;
 mod sidebar;
 mod spaces;
 mod state;
+mod tab_sleep;
 mod tabs;
 mod workspace;
 
@@ -27,15 +29,12 @@ pub use dialogs::{DialogKind, DialogReply, DialogRequest, PageDialogs};
 pub use history::{HISTORY_MAX_PAGES, HISTORY_MAX_SEARCHES, History, HistoryEntry, SearchEntry};
 pub use internal_pages::{internal_page_name, internal_page_url};
 pub use new_tab::{NewTabSettings, SHORTCUT_COUNTS, Shortcut, site_name};
-pub use photon_omnibox::{
-    OmniboxError, OmniboxTarget, SearchEngine, SearchEngineError, SearchEngines, Suggestion,
-    SuggestionKind, Suggestions, UrlKind, resolve as resolve_omnibox_input,
-};
-pub use photon_tab_sleep::TabSleepMode;
+pub use omnibox::resolve as resolve_omnibox_input;
+pub use omnibox::*;
 pub use session::{Session, SessionTab, WindowSession};
 pub use settings::{
-    AnimationSettings, BACKGROUND_NOISE_INTENSITY_MAX, BrowserSettings, PopupPolicy, TabLayout,
-    ThemeMode, Transparency, WindowBackgroundStyle, WindowColor,
+    AnimationSettings, BACKGROUND_NOISE_INTENSITY_MAX, BrowserSettings, NewTabPosition,
+    PopupPolicy, TabLayout, ThemeMode, Transparency, WindowBackgroundStyle, WindowColor,
 };
 pub use sidebar::{
     SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH, SidebarResize,
@@ -43,6 +42,7 @@ pub use sidebar::{
 };
 pub use spaces::{MAX_FAVOURITES, Space, SpaceId, Spaces};
 pub use state::{BrowserCommand, BrowserState, EngineEvent, normalize_url};
+pub use tab_sleep::{MemoryPressure, TabSleepMode, idle_timeout};
 pub use tabs::{ARCHIVE_AFTER, should_archive};
 pub use workspace::{
     ADDRESS_FIELD_COMPONENT_ID, ADDRESS_TOOLBAR_COMPONENT_ID, BACK_BUTTON_COMPONENT_ID,

@@ -60,11 +60,11 @@ fn display_link_refresh_rate(display: u32) -> Option<f64> {
 
 /// The refresh rate of a `CGDirectDisplayID`, which is what GPUI's macOS
 /// `DisplayId` holds.
-pub(super) fn refresh_rate(display: u64) -> f64 {
+pub(in crate::platform) fn refresh_rate(display: u64) -> f64 {
     known_refresh_rate(display).unwrap_or(FALLBACK_REFRESH_RATE)
 }
 
-pub(super) fn known_refresh_rate(display: u64) -> Option<f64> {
+pub(in crate::platform) fn known_refresh_rate(display: u64) -> Option<f64> {
     let Ok(display) = u32::try_from(display) else {
         return None;
     };
