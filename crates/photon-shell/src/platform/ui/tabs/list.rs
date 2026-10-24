@@ -133,7 +133,9 @@ pub(in super::super) fn tab_list(
     let list = v_stack()
         .id("sidebar-tab-list-drag-target")
         .w_full()
-        .h_full()
+        // Keep the drop target viewport-sized when it fits, and let overflowing rows grow it.
+        .min_h_full()
+        .flex_shrink_0()
         .gap(px(spacing.item_gap))
         .tab_group()
         .when(!pinned.is_empty(), |list| {
