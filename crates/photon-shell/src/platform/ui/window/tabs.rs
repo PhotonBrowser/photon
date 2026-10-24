@@ -2137,10 +2137,10 @@ impl BrowserWindow {
             Self::notify_other_tab_drop_targets(cx, window.window_handle());
         }
 
-        self.finish_close_tab(index, window, cx);
+        self.delete_tab(index, window, cx);
     }
 
-    fn finish_close_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+    fn delete_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
         if index >= self.tabs.len() {
             return;
         }
