@@ -17,15 +17,13 @@ Install the platform prerequisites in [contributor setup](CONTRIBUTOR_SETUP.md) 
 ```sh
 git clone https://github.com/PhotonBrowser/photon.git
 cd photon
-cargo install --path crates/photon-cli --bin photon --locked
-photon setup --install-system-deps
+./photon setup --install-system-deps
 photon check
 photon run
 ```
 
-After installation, `photon` works from anywhere inside the checkout. Re-run
-`cargo install --path crates/photon-cli --bin photon --locked --force` to update
-the installed command after changing the CLI.
+Setup installs or refreshes the `photon` command in Cargo's bin directory. Make
+sure `~/.cargo/bin` is on your `PATH` to use `photon` without the `./` prefix.
 
 ## Develop Photon
 

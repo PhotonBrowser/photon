@@ -139,6 +139,7 @@ pub(crate) fn setup(root: &Path, verbose: bool, install_system_deps: bool) -> Re
     }
     crate::commands::ide::setup(root, verbose)?;
     clang_format(root, CLANG_FORMAT_VERSION)?;
+    crate::commands::install::install(root, verbose)?;
     println!("Setup ready. Existing dependency worktrees were preserved.");
     println!("Rust formatting, Clippy, and native formatting tools are ready.");
     if install_system_deps {

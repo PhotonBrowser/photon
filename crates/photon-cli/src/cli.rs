@@ -34,7 +34,7 @@ struct GlobalOptions {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    /// Verify tools, initialize dependencies, and prepare formatting/lint tools.
+    /// Verify prerequisites, initialize dependencies, prepare tools, and install the CLI.
     Setup {
         /// Install macOS build packages with Homebrew before setup.
         #[arg(long)]

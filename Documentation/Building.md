@@ -15,7 +15,7 @@ photon build
 photon run
 ```
 
-- `photon setup` checks required tools, initializes pinned dependencies, and prepares Rust formatting/lint tools and clang-format 22. On macOS, add `--install-system-deps` to install the required Homebrew packages. The pinned clang-format 22.1.8 stays under the ignored `build/tools/` directory.
+- `photon setup` checks required tools, initializes pinned dependencies, prepares Rust formatting/lint tools and clang-format 22, and installs or refreshes the `photon` command in Cargo's bin directory. On macOS, add `--install-system-deps` to install the required Homebrew packages. The pinned clang-format 22.1.8 stays under the ignored `build/tools/` directory.
 - `photon doctor` reports tool versions, Rust components, dependency revisions, and build directories. `photon setup` is the strict prerequisite check.
 - `photon format` formats Rust and Photon-owned native code, including the Engine embedder with its matching style version.
 - `photon lint` checks Rust formatting, runs Clippy with warnings treated as errors, and checks Photon and Engine embedder C++ formatting.
