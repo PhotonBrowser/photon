@@ -49,8 +49,9 @@ limits.
 
 Photon owns XPC presentation, frame ordering, generations, retirement, release
 forwarding, Engine thread affinity, browser input, and application startup.
-On macOS, `photon run` uses GPUI hot reloading by default; pass
-`--no-hot-reload` to build and launch the application directly.
+On macOS, `photon run` uses ra-jit's direct build path by default when ra-jit
+is installed; pass `--hot-reload` to use GPUI hot reloading through Dioxus, or
+`--no-hot-reload` to force the direct path.
 Hot-reload launches from the same development app bundle as the direct path,
 so the Dock icon, app identity, and browser link metadata are available there
 too. If a build fails or the patched app crashes, `photon run` restarts Dioxus

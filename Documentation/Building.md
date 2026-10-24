@@ -1,6 +1,6 @@
 # Building Photon
 
-Use the `photon` CLI for setup, formatting, linting, building, and running Photon. The toolchain requires Git, Rust/Cargo 1.85 or newer, a C++23-capable compiler, CMake 3.30 or newer, Ninja 1.10 or newer, Python 3 with pip, and the platform packages required by the pinned Engine. On macOS, `photon setup --install-system-deps` installs native build packages with Homebrew. On Linux/WSL2, install packages from [Ladybird's build guide](../Engine/Documentation/BuildInstructionsLadybird.md), then run `photon setup`. See [contributor setup](../CONTRIBUTOR_SETUP.md) for the full first-checkout sequence.
+Use the `photon` CLI for setup, formatting, linting, building, and running Photon. The toolchain requires Git, Rust/Cargo 1.99.0, a C++23-capable compiler, CMake 3.30 or newer, Ninja 1.10 or newer, Python 3 with pip, and the platform packages required by the pinned Engine. On macOS, `photon setup --install-system-deps` installs native build packages with Homebrew. On Linux/WSL2, install packages from [Ladybird's build guide](../Engine/Documentation/BuildInstructionsLadybird.md), then run `photon setup`. See [contributor setup](../CONTRIBUTOR_SETUP.md) for the full first-checkout sequence.
 
 ## Common commands
 
@@ -22,10 +22,33 @@ photon run
 - `photon check` runs linting, compiles the Cargo workspace, and verifies architecture and dependency checkout rules.
 - `photon test` runs the Rust workspace tests.
 - `photon build` builds the Engine and the GPUI-CE application.
-- `photon run` builds and launches the native app. On macOS it uses GPUI hot reloading by default, reusing the existing Engine build without building Engine; run `photon build` first if that build is missing or out of date. This experimental mode currently supports macOS only. Use `--no-hot-reload` for the direct build and launch path. Use `--url URL` to choose the initial page. `--shutdown-after-seconds N` requires `--no-hot-reload`; `--verbose` prints the final presentation frame counts.
+- `photon run` builds and launches the native app. Direct app builds use `cargo ra-jit build` when ra-jit is installed with the pinned toolchain. On macOS, ra-jit selects the direct path by default when installed; Photon uses full-link mode (`RA_JIT_SPLICE=0`) unless you set that variable, because the crates.io 0.1.0 Mach-O splice path panicked on Photon edits. Changed functions still use ra-jit's compiler, then the app is relinked. Pass `--hot-reload` to use Dioxus, which reuses the existing Engine build without building Engine. Run `photon build` first if that Engine build is missing or out of date. Hot reloading currently supports macOS only. Use `--url URL` to choose the initial page. `--shutdown-after-seconds N` works on the direct path; pass `--no-hot-reload` if hot reload would otherwise be selected. `--verbose` prints the final presentation frame counts.
 - Hot reload launches the debug shell through Dioxus CLI and patches GPUI rendering code without restarting the app. Photon installs Dioxus CLI 0.7.10 with Cargo on first use if it is missing or has an incompatible version. Use `--hot-reload` to enable it explicitly, or `--ui` to hot-patch the UI-only shell without requiring Photon Engine.
 - `photon run --ui` builds and launches the shared browser window with the New Tab page, without building, linking, or starting Photon Engine. Shell-owned pages remain available; web pages cannot be opened in this mode. The path is available on macOS, Linux, and Windows.
 - `photon clean` removes generated build trees and stops the checkout-specific presentation broker.
+
+Photon currently uses ra-jit upstream commit
+[`c48ca3f`](https://github.com/indexable-inc/ra-jit/commit/c48ca3f800a1a4ce6a7e1ce9f9d7d05f26eced2f).
+The crates.io `ra-jit` 0.1.0 build segfaulted during Photon startup; this source
+build passed a Photon launch and a warm edited-function build on macOS arm64.
+The checkout pins Rust 1.99.0 and includes `rust-src`, which ra-jit requires.
+
+```sh
+git clone https://github.com/indexable-inc/ra-jit.git /tmp/ra-jit
+cd /tmp/ra-jit
+git checkout c48ca3f800a1a4ce6a7e1ce9f9d7d05f26eced2f
+cargo +1.99.0 build --locked --release -p ra-jit --bins
+cp target/release/cargo-ra-jit target/release/ra-jit \
+  target/release/ra-jit-rustc target/release/ra-jit-rustc-first ~/.cargo/bin/
+```
+
+On macOS, ad-hoc sign the copied executables so the system accepts their
+signatures:
+
+```sh
+codesign --force --sign - ~/.cargo/bin/cargo-ra-jit ~/.cargo/bin/ra-jit \
+  ~/.cargo/bin/ra-jit-rustc ~/.cargo/bin/ra-jit-rustc-first
+```
 
 `photon check` includes the lint checks, so run it before sharing a change. Build and test commands use release mode by default; `--release` is accepted for compatibility.
 
