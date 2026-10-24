@@ -78,7 +78,9 @@ mod tests {
         sync::atomic::{AtomicUsize, Ordering},
     };
 
-    use super::{is_dependency_behind, warn_if_dependencies_are_behind};
+    use super::{
+        is_dependency_behind, ra_jit_is_on_path, should_use_ra_jit, warn_if_dependencies_are_behind,
+    };
 
     static NEXT_TEMP_REPO: AtomicUsize = AtomicUsize::new(0);
 
@@ -88,6 +90,48 @@ mod tests {
         assert!(is_dependency_behind(10, 10));
         assert!(!is_dependency_behind(0, 1));
         assert!(is_dependency_behind(1, 1));
+    }
+
+    #[test]
+    fn ra_jit_is_detected_only_with_its_companion_programs() {
+        let root = temporary_repository();
+        let bin = root.join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        for program in ["cargo-ra-jit", "ra-jit", "ra-jit-rustc"] {
+            std::fs::write(
+                bin.join(format!("{program}{}", std::env::consts::EXE_SUFFIX)),
+                "",
+            )
+            .unwrap();
+        }
+        assert!(!ra_jit_is_on_path(bin.as_os_str()));
+
+        std::fs::write(
+            bin.join(format!(
+                "ra-jit-rustc-first{}",
+                std::env::consts::EXE_SUFFIX
+            )),
+            "",
+        )
+        .unwrap();
+        assert!(ra_jit_is_on_path(bin.as_os_str()));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn cargo_feature_builds_bypass_ra_jit() {
+        assert!(should_use_ra_jit(&["build", "-p", "photon-app"], true));
+        for args in [
+            &["build", "-p", "photon-app", "--features", "ui-only"][..],
+            &["build", "--features=ui-only"][..],
+            &["build", "-F", "ui-only"][..],
+            &["build", "--all-features"][..],
+            &["build", "--no-default-features"][..],
+        ] {
+            assert!(!should_use_ra_jit(args, true), "args: {args:?}");
+        }
+        assert!(!should_use_ra_jit(&["build", "-p", "photon-app"], false));
+        assert!(!should_use_ra_jit(&["check"], true));
     }
 
     #[test]
@@ -191,12 +235,22 @@ fn invoke_cargo(
     engine_dir: Option<&Path>,
     verbose: bool,
 ) -> Result<(), String> {
+    // ra-jit can treat a target as current after Cargo's feature set changes.
+    let use_ra_jit = should_use_ra_jit(args, ra_jit_available());
     let mut command = Command::new("cargo");
+    if use_ra_jit {
+        command.arg("ra-jit");
+        if cfg!(target_os = "macos") && std::env::var_os("RA_JIT_SPLICE").is_none() {
+            // ra-jit 0.1.0 panics while splicing some macOS executables after an edit.
+            command.env("RA_JIT_SPLICE", "0");
+        }
+    }
     command.args(args).current_dir(root);
     if let Some(engine_dir) = engine_dir {
         command.env("PHOTON_ENGINE_BUILD_DIR", engine_dir);
     }
-    if verbose {
+    if verbose || use_ra_jit {
+        let tool = if use_ra_jit { "cargo ra-jit" } else { "cargo" };
         return command
             .status()
             .map_err(|error| error.to_string())
@@ -204,7 +258,7 @@ fn invoke_cargo(
                 if status.success() {
                     Ok(())
                 } else {
-                    Err(format!("cargo exited with {status}"))
+                    Err(format!("{tool} exited with {status}"))
                 }
             });
     }
@@ -221,6 +275,41 @@ fn invoke_cargo(
         result.status,
         diagnostics(&result.stdout, &result.stderr, 12)
     ))
+}
+
+fn selects_cargo_features(args: &[&str]) -> bool {
+    args.iter().any(|arg| {
+        matches!(
+            *arg,
+            "--features" | "-F" | "--all-features" | "--no-default-features"
+        ) || arg.starts_with("--features=")
+    })
+}
+
+fn should_use_ra_jit(args: &[&str], ra_jit_available: bool) -> bool {
+    args.first() == Some(&"build") && !selects_cargo_features(args) && ra_jit_available
+}
+
+fn ra_jit_is_on_path(path: &std::ffi::OsStr) -> bool {
+    let Some(directory) = std::env::split_paths(path).find(|directory| {
+        directory
+            .join(format!("cargo-ra-jit{}", std::env::consts::EXE_SUFFIX))
+            .is_file()
+    }) else {
+        return false;
+    };
+
+    ["ra-jit", "ra-jit-rustc", "ra-jit-rustc-first"]
+        .into_iter()
+        .all(|program| {
+            directory
+                .join(format!("{program}{}", std::env::consts::EXE_SUFFIX))
+                .is_file()
+        })
+}
+
+pub(crate) fn ra_jit_available() -> bool {
+    std::env::var_os("PATH").is_some_and(|path| ra_jit_is_on_path(&path))
 }
 
 pub(crate) fn engine_build(root: &Path, release: bool, verbose: bool) -> Result<(), String> {

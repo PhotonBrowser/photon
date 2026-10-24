@@ -63,7 +63,7 @@ enum Command {
         /// Build and launch the shell without building, linking, or starting Photon Engine.
         #[arg(long)]
         ui: bool,
-        /// Hot-patch GPUI rendering code via Dioxus CLI (the default on macOS).
+        /// Hot-patch GPUI rendering code via Dioxus CLI (the default on macOS without ra-jit).
         #[arg(long, conflicts_with = "no_hot_reload")]
         hot_reload: bool,
         /// Use the direct launch path instead of GPUI hot reloading.
@@ -250,7 +250,11 @@ pub fn run() -> Result<(), String> {
             if ui && url.is_some() {
                 return Err("--url cannot be used with --ui".into());
             }
-            if should_use_hot_reload(hot_reload, no_hot_reload) {
+            if should_use_hot_reload(
+                hot_reload,
+                no_hot_reload,
+                commands::build::ra_jit_available(),
+            ) {
                 return commands::build::run_hot_reload(
                     &root,
                     release,
@@ -365,8 +369,8 @@ fn workspace_root() -> Result<PathBuf, String> {
         .ok_or_else(|| "cannot locate Photon workspace".into())
 }
 
-fn should_use_hot_reload(explicit: bool, disabled: bool) -> bool {
-    explicit || (cfg!(target_os = "macos") && !disabled)
+fn should_use_hot_reload(explicit: bool, disabled: bool, ra_jit_available: bool) -> bool {
+    explicit || (cfg!(target_os = "macos") && !disabled && !ra_jit_available)
 }
 
 fn print_help() -> Result<(), String> {
@@ -453,7 +457,7 @@ mod tests {
     }
 
     #[test]
-    fn run_uses_hot_reload_by_default_on_macos() {
+    fn run_uses_hot_reload_by_default_on_macos_without_ra_jit() {
         let cli = Cli::try_parse_from(["photon", "run"]).unwrap();
         let Some(Command::Run {
             hot_reload,
@@ -465,9 +469,10 @@ mod tests {
         };
 
         assert_eq!(
-            should_use_hot_reload(hot_reload, no_hot_reload),
+            should_use_hot_reload(hot_reload, no_hot_reload, false),
             cfg!(target_os = "macos")
         );
+        assert!(!should_use_hot_reload(hot_reload, no_hot_reload, true));
     }
 
     #[test]
@@ -482,7 +487,7 @@ mod tests {
         else {
             panic!("expected run command");
         };
-        assert!(should_use_hot_reload(hot_reload, no_hot_reload));
+        assert!(should_use_hot_reload(hot_reload, no_hot_reload, true));
 
         let Some(Command::Run {
             hot_reload,
@@ -492,6 +497,6 @@ mod tests {
         else {
             panic!("expected run command");
         };
-        assert!(!should_use_hot_reload(hot_reload, no_hot_reload));
+        assert!(!should_use_hot_reload(hot_reload, no_hot_reload, false));
     }
 }
