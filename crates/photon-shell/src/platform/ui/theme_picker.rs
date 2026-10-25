@@ -41,7 +41,6 @@ fn picker_control(ink: u32) -> gpui::Div {
         .items_center()
         .justify_center()
         .rounded(px(metrics::control_radius()))
-        .bg(rgb(ink).opacity(tokens().control_surface))
         .hover_style(|style| style.bg(rgb(ink).opacity(tokens().control_hover)))
 }
 

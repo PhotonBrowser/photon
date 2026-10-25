@@ -311,7 +311,6 @@ pub(crate) struct PickerTokens {
     pub(crate) field_lightness_min: f32,
     pub(crate) field_lightness_max: f32,
     pub(crate) field_surface: f32,
-    pub(crate) control_surface: f32,
     pub(crate) control_hover: f32,
     pub(crate) control_selected: f32,
     pub(crate) dots: f32,

@@ -158,7 +158,6 @@ preset_dark_lightness = 0.26
 field_lightness_min = 0.0
 field_lightness_max = 1.0
 field_surface = 0.05
-control_surface = 0.12
 control_hover = 0.2
 control_selected = 0.25
 dots = 0.2
