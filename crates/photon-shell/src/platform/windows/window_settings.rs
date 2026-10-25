@@ -26,6 +26,8 @@ pub(crate) fn uses_custom_window_controls() -> bool {
 
 pub(crate) fn configure_native_controls(_: &Window, _: &AnimationSettings) {}
 
+pub(in crate::platform) fn configure_renderer_memory(_: &Window) {}
+
 pub(crate) fn update_native_controls(
     _: &Window,
     _: &AnimationSettings,

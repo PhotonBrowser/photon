@@ -458,6 +458,7 @@ fn open_browser_window(
     let animations = Settings::get(cx).animations;
     let options = window_settings::options(cx);
     let handle = cx.open_window(options, move |window, cx| {
+        window_settings::configure_renderer_memory(window);
         window_settings::configure_native_controls(window, &animations);
         window.set_window_title(photon_brand::NAME);
         let omnibox = cx.new(|cx| Omnibox::new(window, cx));

@@ -1,10 +1,14 @@
 //! GPUI-CE window defaults. Edit this file to change native window behavior.
 
+use foreign_types::ForeignTypeRef;
 use gpui::{
     App, Axis, Bounds, MacosWindowBackground, TitlebarOptions, Window, WindowBackgroundAppearance,
     WindowBounds, WindowOptions, point, px, size,
 };
+use metal::{MetalLayerRef, NSUInteger};
+use objc2_app_kit::NSView;
 use photon_core::{AnimationSettings, WindowBackgroundStyle};
+use raw_window_handle::RawWindowHandle;
 
 use crate::platform::{
     ui::{metrics, window_background_style},
@@ -12,6 +16,10 @@ use crate::platform::{
 };
 
 const TRAFFIC_LIGHTS_ENABLED_ON_HOVER: bool = true;
+/// Use double buffering to keep one full-size drawable out of every window's
+/// Metal pool. Under GPU load, the background drawable acquisition may wait
+/// instead of keeping a third frame ready.
+const PHOTON_MAXIMUM_DRAWABLE_COUNT: NSUInteger = 2;
 const WINDOW_CONTROLS_HEIGHT: f32 = 14.0;
 const WINDOW_CONTROLS_GAP: f32 = 6.0;
 const WINDOW_CONTROLS_INSET: f32 = 80.0;
@@ -42,6 +50,27 @@ pub(in crate::platform) fn native_controls_trailing_inset() -> f32 {
 
 pub(in crate::platform) fn uses_custom_window_controls() -> bool {
     false
+}
+
+/// Reduces the drawable pool created by GPUI for this window's CAMetalLayer.
+pub(in crate::platform) fn configure_renderer_memory(window: &Window) {
+    if let Ok(handle) = raw_window_handle::HasWindowHandle::window_handle(window)
+        && let RawWindowHandle::AppKit(handle) = handle.as_raw()
+    {
+        // SAFETY: GPUI's handle borrows a live AppKit view, and this runs on GPUI's main thread.
+        let view = unsafe { &*handle.ns_view.as_ptr().cast::<NSView>() };
+        if let Some(layer) = view.layer() {
+            // SAFETY: GPUI's macOS window view uses its renderer's CAMetalLayer as its backing layer.
+            let layer = unsafe {
+                MetalLayerRef::from_ptr(objc2::rc::Retained::as_ptr(&layer).cast_mut().cast())
+            };
+            layer.set_maximum_drawable_count(PHOTON_MAXIMUM_DRAWABLE_COUNT);
+        }
+    }
+
+    // GPUI creates the native window before this callback. Keep it hidden until
+    // the drawable limit is set, then present it with the usual key-window behavior.
+    window.activate();
 }
 
 /// Applies Photon-specific interaction styling to macOS window controls.
@@ -173,6 +202,7 @@ fn options_for_size(cx: &App, width: f32, height: f32) -> WindowOptions {
     let bounds = Bounds::centered(None, size(px(width), px(height)), cx);
     WindowOptions::new()
         .window_bounds(Some(WindowBounds::Windowed(bounds)))
+        .show(false)
         .titlebar(Some(
             TitlebarOptions::default()
                 .appears_transparent(window_config::MACOS_TRANSPARENT_TITLEBAR)

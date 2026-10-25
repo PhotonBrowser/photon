@@ -386,6 +386,7 @@ pub(super) fn open_task_manager(runtime: Rc<EngineRuntime>, cx: &mut App) {
     ));
     let animations = Settings::get(cx).animations;
     if let Err(error) = cx.open_window(options, move |window, cx| {
+        window_settings::configure_renderer_memory(window);
         window_settings::configure_native_controls(window, &animations);
         window.set_window_title("Task Manager");
         cx.new(|cx| TaskManagerWindow::new(runtime, window, cx))
