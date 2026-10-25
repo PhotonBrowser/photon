@@ -11,6 +11,14 @@ Thanks for your interest in Photon! Photon is pre-release software, and contribu
 
 For a first contribution, look for issues labelled `good first issue` or `help wanted`. If there are none, documentation, tests, and small bug fixes are good places to start. Comment on an issue to discuss an approach before investing in a large change.
 
+## AI-assisted work
+
+AI tools may assist with research, coding, or review, but you are responsible for every change you submit. Read the full diff, verify the behavior, and remove or rewrite anything you cannot explain and support. Do not submit AI-written PR descriptions: explain the change and its validation in your own words.
+
+Before requesting maintainer review, resolve merge conflicts and respond to every CodeRabbit and other automated review finding. Verify each suggestion, make the appropriate fix, and explain any finding you leave unresolved. Automated reviews do not replace your own review of the diff or project checks.
+
+The PR template repeats these acknowledgments, and CI checks that both are selected. Maintainers must require the `Photon checks` status in branch protection for this check to block merging.
+
 ## Submit a pull request
 
 1. Fork the repository (or create a branch if you have write access) and make a focused change.
@@ -21,11 +29,10 @@ For a first contribution, look for issues labelled `good first issue` or `help w
    photon format
    photon check
    photon test
-   photon build
    ```
 
-   `photon build` can take a while because it builds the Engine. Explain any skipped checks and platform limitations in your PR.
-4. Open a pull request against `main`. Complete the PR template, link the related issue, and include screenshots or recordings for visible UI changes.
+   `photon build` builds the Engine and can take a while. Run it for Engine or native integration changes when practical. Explain skipped checks and platform limitations in your PR.
+4. Open a pull request against `main`. Complete the PR template honestly, link the related issue, and include screenshots or recordings for visible UI changes. Its checklist asks you to confirm that you understand the full diff and will address automated review findings before requesting maintainer review.
 5. Respond to review feedback. Maintainers may request changes or decline proposals that do not fit the project's direction.
 
 **Never disclose security vulnerabilities in public issues or PRs.** See the [security policy](SECURITY.md). Please follow our [Code of Conduct](CODE_OF_CONDUCT.md).

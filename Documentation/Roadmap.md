@@ -22,6 +22,8 @@ documented in the guides linked from the [README](../README.md).
 - Add optional local notes and time reports tied to browsing activity.
 - Add native ad and tracker blocking with per-site controls and explicit Engine
   APIs.
+- Define separate stable and canary release channels once Photon can sign and
+  publish installable builds with a reliable update path.
 
 ## Deferred
 

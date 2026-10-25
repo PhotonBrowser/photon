@@ -26,6 +26,8 @@
 
 - [ ] This PR is focused and linked to a relevant issue or explains the motivation.
 - [ ] I updated documentation or tests where behavior changed, or explained why not.
+- [ ] I read the AI-assisted work guidance in `CONTRIBUTING.md`, can explain every submitted change, and wrote this PR description myself.
+- [ ] I resolved merge conflicts and will review and address applicable CodeRabbit and other automated review findings before requesting maintainer review.
 - [ ] I have not committed credentials, private data, or generated build artifacts.
 - [ ] I checked relevant platform behavior, or documented what I could not test.
 - [ ] Changes to Engine or GPUI-CE are made in their respective repositories, with any submodule pin updates handled separately.

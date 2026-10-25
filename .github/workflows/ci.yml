@@ -22,6 +22,20 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Check contributor acknowledgments
+        if: github.event_name == 'pull_request'
+        env:
+          PULL_REQUEST_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if ! printf '%s\n' "$PULL_REQUEST_BODY" | grep -Eiq '^[[:space:]]*-[[:space:]]*\[x\] I read the AI-assisted work guidance'; then
+            echo "Check the AI-assisted work acknowledgment in the PR template."
+            exit 1
+          fi
+          if ! printf '%s\n' "$PULL_REQUEST_BODY" | grep -Eiq '^[[:space:]]*-[[:space:]]*\[x\] I resolved merge conflicts and will review and address applicable CodeRabbit'; then
+            echo "Check the automated review and conflict acknowledgment in the PR template."
+            exit 1
+          fi
+
       - name: Install native build tools
         run: |
           sudo apt-get update

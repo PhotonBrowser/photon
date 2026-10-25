@@ -7,7 +7,8 @@
 <p align="center">
   <a href="#run-from-source">Run from source</a> ·
   <a href="Documentation/Architecture.md">Architecture</a> ·
-  <a href="Documentation/Roadmap.md">Roadmap</a>
+  <a href="Documentation/Roadmap.md">Roadmap</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
 ## Run from source
@@ -29,7 +30,7 @@ sure `~/.cargo/bin` is on your `PATH` to use `photon` without the `./` prefix.
 
 ## Develop Photon
 
-Start with [contributor setup](CONTRIBUTOR_SETUP.md), then use the [build guide](Documentation/Building.md) and [architecture guide](Documentation/Architecture.md). See the [roadmap](Documentation/Roadmap.md) for planned work.
+Start with [contributor setup](CONTRIBUTOR_SETUP.md), then use the [build guide](Documentation/Building.md) and [architecture guide](Documentation/Architecture.md). See [contribution guidance](CONTRIBUTING.md) for pull requests and the [roadmap](Documentation/Roadmap.md) for planned work.
 
 <details>
 <summary>Rust crate guides</summary>

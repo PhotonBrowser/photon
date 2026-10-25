@@ -61,17 +61,6 @@ On macOS, `photon run` starts the Photon-owned presentation broker before openin
 
 Hot reloading uses GPUI-CE's experimental Subsecond integration. Changes to GPUI render functions and direct workspace dependencies can be patched into the running process. Changes to indirect workspace dependencies, application startup, and unsupported code paths require a rebuild or restart. `--shutdown-after-seconds` is unavailable in hot-reload mode because Dioxus CLI keeps the development server running.
 
-## Release channels (planned)
-
-Photon should add a separate canary channel for nightly builds when its release
-pipeline can produce, sign, and publish installable builds with a reliable
-update path. Canary should have its own channel identity and use the yellow
-logo variants in `crates/photon-brand/assets/`. Stable remains the default
-channel. Local development or debug builds are not canary releases; dev mode
-describes a build workflow, while canary identifies a distributed update
-channel. A local canary build may be useful for validating channel-specific
-behavior, but it should be selected explicitly.
-
 Platform-specific behavior belongs under `crates/photon-shell/src/platform/<target>/`. Keep the GPUI views in `platform/ui/`, the shared Engine adapter in `platform/engine/`, and the Apple-only XPC/IOSurface presentation path in `platform/macos/`. Linux and Windows currently use the portable CPU frame adapter; future DMA-BUF or DXGI imports belong in their target renderers without changing shared WebView code.
 
 ## Upstream dependencies
