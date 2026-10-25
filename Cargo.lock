@@ -4433,6 +4433,7 @@ version = "0.1.0"
 dependencies = [
  "photon-brand",
  "serde",
+ "serde_json",
  "url",
 ]
 

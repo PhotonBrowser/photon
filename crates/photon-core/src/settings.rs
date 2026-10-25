@@ -11,7 +11,7 @@ use crate::tab_sleep::TabSleepMode;
 /// Maximum selectable strength for the window background's static noise.
 pub const BACKGROUND_NOISE_INTENSITY_MAX: u8 = 20;
 
-/// The shell's selected appearance.
+/// The selected appearance for pages, web content, menus and context menus.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ThemeMode {
@@ -129,6 +129,8 @@ pub enum PopupPolicy {
 pub struct BrowserSettings {
     pub theme: ThemeMode,
     pub transparency: Transparency,
+    /// Continuous transparency, 0 (opaque) to 100. None follows the named preset.
+    pub transparency_percent: Option<u8>,
     pub window_background_style: WindowBackgroundStyle,
     /// How strongly static noise overlays the window background, from 0 to 20.
     /// Legacy boolean values under `background_noise` are migrated on load.
@@ -245,6 +247,7 @@ impl Default for BrowserSettings {
         Self {
             theme: ThemeMode::System,
             transparency: Transparency::default(),
+            transparency_percent: None,
             window_background_style: WindowBackgroundStyle::default(),
             background_noise_intensity: 5,
             tab_layout: TabLayout::Vertical,
@@ -325,6 +328,24 @@ impl BrowserSettings {
 mod tests {
     use super::*;
     use crate::Shortcut;
+
+    #[test]
+    fn continuous_transparency_round_trips_and_legacy_profiles_keep_the_preset() {
+        let legacy: BrowserSettings = serde_json::from_str(r#"{"transparency":"clear"}"#).unwrap();
+        assert_eq!(legacy.transparency_percent, None);
+        assert_eq!(legacy.transparency, Transparency::Clear);
+        let settings = BrowserSettings {
+            transparency_percent: Some(37),
+            ..Default::default()
+        };
+        let saved = serde_json::to_string(&settings).unwrap();
+        assert_eq!(
+            serde_json::from_str::<BrowserSettings>(&saved)
+                .unwrap()
+                .transparency_percent,
+            Some(37)
+        );
+    }
 
     #[test]
     fn keeps_the_shared_engine_warm_for_one_minute_by_default() {

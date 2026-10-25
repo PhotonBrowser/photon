@@ -8,3 +8,6 @@ license.workspace = true
 photon-brand = { path = "../photon-brand" }
 serde = { version = "1", features = ["derive"] }
 url = "2"
+
+[dev-dependencies]
+serde_json = "1"
