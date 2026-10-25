@@ -1,7 +1,9 @@
 use owo_colors::{OwoColorize, Stream};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
+#[cfg(target_os = "macos")]
+use std::time::Duration;
+use std::time::Instant;
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
