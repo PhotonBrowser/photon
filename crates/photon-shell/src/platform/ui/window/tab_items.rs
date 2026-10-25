@@ -1,7 +1,10 @@
 //! The window's tabs as both tab layouts draw them: label, icon and what
 //! each interaction does.
 
-use gpui::{App, Context, DispatchPhase, KeyDownEvent, MouseButton, MouseDownEvent, MouseUpEvent};
+use gpui::{
+    App, Context, DispatchPhase, KeyDownEvent, MouseButton, MouseDownEvent, MouseUpEvent,
+    SharedString,
+};
 
 use super::super::history::BrowsingHistory;
 use super::super::pages::PageIcon;
@@ -178,11 +181,11 @@ impl BrowserWindow {
                         .then_some(incoming.size)
                 });
                 TabItem {
-                    id: format!("browser-tab-{stable_id}"),
+                    id: format!("browser-tab-{stable_id}").into(),
                     reorder_key: stable_id,
                     motion,
                     reorder_transition,
-                    label,
+                    label: SharedString::from(label),
                     icon_appearing: icon_appearing && !entry_appearing,
                     animations: motion_settings,
                     icon,

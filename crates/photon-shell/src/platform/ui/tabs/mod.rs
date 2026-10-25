@@ -10,7 +10,7 @@ mod strip;
 use gpui::{
     AnyElement, AnyWindowHandle, App, Bounds, Context, DispatchPhase, ElementId, FocusHandle,
     Hitbox, ImageSource, MouseButton, MouseDownEvent, MouseMoveEvent, ObjectFit, Render, Role,
-    SpringConfig, Stateful, Window, div, img, prelude::*, px, rgb, rgba,
+    SharedString, SpringConfig, Stateful, Window, div, img, prelude::*, px, rgb, rgba,
 };
 
 use super::Favicon;
@@ -248,14 +248,14 @@ where
 }
 
 pub(super) struct TabItem {
-    pub id: String,
+    pub id: SharedString,
     pub reorder_key: u64,
     /// The tab's entrance motion.
     pub motion: Option<TabMotion>,
     /// Prevents the reorder group from adding a second position animation
     /// while a measured tab insertion transition is in progress.
     pub reorder_transition: gpui_motion::Transition,
-    pub label: String,
+    pub label: SharedString,
     pub icon: TabIcon,
     /// Whether the icon is still growing in after it first appeared.
     pub icon_appearing: bool,
@@ -288,13 +288,13 @@ struct TabParts {
     /// The tab itself, with its role, focus and interactions, but no layout.
     tab: gpui_motion::PressScaleElement<Stateful<gpui::Div>>,
     icon: AnyElement,
-    label: String,
+    label: SharedString,
     close: gpui_motion::PressScaleElement<Stateful<gpui::Div>>,
     active: bool,
     pinned: bool,
     audio_control: bool,
     suppress_tooltips: bool,
-    group: String,
+    group: SharedString,
     motion: Option<TabMotion>,
     reorder_transition: gpui_motion::Transition,
     position_offset: f32,
@@ -315,13 +315,13 @@ impl TabParts {
         palette: ThemeColors,
         axis: TabDragAxis,
     ) -> Self {
-        let close_label = format!("Close {}", tab.label);
+        let close_label = format!("Close {}", tab.label).into();
         let tab_label = if tab.sleeping {
-            format!("{} (sleeping)", tab.label)
+            format!("{} (sleeping)", tab.label).into()
         } else {
             tab.label.clone()
         };
-        let close_id = format!("{}-close", tab.id);
+        let close_id = format!("{}-close", tab.id).into();
         let tab_id = tab.id.clone();
         let reorder_key = tab.reorder_key;
         let audio_control = matches!(&tab.icon, TabIcon::Audio { .. });
@@ -407,7 +407,7 @@ impl TabParts {
                 &animations,
             ),
             TabIcon::Audio { muted, .. } => audio_control_button(
-                format!("{tab_id}-audio"),
+                format!("{tab_id}-audio").into(),
                 tab.label.clone(),
                 muted,
                 tab.on_toggle_audio,
@@ -590,8 +590,8 @@ pub(super) fn insertion_marker(axis: TabDragAxis, size: f32, palette: ThemeColor
     reason = "keeps the tab audio button's accessibility and focus inputs explicit"
 )]
 fn audio_control_button(
-    id: String,
-    tab_label: String,
+    id: SharedString,
+    tab_label: SharedString,
     muted: bool,
     on_click: ClickHandler,
     focus_index: isize,
@@ -630,8 +630,8 @@ fn audio_control_button(
 }
 
 fn close_tab_button(
-    id: String,
-    label: String,
+    id: SharedString,
+    label: SharedString,
     on_click: ClickHandler,
     focus_index: isize,
     palette: ThemeColors,
