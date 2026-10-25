@@ -202,6 +202,7 @@ impl Render for MinimalPopupWindow {
             .size_full()
             .relative()
             .bg(palette.window_background())
+            .children(palette.gradient_overlay(0.0))
             .text_color(rgb(palette.text_primary))
             .child(titlebar(
                 div()

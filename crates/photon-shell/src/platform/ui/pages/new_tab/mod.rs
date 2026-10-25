@@ -20,7 +20,7 @@ use super::super::icons::photon_logo;
 use super::super::layout::v_stack;
 use super::super::motion::Presence;
 use super::super::settings::Settings;
-use super::super::{metrics, theme::palette};
+use super::super::{metrics, theme::page_palette as palette};
 use super::{PageContext, PageDefinition, PageIcon};
 pub(super) use options::LayoutOptions;
 use shortcut_form::ShortcutForm;
@@ -100,6 +100,7 @@ impl Render for NewTabPage {
             layout.shortcuts(&BrowsingHistory::most_visited(layout.history_needed(), cx));
 
         let mut content = v_stack()
+            .text_color(gpui::rgb(palette.text_primary))
             .items_center()
             .gap(px(metrics::INTERNAL_PAGE_SECTION_GAP));
         if layout.show_logo {
@@ -136,6 +137,6 @@ impl Render for NewTabPage {
                     .bottom(px(metrics::INTERNAL_PAGE_GROUP_GAP))
                     .child(self.customise_button(palette, cx)),
             )
-            .children(self.shortcut_form(palette, cx))
+            .children(self.shortcut_form(super::super::theme::palette(window, cx), cx))
     }
 }

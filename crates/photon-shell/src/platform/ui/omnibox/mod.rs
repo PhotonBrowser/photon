@@ -328,7 +328,8 @@ impl Omnibox {
 
 impl Render for Omnibox {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let palette = palette(window, cx);
+        let menu_palette = palette(window, cx);
+        let palette = super::theme::chrome_palette(window, cx);
         let editing = self.is_editing(window, cx);
         let style = FieldStyle::current(cx);
         let field_box = h_stack()
@@ -366,11 +367,11 @@ impl Render for Omnibox {
         let mut field_box = self.handle_editing_keys(field_box, cx);
         // The open panel draws the field's content itself, in the same place.
         field_box = if editing && !self.suggestions.is_empty() {
-            field_box.child(self.open_panel(palette, cx))
+            field_box.child(self.open_panel(menu_palette, cx))
         } else {
             field_box.child(self.field_content(palette, editing, cx))
         };
-        field_box = field_box.child(self.site_info_popover(palette, cx));
+        field_box = field_box.child(self.site_info_popover(menu_palette, cx));
         if self.invalid {
             field_box = field_box.aria_description(INVALID_ADDRESS_DESCRIPTION);
         }

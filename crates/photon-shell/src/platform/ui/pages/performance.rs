@@ -10,7 +10,7 @@ use std::{collections::VecDeque, time::Instant};
 use super::super::super::engine::PerformanceDashboardLease;
 use super::super::layout::{h_stack, v_stack};
 use super::super::settings::Settings;
-use super::super::{metrics, theme::ThemeColors, theme::palette};
+use super::super::{metrics, theme::ThemeColors, theme::page_palette as palette};
 use super::layout::{group, heading, secondary_text};
 use super::{PageContext, PageDefinition, PageIcon};
 
@@ -304,6 +304,7 @@ impl Render for PerformancePage {
         let palette = palette(window, cx);
         v_stack()
             .id("performance-page")
+            .text_color(rgb(palette.text_primary))
             .size_full()
             .overflow_y_scroll()
             .elastic_scroll(

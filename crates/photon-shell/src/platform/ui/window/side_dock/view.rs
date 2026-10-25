@@ -53,7 +53,7 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
-        let palette = self.palette(window, cx);
+        let palette = super::super::super::theme::chrome_palette(window, cx);
         let layout = WorkspaceLayout::current(cx);
         let sidebar = &self.sidebar;
         let leading = region == DockRegion::Leading;

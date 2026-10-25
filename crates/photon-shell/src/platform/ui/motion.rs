@@ -564,6 +564,9 @@ pub(super) enum TweenCurve {
     Spring(SpringConfig),
 }
 
+pub(super) const THEME_PICKER_SPRING: TweenCurve =
+    TweenCurve::Spring(SpringConfig::new(360.0, 18.0, 1.0));
+
 pub(super) const SIDEBAR_RESIZE_SPRING: TweenCurve =
     TweenCurve::Spring(SpringConfig::new(520.0, 30.0, 1.0));
 
@@ -675,10 +678,6 @@ pub(super) mod distance {
 }
 
 /// Photon-specific control stretch tuning.
-pub(super) const CONTROL_THUMB_HELD_STRETCH_X: f32 = 1.2;
-pub(super) const SLIDER_EDGE_STRETCH_MAX: f32 = 0.3;
-pub(super) const SLIDER_EDGE_STRETCH_SPEED_THRESHOLD: f32 = 700.0;
-pub(super) const SLIDER_EDGE_STRETCH_SPEED_RANGE: f32 = 1_500.0;
 const ICON_BUTTON_PRESS_SCALE: f32 = 0.92;
 
 fn press_spring() -> Spring {
@@ -729,32 +728,6 @@ pub(super) fn icon_pressable<E: StatefulInteractiveElement + Styled + IntoElemen
     element: E,
 ) -> PressScaleElement<E> {
     press_scale(element, ICON_BUTTON_PRESS_SCALE, None)
-}
-
-pub(super) fn control_scale_transition<E: Styled + IntoElement + 'static>(
-    id: ElementId,
-    element: E,
-    offset: f32,
-    scale_x: f32,
-    tracking: bool,
-    config: &MotionConfig,
-) -> impl IntoElement {
-    let motion = Motion::new(Target::default().x(offset).scale(scale_x))
-        .transition(elastic_control_transition(tracking, config));
-    MotionElement::new(id, element, motion).map(|element: E, frame: Frame| {
-        let target = frame.target();
-        element
-            .left(gpui::px(target.x_px()))
-            .scale_xy(target.scale_factor().unwrap_or(1.0), 1.0)
-    })
-}
-
-fn elastic_control_transition(tracking: bool, config: &MotionConfig) -> gpui_motion::Transition {
-    if tracking || !config.allows_motion() {
-        gpui_motion::Transition::Instant
-    } else {
-        SIDEBAR_RESIZE_SPRING.transition(config.duration(Speed::Quick))
-    }
 }
 
 pub(super) fn control_thumb_transition<E: Styled + IntoElement + 'static>(

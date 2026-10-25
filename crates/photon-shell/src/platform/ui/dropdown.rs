@@ -108,6 +108,7 @@ impl RenderOnce for Dropdown {
             .into_iter()
             .map(|option| ((option.label, option.chosen), Rc::from(option.on_choose)))
             .unzip();
+        let menu_palette = super::theme::palette(window, cx);
         let menu = transition.map(|transition| {
             let rows = labels
                 .into_iter()
@@ -123,7 +124,7 @@ impl RenderOnce for Dropdown {
                             on_choose(event, window, cx);
                             set_open(false, window, cx);
                         }),
-                        palette,
+                        menu_palette,
                     )
                 });
             let close = set_open.clone();
@@ -156,7 +157,7 @@ impl RenderOnce for Dropdown {
                         metrics::DROPDOWN_WIDTH,
                         v_stack().children(rows),
                         transition,
-                        palette,
+                        menu_palette,
                         cx,
                     )),
             )

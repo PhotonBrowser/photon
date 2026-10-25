@@ -171,26 +171,6 @@ pub(super) const FORM_FIELD_GAP: f32 = 4.0;
 pub(super) const INTERNAL_PAGE_SECTION_SIZE: f32 = 18.0;
 pub(super) const INTERNAL_PAGE_BODY_SIZE: f32 = 14.0;
 pub(super) const SETTINGS_APPEARANCE_MAX_WIDTH: f32 = 900.0;
-pub(super) const THEME_PREVIEW_HEIGHT: f32 = 88.0;
-pub(super) const THEME_PREVIEW_SIDEBAR_WIDTH: f32 = 48.0;
-pub(super) const THEME_PREVIEW_INSET: f32 = 5.0;
-pub(super) const THEME_PREVIEW_GAP: f32 = 5.0;
-pub(super) const THEME_PREVIEW_LINE_HEIGHT: f32 = 4.0;
-pub(super) const THEME_PREVIEW_TITLE_WIDTH: f32 = 48.0;
-pub(super) const THEME_PREVIEW_SIDEBAR_INSET: f32 = 2.0;
-pub(super) const THEME_PREVIEW_SIDEBAR_GAP: f32 = 2.0;
-pub(super) const THEME_PREVIEW_ADDRESS_HEIGHT: f32 = 9.0;
-pub(super) const THEME_PREVIEW_ADDRESS_LINE_WIDTH: f32 = 20.0;
-pub(super) const THEME_PREVIEW_TAB_HEIGHT: f32 = 10.0;
-pub(super) const THEME_PREVIEW_TAB_GAP: f32 = 2.0;
-pub(super) const THEME_PREVIEW_TAB_TITLE_WIDTH: f32 = 17.0;
-pub(super) const THEME_PREVIEW_SELECTION_INSET: f32 = 2.0;
-pub(super) const THEME_PREVIEW_SELECTION_BORDER_WIDTH: f32 = 2.0;
-pub(super) const ACCENT_SWATCH_SIZE: f32 = 24.0;
-pub(super) const ACCENT_SWATCH_RING_SIZE: f32 = 32.0;
-pub(super) const ACCENT_SWATCH_GAP: f32 = 4.0;
-pub(super) const ACCENT_SECTION_PADDING: f32 = 12.0;
-pub(super) const THEME_ACCENT_DIVIDER_HEIGHT: f32 = 1.0;
 pub(super) const PERFORMANCE_PAGE_INSET: f32 = 32.0;
 pub(super) const PERFORMANCE_PAGE_MAX_WIDTH: f32 = 1040.0;
 pub(super) const PERFORMANCE_PAGE_SECTION_GAP: f32 = 24.0;
@@ -227,20 +207,9 @@ pub(super) const SHORTCUT_GAP: f32 = 8.0;
 pub(super) const SHORTCUT_REMOVE_INSET: f32 = 4.0;
 pub(super) const SEGMENT_HEIGHT: f32 = 26.0;
 pub(super) const DROPDOWN_WIDTH: f32 = 160.0;
-/// A colour swatch, and the ring around the chosen one.
-pub(super) const SWATCH_SIZE: f32 = 22.0;
-pub(super) const SWATCH_RING_SIZE: f32 = 30.0;
-pub(super) const SWATCH_GAP: f32 = 6.0;
 pub(super) const SEGMENT_HORIZONTAL_PADDING: f32 = 12.0;
 pub(super) const SEGMENT_GAP: f32 = 2.0;
 pub(super) const SEGMENT_INSET: f32 = 2.0;
-pub(super) const INTENSITY_SLIDER_HEIGHT: f32 = 26.0;
-pub(super) const INTENSITY_SLIDER_THUMB_WIDTH: f32 = 18.0;
-pub(super) const INTENSITY_SLIDER_THUMB_HEIGHT: f32 = 14.0;
-pub(super) const INTENSITY_SLIDER_TRACK_HEIGHT: f32 = 4.0;
-pub(super) const INTENSITY_SLIDER_RUBBERBAND_RANGE: f32 = 36.0;
-pub(super) const INTENSITY_SLIDER_RUBBERBAND_RESISTANCE: f32 = 0.55;
-pub(super) const INTENSITY_SLIDER_VALUE_WIDTH: f32 = 40.0;
 pub(super) const SETTINGS_ROW_HEIGHT: f32 = 34.0;
 pub(super) const SETTINGS_SIDEBAR_WIDTH: f32 = 200.0;
 pub(super) const SETTINGS_SIDEBAR_ITEM_HEIGHT: f32 = 30.0;
@@ -389,18 +358,6 @@ pub(in crate::platform) fn page_smoothing() -> f32 {
     crate::platform::theme_config::radius_tokens().page_smoothing
 }
 
-pub(super) fn theme_preview_radius() -> f32 {
-    concentric_radius(control_radius(), THEME_PREVIEW_INSET, 0.0)
-}
-
-pub(super) fn theme_preview_selection_radius() -> f32 {
-    concentric_radius(
-        theme_preview_radius(),
-        THEME_PREVIEW_SELECTION_INSET,
-        THEME_PREVIEW_SELECTION_BORDER_WIDTH,
-    )
-}
-
 pub(super) fn theme_accent_panel_radius() -> f32 {
     crate::platform::theme_config::radius_tokens().theme_accent_panel
 }
@@ -469,3 +426,35 @@ pub(super) const SPACE_DOT_GAP: f32 = 2.0;
 /// between its buttons and the page.
 pub(super) const PEEK_INSET_FRACTION: f32 = 0.08;
 pub(super) const PEEK_CONTROL_GAP: f32 = 6.0;
+
+// Arc-style theme controls: shared geometry and bounded rendering work.
+pub(super) const PICKER_WIDTH: f32 = 344.0;
+pub(super) const PICKER_PADDING: f32 = 12.0;
+pub(super) const PICKER_GAP: f32 = 16.0;
+pub(super) const PICKER_MODE_SIZE: f32 = 34.0;
+pub(super) const PICKER_ICON_SIZE: f32 = 20.0;
+pub(super) const PICKER_HANDLE_RADIUS: f32 = 17.0;
+pub(super) const PICKER_HANDLE_BORDER: f32 = 4.0;
+pub(super) const PICKER_DOT_SPACING: f32 = 5.0;
+pub(super) const PICKER_DOT_RADIUS: f32 = 0.55;
+pub(super) const PICKER_SWATCH_SIZE: f32 = 24.0;
+pub(super) const PICKER_SWATCH_GAP: f32 = 8.0;
+pub(super) const PICKER_FOOTER_HEIGHT: f32 = 68.0;
+pub(super) const PICKER_KNOB_SIZE: f32 = 68.0;
+pub(super) const PICKER_KNOB_DOT: f32 = 2.5;
+pub(super) const PICKER_THUMB_MIN_WIDTH: f32 = 10.0;
+pub(super) const PICKER_THUMB_MAX_WIDTH: f32 = 24.0;
+pub(super) const PICKER_THUMB_MIN_HEIGHT: f32 = 40.0;
+pub(super) const PICKER_THUMB_MAX_HEIGHT: f32 = 54.0;
+pub(super) const PICKER_TRACK_WIDTH: f32 = 12.0;
+pub(super) const PICKER_WAVE_AMPLITUDE: f32 = 7.0;
+pub(super) const PICKER_WAVE_CYCLES: f32 = 5.0;
+pub(super) const PICKER_WAVE_STROKE: f32 = 4.0;
+pub(super) const PICKER_WAVE_SAMPLES: usize = 160;
+pub(super) const PICKER_WAVE_CAP_SAMPLES: usize = 8;
+
+pub(super) const PICKER_SECONDARY_HANDLE_SCALE: f32 = 0.6;
+pub(super) const PICKER_HELD_HANDLE_SCALE: f32 = 1.08;
+pub(super) const PICKER_HANDLE_HIT_SLOP: f32 = 5.0;
+/// Normalized radial distance within which hue remains stable while dragging.
+pub(super) const PICKER_HUE_DEAD_ZONE: f32 = 0.015;

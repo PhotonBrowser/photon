@@ -6,7 +6,7 @@ use gpui::{
     Subscription, Window, div, prelude::*, px, rgb,
 };
 use gpui_elements::editable_text::{EditableTextState, StringStorage, text_input};
-use photon_core::{SidebarSide, Space, TabLayout, WindowColor, WorkspaceLayout};
+use photon_core::{SidebarSide, Space, SpaceColors, TabLayout, WindowColor, WorkspaceLayout};
 use std::rc::Rc;
 
 use super::button::{ButtonKind, ButtonSize, button};
@@ -23,7 +23,7 @@ pub(super) enum SpaceEditorEvent {
     Save {
         name: String,
         color: WindowColor,
-        gradient: bool,
+        colors: SpaceColors,
         preset_id: Option<String>,
         new_preset: Option<(String, WorkspaceLayout)>,
     },
@@ -37,7 +37,7 @@ pub(super) struct SpaceEditor {
     creating: bool,
     name: Entity<EditableTextState>,
     color: WindowColor,
-    gradient: bool,
+    colors: SpaceColors,
     preset_id: Option<String>,
     creating_preset: bool,
     preset_name: Entity<EditableTextState>,
@@ -95,7 +95,7 @@ impl SpaceEditor {
             creating: space.is_none(),
             name,
             color: space.map_or(WindowColor::System, |space| space.color),
-            gradient: space.is_some_and(|space| space.gradient),
+            colors: space.map(super::theme::space_colors).unwrap_or_default(),
             preset_id,
             creating_preset: false,
             preset_name,
@@ -127,7 +127,7 @@ impl SpaceEditor {
         cx.emit(SpaceEditorEvent::Save {
             name: self.name.read(cx).as_str().trim().to_owned(),
             color: self.color,
-            gradient: self.gradient,
+            colors: self.colors,
             preset_id: if new_preset.is_some() {
                 None
             } else {
@@ -203,12 +203,11 @@ impl Render for SpaceEditor {
         let colors = color_picker(
             "space-editor-color",
             self.color,
-            self.gradient,
-            palette,
-            Rc::new(move |color, gradient, _, cx| {
+            self.colors,
+            Rc::new(move |color, colors, cx| {
                 this.update(cx, |this, cx| {
                     this.color = color;
-                    this.gradient = gradient;
+                    this.colors = colors;
                     cx.notify();
                 })
                 .ok();

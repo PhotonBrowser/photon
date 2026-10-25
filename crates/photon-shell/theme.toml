@@ -98,26 +98,27 @@ soft_accent_border = 0.48
 
 [transparency.off]
 window = 1.0
+# Internal pages remain translucent over the window theme even with an opaque window.
+page = 0.18
 raised = 1.0
 raised_blur = 0.0
 
 [transparency.subtle]
 window = 0.88
+page = 0.12
 raised = 0.92
 raised_blur = 20.0
 
 [transparency.clear]
 window = 0.46
+page = 0.06
 raised = 0.84
 raised_blur = 48.0
 
 [window]
 gradient_angle_degrees = 135.0
 gradient_turn = 0.09
-light_tint_saturation = 0.55
 light_tint_lightness = 0.87
-dark_tint_saturation = 0.3
-dark_tint_lightness = 0.17
 swatch_saturation = 0.6
 swatch_lightness = 0.55
 
@@ -148,3 +149,18 @@ segment = 5.0
 sidebar_collapsed_item = 8.0
 sidebar_item = 12.0
 sidebar_reveal = 12.0
+
+[picker]
+ink_light = "#ffffff"
+ink_dark = "#000000"
+field_saturation = 0.9
+preset_dark_lightness = 0.26
+field_lightness_min = 0.0
+field_lightness_max = 1.0
+field_surface = 0.05
+control_surface = 0.12
+control_hover = 0.2
+control_selected = 0.25
+dots = 0.2
+track = 0.15
+inactive = 0.38

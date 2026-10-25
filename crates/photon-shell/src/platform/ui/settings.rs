@@ -368,7 +368,7 @@ impl Settings {
         engines
     }
 
-    /// The appearance windows use: the chosen one, or the system's.
+    /// The appearance pages and menus use: the chosen one, or the system's.
     pub(super) fn appearance(system: WindowAppearance, cx: &App) -> WindowAppearance {
         Self::chosen_appearance(cx).unwrap_or(system)
     }

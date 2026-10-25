@@ -13,6 +13,7 @@ pub(crate) struct ThemeDefinition {
     pub(crate) transparency: TransparencyTokens,
     pub(crate) window: WindowTokens,
     pub(crate) radii: RadiusTokens,
+    pub(crate) picker: PickerTokens,
 }
 
 #[derive(Deserialize)]
@@ -84,6 +85,7 @@ pub(crate) struct TransparencyTokens {
 #[derive(Deserialize)]
 pub(crate) struct SurfaceOpacity {
     pub(crate) window: f32,
+    pub(crate) page: f32,
     pub(crate) raised: f32,
     pub(crate) raised_blur: f32,
 }
@@ -96,16 +98,35 @@ impl TransparencyTokens {
             Transparency::Clear => &self.clear,
         }
     }
+    /// Interpolate native surface roles through the existing named presets.
+    pub(crate) fn for_percent(&self, percent: u8) -> SurfaceOpacity {
+        let fraction = f32::from(percent.min(100)) / 100.0;
+        let subtle = 1.0 - self.subtle.window;
+        let clear = 1.0 - self.clear.window;
+        let (from, to, amount) = if fraction <= subtle {
+            (&self.off, &self.subtle, fraction / subtle.max(f32::EPSILON))
+        } else {
+            (
+                &self.subtle,
+                &self.clear,
+                ((fraction - subtle) / (clear - subtle).max(f32::EPSILON)).min(1.0),
+            )
+        };
+        let lerp = |a: f32, b: f32| a + (b - a) * amount;
+        SurfaceOpacity {
+            window: 1.0 - fraction,
+            page: lerp(from.page, to.page),
+            raised: lerp(from.raised, to.raised),
+            raised_blur: lerp(from.raised_blur, to.raised_blur),
+        }
+    }
 }
 
 #[derive(Deserialize)]
 pub(crate) struct WindowTokens {
     pub(crate) gradient_angle_degrees: f32,
     pub(crate) gradient_turn: f32,
-    pub(crate) light_tint_saturation: f32,
     pub(crate) light_tint_lightness: f32,
-    pub(crate) dark_tint_saturation: f32,
-    pub(crate) dark_tint_lightness: f32,
     pub(crate) swatch_saturation: f32,
     pub(crate) swatch_lightness: f32,
     pub(crate) hues: HashMap<String, f32>,
@@ -167,6 +188,8 @@ fn validate_theme(theme: &ThemeDefinition) {
         &colors.peek_backdrop.light,
         &colors.peek_backdrop.dark,
         &colors.accent_swatch_mark.value,
+        &theme.picker.ink_light,
+        &theme.picker.ink_dark,
     ];
     for accent in colors.accents.values() {
         values.extend([&accent.light, &accent.dark, &accent.swatch]);
@@ -238,6 +261,30 @@ mod tests {
     use super::theme;
 
     #[test]
+    fn continuous_transparency_preserves_presets_and_changes_monotonically() {
+        let tokens = &theme().transparency;
+        let mut previous = 1.0;
+        for percent in 0..=100 {
+            let surface = tokens.for_percent(percent);
+            assert!(
+                surface.window <= previous,
+                "opacity must decrease as transparency rises"
+            );
+            assert!(
+                (0.0..1.0).contains(&surface.page),
+                "internal pages must reveal the window theme at every transparency level"
+            );
+            assert!((0.0..=1.0).contains(&surface.raised));
+            previous = surface.window;
+        }
+        assert_eq!(tokens.for_percent(0).window, 1.0);
+        assert_eq!(tokens.for_percent(100).window, 0.0);
+        for preset in [&tokens.subtle, &tokens.clear] {
+            let percent = ((1.0 - preset.window) * 100.0).round() as u8;
+            assert!((tokens.for_percent(percent).window - preset.window).abs() < 0.01);
+        }
+    }
+    #[test]
     fn bundled_theme_has_complete_accent_and_window_color_tokens() {
         let theme = theme();
         for accent in [
@@ -253,4 +300,21 @@ mod tests {
         assert!(theme.radii.page.is_finite() && theme.radii.page >= 0.0);
         assert!(theme.opacity.surface_tint.is_finite());
     }
+}
+
+#[derive(Deserialize)]
+pub(crate) struct PickerTokens {
+    pub(crate) ink_light: String,
+    pub(crate) ink_dark: String,
+    pub(crate) field_saturation: f32,
+    pub(crate) preset_dark_lightness: f32,
+    pub(crate) field_lightness_min: f32,
+    pub(crate) field_lightness_max: f32,
+    pub(crate) field_surface: f32,
+    pub(crate) control_surface: f32,
+    pub(crate) control_hover: f32,
+    pub(crate) control_selected: f32,
+    pub(crate) dots: f32,
+    pub(crate) track: f32,
+    pub(crate) inactive: f32,
 }
