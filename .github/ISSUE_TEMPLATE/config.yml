@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability privately
+    url: https://github.com/PhotonBrowser/photon/security/advisories/new
+    about: Never disclose security vulnerabilities in public issues.
+  - name: Contributor setup and build instructions
+    url: https://github.com/PhotonBrowser/photon/blob/main/CONTRIBUTOR_SETUP.md
+    about: Start here for setup and build troubleshooting.
