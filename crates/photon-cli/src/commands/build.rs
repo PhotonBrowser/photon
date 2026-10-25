@@ -27,7 +27,6 @@ pub(crate) fn warn_if_dependencies_are_behind(root: &Path) {
     let dependencies = [
         ("Engine", "Engine", "upstream/master", 10),
         ("GPUI-CE", "vendor/gpui-ce", "upstream/main", 1),
-        ("gpui-motion", "crates/gpui-motion", "upstream/main", 1),
     ];
 
     let mut behind = Vec::new();
@@ -95,11 +94,7 @@ mod tests {
     #[test]
     fn warning_displays_for_disposable_dependencies_at_thresholds() {
         let root = temporary_repository();
-        for (path, branch, count) in [
-            ("Engine", "master", 10),
-            ("vendor/gpui-ce", "main", 1),
-            ("crates/gpui-motion", "main", 1),
-        ] {
+        for (path, branch, count) in [("Engine", "master", 10), ("vendor/gpui-ce", "main", 1)] {
             let repository = root.join(path);
             std::fs::create_dir_all(&repository).unwrap();
             git(&repository, &["init", "-q"]);

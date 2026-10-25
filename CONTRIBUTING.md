@@ -41,11 +41,11 @@ For a first contribution, look for issues labelled `good first issue` or `help w
 | Rust-to-Engine integration | `crates/photon-shell/src/platform/engine/` and `native/embedder/` |
 | Ladybird-based engine and embedder API | [Photon Engine](https://github.com/PhotonBrowser/photon-engine) |
 | Generic GPUI-CE framework changes | [Photon GPUI-CE](https://github.com/PhotonBrowser/gpui-ce) |
-| Generic motion library changes | [Photon gpui-motion](https://github.com/PhotonBrowser/gpui-motion) |
+| Generic motion library changes | `crates/gpui-motion/` |
 
 Keep shared UI code platform-neutral, platform-specific behavior in its adapter, and engine implementation behind the embedder boundary. Avoid unrelated refactors in focused PRs.
 
-Photon uses pinned Git submodules. Make changes to Engine, GPUI-CE, or gpui-motion in their own repositories, rather than mixing dependency source changes into a shell PR. Follow [Upstream maintenance](Documentation/Upstream.md) for development branches, upstream syncs, validation, and pin updates. Do not use `git submodule update --remote` to change dependency pins.
+Photon keeps Engine and GPUI-CE as pinned Git submodules. The gpui-motion crate is vendored directly in this repository and can be changed alongside Photon code. Follow [Upstream maintenance](Documentation/Upstream.md) for Engine and GPUI-CE development branches, upstream syncs, validation, and pin updates. Do not use `git submodule update --remote` to change dependency pins.
 
 ## GitHub issues and Linear
 

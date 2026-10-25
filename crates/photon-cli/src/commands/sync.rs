@@ -11,7 +11,6 @@ pub(crate) struct SyncHeads {
     root: String,
     engine: String,
     gpui_ce: String,
-    motion: String,
 }
 
 pub(crate) fn require_review_dispatch_auth(root: &Path) -> Result<(), String> {
@@ -29,7 +28,6 @@ pub(crate) fn capture_sync_heads(root: &Path) -> Result<SyncHeads, String> {
             .to_owned(),
         engine: branch_head(root, "Engine", "master")?,
         gpui_ce: branch_head(root, "vendor/gpui-ce", "main")?,
-        motion: branch_head(root, "crates/gpui-motion", "main")?,
     })
 }
 
@@ -50,10 +48,7 @@ pub(crate) fn dispatch_review(
     after: &SyncHeads,
     verbose: bool,
 ) -> Result<(), String> {
-    if before.engine == after.engine
-        && before.gpui_ce == after.gpui_ce
-        && before.motion == after.motion
-    {
+    if before.engine == after.engine && before.gpui_ce == after.gpui_ce {
         success("No upstream commits merged; no review issue was dispatched");
         return Ok(());
     }
@@ -71,7 +66,6 @@ pub(crate) fn dispatch_review(
     for (name, before, after) in [
         ("engine", &before.engine, &after.engine),
         ("gpui_ce", &before.gpui_ce, &after.gpui_ce),
-        ("motion", &before.motion, &after.motion),
     ] {
         args.push("-F".to_owned());
         args.push(format!("client_payload[{name}_before_sha]={before}"));

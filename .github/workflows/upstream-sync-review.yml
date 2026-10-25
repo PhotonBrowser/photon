@@ -33,8 +33,6 @@ jobs:
           ENGINE_AFTER_SHA: ${{ github.event.client_payload.engine_after_sha }}
           GPUI_CE_BEFORE_SHA: ${{ github.event.client_payload.gpui_ce_before_sha }}
           GPUI_CE_AFTER_SHA: ${{ github.event.client_payload.gpui_ce_after_sha }}
-          MOTION_BEFORE_SHA: ${{ github.event.client_payload.motion_before_sha }}
-          MOTION_AFTER_SHA: ${{ github.event.client_payload.motion_after_sha }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |

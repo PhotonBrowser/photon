@@ -13,11 +13,6 @@ const DEPENDENCIES = [
     name: 'GPUI-CE',
     repo: 'PhotonBrowser/gpui-ce',
   },
-  {
-    key: 'MOTION',
-    name: 'gpui-motion',
-    repo: 'PhotonBrowser/gpui-motion',
-  },
 ];
 
 function commit(sha, repo) {
@@ -123,7 +118,7 @@ async function run({ github, context, core }) {
     '',
     '- [ ] Confirm relevant upstream changes were reviewed',
     '- [ ] Confirm merge conflicts and Photon-specific changes were resolved correctly',
-    '- [ ] Confirm Engine, GPUI-CE, and gpui-motion checks passed where applicable',
+    '- [ ] Confirm Engine and GPUI-CE checks passed where applicable',
     '- [ ] Push tested dependency commits to Photon-owned remotes, then update pins with `photon deps pin`',
     '- [ ] Confirm `photon check` and `photon test` passed',
     '- [ ] Record any Velocity performance comparison (if relevant)',
@@ -135,7 +130,7 @@ async function run({ github, context, core }) {
   );
 
   const title = 'Photon Upstream Sync #' + String(number).padStart(3, '0') +
-    ' — Ladybird, GPUI-CE & gpui-motion';
+    ' — Ladybird & GPUI-CE';
   const issue = await github.rest.issues.create({
     owner,
     repo,

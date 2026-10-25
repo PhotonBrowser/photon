@@ -133,7 +133,6 @@ pub(crate) fn setup(root: &Path, verbose: bool, install_system_deps: bool) -> Re
     }
     crate::commands::engine::edit(root, verbose)?;
     crate::commands::gpui::edit(root, verbose)?;
-    crate::commands::motion::edit(root, verbose)?;
     for path in ["build/engine-debug", "build/app-debug", "build/bin"] {
         std::fs::create_dir_all(root.join(path)).map_err(|e| e.to_string())?;
     }
@@ -405,16 +404,6 @@ pub(crate) fn doctor(root: &Path) -> Result<(), String> {
         .trim()
     );
     println!(
-        "  gpui-motion {}",
-        output(
-            "git",
-            &["rev-parse", "--short", "HEAD"],
-            &root.join("crates/gpui-motion")
-        )
-        .unwrap_or_else(|_| "missing".into())
-        .trim()
-    );
-    println!(
         "  System package instructions: {}",
         root.join("Engine/Documentation/BuildInstructionsLadybird.md")
             .display()
@@ -433,7 +422,7 @@ mod tests {
         let root = root.ancestors().nth(2).unwrap();
         let config = SetupConfig::load(root).unwrap();
 
-        assert_eq!(config.submodules.len(), 3);
+        assert_eq!(config.submodules.len(), 2);
         assert!(
             config
                 .repositories
@@ -453,7 +442,7 @@ mod tests {
             root,
         )
         .unwrap();
-        assert_eq!(submodule_urls.lines().count(), 3);
+        assert_eq!(submodule_urls.lines().count(), 2);
         assert!(submodule_urls.lines().all(|line| {
             line.split_whitespace()
                 .last()

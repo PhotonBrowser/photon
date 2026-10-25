@@ -114,12 +114,6 @@ enum Command {
         #[command(subcommand)]
         command: GpuiCommand,
     },
-    /// Maintain Photon’s gpui-motion fork.
-    #[command(hide = true)]
-    Motion {
-        #[command(subcommand)]
-        command: MotionCommand,
-    },
     /// Run Rust workspace tests.
     Test,
     /// Inspect or build Photon Engine.
@@ -142,20 +136,6 @@ enum GpuiCommand {
     /// Return GPUI-CE to the revision pinned by this Photon checkout.
     Pin,
     /// Merge the configured upstream GPUI-CE branch into the Photon branch.
-    Sync {
-        /// Fetch and preview commit counts and merge conflicts without merging.
-        #[arg(long)]
-        check: bool,
-    },
-}
-
-#[derive(Debug, Subcommand)]
-enum MotionCommand {
-    /// Switch gpui-motion to its persistent Photon development branch.
-    Edit,
-    /// Return gpui-motion to the revision pinned by this Photon checkout.
-    Pin,
-    /// Merge the configured upstream gpui-motion branch into the Photon fork.
     Sync {
         /// Fetch and preview commit counts and merge conflicts without merging.
         #[arg(long)]
@@ -303,7 +283,14 @@ pub fn run() -> Result<(), String> {
                 dependency,
                 check,
                 review,
-            } => commands::deps::sync(&root, dependency, check, !review, verbose),
+            } => {
+                if review && (check || dependency.is_some()) {
+                    return Err(
+                        "`--review` applies only to a completed sync of all dependencies".into(),
+                    );
+                }
+                commands::deps::sync(&root, dependency, check, !review, verbose)
+            }
         },
         Some(Command::Gpui { command }) => match command {
             GpuiCommand::Edit => commands::gpui::edit(&root, verbose),
@@ -313,17 +300,6 @@ pub fn run() -> Result<(), String> {
                     commands::gpui::check_upstream(&root, verbose)
                 } else {
                     commands::gpui::sync(&root, verbose)
-                }
-            }
-        },
-        Some(Command::Motion { command }) => match command {
-            MotionCommand::Edit => commands::motion::edit(&root, verbose),
-            MotionCommand::Pin => commands::motion::pin(&root, verbose),
-            MotionCommand::Sync { check } => {
-                if check {
-                    commands::motion::check_upstream(&root, verbose)
-                } else {
-                    commands::motion::sync(&root, verbose)
                 }
             }
         },

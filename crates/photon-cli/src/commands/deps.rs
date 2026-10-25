@@ -8,10 +8,9 @@ use crate::support::{output, success};
 pub(crate) enum Dependency {
     Engine,
     Gpui,
-    Motion,
 }
 
-const DEPENDENCIES: [(Dependency, &str, &str, &str, &str); 3] = [
+const DEPENDENCIES: [(Dependency, &str, &str, &str, &str); 2] = [
     (
         Dependency::Engine,
         "Engine",
@@ -23,13 +22,6 @@ const DEPENDENCIES: [(Dependency, &str, &str, &str, &str); 3] = [
         Dependency::Gpui,
         "GPUI-CE",
         "vendor/gpui-ce",
-        "main",
-        "upstream/main",
-    ),
-    (
-        Dependency::Motion,
-        "gpui-motion",
-        "crates/gpui-motion",
         "main",
         "upstream/main",
     ),
@@ -106,7 +98,6 @@ pub(crate) fn edit(
         match item {
             Dependency::Engine => crate::commands::engine::edit(root, verbose)?,
             Dependency::Gpui => crate::commands::gpui::edit(root, verbose)?,
-            Dependency::Motion => crate::commands::motion::edit(root, verbose)?,
         }
     }
     Ok(())
@@ -121,7 +112,6 @@ pub(crate) fn restore(
         match item {
             Dependency::Engine => crate::commands::engine::pin(root, verbose)?,
             Dependency::Gpui => crate::commands::gpui::pin(root, verbose)?,
-            Dependency::Motion => crate::commands::motion::pin(root, verbose)?,
         }
     }
     Ok(())
@@ -134,9 +124,6 @@ pub(crate) fn sync(
     no_review: bool,
     verbose: bool,
 ) -> Result<(), String> {
-    if !no_review && (check || dependency.is_some()) {
-        return Err("`--review` applies only to a completed sync of all dependencies".into());
-    }
     if dependency.is_none() && !check && !no_review {
         crate::commands::sync::require_review_dispatch_auth(root)?;
     }
@@ -150,12 +137,10 @@ pub(crate) fn sync(
         match (item, check) {
             (Dependency::Engine, true) => crate::commands::engine::check_upstream(root, verbose)?,
             (Dependency::Gpui, true) => crate::commands::gpui::check_upstream(root, verbose)?,
-            (Dependency::Motion, true) => crate::commands::motion::check_upstream(root, verbose)?,
             (Dependency::Engine, false) => {
                 crate::commands::engine::engine(root, Some("sync"), false, verbose)?
             }
             (Dependency::Gpui, false) => crate::commands::gpui::sync(root, verbose)?,
-            (Dependency::Motion, false) => crate::commands::motion::sync(root, verbose)?,
         }
     }
 
@@ -171,7 +156,7 @@ pub(crate) fn sync(
 fn selected(dependency: Option<Dependency>) -> impl Iterator<Item = Dependency> {
     match dependency {
         Some(dependency) => vec![dependency],
-        None => vec![Dependency::Engine, Dependency::Gpui, Dependency::Motion],
+        None => vec![Dependency::Engine, Dependency::Gpui],
     }
     .into_iter()
 }

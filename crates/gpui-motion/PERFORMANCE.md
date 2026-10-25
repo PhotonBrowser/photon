@@ -1,0 +1,971 @@
+# Performance history
+
+Early results were recorded in the original 1keep workspace before extraction;
+Git-pinned CE results are not measurements of the standalone registry demos.
+Later sections identify standalone registry-backed measurements. Use their
+commands to reproduce the corresponding workloads.
+
+# Motion validation — 2026-10-16
+
+Host: macOS 26.6.2, ARM64, Rust 1.95.0, native Metal, GPUI CE revision
+`094fe979fc4bd9a7dd4544d75b147a9278afcecf`. Other platforms are unverified.
+
+## Sampling
+
+`cargo bench -p gpui-ce-motion --bench sampling --locked --offline`, release
+optimization, no default features. Twenty-five batches of 1,000 independent
+objects × 240 samples, alternating destinations every 24 samples. Setup and
+state allocation are outside the timed region; declarations, retargeting, and
+sampling are inside. Results are passed through `black_box`.
+
+| Workload | Median ns/object/sample | Batch P95 ns/object/sample | Median ms/1,000 objects/frame |
+| --- | ---: | ---: | ---: |
+| Settled baseline | 7.5 | 7.6 | 0.007 |
+| Tween and interruption | 13.0 | 13.1 | 0.013 |
+| Spring and interruption | 27.9 | 28.4 | 0.028 |
+
+This measures sampler CPU work, not GPUI element construction, frame requests,
+layout, painting, GPU execution, or scanout. The sampler stores fixed arrays and
+scalar state and performs no heap allocation; GPUI rendering has its own costs.
+
+## Native rendering smoke comparison
+
+`cargo run --release --features demo --example gpui_eval -- 400 8 baseline` and the same command
+with `motion`. Both use 400 text-labelled cards in a 960×640 logical window,
+one second of warmup, and eight seconds of measurement. The baseline computes
+a shared sinusoidal offset; motion samples an independent spring for each card,
+retargeted between ±3 logical pixels every 200 ms. Identical drawing code then
+uses the sampled offset. This isolates sampler overhead in a native scene;
+it does not stress presence or nested animated subtrees.
+
+| Measurement | Baseline | Motion |
+| --- | ---: | ---: |
+| Measured render callbacks | 960 | 942 |
+| Inactive callbacks | 0 | 5 |
+| Active interval samples | 960 | 937 |
+| Median render interval | 8.331 ms | 8.332 ms |
+| Active render interval P95 | 8.767 ms | 9.233 ms |
+| Construction median | 0.161 ms | 0.184 ms |
+| Construction P95 | 0.182 ms | 0.196 ms |
+| Maximum interval, including inactive time | 18.852 ms | 53.735 ms |
+
+Both foreground workloads sustained approximately 120 render callbacks/second.
+The observed construction median difference was 0.023 ms/frame. These are
+single-run smoke results on a shared developer desktop, not an isolated
+statistical regression test or a guarantee of GPU frame deadlines.
+
+An earlier baseline spent 192 callbacks inactive and had a 33.381 ms median;
+it was excluded from this foreground comparison. Occlusion/activation affects
+scheduling on this host. Keep the window visible, click to activate it, and
+inspect active samples and maximum intervals rather than silently discarding
+long gaps. Neither callback timing nor view construction proves GPU completion
+or physical screen scanout. Repeat isolated runs before making release claims.
+
+## Behavior and release checks
+
+- External-consumer tests cover duration endpoints, analytic spring damping
+  regimes and known critical solution, retargeting between samples, preserved
+  spring momentum, transition switching, exit retention and interrupted re-entry,
+  initial absence, backward timestamps, zero duration, reduced motion, invalid
+  spring parameters, opacity bounds, and extreme finite targets.
+- The optional adapter accepts stateful GPUI elements. Native and portable
+  doctests compile public usage. Default-feature tests need no GPU.
+- Native demo checked with its real keyboard actions and accessible status:
+  exit progressed through `Exiting` to `Absent`; re-entry, repeated reversal,
+  spring/tween switching, and reduced-motion immediate exit worked. Native menus
+  were opened and exercised. Command+W and Command+Q ended the process.
+- After settling, sampled process CPU time remained 1.47 seconds across a
+  three-second idle interval; RSS was 97,248 KiB. This short sample checks for a
+  busy frame loop, not a general energy or memory-leak guarantee.
+- Workspace format, check, Clippy with warnings denied, tests, and docs pass.
+  The crate archive verifies independently; its optional native feature builds
+  and its tests pass against registry `gpui-ce =0.2.2`, separately from the Git
+  dependency used by the running app. Nothing has been published.
+
+For an actual release, repeat native checks against the registry-backed consumer,
+confirm package-name availability and repository metadata, and exercise each
+claimed desktop platform. OS reduced-motion preference synchronization belongs
+to the host application; this demo explicitly toggles GPUI's application flag.
+
+## Width, height, and radius update — 2026-10-17
+
+Same host, toolchain, and official CE revision. The sampler now retains six
+channels; width, height, and radius are optional and inherit previously declared
+destinations when omitted. No CE source modifications or renderer fork are used.
+
+The release sampling benchmark (25 batches, same 1,000 × 240 workload) reports:
+
+| Workload | Median ns/object/sample | Batch P95 ns/object/sample | Median ms/1,000 objects/frame |
+| --- | ---: | ---: | ---: |
+| Settled, no layout targets | 14.3 | 14.6 | 0.014 |
+| Tween and interruption, no layout targets | 23.1 | 23.5 | 0.023 |
+| Spring and interruption, no layout targets | 40.6 | 41.1 | 0.041 |
+| Six-channel spring and interruption | 40.6 | 41.0 | 0.041 |
+
+The original three-channel results above are historical, not a claim that the
+expanded sampler has zero overhead. The new timing includes declaration
+resolution and all six channels, but still excludes native rendering.
+
+For the native comparison, run `gpui_eval -- 400 8 layout-baseline` and
+`gpui_eval -- 400 8 layout` in release mode. Both paint identical text cards in
+400 fixed slots. Width alternates between 30/42 logical pixels, height 18/26,
+and radius 2/8 every 200 ms. Both apply these values through the real
+`Frame::apply` adapter and GPUI layout. The baseline uses one shared sampler;
+the independent mode uses 400 retained samplers with the same time and targets.
+
+| Measurement | Shared sampler baseline | 400 independent samplers |
+| --- | ---: | ---: |
+| Measured callbacks | 922 | 922 |
+| Inactive callbacks | 0 | 0 |
+| Median render interval | 8.333 ms | 8.333 ms |
+| Active render interval P95 | 11.210 ms | 11.135 ms |
+| Render interval P99 | 21.190 ms | 17.390 ms |
+| Maximum render interval | 39.043 ms | 33.760 ms |
+| Construction median | 0.281 ms | 0.310 ms |
+| Construction P95 | 0.318 ms | 0.357 ms |
+
+The observed construction difference is 0.029 ms/frame. Both runs delivered
+about 115 callbacks/second over the measurement window, with an 8.333 ms median
+cadence and occasional longer intervals. The small P95 difference is noise in
+this single shared-desktop comparison, not evidence that independent motion is
+faster. Neither run measures GPU completion or scanout, and these results do
+not establish uninterrupted 120 Hz presentation.
+
+The first independent run included 45 inactive callbacks; it was excluded from
+the foreground comparison and repeated with the window activated. Activation
+and occlusion remain material measurement constraints.
+
+New tests cover numeric layout endpoints, omitted dimensions, first introduction
+of a size, dimension momentum during reversal/re-entry, partial exit inheritance,
+non-negative drawable bounds, invalid inputs, reduced-motion exit, and the
+adapter's preservation/replacement of actual GPUI styles. The native feature
+has 23 passing external-consumer tests and two passing doctests. The independent
+crate archive also passes these tests against registry `gpui-ce =0.2.2`.
+
+The playground's W command changes 240×160/radius 8 to 360×200/radius 36.
+Native checks covered both endpoints, repeated retargeting, spring/tween
+switching, reduced motion, collapse to 0×0 on exit, and restoration on re-entry.
+The sidebar consumer now animates its outer clipping width directly, retaining
+fixed-width inner content and its existing focus/input policy.
+
+Sidebar runtime checks also confirmed Projects selection, Escape exit, visible
+focus restoration to Show sidebar, content reflow after removal, and Command+B
+re-entry with the same selection.
+
+## Prepared playback and interaction update — 2026-10-17
+
+Same host/toolchain and unmodified official CE revision. The scalar engine now
+owns each channel's independent transition/delay. Prepared clips, timelines,
+colors, and interaction helpers share that engine; default dependencies remain
+empty. These results supersede the earlier sampler numbers for current code.
+
+`cargo bench -p gpui-ce-motion --bench sampling --offline`: release, 25 batches
+of 1,000 objects × 240 samples. Setup is outside measurement. The three advanced
+workloads keep one monotonically advancing clock across batches: repeating
+keyframes, retargeted linear-light colors (including sRGB conversion), and
+bounded drag/release. The original workloads reset states between batches.
+
+| Workload | Median ns/object/sample | Batch P95 ns/object/sample | Median ms/1,000 objects/frame |
+| --- | ---: | ---: | ---: |
+| Repeating prepared keyframes | 96.6 | 113.4 | 0.097 |
+| Color spring, interruption and sRGB conversion | 139.6 | 140.8 | 0.140 |
+| Drag and bounded inertial release | 55.6 | 58.5 | 0.056 |
+| Settled six-channel state | 66.8 | 67.3 | 0.067 |
+| Tween and interruption | 95.0 | 99.0 | 0.095 |
+| Spring and interruption | 130.9 | 134.3 | 0.131 |
+| Six independent layout springs and interruption | 208.9 | 213.2 | 0.209 |
+
+Independent timing costs more than the previous common-matrix sampler: the
+six-channel spring case increased from 0.041 to 0.209 ms/1,000 objects/frame on
+this host. This is a measured regression in that CPU-only workload in exchange
+for property-specific timing and shared scalar behavior, not a claim of free
+feature expansion. The current workload uses about 2.5% of an 8.33 ms CPU frame
+budget before native rendering. A thread-local allocator-observation test also
+checks zero allocations across first bind, retained clip/timeline sampling,
+retargeting, colors, dragging, and inertia. It excludes preparation, membership
+updates, and GPUI element construction.
+
+The added native probe modes `keyframes-baseline` and `keyframes` use identical
+400-card layouts, numeric endpoints, 400 ms mirrored keyframes and easing. One
+player supplies every baseline card; the independent run samples 400 retained
+players. Both use `Frame::apply`, real layout/text/paint, and forced redraws,
+with one second warmup and eight seconds measurement. Both windows were visible
+and activated; neither run recorded inactive callbacks.
+
+| Measurement | Shared prepared player | 400 independent players |
+| --- | ---: | ---: |
+| Measured callbacks | 937 | 946 |
+| Inactive callbacks | 0 | 0 |
+| Median callback interval | 8.332 ms | 8.330 ms |
+| Active interval P95 | 9.296 ms | 9.291 ms |
+| Interval P99 | 16.504 ms | 12.683 ms |
+| Maximum interval | 58.205 ms | 64.547 ms |
+| Construction median | 0.292 ms | 0.327 ms |
+| Construction P95 | 0.313 ms | 0.359 ms |
+
+The observed median construction difference is 0.035 ms/frame. These shared
+Desktop single-run results show roughly 117–118 callbacks/second, with occasional
+long gaps. The nearly equal P95 is not evidence of an improvement. They do not
+measure GPU completion, energy, scanout, or guarantee 120 Hz presentation.
+Raw probe logs are in ignored `target/gpui-ce-eval/ce/keyframes*.txt`.
+
+The native gallery was exercised in the actual CE/Metal app: pause/resume,
+variant width changes, keyed wait-mode replacement, stable-ID reordered items,
+pointer drag with bounded snapped release, focused arrow-key motion, real scroll
+progress (0%, 25%, 50%), row-10 visibility triggering and reduced-motion snap.
+The gallery cancels pointer state on window deactivation and Escape. Retained
+clips and colors are configured once, with no per-frame preparation allocation.
+The tests additionally cover backward time, pause/seek/rate/reverse playback,
+nonuniform/wildcard keyframes, reverse versus mirror easing, billion-cycle skips,
+velocity-continuous spring clip replacement, independent completion timing,
+analytic inertial frame-rate independence, presence reentry, validation and
+allocation behavior. The native feature now passes 42 external-consumer tests
+and three doctests, also verified from the independent archive against registry
+`gpui-ce =0.2.2`. Default/no-default-feature tests, workspace checks, Clippy and
+documentation checks pass. These are CPU/public API tests; other desktop platforms
+and native execution of a standalone registry consumer remain unverified.
+
+Portable retained-state sizes from `size_of` in the same release benchmark:
+`MotionState` 1,352 bytes, `AnimationState` 352 bytes, `ColorState` 896 bytes,
+`Drag` 560 bytes. These exclude shared clip/keyframe storage and container
+allocations; the native feature also stores an `Instant` in motion/playback
+states. Sample costs depend on active channels and keyframe count. The expanded
+state trades memory for independently interruptible property clocks.
+
+## SVG-only scale and rotation — 2026-10-17
+
+Same macOS ARM64/Rust 1.95.0 host and official CE pin. `SvgMotionState` reuses
+three independent scalar channels (X/Y scale and unwrapped degrees). The native
+adapter sends scale and rotation to CE's SVG sprite transform. Neither the
+renderer nor its shaders were patched. Existing general-element motion is unchanged.
+
+`cargo bench -p gpui-ce-motion --bench sampling --offline`, release, no default
+features, 25 batches × 1,000 SVG states × 240 samples. Scale/angle targets
+are retargeted every 200 ms; all objects receive the same timestamp/declaration.
+State allocation is outside timing; declaration creation, interruption and
+sampling are inside. Results pass through `black_box`.
+
+| Workload | Median ns/object/sample | Batch P95 ns/object/sample | Median ms/1,000 objects/frame |
+| --- | ---: | ---: | ---: |
+| SVG scale/rotation springs with interruption | 136.6 | 149.2 | 0.137 |
+
+The portable retained SVG state occupies 680 bytes on this host. The optional
+native adapter also stores an `Instant`. The allocator test now exercises SVG
+first bind and retargeting alongside the existing engines and observes zero
+sampling allocations. This benchmark excludes native transform conversion,
+element construction, SVG loading/rasterization, painting and GPU execution.
+
+The native probe adds `svg-baseline` / `svg`, each drawing 400 copies of the same
+embedded SVG (including SVG text) at a fixed 18×18 logical base size. Unit scale
+is replaced by spring destinations 0.7/1.1 with rotation -30/+30 degrees, toggled
+every 200 ms. Both modes use the same SVG adapter, fixed slots, asset path, cache
+and geometry; only the number of retained samplers differs. Fixed raster size
+and asset identity allow CE to reuse its SVG raster cache across transforms.
+There are five seconds of warmup for font/raster caches and eight measured
+seconds. Earlier probe modes retain their original one-second warmup.
+
+| Recorded run | Shared sampler, foreground | 400 samplers, inactive diagnostic |
+| --- | ---: | ---: |
+| Callbacks | 955 | 212 |
+| Inactive callbacks | 0 | 212 |
+| Active interval samples | 955 | 0 |
+| Median interval | 8.333 ms | 40.770 ms |
+| Active interval P95 | 9.421 ms | unavailable |
+| Maximum interval | 17.063 ms | 66.163 ms |
+| Construction median | 0.229 ms | 0.304 ms |
+| Construction P95 | 0.677 ms | 0.796 ms |
+
+**These columns are not a controlled foreground performance comparison.** The
+independent run was inactive and throttled; its slower callbacks do not establish
+an animation-engine regression, nor does the construction difference establish
+sampler overhead. Other independent attempts also included inactivity, including
+one 16.9-second occlusion gap. UI automation then reported macOS ScreenCaptureKit
+error -3811 (capture stream failure), preventing reliable activation/observation
+of a final foreground comparison. The baseline demonstrates foreground rendering;
+independent-player frame cadence/GPU performance needs a repeat on an uninterrupted
+desktop. Raw logs, including excluded runs, are retained in ignored
+`target/gpui-ce-eval/svg/`.
+
+The native SVG demo was visually exercised before the capture failure: scale
+1.0/1.5, rotation, multiple-turn angle presentation, horizontal mirroring of both
+shapes and SVG text, reset, and reduced-motion immediate completion. Its original
+bounds outline and surrounding native text stayed fixed. Input is attached to
+a padded native stage, never to an assumed transformed hitbox. The final layout
+was enlarged and its help text shortened after inspecting clipped bottom copy;
+that layout adjustment and the final Tab/Enter path could not be visually rechecked
+after capture failed. Spring/tween interruption and native transformation mapping
+are additionally covered by deterministic external-consumer tests.
+
+All workspace checks, Clippy with denied warnings, no-default/native feature
+tests, rustdoc, and archive verification pass. The independent archive passes
+51 public API tests and five doctests against registry `gpui-ce =0.2.2` (no Git
+patch), including nine SVG tests. No new dependency was added; the default core
+still has no third-party dependencies. No package was published. Windows/Linux,
+a native registry-backed app launch, and transformed visual hit testing are not
+verified; CE intentionally leaves SVG layout/hitbox unchanged. Large zooms may
+soften its cached rasterized graphic, and clipping follows CE's axis-aligned masks.
+
+## Automatic position-only layout — 2026-10-17
+
+Same macOS ARM64/Rust 1.95.0 host, official CE revision
+`094fe979fc4bd9a7dd4544d75b147a9278afcecf`. No CE fork, renderer/shader
+patch or new runtime dependency. `LayoutGroup::position` delegates the child's
+layout node, measures its final native origin in prepaint, and translates the
+child's presentation and input bounds together. Positions are spring/tween-driven;
+size is immediate. Nested wrappers share a coordinate group.
+
+Portable release benchmark (`cargo bench -p gpui-ce-motion --bench sampling
+--offline`), 25 batches × 1,000 states × 240 samples, retargeting every 200 ms:
+
+| Workload | Median ns/object/sample | Batch P95 ns/object/sample | Median ms/1,000 objects/frame |
+| --- | ---: | ---: | ---: |
+| Measured position springs with interruption | 73.2 | 75.3 | 0.073 |
+
+State allocation is outside timing; measurement input, interruption and sampling
+are inside. The allocator test includes first measurement and retargeting and
+observes zero portable sampling allocations. Native element construction, keyed
+CE state and frame callbacks can allocate; they are not covered by that claim.
+
+### Full native CPU pipeline
+
+```sh
+cargo bench -p gpui-ce-motion --features native-tests --bench layout_native --offline
+```
+
+This benchmark uses real CE views, Taffy layout, prepaint, hitbox/scene registration,
+paint preparation, frame callback dispatch and frame cleanup on CE TestPlatform.
+Only the platform/window/display/GPU are test doubles. Each mode runs seven fresh
+windows, 24 warmup frames and 240 measured frames each, advancing the fake
+monotonic clock by 8,333 µs per frame. Four hundred 20×16 rectangles wrap inside a
+480/600-pixel board that changes width every 24 frames and reverses order every 48.
+Layout changes interrupt unsettled springs. Input geometry/content are identical
+across modes; direct/disabled modes snap, animated mode moves toward final layout.
+
+| Mode | Median of batch means, ms/frame | Aggregate frame P95, ms |
+| --- | ---: | ---: |
+| Direct CE elements | 1.671 | 1.838 |
+| Position wrapper, interpolation disabled | 2.234 | 2.529 |
+| Automatic measured positions + interruption | 2.539 | 4.834 |
+
+The observed total difference is 0.868 ms/frame for 400 elements. This final run
+had no concurrent Cargo builds. An earlier run overlapping validation builds
+measured 1.632 / 2.097 / 2.327 ms batch means and 1.772 / 2.269 / 2.500 ms
+frame P95 in the same mode order; the higher final animated tail illustrates
+shared-desktop timing variation. Both runs are retained in
+`target/gpui-ce-eval/layout/cpu-native.csv`. This includes
+wrapper traversal, retained-state lookup, measurement, sampling and scheduling;
+it is not a standalone spring cost. Normal clipping and translated child bounds
+use CE's existing pipeline. No GPU submission/completion, Metal rendering, OS
+input, display scanout or 120 Hz guarantee is measured here. Small rectangles
+also do not model expensive text or complex subtrees. Modes run in fixed order
+on a shared desktop; timings are local measurements, not release thresholds.
+
+### Native demo and redraw probe
+
+`layout_motion` was launched as a release CE/Metal app and visually checked.
+Pointer controls and shortcuts exercised compact wrapping, repeated reorder/
+relayout interruption, insertion, alignment, spring/tween switching, disabled
+animation and reduced motion. Card selection and Tab/Enter activation updated
+the live status; focus borders and help copy were visible without clipping.
+
+`gpui_eval` adds `position-baseline` / `position`: 400 text-labelled cards, board
+width 720/900 and reversed stable-ID order every 200 ms, five seconds of warmup
+and eight measured seconds. View-construction timing ends before the wrapper's
+prepaint sampling, so it cannot measure this feature's full CPU cost. The
+TestPlatform benchmark above covers that missing work. The native baseline
+attempt stalled without output and was terminated after a 35-second bound.
+A retry's activation check failed with macOS ScreenCaptureKit error -3811.
+There is no valid foreground callback comparison or GPU timing for this change;
+repeat these modes on an uninterrupted desktop. Diagnostic logs are retained in
+ignored `target/gpui-ce-eval/layout/`. The probe forces redraws independently
+of the wrapper's own scheduling.
+
+Seven portable layout tests cover first mount, two-axis settling/completion,
+velocity-continuous interruption, between-sample retargeting, backward clocks,
+tweens, reset, finite input validation and reduced motion. Five headless native
+tests exercise real flex wrapping/reorder/insertion, immediate size changes,
+translated pointer hitboxes, nested movement without double offsets, scrolling,
+reduced/disabled interpolation and zero pending frame callbacks after settling.
+The opt-in `native-tests` feature enables CE's test-support dependencies; default
+and normal `gpui` builds do not enable it. Cross-parent shared layout, animated
+size projection, general subtree scale/rotation, Windows/Linux runtime behavior
+and alternate display scales remain unverified or deferred. Nothing was published.
+
+Verification passes: 54 portable tests + four doctests without default features;
+58 tests + seven doctests with normal `gpui`; 63 tests + seven doctests with
+`native-tests`, including five real-CE headless tests. The independent packaged
+archive passes both native configurations against registry `gpui-ce =0.2.2`
+without a Git override. Workspace all-target checks, Clippy with warnings denied,
+formatting, rustdoc with warnings denied, and Cargo package verification pass.
+The registry crate remains unpublished; no third-party dependency is enabled
+by default (`cargo tree -p gpui-ce-motion --no-default-features`).
+
+## Remaining stock-CE integrations — 2026-10-17
+
+Same macOS ARM64/Rust 1.95.0 host and official CE pin. New APIs use public
+layout, prepaint offsets, hitboxes, input dispatch, style/filter and PathBuilder
+hooks. No renderer source, shader, CE dependency revision or runtime dependency
+was changed. Gaussian blur/backdrop blur exist in both supported CE sources.
+
+### Portable sampling
+
+Release `cargo bench -p gpui-ce-motion --bench sampling --offline`, 25 batches
+of 1,000 states × 240 samples with targets interrupted every 200 ms. Setup,
+path preparation and state allocation are outside timing; declarations, channel
+sampling, compatible topology checks, length updates and stroke iteration are
+inside. Outputs pass through `black_box`.
+
+| Workload | Median ns/object/sample | Batch P95 ns/object/sample | Median ms/1,000 objects/frame |
+| --- | ---: | ---: | ---: |
+| Eight padding/radius tracks + linear-light background color | 483.3 | 660.2 | 0.483 |
+| Prepared cubic morph + measured stroke reveal | 544.4 | 607.8 | 0.544 |
+| Five-channel SVG transform state, interrupted scale/rotation | 170.3 | 189.9 | 0.170 |
+
+The final run is reported above. The earlier run measured style sampling at
+503.5 ns and morph/reveal at 551.5 ns; desktop timing varies between runs.
+These exclude native element creation, native style vectors, tessellation, GPU
+work, input dispatch and layout. Portable allocation checks include style first
+bind/retargeting, cubic morphing and stroke iteration and observe zero allocations
+after preparation. Curve reveal uses 32 equal-parameter segments per curve,
+not an exact arc-length solver. Native tessellation can allocate and fail;
+`VectorState::error` reports that boundary. Patterns are capped at 4096 periods.
+
+Retained sizes in this release benchmark: `MotionState` 1,496 bytes,
+`AnimationState` 352, `ColorState` 992, `Drag` 608 and `SvgMotionState` 1,248.
+New configurable settling tolerances enlarge physical spring state, and SVGs
+now retain two additional translation channels. These exclude vector/clip heap
+storage and native element allocations; the native SVG clock adds its `Instant`.
+They are historical measurements, not stable ABI promises.
+
+### Full native CPU preparation
+
+```sh
+cargo bench -p gpui-ce-motion --features native-tests --bench advanced_native --offline
+```
+
+Real CE views, Taffy, prepaint/hitboxes, style/filter scene preparation, frame
+callback dispatch, path tessellation and frame cleanup on TestPlatform. The
+platform/window/display/GPU are test doubles. Five fresh contexts per mode,
+24 warmup + 240 measured frames each, fake clock advancing 8,333 µs/frame.
+Each mode constructs 100 small elements in a 480-pixel wrapping board. Targets
+change every 24 frames; real sizes alternate 16/24 pixels. Native reorder mode
+programmatically reverses keys; its handlers are installed but pointer input is
+covered by behavioral tests instead. Shared mode measures one active appearance
+per identity. Vector mode morphs one cubic per element and changes stroke reveal.
+
+| Workload | Median batch mean, ms/frame | Aggregate frame P95, ms |
+| --- | ---: | ---: |
+| Direct reflow | 0.694 | 1.467 |
+| Native style tracks | 0.711 | 1.832 |
+| Blur CPU preparation only | 0.756 | 1.280 |
+| Gesture bindings + interruptible opacity | 1.904 | 3.665 |
+| Intrinsic height measurement | 1.049 | 2.649 |
+| Popped retained exits | 0.796 | 1.475 |
+| Measured reorder + native handlers | 1.133 | 1.506 |
+| Shared position bindings | 0.582 | 0.674 |
+| Cubic morph/reveal + tessellation | 1.311 | 1.772 |
+
+These are final-run timings after the popped-reentry fix. An earlier run
+measured direct reflow at 0.430 ms mean / 0.531 ms P95, versus 0.694 / 1.467
+in this run despite no change to that control. This variation prevents treating
+small differences between modes as measured feature overhead. No Cargo builds
+ran concurrently with either benchmark.
+
+These are different feature workloads, not identical rendered-output comparisons
+or isolated sampler overheads. In particular, popped exits change occupancy,
+shared elements move, vector geometry differs from rectangles, and gesture mode
+registers focus/input listeners. Fixed-order modes on a shared desktop are local
+CPU measurements, not release thresholds or a 120 Hz presentation guarantee.
+They do not measure GPU filter execution, energy, native OS input latency or
+screen scanout. Blur may be much more expensive than its CPU preparation suggests.
+The six-page release gallery verifies actual Metal rendering separately.
+
+### Behavior and packaging evidence
+
+The release `motion_native` gallery was launched on CE/Metal. Native checks
+exercised content-measured expansion, popped removal, hover/activation, bounded
+pointer drag and release, focused arrow-key motion, real scroll progress, pointer
+and Alt+Arrow reorder commits with visible focus, shared position/crossfade,
+vector morph/reveal/fill controls, SVG custom-pivot controls, style changes,
+Gaussian blur/backdrop-filter rendering, reduced motion, and Command+Q/W exit.
+All six pages were inspected; transient overlapping reflow settles normally.
+No GPU completion or foreground callback-cadence measurement was captured.
+
+Native verification found a keyboard dispatch bug with text-bearing controls:
+listeners registered after child paint landed on its deepest dispatch node.
+A new external-consumer test failed at zero movement before the correction and
+passes at the requested ten-pixel keyboard movement after registering handlers
+on the wrapper before child paint. Reorder fixtures now include text too.
+A second regression reproduced a position jump when restoring a popped item
+during exit. Popped items now own their reflow state and freeze the visible
+position instead of following a hidden layout placeholder. The restore test
+passes at the same displayed position before and after reentry.
+Other tests cover borders/gaps in popped exits, clipped input during size changes,
+nonanimated size axes with no pending frame, first active shared-member ordering,
+disabled binding/cancellation, focus-loss pointer cancellation, reentrant reorder
+callbacks and reduced-motion idle.
+
+Final checks pass: 63 portable tests + six doctests, 68 normal-`gpui` tests +
+15 doctests, and 88 `native-tests` tests + 15 doctests. The latter includes 20
+real-CE headless tests (five existing layout tests plus 15 integration tests).
+Workspace all-target Clippy and rustdoc pass with warnings denied, formatting
+and the release gallery build pass, and Cargo package verification passes.
+
+The default core remains dependency-free. Native consumers still enable only
+`gpui`; opt-in `native-tests` adds CE's existing test-support feature. The package
+is self-contained and independently checked against registry `gpui-ce =0.2.2`.
+Test/benchmark activation uses a small adapter for that release's `activate_window`
+and the official pin's `activate` name. Runtime code needs no compatibility flag.
+Shadow conversion uses the common public constructor. Disabled accessibility
+metadata and removal focus remain host responsibilities across CE releases.
+Windows/Linux execution, alternate display scales, screen-reader interaction,
+OS-wide pointer capture and GPU performance remain unverified. General subtree
+transforms/full size projection and browser APIs remain outside the implemented
+stock-CE equivalents. No crate was published.
+
+
+## GPUI Kit integration — 2026-10-18
+
+The standalone [Kit showcase](integrations/gpui-kit/README.md) binds the portable
+engine to registry GPUI Kit 0.7.3 / gpui-pre 0.3.9, with no CE or Kit fork.
+Its release benchmark compares 400 identical small rectangles under direct
+layout, disabled position interpolation, and animated measured positions.
+Seven fresh TestPlatform contexts per mode run 24 warmup + 240 measured frames,
+advancing the executor clock by 8,333 microseconds per frame. Width changes every
+24 frames and keyed order reverses every 48 frames, interrupting ongoing motion.
+
+On macOS ARM64 / Rust 1.95.0, the final run after other builds finished measured
+1.259 ms median batch mean / 1.397 ms aggregate P95 for direct layout,
+1.779 / 2.004 ms for tracking without interpolation, and 2.014 / 2.294 ms for
+animated positions. Run commands and the comparison table live in the linked
+README. These are CPU construction/layout/prepaint/paint preparation timings;
+TestPlatform substitutes the display/GPU. They establish neither GPU completion
+nor screen presentation, and do not benchmark the six product screens.
+
+Production-view interaction tests cover inbox archive/undo, mid-exit keyboard
+undo without a position jump, asset search/inspector collapse, simulated transfer
+pause/cancel/completion, command search/Enter, native planner drag/drop, and
+pipeline failure/retry preserving completed steps. Adapter tests exercise clock
+advancement, reversal continuity, and reduced-motion unmounting. Live macOS
+window inspection covers all six screens separately from the CPU benchmark.
+
+
+## Native text motion — 2026-10-18
+
+Standalone repository, macOS ARM64 / Rust 1.95.0, registry GPUI CE 0.2.2 and
+GPUI Kit 0.7.3 / gpui-pre 0.3.9. No backend source changes. Release binaries
+were built first; no Cargo builds ran concurrently with these measurements.
+The [text contracts](docs/TEXT.md) describe the API and backend limits.
+
+### Prepared sampling
+
+```sh
+cargo bench --locked --features text --bench text_sampling
+```
+
+Fifteen batches of 1,000 prepared units × 240 samples, advancing 8,333 µs per
+sample. Each batch starts a spring entrance with center stagger; the scramble
+variant keeps substitutions active for three seconds. Preparation, reconciliation,
+segmentation, shaping and native painting are outside timing. Settled units are
+still sampled as the two-second window advances.
+
+| Workload | Median ns/unit/sample | Batch P95 ns/unit/sample | Median ms/1,000 units/frame |
+| --- | ---: | ---: | ---: |
+| Spring entrance and stagger | 50.9 | 53.8 | 0.051 |
+| Spring entrance and deterministic scramble | 53.3 | 55.7 | 0.053 |
+
+The thread-local counting allocator test observes zero allocations across prepared
+text sampling and backward/forward scrubbing. Reconciliation and native frame
+construction allocate; this is not a claim of allocation-free native rendering.
+
+### Native CPU preparation
+
+```sh
+cargo bench --locked --features native-tests --bench text_native
+cargo bench --manifest-path integrations/gpui-kit/Cargo.toml --locked --features demo,native-tests --bench text_native
+```
+
+Both backends use the same fixture: 40 labels, seven fresh contexts per mode,
+24 warmup + 240 measured frames, and an executor clock advancing 8,333 µs/frame.
+Content changes every 24 frames, interrupting ongoing entrances and reflow.
+The settled mode uses grapheme units and never changes its content. Timings
+include view construction, invalidated text-unit preparation, cache lookup,
+matching, framework layout, prepaint, paint preparation and frame cleanup.
+TestPlatform's `NoopTextSystem` supplies synthetic font metrics and glyphs, alongside
+display/GPU doubles. Platform font shaping and glyph rasterization are not measured;
+these timings describe adapter/framework overhead with simplified text shaping.
+
+| Workload | CE median batch mean, ms/frame | CE aggregate P95, ms | Kit median batch mean, ms/frame | Kit aggregate P95, ms |
+| --- | ---: | ---: | ---: | ---: |
+| Ordinary text with replacement | 0.279 | 0.333 | 0.271 | 0.319 |
+| Settled grapheme adapter | 0.385 | 0.499 | 0.372 | 0.485 |
+| Interrupted word motion | 0.426 | 0.538 | 0.419 | 0.526 |
+| Interrupted grapheme motion | 0.553 | 0.772 | 0.542 | 0.766 |
+| Grapheme motion and scramble | 0.571 | 0.794 | 0.560 | 0.783 |
+
+These are feature workloads, including outgoing fragments, rather than identical
+rendered-output comparisons or isolated sampler overheads. Earlier Kit runs
+measured words at 0.431–0.498 ms and graphemes at 0.576–0.654 ms. Shared-desktop variation and
+fixed mode order prevent interpreting small differences between modes or backends as an optimization or a backend
+ranking. These are
+local CPU measurements, not GPU completion, display cadence, energy, or a frame
+rate guarantee. Raw final logs are retained in ignored `target/text-motion-validation/`.
+
+### Behavior and release checks
+
+Seventeen portable text tests cover Unicode segmentation, stable duplicate matching,
+exit reclamation, smooth spring reversal, latest-only wait mode, reduced motion,
+scramble, typewriter timing, coordinate anchoring, scrubbing and playback.
+Two clip regressions were observed failing before their fixes: resuming from a
+scrub applied offsets twice, and staggered clips replayed their original hold.
+Both now preserve the held presentation when playback resumes. Two additional
+fail-before-fix tests cover replay using the latest declared stagger and a
+wait-mode release preserving each unit’s staggered scrub cursor.
+
+Seven native text tests run on each backend, using production adapter/layout code
+with synthetic fonts, including centered width changes without a position jump,
+event-handler controls, number place identities, and one semantic accessibility
+label. Five production Kit-gallery interaction tests exercise editing, buttons, pointer-driven
+scrubbing, reduced motion and changing counts. A native accessibility regression
+failed before the label role was added and passes on both backends afterward.
+
+Both real macOS galleries were launched. Checks covered CE effect/text changes,
+Unicode/emoji rendering and reduced motion, plus Kit input/mode changes and count
+controls. The live Kit accessibility tree exposes the requested label once and
+updates its count target. Wrapped mixed-direction Arabic reproduces the same
+incorrect break in an ordinary GPUI label; the limitation and workarounds are
+explicit in the text contracts. Screen-reader announcements, other platforms,
+GPU execution and presentation timing remain outside this validation.
+
+
+## Text exit cleanup — 2026-10-18
+
+The recording exposed two reproducible defects: a 20 px em-based slide inside a
+36 px slot left visible fragments, and outgoing slide/wipe units stayed fully
+opaque until their positional transition completed. A native regression also
+reproduced 24 px travel inside a 72 px line box. Those assertions failed before
+the fix and pass afterward on both native backends.
+
+SlideUp now travels by the complete measured unit height. SlideUp, rolling/sliding
+counts, and wipes give outgoing opacity a separate 100 ms ease-out transition.
+Movement and reveal retain their declared timing. Custom `y_relative` targets
+and `opacity_transition` declarations work during scrubbing, resume and reentry;
+rapid replacements retain matching identities and never restart old exit fades.
+Both galleries use the corrected shared line preset.
+
+The final checks pass: 21 portable text tests, eight native text tests on each
+backend, six production Kit-gallery interaction tests, zero-allocation prepared
+sampling, strict Clippy/rustdoc, and 34 compiled/Dylint-checked README examples.
+The full CE suite passes too. New cases cover tall line boxes, rapid counter
+updates, caller-overridden fade timing, reentry continuity, independent scrubbing,
+and rapid changes through the actual Lines gallery button.
+
+Release benchmark workloads and host match the preceding text section. The
+pre-fix binaries were measured before rebuilding. No Cargo builds ran during
+measurements. Prepared sampling measured 54.3 → 51.3 ns/unit/sample for springs,
+and 56.6 → 53.6 ns with scramble; those small differences do not establish a
+speedup. Native Kit CPU preparation measured these median batch means:
+
+| Workload | Before, ms/frame | After, first run | After, repeat |
+| --- | ---: | ---: | ---: |
+| Ordinary text replacement | 0.293 | 0.280 | 0.270 |
+| Settled grapheme adapter | 0.372 | 0.390 | 0.374 |
+| Interrupted words | 0.423 | 0.524 | 0.426 |
+| Interrupted graphemes | 0.550 | 0.643 | 0.549 |
+| Graphemes and scramble | 0.567 | 0.575 | 0.567 |
+
+The first after-run had elevated word/grapheme costs and P95; a single repeat
+returned to the previous range. These shared-desktop timings support no isolated
+speedup or slowdown claim. They measure common adapter overhead, rather than
+specifically benchmarking the corrected line/wipe/count effects. The affected
+geometry and fade timing are verified separately by the behavioral regressions.
+TestPlatform substitutes fonts/display/GPU; no native font or GPU timing is claimed.
+Raw before/after logs are in ignored `target/text-motion-validation/exit-fix/`.
+
+The corrected native gallery was rebuilt and launched, and the Lines controls
+updated the semantic target. Screenshot capture returned distorted miniature
+window images and a later native UI operation timed out, so this run does not
+establish a clean live visual acceptance check. Native frame-geometry/opacity
+assertions and real production interaction tests remain the regression evidence.
+The previously documented backend Arabic wrapping limitation is separate.
+
+
+### Display-font workaround acceptance
+
+Later live macOS checks reproduced a truncated system-font zero in ordinary GPUI
+text as well as the animated label. Both demos now select Helvetica Neue for all
+animated text and counters on macOS. C and zero were inspected in both rebuilt
+native previews, with additional Kit word/wipe checks and rolling counters on both
+backends. This is a demo font workaround; the library still inherits the host's
+font. The checks establish the observed glyph outlines at the tested display scale,
+not a fix to GPUI's system-font renderer or a new performance measurement.
+
+## Kit native helpers — 2026-10-18
+
+Stock `gpui-kit =0.7.3` / `gpui-pre =0.3.9`, shared published
+`gpui-ce-motion 0.2.0`, macOS ARM64, Rust 1.95.0, release profile. No renderer
+fork or runtime dependency was added. Run:
+
+```sh
+cargo bench --manifest-path integrations/gpui-kit/Cargo.toml --features demo,native-tests --bench helpers_native
+```
+
+Each mode creates five fresh TestPlatform contexts with 100 elements. Each batch
+has 24 warmup and 240 measured frames, advancing the executor by 8,333 microseconds
+per frame. Destinations/layout heights alternate every 24 frames; reorder also
+reverses membership order. Prepared players and the staggered timeline share an
+immutable repeating clip. Setup/state allocation is outside timing. Measured work
+includes element construction, sampling, native layout, prepaint/hitboxes,
+listener registration, painting preparation and frame cleanup.
+
+Styles sample the explicit board epoch and animate corners, border widths and
+background color; popped exits also use that epoch. Clip/timeline/SVG modes use
+the native clock helpers. The gallery additionally exercises padding and shadows;
+these timings do not characterize every style combination. Scroll includes a real
+measured source viewport and 100 smoothed bindings. Both SVG modes construct the
+same immutable inline drawing, including its normal hash/data-builder cost, and
+reuse Kit's path cache. Animated SVG adds only sampled scale/rotation.
+
+Two complete consecutive runs after compilation finished:
+
+| Workload | First mean, ms/frame | Repeat mean, ms/frame | Repeat frame P95, ms |
+| --- | ---: | ---: | ---: |
+| Direct reflow | 0.359 | 0.314 | 0.370 |
+| Native style tracks | 0.519 | 0.465 | 0.537 |
+| Measured scroll with smoothing | 0.557 | 0.545 | 0.627 |
+| Prepared clip playback | 0.669 | 0.370 | 0.408 |
+| Staggered timeline | 0.361 | 0.359 | 0.396 |
+| Direct cached SVG | 0.249 | 0.246 | 0.263 |
+| SVG scale/rotation with interruption | 0.312 | 0.309 | 0.336 |
+| Gesture bindings and opacity | 0.970 | 0.996 | 1.279 |
+| Intrinsic height measurement | 0.516 | 0.514 | 0.555 |
+| Popped retained exits | 0.519 | 0.516 | 0.532 |
+| Measured reorder and handlers | 0.935 | 0.924 | 0.998 |
+| Shared position bindings | 0.473 | 0.489 | 0.579 |
+| Compatible path morph/reveal | 1.165 | 1.200 | 1.433 |
+
+Means are the median of five batch means; P95 combines the 1,200 measured frames.
+The first playback pass varied noticeably, so both runs are retained rather than
+presenting a single timing as a guarantee. These are shared-desktop CPU measurements
+with synthetic font/display/GPU services. They do not measure GPU completion,
+platform glyph rasterization, OS input latency, displayed frame cadence or energy.
+
+Seventeen shared native geometry/input contracts run against both CE and Kit,
+including interruption, clipped input, scroll resize/smoothing, viewport/once
+visibility, reordered hitboxes, cancellation and reentry. Eight additional Kit
+contracts cover styles/unsupported filters, clip and timeline controls/epochs,
+future-track scheduling, idle/reduced motion, frame-buffer reuse and SVG pivots.
+Six production-gallery tests dispatch native Kit controls, pointer drag, keyboard
+reorder and manual scrolling. Real-window validation is recorded separately below;
+headless tests alone do not establish GPU presentation or screen-reader behavior.
+
+### Live helper gallery acceptance
+
+The new gallery was launched as a native macOS app at 1020 × 760 logical points.
+The first screenshots showed the styled card correctly; Change state visibly
+changed its color, padding, corner radius, border width and shadow. The native
+accessibility tree exposed all eight tabs, reduced-motion control, the drag
+control and reorder row labels. Live tab changes were observed in that tree.
+
+Later captures returned distorted miniature images, then the desktop automation
+service reported macOS ScreenCaptureKit `SCStreamErrorDomain -3811` (capture
+stream failure). Reliable visual acceptance of the remaining scenes was therefore
+not completed. This is separate from the production gallery's six passing native
+input/layout tests. GPU/display cadence, real screen-reader announcements,
+Linux/Windows execution and alternate display scales remain unverified.
+
+
+## Expanded shared engine — core 0.3.0 / Kit 0.4.0
+
+Apple M1 Max, macOS 26.6.2, Rust 1.95.0, optimized builds. Baseline is
+`a44f80ba971c989a7b35cbf4bfb6dbdf20a6724c` (core 0.2.0), extracted into an
+independent temporary checkout. The same portable sampling benchmark runs against
+both versions without native features. Two sequential passes use reversed order;
+no builds run concurrently. The desktop remains interactive, so these observations
+include scheduler noise. [Complete output](docs/performance/2026-10-18-expansion.txt).
+
+### Existing portable sampling
+
+Twenty-five batches of 240 frames × 1000 objects. The table shows the range of
+median ns/object across two runs, not confidence intervals.
+
+| Workload | Baseline | Current |
+| --- | ---: | ---: |
+| Settled | 71.1–71.6 | 69.0–69.9 |
+| Tween interruption | 96.8–99.3 | 94.2–95.2 |
+| Spring interruption | 133.3–137.1 | 126.3–127.0 |
+| Six numeric channels | 225.3–236.5 | 216.4–216.6 |
+| Prepared repeating clip | 100.5–101.3 | 97.2–97.6 |
+| Drag/inertia | 58.4–58.4 | 57.3–58.0 |
+| Styles/colors | 501.6–538.9 | 482.7–483.2 |
+| Curve morph/reveal | 553.3–576.9 | 533.5–536.8 |
+
+The observed current medians were lower in these runs. Scheduler noise and two
+repetitions limit conclusions about overall performance. Batch and frame tail
+variation is preserved in the complete output; these observations do not establish
+a latency bound.
+Portable retained sizes change from 352 to 376 bytes for `AnimationState` (completion
+observer storage), and 608 to 640 bytes for `Drag` (direction locking). `MotionState`
+remains 1496 bytes. These sizes exclude heap allocations and native clock fields.
+
+### New prepared shared-engine workloads
+
+Fifteen batches of 240 frames × 1000 items. Construction is excluded; retargeting,
+dependency sampling and callbacks are included. Graph items contain a source,
+derived value and subscriber; the tree contains 200 parents and 800 children.
+Typed timeline items each contain four color channels. Path queries use a prepared
+32-segment cubic approximation. Normal sampling reuses storage.
+
+| Workload | Median ns/item, two-run range |
+| --- | ---: |
+| source + derived + subscriber | 39.1–39.3 |
+| variant tree + spring retargeting | 36.3–37.3 |
+| mixed-capable timeline / RGBA track | 438.4–443.1 |
+| prepared path-follow query | 23.3–23.6 |
+
+Allocator-counting tests cover prepared graph subscriptions, variant retargeting,
+typed timeline samples, path queries and the existing engines: zero allocations
+inside the measured sampling loops. Preparation, native element construction,
+formatting, shaping, membership changes and requesting completion futures may allocate.
+
+### Full native lab CPU preparation
+
+The production nine-scene gallery is rendered on each stock backend's TestPlatform.
+Each case uses five batches of 240 measured frames after 24 warmup frames. Executor
+clocks advance at 120 Hz and Play toggles every 24 frames in animated scenes.
+The grid acquires through its external-handle API, dispatches three native moves
+per frame, crosses row/column destinations and the scroll edge, then releases every
+48 frames. Input, collision mapping and scrolling are included. Queued asset and callback
+work is flushed within timing, allowing SVG assets to load during warmup. Kit uses
+its actual Button components and dark theme; CE uses its native control composition.
+The cases contain different amounts of UI, so these are gallery observations rather
+than per-element costs or a controlled comparison of the two backends.
+
+| Scene | CE median batch mean, ms/frame | Kit median batch mean, ms/frame |
+| --- | ---: | ---: |
+| 01 Connected values | 0.219–0.227 | 0.498–0.505 |
+| 02 Parent/child sequence | 0.272–0.280 | 0.551–0.556 |
+| 03 Mixed timeline | 0.222–0.228 | 0.490–0.506 |
+| 06 Grid input / autoscroll | 0.697–0.720 | 1.140–1.154 |
+| 07 Cross-container transfer | 0.240–0.251 | 0.515–0.525 |
+| 08 Morph/path following | 0.276–0.284 | 0.557–0.571 |
+| 09 Rich text/font size/currency | 0.305–0.316 | 0.600–0.603 |
+
+Frame P95 values and variation are preserved in the complete output. TestPlatform substitutes font/display/GPU services:
+these timings exclude GPU submission/execution, compositor/display latency and
+physical device input. They do not establish actual 120 FPS. Font-size animation
+performs shaping/layout; prefer opacity/position when reshaping is unnecessary.
+
+### Native behavior and acceptance
+
+- Shared fixtures exercise measured scroll intersections and resize, external drag
+  handles/bounds/direction lock, callback reentry, grid pointer/keyboard ordering,
+  edge autoscroll stopping on release, stable batched pointer/key collisions,
+  measurement invalidation after external edits, cross-container hitboxes/interruption,
+  rich-text style pause, formatted accessibility and pinch lifecycle on both stacks.
+- Kit-only tests exercise recognized touch dragging/cancellation and touch reorder
+  release. CE raw touch dispatch remains pending upstream; physical touch devices
+  and operating systems other than macOS are unverified.
+- Each production lab is tested by clicking its Play control in all nine scenes
+  and interrupting it. The existing showcase/text/helper suites remain enabled.
+- Both actual macOS apps launch and respond to native scene/Play controls. Captures
+  show intact C/zero glyphs, rich style changes and the formatted amount. CE's native
+  accessibility reports `€1 209,00`. Pointer automation/capture was unreliable, so
+  live pointer/scroll acceptance remains unverified; automated native input tests
+  cover those paths. GPU timing remains unprofiled.
+
+Reproduce from the repository root:
+
+```sh
+cargo bench --locked --no-default-features --bench sampling --bench graph
+cargo bench --locked --features demo,native-tests --bench motion_lab
+cargo bench --manifest-path integrations/gpui-kit/Cargo.toml --locked --features demo,native-tests --bench motion_lab
+```
+
+## Keyed collections — 2026-10-19
+
+Core 0.4.0 / Kit 0.5.0. Apple M1 Max, macOS 26.6.2,
+Rust 1.95.0, optimized builds. Portable and native measurements run sequentially,
+with reversed execution order on the second pass and no concurrent builds.
+The desktop remains interactive; these are observations, not latency bounds.
+
+### Portable sampling and memory
+
+The `motions` benchmark compares a `Motions<usize>` batch with directly indexed
+`MotionState`s under identical six-channel springs, retargeting every 24 frames,
+and alternating declaration order. Both paths construct the same declaration
+arrays and return owned frame arrays. Setup is excluded from sampling timings.
+There are 25 batches, each sampling 240,000 objects in total: 30,000 frames for
+8 keys, 3,750 for 64, and 240 for 1,000. Longer small-collection runs avoid
+sub-millisecond timing batches. Each simulated frame advances time by 8,333 µs.
+
+| Keys | Direct median ns/object | Motions median ns/object | Motions time per batch call |
+| --- | ---: | ---: | ---: |
+| 8 | 307.9–318.7 | 307.1–323.9 | 0.0025–0.0026 ms |
+| 64 | 333.4–334.9 | 339.4–339.8 | 0.0217–0.0218 ms |
+| 1,000 | 339.1–340.2 | 347.5–349.1 | 0.3475–0.3491 ms |
+
+These workloads include declaration/result array traffic and are not directly
+comparable to the older `sampling` benchmark. [Full output, including batch P95](docs/performance/2026-10-19-motions.txt).
+
+The benchmark's allocator counter measures live requested bytes during prepared
+collection construction, including the hash table and separately allocated states.
+It excludes allocator bookkeeping, key-owned allocations (keys here are integers),
+UI resources, GPU storage, and process RSS. The portable owner occupies 72 bytes
+on this target; native clock fields are additional.
+
+| Retained keys | Hash table capacity | Collection requested heap | Direct state bytes |
+| --- | ---: | ---: | ---: |
+| 8 | 14 | 12,312 | 11,968 |
+| 64 | 112 | 98,440 | 95,744 |
+| 1,000 | 1,792 | 1,538,824 | 1,496,000 |
+
+An initial inline-table implementation reserved 3,098,632 bytes for 1,000 entries.
+[Exploratory inline-table output](docs/performance/2026-10-19-motions-inline-baseline.txt)
+uses shorter small-collection timing batches; only its memory numbers are used
+for this storage comparison. Keeping each large state behind a `Box` reduced
+requested storage to roughly 1.47 MiB, instead of 2.96 MiB. The tradeoff is one
+allocation for each new key. `with_capacity` reserves only table storage.
+
+The allocation test covers prepared batch/single sampling, spring interruption,
+reordering, removal, retention and clearing: zero allocations inside its measured
+loop. Removal frees the owned state immediately; `clear` frees states while
+retaining table storage. `shrink_to_fit` releases unused table storage. There is
+no fixed animation-count limit or automatic eviction policy.
+
+### Native collection scene
+
+Scene 10 uses the production gallery on each backend's TestPlatform. It combines
+a three-entry panel/title/progress batch with a conditional single-entry notice,
+including interrupted exits and explicit removal. Each run measures five batches
+of 240 frames after 24 warmup frames, advancing the executor at 120 Hz and toggling
+Play every 24 frames. Timings include gallery controls, element construction,
+layout, and paint preparation.
+
+| Backend | Median batch mean, ms/frame | Frame P95, ms |
+| --- | ---: | ---: |
+| CE | 0.365–0.474 | 0.443–1.374 |
+| Kit | 0.692–0.725 | 0.775–0.931 |
+
+[Complete native output](docs/performance/2026-10-19-motions-native.txt).
+TestPlatform substitutes font/display/GPU services. These measurements exclude
+GPU submission/execution and display latency; they do not establish actual FPS.
+
+Shared native fixtures verify identical batch timestamps, position/velocity
+continuity through reordering and interruption, native layout rounded to physical
+pixels, exactly one queued frame callback per active batch, no callbacks after
+settling/omission/reduced motion, and explicit exit cleanup. Production-gallery
+click tests run on both backends and ensure completed notices are not recreated.
+Both macOS apps were also launched: selecting Collection and clicking Play/reverse
+visibly expanded/collapsed the panel and entered/removed the notice. Accessibility
+click automation was inconsistent; screenshot-based coordinate clicks verified
+live behavior. GPU timing and other operating systems remain unprofiled.
+
+Reproduce from the repository root:
+
+```sh
+cargo bench --locked --no-default-features --bench motions
+cargo bench --locked --no-default-features --bench motions -- --reverse
+cargo bench --locked --features demo,native-tests --bench motion_lab
+cargo bench --manifest-path integrations/gpui-kit/Cargo.toml --locked --features demo,native-tests --bench motion_lab
+```
