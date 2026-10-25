@@ -8,7 +8,7 @@ the supported Windows build path; its native Windows/Clang-CL build is still
 experimental, so the Windows shell target is wired but a full native Windows
 Engine build needs that upstream toolchain to work.
 
-Install Git, Rust through [rustup](https://rustup.rs/), and Python 3 with pip. The checkout pins Rust 1.99.0 and installs `rustfmt`, `clippy`, and `rust-src` through `rust-toolchain.toml`.
+Install Git, Rust through [rustup](https://rustup.rs/), and Python 3 with pip. The checkout pins Rust 1.99.0 and installs `rustfmt` and `clippy` through `rust-toolchain.toml`.
 
 Make sure Cargo's bin directory (`~/.cargo/bin` by default) is on `PATH`.
 
@@ -45,14 +45,9 @@ Setup installs or refreshes `photon` in Cargo's bin directory. Make sure `~/.car
 
 The first `photon check` verifies formatting, linting, Rust compilation, and architecture rules. `photon test` runs the workspace tests. On macOS, run `photon build` before `photon run --hot-reload`; the Dioxus hot-reload path reuses Engine and does not build it. On Linux and Windows, `photon run` builds and launches the app directly.
 
-To opt into faster app rebuilds, install the ra-jit source revision documented
-in [Building Photon](Documentation/Building.md), then set
-`PHOTON_USE_RA_JIT=1` for `photon build` or a direct `photon run`. Keep it
-unset for the supported default: a recent macOS ra-jit launch exited with
-`SIGBUS` in this checkout. On macOS, `photon run` uses Dioxus hot reloading by
-default when ra-jit is not enabled; pass `--no-hot-reload` for a plain Cargo
-build. On Linux and Windows, direct runs use plain Cargo unless ra-jit is
-explicitly enabled.
+On macOS, `photon run` uses Dioxus hot reloading by default; pass
+`--no-hot-reload` for a direct Cargo build. Linux and Windows use direct Cargo
+builds.
 
 Continue with [Building Photon](Documentation/Building.md) for build, run, and development commands.
 
