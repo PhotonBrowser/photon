@@ -1,6 +1,6 @@
 # Contributor setup
 
-Photon's primary development platform is macOS. Linux support is experimental: the Rust shell and Engine build paths exist, and Ubuntu 24.04 is exercised by CI, but a full interactive browser run is not currently validated in CI.
+Photon's primary development platform is macOS. Linux support is experimental: Ubuntu 24.04 CI validates workspace checks, CLI smoke commands, and tests in the [latest passing run](https://github.com/PhotonBrowser/photon/actions/runs/40202068735), but a full interactive browser run is not currently validated in CI.
 
 ## macOS
 
@@ -22,7 +22,7 @@ The system dependency option installs Ladybird's Homebrew build packages. Setup 
 
 ## Linux
 
-Ubuntu 24.04 is the configured CI target; other Linux distributions may work if they meet Ladybird's current requirements. The latest CI run failed before Rust checks because its checkout did not contain the vendored `gpui-motion` package; the current revision includes it, but Linux validation is pending a new CI run. Install Rust with rustup, Python 3 with pip, Git, a C++23-capable compiler, CMake 3.30+, Ninja 1.10+, Qt 6.10+ development packages, NASM, and the distribution-specific libraries listed in [Ladybird's Linux build instructions](Engine/Documentation/BuildInstructionsLadybird.md). Some distributions need newer compiler, CMake, or Qt packages than their standard repositories provide.
+Ubuntu 24.04 is the CI-checked distribution; other Linux distributions may work if they meet Ladybird's current requirements. Install Rust with rustup, Python 3 with pip, Git, a C++23-capable compiler, CMake 3.30+, Ninja 1.10+, Qt 6.10+ development packages, NASM, and the distribution-specific libraries listed in [Ladybird's Linux build instructions](Engine/Documentation/BuildInstructionsLadybird.md). Some distributions need newer compiler, CMake, or Qt packages than their standard repositories provide.
 
 ```sh
 git clone --recurse-submodules https://github.com/PhotonBrowser/photon.git
@@ -34,7 +34,7 @@ photon build
 photon run
 ```
 
-Setup does not install Linux packages. `photon check` and `photon test` are included in the Ubuntu CI workflow but are not yet verified on Linux. `photon build` and `photon run` are implemented using the portable Linux Engine and GPUI paths, but need a working graphical session and have not yet been verified as end-to-end runtime paths by CI. `photon run --ui` launches the shell without the Engine and cannot load web pages.
+Setup does not install Linux packages. `photon check` and `photon test` pass in Ubuntu CI. `photon build` and `photon run` are implemented using the portable Linux Engine and GPUI paths, but need a working graphical session and have not yet been verified as end-to-end runtime paths by CI. `photon run --ui` launches the shell without the Engine and cannot load web pages.
 
 ## Recover an existing checkout
 

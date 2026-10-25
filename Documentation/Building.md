@@ -1,14 +1,14 @@
 # Building Photon
 
-Use the `photon` CLI for setup, formatting, linting, building, and running Photon. The repository pins Rust/Cargo 1.99.0, a C++23-capable compiler, CMake 3.30+, Ninja 1.10+, Python 3 with pip, and the native packages required by the pinned Engine. macOS is the primary development platform. Linux is experimental; Ubuntu 24.04 is the configured CI target, but the latest CI run failed before Rust checks because the vendored `gpui-motion` package was absent from its checkout. The current revision vendors that crate; Linux validation of this revision is pending a CI run. A complete graphical browser run is not CI-verified. See [contributor setup](../CONTRIBUTOR_SETUP.md) for platform prerequisites and first checkout.
+Use the `photon` CLI for setup, formatting, linting, building, and running Photon. The repository pins Rust/Cargo 1.99.0, a C++23-capable compiler, CMake 3.30+, Ninja 1.10+, Python 3 with pip, and the native packages required by the pinned Engine. macOS is the primary development platform. Linux is experimental; Ubuntu 24.04 CI validates workspace checks, CLI smoke commands, and tests in the [latest passing run](https://github.com/PhotonBrowser/photon/actions/runs/40202068735). A complete Engine build and graphical browser run are not CI-verified. See [contributor setup](../CONTRIBUTOR_SETUP.md) for platform prerequisites and first checkout.
 
 ## Platform status
 
 | Command | macOS | Linux |
 | --- | --- | --- |
 | `photon setup` | Implemented but unverified | Implemented but unverified; package installation is manual |
-| `photon check` | Verified working in the current macOS checkout | Implemented but unverified; the latest CI run failed before this check because the vendored `gpui-motion` package was absent |
-| `photon test` | Verified working in the current macOS checkout | Implemented but unverified; the latest CI run failed before tests because the vendored `gpui-motion` package was absent |
+| `photon check` | Verified working in the current macOS checkout | Verified working by Ubuntu 24.04 CI |
+| `photon test` | Verified working in the current macOS checkout | Verified working by Ubuntu 24.04 CI |
 | `photon build` | Implemented but unverified; Engine build was not run in this audit | Partially implemented; Linux Engine build path exists, but full Engine build is not verified here or by CI |
 | `photon run` | Implemented but unverified; native run path was not launched in this audit | Partially implemented; portable run path exists, but end-to-end graphical runtime is not CI-verified |
 

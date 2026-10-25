@@ -7,10 +7,10 @@ the Engine embedder API. Platform adapters own window integration and page
 surfaces.
 
 macOS is Photon's primary development platform. Linux support is experimental:
-Ubuntu 24.04 is the CI target, but the current revision has not yet completed
-Linux validation. A complete Engine build and interactive browser run are not
-part of CI. Windows adapters are also present, but native Engine builds remain
-experimental under Ladybird.
+Ubuntu 24.04 CI validates workspace checks and tests, but the current revision
+has not had a complete Engine build or interactive browser run. Windows
+adapters are also present, but native Engine builds remain experimental under
+Ladybird.
 
 ## Workspace map
 
