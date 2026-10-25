@@ -200,7 +200,7 @@ impl TaskManagerWindow {
                 "Memory",
                 self.total_memory_bytes()
                     .map_or_else(|| "—".into(), format_bytes),
-                "Combined process memory",
+                "Sum of all process rows",
                 palette,
             ))
             .child(summary_card(
@@ -326,10 +326,10 @@ impl Render for TaskManagerWindow {
                                     .text_size(px(metrics::INTERNAL_PAGE_SECTION_SIZE))
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(rgb(palette.text_primary))
-                                    .child("Total app usage"),
+                                    .child("Total Engine usage"),
                             )
                             .child(secondary_text(
-                                "Live usage across Photon and every process registered by the Engine.",
+                                "Live memory and activity across every Engine process and tab. Selecting a tab does not filter these totals.",
                                 palette,
                             )),
                     )
