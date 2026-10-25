@@ -25,7 +25,7 @@ packages listed in [contributor setup](CONTRIBUTOR_SETUP.md), then run
 `./photon setup`. Follow the platform-specific build and run guidance there
 before launching Photon.
 
-Setup installs or refreshes the `photon` command in Cargo's bin directory. Make
+Setup installs or refreshes the `photon` command and `ph` alias in Cargo's bin directory. Make
 sure `~/.cargo/bin` is on your `PATH` to use `photon` without the `./` prefix.
 
 ## Develop Photon

@@ -18,7 +18,7 @@ photon build
 photon run
 ```
 
-The system dependency option installs Ladybird's Homebrew build packages. Setup verifies tools, initializes missing pinned submodules, configures their remotes and persistent development branches, prepares formatting tools, and installs the `photon` command in Cargo's bin directory. It does not install Xcode tools, Homebrew, Rust, or Python.
+The system dependency option installs Ladybird's Homebrew build packages. Setup verifies tools, initializes missing pinned submodules, configures their remotes and persistent development branches, prepares formatting tools, and installs the `photon` command and `ph` alias in Cargo's bin directory. It does not install Xcode tools, Homebrew, Rust, or Python.
 
 ## Linux
 
