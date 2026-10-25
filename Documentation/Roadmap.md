@@ -27,10 +27,8 @@ documented in the guides linked from the [README](../README.md).
 
 ## Deferred
 
-A full agent Work environment and Chrome extension compatibility are not planned
-currently. Any future agent workflow should make progress visible and require
-approval for actions that change state. Extension support needs a security
-review and explicit Photon Engine APIs.
+Chrome extension compatibility is not planned currently. Extension support needs
+a security review and explicit Photon Engine APIs.
 
 Engine performance investigations and measurements live in
 [Performance](Performance.md) and [Compositor performance](CompositorPerformance.md).
