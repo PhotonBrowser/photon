@@ -1,21 +1,58 @@
-# Contributing
+# Contributing to Photon
 
-Start with [contributor setup](CONTRIBUTOR_SETUP.md). Use the repository entry point for everyday work:
+Thanks for your interest in Photon! Photon is pre-release software, and contributions of all sizes are welcome for review. Please keep changes focused and be patient with review times.
 
-```bash
-photon format
-photon check
-photon test
-photon build
-photon run
-```
+## Get started
 
-See [Building Photon](Documentation/Building.md) for command details. Keep generated output under `build/` and `target/`.
+1. Read the [contributor setup guide](CONTRIBUTOR_SETUP.md) for platform prerequisites and first checkout.
+2. Follow [Building Photon](Documentation/Building.md) to build, run, and test the project.
+3. Read the [architecture guide](Documentation/Architecture.md) to find the right component.
+4. Check the [roadmap](Documentation/Roadmap.md) and [GitHub issues](https://github.com/PhotonBrowser/photon/issues) before starting work.
 
-The runnable `crates/photon-app` package delegates to `crates/photon-shell`, which owns GPUI-CE and Photon-specific native shell integration. Framework-independent browser state and rules belong in `crates/photon-core`; the native C ABI belongs in `crates/photon-ffi`. Shared GPUI shell colors, measurements, and views live under `crates/photon-shell/src/platform/ui/`; target-specific window controls, system services, and renderers belong under `crates/photon-shell/src/platform/<target>/`. Linux integration belongs under `crates/photon-shell/src/platform/linux/`. Engine behavior belongs in the separate `PhotonBrowser/photon-engine` repository, pinned at `Engine/` as a submodule.
+For a first contribution, look for issues labelled `good first issue` or `help wanted`. If there are none, documentation, tests, and small bug fixes are good places to start. Comment on an issue to discuss an approach before investing in a large change.
 
-`photon format` and `photon check` cover every Rust package in the workspace. Keep crate ownership focused: add a package when it has an independent boundary or a useful consumer outside its current crate.
+## Submit a pull request
 
-`vendor/gpui-ce` is the pinned `PhotonBrowser/gpui-ce` submodule. Keep generic framework changes there and Photon-specific behavior in this repository.
+1. Fork the repository (or create a branch if you have write access) and make a focused change.
+2. Add or update tests and documentation where relevant.
+3. Run the checks that apply to your change:
 
-For Engine or GPUI-CE changes, follow [Upstream maintenance](Documentation/Upstream.md) for dependency branches, remotes, validation, and updating the pinned commit.
+   ```bash
+   photon format
+   photon check
+   photon test
+   photon build
+   ```
+
+   `photon build` can take a while because it builds the Engine. Explain any skipped checks and platform limitations in your PR.
+4. Open a pull request against `main`. Complete the PR template, link the related issue, and include screenshots or recordings for visible UI changes.
+5. Respond to review feedback. Maintainers may request changes or decline proposals that do not fit the project's direction.
+
+**Never disclose security vulnerabilities in public issues or PRs.** See the [security policy](SECURITY.md). Please follow our [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Where changes belong
+
+| Area | Location |
+| --- | --- |
+| Browser UI, tabs, and GPUI views | `crates/photon-shell/src/platform/ui/` |
+| Platform-specific integration | `crates/photon-shell/src/platform/<target>/` |
+| Shared browser rules and state | `crates/photon-core/` |
+| Profile and persistent data | `crates/photon-storage/` |
+| Rust-to-Engine integration | `crates/photon-shell/src/platform/engine/` and `native/embedder/` |
+| Ladybird-based engine and embedder API | [Photon Engine](https://github.com/PhotonBrowser/photon-engine) |
+| Generic GPUI-CE framework changes | [Photon GPUI-CE](https://github.com/PhotonBrowser/gpui-ce) |
+| Generic motion library changes | [Photon gpui-motion](https://github.com/PhotonBrowser/gpui-motion) |
+
+Keep shared UI code platform-neutral, platform-specific behavior in its adapter, and engine implementation behind the embedder boundary. Avoid unrelated refactors in focused PRs.
+
+Photon uses pinned Git submodules. Make changes to Engine, GPUI-CE, or gpui-motion in their own repositories, rather than mixing dependency source changes into a shell PR. Follow [Upstream maintenance](Documentation/Upstream.md) for development branches, upstream syncs, validation, and pin updates. Do not use `git submodule update --remote` to change dependency pins.
+
+## GitHub issues and Linear
+
+**GitHub is the public entry point for external contributors.** Use GitHub issues to report bugs, propose features, and discuss changes; link the GitHub issue in your PR.
+
+Maintainers also use Linear for internal planning and prioritization. Contributors do not need a Linear account. Maintainers can link or synchronize relevant work between the two trackers; do not assume every internal Linear issue is available publicly.
+
+## Before asking for help
+
+Check [Contributor setup](CONTRIBUTOR_SETUP.md), [Building Photon](Documentation/Building.md), and existing GitHub issues. When asking about a build failure, include your OS, tool versions, relevant logs, and commit SHA, with secrets removed.
