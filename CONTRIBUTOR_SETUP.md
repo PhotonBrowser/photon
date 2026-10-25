@@ -27,12 +27,15 @@ git clone https://github.com/PhotonBrowser/photon.git --recurse-submodules
 cd photon
 ```
 
-On macOS, use `./photon setup --install-system-deps` to install build packages with Homebrew. On Linux/WSL2, install the documented packages first, then use `./photon setup`. On native Windows, use the upstream experimental toolchain described above.
+Run setup once for your platform:
 
-Then continue with the setup:
+- **macOS:** `./photon setup --install-system-deps` (installs Homebrew build packages and performs setup).
+- **Linux/WSL2:** Install the documented system packages, then run `./photon setup`.
+- **Native Windows (experimental):** Configure the upstream toolchain described above, then run `./photon setup`.
+
+After setup completes, verify the checkout:
 
 ```bash
-./photon setup
 photon doctor
 photon check
 photon test
