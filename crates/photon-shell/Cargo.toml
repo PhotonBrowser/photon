@@ -61,3 +61,6 @@ libc = "0.2"
 
 [build-dependencies]
 cc = "1"
+
+[dev-dependencies]
+gpui = { package = "gpui-ce", path = "../../vendor/gpui-ce/crates/gpui", default-features = false, features = ["test-support"] }

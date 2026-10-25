@@ -9,6 +9,7 @@ use gpui::{App, BorrowAppContext, Global, Task};
 use photon_core::SearchEngines;
 use photon_core::{ClearBrowsingData, History, HistoryEntry, Suggestions};
 use photon_storage::{DataUsage, Profile, ProfileWriteTicket};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -21,10 +22,17 @@ use crate::platform::app_update::update_app;
 /// saves once.
 const SAVE_DELAY: Duration = Duration::from_secs(2);
 
+struct MostVisitedPages {
+    limit: usize,
+    pages: Vec<HistoryEntry>,
+}
+
 /// Visited pages, past searches and the icons pages showed.
 #[derive(Default)]
 pub(super) struct BrowsingHistory {
     history: History,
+    /// Shared by new tab pages; icon loads do not invalidate page rankings.
+    most_visited: RefCell<Option<MostVisitedPages>>,
     /// Where the history is saved; `None` keeps it in memory only.
     profile: Option<Profile>,
     /// Icons by page address. `None` records that the page has no saved icon.
@@ -82,13 +90,24 @@ impl BrowsingHistory {
 
     /// The pages visited most often, for a new tab page.
     pub(super) fn most_visited(limit: usize, cx: &App) -> Vec<HistoryEntry> {
+        if limit == 0 {
+            return Vec::new();
+        }
         cx.try_global::<Self>().map_or_else(Vec::new, |browsing| {
-            browsing
-                .history
-                .most_visited(limit)
-                .into_iter()
-                .cloned()
-                .collect()
+            let mut cached = browsing.most_visited.borrow_mut();
+            if cached.as_ref().is_some_and(|ranked| ranked.limit < limit) {
+                *cached = None;
+            }
+            let ranked = cached.get_or_insert_with(|| MostVisitedPages {
+                limit,
+                pages: browsing
+                    .history
+                    .most_visited(limit)
+                    .into_iter()
+                    .cloned()
+                    .collect(),
+            });
+            ranked.pages.iter().take(limit).cloned().collect()
         })
     }
 
@@ -105,6 +124,16 @@ impl BrowsingHistory {
     /// The icon `url` showed when last visited, loading it from the profile in
     /// the background the first time it is asked for.
     pub(super) fn favicon(url: &str, cx: &mut App) -> Option<Favicon> {
+        // This is called during rendering. Mutable global access notifies all
+        // history observers, even if its closure does not change anything.
+        if let Some(browsing) = cx.try_global::<Self>() {
+            if let Some(favicon) = browsing.favicons.get(url) {
+                return favicon.clone();
+            }
+            if browsing.favicon_loads.contains_key(url) {
+                return None;
+            }
+        }
         let (cached, request) = Self::update(cx, |browsing, _| {
             if let Some(favicon) = browsing.favicons.get(url) {
                 return (favicon.clone(), None);
@@ -121,12 +150,14 @@ impl BrowsingHistory {
         if let Some((profile, request_id)) = request {
             let url = url.to_owned();
             let read_url = url.clone();
-            let read = cx
-                .background_executor()
-                .spawn(async move { profile.load_favicon(&read_url) });
+            let read = cx.background_executor().spawn(async move {
+                profile
+                    .load_favicon(&read_url)
+                    .and_then(Favicon::from_pixels)
+            });
             let app = cx.to_async();
             app.spawn(async move |cx| {
-                let favicon = read.await.and_then(Favicon::from_pixels);
+                let favicon = read.await;
                 update_app(cx, move |cx| {
                     if !cx.has_global::<Self>() {
                         return;
@@ -174,10 +205,10 @@ impl BrowsingHistory {
             let Some(profile) = browsing.profile.clone() else {
                 return;
             };
-            let (url, pixels) = (url.to_owned(), favicon.pixels().clone());
+            let (url, favicon) = (url.to_owned(), favicon.clone());
             cx.background_executor()
                 .spawn(async move {
-                    if let Err(error) = profile.save_favicon(&url, &pixels) {
+                    if let Err(error) = profile.save_favicon(&url, favicon.pixels()) {
                         trace(format_args!("saving page icon: {error}"));
                     }
                 })
@@ -238,6 +269,9 @@ impl BrowsingHistory {
     fn change(cx: &mut App, change: impl FnOnce(&mut History) -> bool) {
         Self::update(cx, |browsing, cx| {
             let changed = change(&mut browsing.history);
+            if changed {
+                *browsing.most_visited.get_mut() = None;
+            }
             if changed && browsing.profile.is_some() && browsing.save.is_none() {
                 browsing.save = Some(cx.spawn(async move |cx| {
                     cx.background_executor().timer(SAVE_DELAY).await;
@@ -329,6 +363,73 @@ fn now() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::BrowsingHistory;
+    use std::{cell::Cell, rc::Rc};
+
+    #[gpui::test]
+    fn cached_favicon_reads_do_not_invalidate_history_observers(cx: &mut gpui::TestAppContext) {
+        let url = "https://example.com/";
+        cx.update(|cx| {
+            let mut history = BrowsingHistory::default();
+            history.favicons.insert(url.to_owned(), None);
+            cx.set_global(history);
+        });
+        let notifications = Rc::new(Cell::new(0));
+        let observed = notifications.clone();
+        let _subscription = cx.update(|cx| {
+            cx.observe_global::<BrowsingHistory>(move |_| observed.set(observed.get() + 1))
+        });
+
+        for _ in 0..10 {
+            cx.update(|cx| assert!(BrowsingHistory::favicon(url, cx).is_none()));
+        }
+        assert_eq!(
+            notifications.get(),
+            0,
+            "rendering cached icons must stay idle"
+        );
+    }
+
+    #[gpui::test]
+    fn pending_favicon_reads_do_not_invalidate_history_observers(cx: &mut gpui::TestAppContext) {
+        let url = "https://example.com/";
+        cx.update(|cx| {
+            let mut history = BrowsingHistory::default();
+            history.reserve_favicon_load(url);
+            cx.set_global(history);
+        });
+        let notifications = Rc::new(Cell::new(0));
+        let observed = notifications.clone();
+        let _subscription = cx.update(|cx| {
+            cx.observe_global::<BrowsingHistory>(move |_| observed.set(observed.get() + 1))
+        });
+
+        for _ in 0..10 {
+            cx.update(|cx| assert!(BrowsingHistory::favicon(url, cx).is_none()));
+        }
+        assert_eq!(
+            notifications.get(),
+            0,
+            "in-flight icon reads must stay idle"
+        );
+    }
+
+    #[gpui::test]
+    fn most_visited_cache_follows_visits_titles_and_removals(cx: &mut gpui::TestAppContext) {
+        cx.update(|cx| {
+            BrowsingHistory::record_visit("https://a.example/", "A", cx);
+            BrowsingHistory::record_visit("https://b.example/", "B", cx);
+            assert_eq!(BrowsingHistory::most_visited(1, cx).len(), 1);
+            assert_eq!(BrowsingHistory::most_visited(2, cx).len(), 2);
+            BrowsingHistory::record_visit("https://b.example/", "B", cx);
+            assert_eq!(BrowsingHistory::most_visited(1, cx)[0].title, "B");
+            BrowsingHistory::set_title("https://b.example/", "Updated", cx);
+            assert_eq!(BrowsingHistory::most_visited(1, cx)[0].title, "Updated");
+            BrowsingHistory::remove_page("https://b.example/", cx);
+            assert_eq!(BrowsingHistory::most_visited(2, cx)[0].title, "A");
+            assert_eq!(BrowsingHistory::most_visited(2, cx).len(), 1);
+            assert!(BrowsingHistory::most_visited(0, cx).is_empty());
+        });
+    }
 
     #[test]
     fn favicon_loads_coalesce_by_url() {
