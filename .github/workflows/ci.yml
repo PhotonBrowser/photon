@@ -37,10 +37,17 @@ jobs:
             libx11-dev \
             libxkbcommon-dev \
             libxkbcommon-x11-dev \
-            libwayland-dev
+            libwayland-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            libxcb-randr0-dev \
+            libxcb-xinput-dev \
+            libegl1-mesa-dev \
+            libgles2-mesa-dev \
+            libglib2.0-dev
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.99.0
         with:
           components: clippy, rustfmt
 
@@ -49,6 +56,12 @@ jobs:
 
       - name: Check Photon
         run: ./photon check --verbose
+
+      - name: Smoke test CLI
+        run: |
+          ./photon --help
+          ./photon doctor
+          ./photon deps status
 
       - name: Test Photon
         run: ./photon test

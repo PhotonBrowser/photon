@@ -15,12 +15,14 @@
 Install the platform prerequisites in [contributor setup](CONTRIBUTOR_SETUP.md) first.
 
 ```sh
-git clone https://github.com/PhotonBrowser/photon.git
+git clone --recurse-submodules https://github.com/PhotonBrowser/photon.git
 cd photon
-./photon setup --install-system-deps
-photon check
-photon run
 ```
+
+On macOS, run `./photon setup --install-system-deps`; on Linux, install the
+packages listed in [contributor setup](CONTRIBUTOR_SETUP.md), then run
+`./photon setup`. Follow the platform-specific build and run guidance there
+before launching Photon.
 
 Setup installs or refreshes the `photon` command in Cargo's bin directory. Make
 sure `~/.cargo/bin` is on your `PATH` to use `photon` without the `./` prefix.
