@@ -10,14 +10,12 @@ pub(crate) fn install(root: &Path, verbose: bool) -> Result<(), String> {
             "install",
             "--path",
             "crates/photon-cli",
-            "--bin",
-            "photon",
             "--locked",
             "--force",
         ],
         root,
         verbose,
     )?;
-    success("Photon is installed; run `photon` from this checkout");
+    success("Photon is installed; run `photon` or `ph` from this checkout");
     Ok(())
 }
