@@ -42,7 +42,9 @@ pub use sidebar::{
 };
 pub use spaces::{MAX_FAVOURITES, Space, SpaceId, Spaces};
 pub use state::{BrowserCommand, BrowserState, EngineEvent, normalize_url};
-pub use tab_sleep::{MemoryPressure, TabSleepMode, idle_timeout};
+pub use tab_sleep::{
+    MemoryPressure, TabSleepMode, active_idle_timeout, idle_discard_delay, idle_timeout,
+};
 pub use tabs::{ARCHIVE_AFTER, should_archive};
 pub use workspace::{
     ADDRESS_FIELD_COMPONENT_ID, ADDRESS_TOOLBAR_COMPONENT_ID, BACK_BUTTON_COMPONENT_ID,

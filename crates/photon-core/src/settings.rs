@@ -159,7 +159,7 @@ pub struct BrowserSettings {
     pub spaces: Spaces,
     /// Whether unpinned tabs left unused for twelve hours are closed.
     pub archive_tabs: bool,
-    /// How quickly quiet inactive page processes are discarded.
+    /// How quickly quiet pages out of view are discarded.
     pub tab_sleep_mode: TabSleepMode,
     /// Whether the browser reopens its windows and tabs from last time.
     pub restore_session: bool,
@@ -260,7 +260,7 @@ impl Default for BrowserSettings {
             archive_tabs: false,
             tab_sleep_mode: TabSleepMode::default(),
             restore_session: true,
-            engine_idle_timeout_seconds: 300,
+            engine_idle_timeout_seconds: 60,
             elastic_scroll: false,
             animations: AnimationSettings::default(),
         }
@@ -325,6 +325,11 @@ impl BrowserSettings {
 mod tests {
     use super::*;
     use crate::Shortcut;
+
+    #[test]
+    fn keeps_the_shared_engine_warm_for_one_minute_by_default() {
+        assert_eq!(BrowserSettings::default().engine_idle_timeout_seconds, 60);
+    }
 
     #[test]
     fn reset_keeps_saved_sites_only() {
