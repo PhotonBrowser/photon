@@ -750,6 +750,7 @@ impl Render for PickerState {
                     )
             })
             .collect::<Vec<_>>();
+        let panel_radius = metrics::theme_accent_panel_radius();
         let field = self
             .interaction(
                 Control::Field,
@@ -760,7 +761,7 @@ impl Render for PickerState {
             .relative()
             .w_full()
             .aspect_ratio(1.0)
-            .rounded(px(metrics::theme_accent_panel_radius()))
+            .rounded(px(panel_radius))
             .overflow_hidden()
             .child(
                 canvas(
@@ -983,11 +984,14 @@ impl Render for PickerState {
             .max_w(px(metrics::PICKER_WIDTH))
             .p(px(metrics::PICKER_PADDING))
             .gap(px(metrics::PICKER_GAP))
-            .rounded(px(metrics::theme_accent_panel_radius()))
+            .rounded(px(panel_radius))
             .relative()
             .bg(background_palette.window_background())
-            .children(background_palette.gradient_overlay(metrics::theme_accent_panel_radius()))
-            .children((self.noise > 0).then(|| super::background_noise::overlay(self.noise)))
+            .children(background_palette.gradient_overlay(panel_radius))
+            .children(
+                (self.noise > 0)
+                    .then(|| super::background_noise::overlay(self.noise, panel_radius)),
+            )
             .border_1()
             .border_color(rgb(ink).opacity(tokens().track))
             .child(field)

@@ -189,6 +189,6 @@ impl Render for WindowBackdrop {
             .relative()
             .bg(palette.window_background())
             .children(palette.gradient_overlay(0.0))
-            .children((noise > 0).then(|| background_noise::overlay(noise)))
+            .children((noise > 0).then(|| background_noise::overlay(noise, 0.0)))
     }
 }
