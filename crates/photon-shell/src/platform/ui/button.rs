@@ -1,21 +1,23 @@
 //! Text buttons for alerts and dialogs.
 
-use gpui::{Div, ElementId, Role, SharedString, Stateful, prelude::*, px, rgb, rgba};
+use gpui::{App, Div, ElementId, Role, SharedString, Stateful, Window, prelude::*, px, rgb, rgba};
 
 use super::ClickHandler;
+use super::animated_icons::{animated_icon, browser_menu_dots};
 use super::controls::{FocusRing, OwnsClicks};
-use super::icons::more_icon;
 use super::layout::{ControlSurface, h_stack};
 use super::motion::{icon_pressable, pressable};
 use super::{metrics, theme::ThemeColors};
 use gpui_motion::PressScaleElement;
 
+/// Adds the elastic drag to an enabled button. The button keeps its press
+/// scale, which the drag does not change.
 fn jiggle_button(
     button: PressScaleElement<Stateful<Div>>,
     enabled: bool,
 ) -> PressScaleElement<Stateful<Div>> {
     if enabled {
-        button.scale(1.0).jiggle(
+        button.jiggle(
             metrics::BUTTON_JIGGLE_RANGE,
             metrics::BUTTON_JIGGLE_RESISTANCE,
             super::motion::button_jiggle_spring(),
@@ -223,6 +225,8 @@ pub(super) fn menu_button(
     tab_index: isize,
     palette: ThemeColors,
     on_click: ClickHandler,
+    window: &mut Window,
+    cx: &mut App,
 ) -> PressScaleElement<Stateful<Div>> {
     let button = h_stack()
         .id(id)
@@ -239,10 +243,17 @@ pub(super) fn menu_button(
         .active_style(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks();
     jiggle_button(
-        icon_pressable(button).on_click(on_click).child(more_icon(
-            palette.text_secondary,
-            metrics::TOOLBAR_ICON_SIZE,
-        )),
+        icon_pressable(button).on_click(on_click).child(
+            animated_icon(
+                id,
+                browser_menu_dots(),
+                palette.text_secondary,
+                metrics::TOOLBAR_ICON_SIZE,
+                window,
+                cx,
+            )
+            .size_full(),
+        ),
         true,
     )
 }
