@@ -67,7 +67,7 @@ impl Render for BrowserWindow {
             .pr(px(margins.right))
             .pb(px(margins.bottom))
             .pl(px(margins.left))
-            .child(self.active_view(palette))
+            .child(self.active_view(palette, cx))
             // The find bar floats in the page's top-right corner.
             .children(find_bar.map(|(bar, transition)| {
                 div()

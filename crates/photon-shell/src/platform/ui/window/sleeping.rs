@@ -1,4 +1,4 @@
-//! Sleep inactive Engine views and release hidden-page memory under pressure.
+//! Sleep out-of-view Engine views and release hidden-page memory under pressure.
 
 #[cfg(target_os = "macos")]
 use block2::RcBlock;
@@ -29,7 +29,8 @@ use super::registry::BrowserWindowRegistry;
 const VM_PRESSURE_LEVEL_WARNING: libc::c_int = 2;
 #[cfg(target_os = "macos")]
 const VM_PRESSURE_LEVEL_CRITICAL: libc::c_int = 4;
-const MEMORY_PRESSURE_RETRY_INTERVAL: Duration = Duration::from_secs(5);
+const MEMORY_PRESSURE_RETRY_INTERVAL: Duration = Duration::from_secs(1);
+const ACTIVE_IDLE_RECHECK_INTERVAL: Duration = Duration::from_secs(30);
 
 pub(super) type TabSleepWaker = Sender<SleepWake>;
 
@@ -194,7 +195,6 @@ struct PressureCandidate {
     tab_id: u64,
     memory_bytes: u64,
     last_active: Instant,
-    discardable: bool,
 }
 
 impl Global for MemoryPressureCycle {}
@@ -256,13 +256,12 @@ fn relieve_memory_pressure(cx: &mut App) -> Option<Instant> {
             continue;
         };
         candidates.extend(window_candidates.into_iter().filter_map(
-            |(tab_id, memory_bytes, last_active, discardable)| {
+            |(tab_id, memory_bytes, last_active)| {
                 (!cleaned_tabs.contains(&(window_id, tab_id))).then_some(PressureCandidate {
                     window_id,
                     tab_id,
                     memory_bytes,
                     last_active,
-                    discardable,
                 })
             },
         ));
@@ -270,7 +269,6 @@ fn relieve_memory_pressure(cx: &mut App) -> Option<Instant> {
     candidates.sort_by_key(|candidate| {
         (
             std::cmp::Reverse(candidate.memory_bytes),
-            std::cmp::Reverse(pressure.should_discard_hidden_tabs() && candidate.discardable),
             candidate.last_active,
             candidate.window_id,
             candidate.tab_id,
@@ -289,8 +287,13 @@ fn relieve_memory_pressure(cx: &mut App) -> Option<Instant> {
             continue;
         };
         attempted.push((candidate.window_id, candidate.tab_id));
-        let _ = window.update(cx, |browser, _, cx| {
-            browser.release_tab_memory(candidate.tab_id, pressure.should_discard_hidden_tabs(), cx)
+        let _ = window.update(cx, |browser, window, cx| {
+            browser.release_tab_memory(
+                candidate.tab_id,
+                pressure.should_discard_hidden_tabs(),
+                window,
+                cx,
+            )
         });
     }
 
@@ -355,7 +358,20 @@ impl BrowserWindow {
                 };
 
                 match work {
-                    Some(SleepWake::Recheck) => continue,
+                    Some(SleepWake::Recheck) => {
+                        let Some(retry_at) = update_app(cx, |cx| {
+                            if current_memory_pressure(cx) == MemoryPressure::Normal {
+                                None
+                            } else {
+                                relieve_memory_pressure(cx)
+                            }
+                        })
+                        .await
+                        else {
+                            break;
+                        };
+                        next_pressure_retry = retry_at;
+                    }
                     #[cfg(target_os = "macos")]
                     Some(SleepWake::MemoryPressure) => {
                         let Some(retry_at) = update_app(cx, relieve_memory_pressure).await else {
@@ -398,13 +414,14 @@ impl BrowserWindow {
     }
 
     fn next_sleep_check_delay(&self, cx: &gpui::App) -> Option<Duration> {
-        let timeout = photon_core::idle_timeout(Settings::get(cx).tab_sleep_mode)?;
+        let mode = Settings::get(cx).tab_sleep_mode;
+        photon_core::idle_timeout(mode)?;
         let now = Instant::now();
+        let system_idle = crate::platform::system_idle_duration();
         self.tabs
             .iter()
             .enumerate()
-            .filter(|(index, _)| self.is_sleep_candidate(*index))
-            .filter_map(|(_, tab)| {
+            .filter_map(|(index, tab)| {
                 let TabContent::Web(webview) = &tab.content else {
                     return None;
                 };
@@ -414,19 +431,32 @@ impl BrowserWindow {
                     && !view.audio_playing
                     && !view.page_unresponsive
                     && !view.session.needs_beforeunload_check()
-                    && !view.state.can_go_back
-                    && !view.state.can_go_forward
                     && view.dialogs.open().is_none();
-                safe_to_sleep.then(|| (tab.last_active + timeout).saturating_duration_since(now))
+                if !safe_to_sleep {
+                    return None;
+                }
+                let delay = photon_core::idle_discard_delay(
+                    mode,
+                    self.is_active_visible_tab(index),
+                    now.saturating_duration_since(tab.last_active),
+                    system_idle,
+                )?;
+                Some(if self.is_active_visible_tab(index) {
+                    delay.min(ACTIVE_IDLE_RECHECK_INTERVAL)
+                } else {
+                    delay
+                })
             })
             .min()
     }
 
-    pub(super) fn sleep_idle_tabs(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn sleep_idle_tabs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let mode = Settings::get(cx).tab_sleep_mode;
-        let Some(timeout) = photon_core::idle_timeout(mode) else {
+        if photon_core::idle_timeout(mode).is_none() {
             return;
-        };
+        }
+        let now = Instant::now();
+        let system_idle = crate::platform::system_idle_duration();
 
         let mut changed = 0;
         for index in (0..self.tabs.len()).rev() {
@@ -434,28 +464,33 @@ impl BrowserWindow {
             if !matches!(&tab.content, TabContent::Web(_)) {
                 continue;
             }
-            let candidate = self.is_sleep_candidate(index);
-            if !candidate || tab.last_active.elapsed() < timeout {
+            if photon_core::idle_discard_delay(
+                mode,
+                self.is_active_visible_tab(index),
+                now.saturating_duration_since(tab.last_active),
+                system_idle,
+            ) != Some(Duration::ZERO)
+            {
                 continue;
             }
-            if self.discard_tab(index, cx) {
+            if self.discard_tab(index, window, cx) {
                 changed += 1;
             }
         }
         if changed > 0 {
             trace(format_args!(
-                "discarded {changed} inactive page(s) in the sleep policy"
+                "discarded {changed} idle page(s) in the sleep policy"
             ));
             cx.notify();
         }
     }
 
-    fn pressure_candidates(&self, cx: &App) -> Vec<(u64, u64, Instant, bool)> {
+    fn pressure_candidates(&self, cx: &App) -> Vec<(u64, u64, Instant)> {
         self.tabs
             .iter()
             .enumerate()
             .filter(|(index, _)| self.is_pressure_candidate(*index))
-            .filter_map(|(index, tab)| {
+            .filter_map(|(_, tab)| {
                 let webview = tab.content.webview()?;
                 let view = webview.read(cx);
                 let safe = view.has_page()
@@ -472,9 +507,6 @@ impl BrowserWindow {
                             .or(view.diagnostics.managed_heap_bytes)
                             .unwrap_or_default(),
                         tab.last_active,
-                        self.is_sleep_candidate(index)
-                            && !view.state.can_go_back
-                            && !view.state.can_go_forward,
                     )
                 })
             })
@@ -485,6 +517,7 @@ impl BrowserWindow {
         &mut self,
         id: u64,
         discard_if_safe: bool,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
         let Some(index) = self.tabs.iter().position(|tab| tab.id == id) else {
@@ -493,7 +526,8 @@ impl BrowserWindow {
         if !self.is_pressure_candidate(index) {
             return false;
         }
-        if discard_if_safe && self.is_sleep_candidate(index) && self.discard_tab(index, cx) {
+        if discard_if_safe && self.is_sleep_candidate(index) && self.discard_tab(index, window, cx)
+        {
             cx.notify();
             return true;
         }
@@ -514,18 +548,17 @@ impl BrowserWindow {
         })
     }
 
-    fn discard_tab(&mut self, index: usize, cx: &mut Context<Self>) -> bool {
+    fn discard_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let Some(webview) = self.tabs.get(index).and_then(|tab| tab.content.webview()) else {
             return false;
         };
+        let had_focus = webview.read(cx).focus_handle.is_focused(window);
         let snapshot = webview.update(cx, |view, _| {
             if !view.has_page()
                 || view.state.loading
                 || view.audio_playing
                 || view.page_unresponsive
                 || view.session.needs_beforeunload_check()
-                || view.state.can_go_back
-                || view.state.can_go_forward
                 || view.dialogs.open().is_some()
             {
                 return None;
@@ -540,13 +573,20 @@ impl BrowserWindow {
         let Some(snapshot) = snapshot else {
             return false;
         };
+        if had_focus {
+            window.focus(&self.root_focus, cx);
+        }
         self.tabs[index].content = TabContent::Sleeping(snapshot);
         self.tab_subscriptions[index] = None;
         true
     }
 
+    fn is_active_visible_tab(&self, index: usize) -> bool {
+        self.window_visible && self.active_tab == Some(index)
+    }
+
     fn is_sleep_candidate(&self, index: usize) -> bool {
-        self.active_tab != Some(index)
+        !self.window_visible || self.active_tab != Some(index)
     }
 
     fn is_pressure_candidate(&self, index: usize) -> bool {

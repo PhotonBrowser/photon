@@ -1,7 +1,7 @@
 //! What a tab shows — a web page in the Engine or one of Photon's own pages —
 //! and how the window follows each.
 
-use gpui::{AnyElement, App, Context, Entity, Subscription, Window, div, prelude::*};
+use gpui::{AnyElement, App, Context, Entity, Subscription, Window, div, prelude::*, px};
 use photon_core::{BrowserCommand, BrowserState, Shortcut, SpaceId};
 use std::rc::Rc;
 use std::time::Instant;
@@ -11,8 +11,13 @@ use super::super::super::trace;
 use super::super::Favicon;
 use super::super::pages::{InternalPage, NEW_TAB, PageDefinition, PageEvent, find_page};
 use super::super::settings::Settings;
-use super::super::theme::ThemeColors;
 use super::super::{PhotonWebView, WebViewEvent};
+use super::super::{
+    button::{ButtonKind, ButtonSize, button},
+    layout::{secondary_text, v_stack},
+    metrics,
+    theme::ThemeColors,
+};
 use super::BrowserWindow;
 
 /// What a tab shows.
@@ -92,17 +97,40 @@ impl BrowserWindow {
     }
 
     /// The active tab's page or web view, or the New Tab page when empty.
-    pub(super) fn active_view(&self, palette: ThemeColors) -> AnyElement {
-        self.active_tab
-            .and_then(|index| self.tabs.get(index))
-            .map_or_else(
-                || {
-                    self.empty_page
-                        .as_ref()
-                        .map_or_else(|| div().into_any_element(), |page| page.view(palette))
-                },
-                |tab| tab.content.view(palette),
-            )
+    pub(super) fn active_view(&self, palette: ThemeColors, cx: &mut Context<Self>) -> AnyElement {
+        let Some(index) = self.active_tab else {
+            return self
+                .empty_page
+                .as_ref()
+                .map_or_else(|| div().into_any_element(), |page| page.view(palette));
+        };
+        let Some(tab) = self.tabs.get(index) else {
+            return div().into_any_element();
+        };
+        match &tab.content {
+            TabContent::Sleeping(_) => v_stack()
+                .size_full()
+                .items_center()
+                .justify_center()
+                .gap(px(metrics::INTERNAL_PAGE_SECTION_GAP))
+                .child(secondary_text(
+                    "This page was put to sleep to free memory. Reloading restores its URL; unsaved state and in-page history are lost.",
+                    palette,
+                ).max_w(px(metrics::INTERNAL_PAGE_MAX_WIDTH)).text_center())
+                .child(button(
+                    "sleeping-page-reload",
+                    "Reload page",
+                    ButtonKind::Primary,
+                    true,
+                    ButtonSize::Regular,
+                    palette,
+                    Box::new(cx.listener(move |this, _, window, cx| {
+                        this.activate_tab(index, true, window, cx);
+                    })),
+                ))
+                .into_any_element(),
+            content => content.view(palette),
+        }
     }
 
     pub(super) fn new_page(&self, page: &'static PageDefinition, cx: &mut App) -> TabContent {

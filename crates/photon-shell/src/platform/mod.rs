@@ -32,6 +32,16 @@ pub(crate) mod window_config;
 #[cfg(target_os = "windows")]
 mod windows;
 
+#[cfg(target_os = "macos")]
+pub(crate) fn system_idle_duration() -> Option<std::time::Duration> {
+    macos::idle::duration()
+}
+
+#[cfg(not(target_os = "macos"))]
+pub(crate) fn system_idle_duration() -> Option<std::time::Duration> {
+    None
+}
+
 #[cfg(target_os = "linux")]
 #[allow(unused_imports)]
 pub(crate) use linux::{

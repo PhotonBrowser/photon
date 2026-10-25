@@ -105,7 +105,7 @@ pub(in crate::platform) struct BrowserWindow {
     _archive_task: Task<()>,
     /// Wakes the deadline scheduler when settings or tabs change.
     tab_sleep_waker: sleeping::TabSleepWaker,
-    /// Sleeps inactive pages and checks for system memory pressure.
+    /// Sleeps out-of-view pages and checks for system memory pressure.
     _tab_sleep_task: Task<()>,
     _memory_pressure_monitor: sleeping::MemoryPressureMonitor,
     tab_sleep_mode: TabSleepMode,
@@ -360,7 +360,13 @@ impl BrowserWindow {
         cx.notify();
     }
 
-    fn window_changed(&mut self, visible: bool, display_changed: bool, cx: &mut Context<Self>) {
+    fn window_changed(
+        &mut self,
+        visible: bool,
+        display_changed: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         trace(format_args!(
             "window visible={visible} display-changed={display_changed}"
         ));
@@ -371,8 +377,15 @@ impl BrowserWindow {
         ));
         if self.window_visible != visible {
             self.window_visible = visible;
-            if let Some(webview) = self.active_webview() {
-                webview.update(cx, |view, _| view.session.set_visible(visible));
+            if visible {
+                if let Some(active_tab) = self.active_tab {
+                    self.activate_tab(active_tab, false, window, cx);
+                }
+            } else if let Some(webview) = self.active_webview() {
+                webview.update(cx, |view, _| view.session.set_visible(false));
+                self.wake_tab_sleep_scheduler();
+            } else {
+                self.wake_tab_sleep_scheduler();
             }
         }
         if display_changed {
@@ -466,7 +479,15 @@ fn open_browser_window(
             let appearance_subscription =
                 cx.observe_window_appearance(window, |_, _, cx| cx.notify());
             let activation_subscription =
-                cx.observe_window_activation(window, |_, _, cx| cx.notify());
+                cx.observe_window_activation(window, |this: &mut BrowserWindow, window, cx| {
+                    if window.is_window_active()
+                        && let Some(active_tab) = this.active_tab
+                    {
+                        this.activate_tab(active_tab, false, window, cx);
+                    } else {
+                        cx.notify();
+                    }
+                });
             // Follow settings changed here, in a settings page, or in another
             // window, including the space shown.
             let settings_subscription =
@@ -500,14 +521,16 @@ fn open_browser_window(
             );
             let this = cx.entity().downgrade();
             let app = cx.to_async();
+            let window_handle = window.window_handle();
             let window_observer = WindowObserver::new(window, move |visible, display_changed| {
                 let this = this.clone();
                 app.spawn(async move |cx| {
                     update_app(cx, |cx| {
-                        this.update(cx, |this: &mut BrowserWindow, cx| {
-                            this.window_changed(visible, display_changed, cx)
-                        })
-                        .ok();
+                        let _ = window_handle.update(cx, |_, window, cx| {
+                            let _ = this.update(cx, |this: &mut BrowserWindow, cx| {
+                                this.window_changed(visible, display_changed, window, cx)
+                            });
+                        });
                     })
                     .await;
                 })

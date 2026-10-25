@@ -69,11 +69,7 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
                 palette,
             )
             .into_any_element(),
-            match sleep_mode {
-                TabSleepMode::Off => "Keep inactive pages loaded unless system memory pressure requires a discard. Discarded pages reload when selected.".into(),
-                TabSleepMode::Balanced => "After one minute in another tab, discard its page process. Selecting it reloads the URL; unsaved page state and in-page history are lost.".into(),
-                TabSleepMode::Maximum => "After five seconds in another tab, discard its page process. Selecting it reloads the URL; unsaved page state and in-page history are lost.".into(),
-            },
+            sleep_description(sleep_mode).into(),
             group_with_choices(palette),
         ))
         .child(setting(
@@ -106,4 +102,35 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
             .into(),
             group(palette),
         ))
+}
+
+fn sleep_description(mode: TabSleepMode) -> &'static str {
+    #[cfg(target_os = "macos")]
+    {
+        match mode {
+            TabSleepMode::Off => {
+                "Keep pages loaded unless system memory pressure requires a discard. Selecting a discarded page reloads its URL; unsaved page state and in-page history are lost."
+            }
+            TabSleepMode::Balanced => {
+                "After thirty seconds out of view or about five minutes without input, discard its page process. Selecting it reloads the URL; unsaved page state and in-page history are lost."
+            }
+            TabSleepMode::Maximum => {
+                "After five seconds out of view or about one minute without input, discard its page process. Selecting it reloads the URL; unsaved page state and in-page history are lost."
+            }
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        match mode {
+            TabSleepMode::Off => {
+                "Keep pages loaded unless system memory pressure requires a discard. Selecting a discarded page reloads its URL; unsaved page state and in-page history are lost."
+            }
+            TabSleepMode::Balanced => {
+                "After thirty seconds out of view, discard its page process. Selecting it reloads the URL; unsaved page state and in-page history are lost."
+            }
+            TabSleepMode::Maximum => {
+                "After five seconds out of view, discard its page process. Selecting it reloads the URL; unsaved page state and in-page history are lost."
+            }
+        }
+    }
 }

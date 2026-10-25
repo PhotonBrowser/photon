@@ -4,6 +4,7 @@ pub(crate) mod app_menus;
 pub(crate) mod appkit;
 pub(crate) mod default_browser;
 pub(crate) mod display;
+pub(crate) mod idle;
 pub(crate) mod motion_observer;
 pub(crate) mod presentation;
 pub(crate) mod renderer;
