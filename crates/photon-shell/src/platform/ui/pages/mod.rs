@@ -18,7 +18,10 @@ mod performance;
 mod registry;
 mod settings;
 
-use gpui::{AnyElement, AnyView, App, AppContext, Entity, EventEmitter, prelude::*, px, rgba};
+use gpui::{
+    AnyElement, AnyView, App, AppContext, Entity, EventEmitter, StyleRefinement, prelude::*, px,
+    rgba,
+};
 use photon_core::{BrowserSettings, internal_page_url};
 use std::rc::Rc;
 
@@ -107,7 +110,11 @@ impl InternalPage {
             .rounded(px(metrics::page_radius()))
             .rounded_smoothing(metrics::page_smoothing())
             .bg(rgba(palette.surface))
-            .child(self.view.clone())
+            .child(
+                self.view
+                    .clone()
+                    .cached(StyleRefinement::default().size_full()),
+            )
             .into_any_element()
     }
 }
