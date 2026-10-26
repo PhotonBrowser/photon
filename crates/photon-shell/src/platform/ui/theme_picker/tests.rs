@@ -17,7 +17,7 @@ fn field_drag_previews_live_and_commits_only_on_release(cx: &mut gpui::TestAppCo
         PickerState::new(
             WindowColor::Blue,
             SpaceColors::from_colors(&[theme::preset_tint(WindowColor::Blue)]),
-            Rc::new(move |_, _, _| on_commit.set(on_commit.get() + 1)),
+            Rc::new(move |_, _, _, _, _| on_commit.set(on_commit.get() + 1)),
             cx,
         )
     });
@@ -84,7 +84,7 @@ fn pointer_samples_coalesce_per_frame_without_browser_settings_notifications(
         PickerState::new(
             WindowColor::Blue,
             SpaceColors::from_colors(&[theme::preset_tint(WindowColor::Blue)]),
-            Rc::new(|_, _, _| {}),
+            Rc::new(|_, _, _, _, _| {}),
             cx,
         )
     });
@@ -124,7 +124,7 @@ fn intensity_changes_alpha_in_realtime_without_whitening_the_colour(cx: &mut gpu
         PickerState::new(
             WindowColor::Blue,
             SpaceColors::from_colors(&[SpaceTint::default()]),
-            Rc::new(|_, _, _| {}),
+            Rc::new(|_, _, _, _, _| {}),
             cx,
         )
     });
@@ -215,7 +215,7 @@ fn add_and_remove_buttons_edit_the_gradient_and_allow_zero_colours(cx: &mut gpui
         PickerState::new(
             WindowColor::Blue,
             SpaceColors::from_colors(&[SpaceTint::default()]),
-            Rc::new(|color, colors, cx| {
+            Rc::new(|color, colors, _, _, cx| {
                 Settings::update(cx, |settings| {
                     let id = settings.spaces.active().id;
                     let space = settings.spaces.get_mut(id).unwrap();
@@ -433,7 +433,13 @@ fn gradient_colours_round_trip_the_profile_toml() {
     assert_eq!(restored.spaces.active().colors, Some(colors));
 }
 
-fn save_colors(color: WindowColor, colors: SpaceColors, cx: &mut App) {
+fn save_colors(
+    color: WindowColor,
+    colors: SpaceColors,
+    _transparency: Option<u8>,
+    _noise: Option<u8>,
+    cx: &mut App,
+) {
     Settings::update(cx, |settings| {
         let id = settings.spaces.active().id;
         let space = settings.spaces.get_mut(id).unwrap();
@@ -601,7 +607,7 @@ fn selecting_a_preset_uses_the_swatch_colour(cx: &mut gpui::TestAppContext) {
         PickerState::new(
             WindowColor::Blue,
             SpaceColors::from_colors(&[SpaceTint::default()]),
-            Rc::new(|_, _, _| {}),
+            Rc::new(|_, _, _, _, _| {}),
             cx,
         )
     });
@@ -817,7 +823,7 @@ fn picker_icon_buttons_share_the_same_size(cx: &mut gpui::TestAppContext) {
         PickerState::new(
             WindowColor::Blue,
             SpaceColors::from_colors(&[SpaceTint::default()]),
-            Rc::new(|_, _, _| {}),
+            Rc::new(|_, _, _, _, _| {}),
             cx,
         )
     });
@@ -856,7 +862,7 @@ fn intensity_thumb_tracks_between_whole_percentage_steps(cx: &mut gpui::TestAppC
         PickerState::new(
             WindowColor::Blue,
             SpaceColors::from_colors(&[SpaceTint::default()]),
-            Rc::new(|_, _, _| {}),
+            Rc::new(|_, _, _, _, _| {}),
             cx,
         )
     });

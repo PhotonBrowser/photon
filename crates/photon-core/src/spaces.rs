@@ -37,11 +37,26 @@ pub const MAX_SPACE_COLORS: usize = 3;
 
 /// A bounded palette, shared by profile storage and the native theme picker.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
-#[serde(default)]
+#[serde(from = "RawSpaceColors")]
 pub struct SpaceColors {
     colors: [SpaceTint; MAX_SPACE_COLORS],
     count: u8,
     primary: u8,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct RawSpaceColors {
+    colors: [SpaceTint; MAX_SPACE_COLORS],
+    count: u8,
+    primary: u8,
+}
+
+impl From<RawSpaceColors> for SpaceColors {
+    fn from(raw: RawSpaceColors) -> Self {
+        let count = usize::from(raw.count).min(MAX_SPACE_COLORS);
+        Self::from_colors(&raw.colors[..count]).with_primary(usize::from(raw.primary))
+    }
 }
 
 impl Default for SpaceColors {

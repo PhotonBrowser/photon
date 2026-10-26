@@ -244,14 +244,18 @@ impl BrowserWindow {
             name,
             color,
             colors,
+            transparency,
+            noise,
             preset_id,
             new_preset,
         } = event
         {
-            let (name, color, colors, preset_id, new_preset) = (
+            let (name, color, colors, transparency, noise, preset_id, new_preset) = (
                 name.clone(),
                 *color,
                 *colors,
+                *transparency,
+                *noise,
                 preset_id.clone(),
                 new_preset.clone(),
             );
@@ -297,6 +301,24 @@ impl BrowserWindow {
                 };
                 if let Some(space) = settings.spaces.get_mut(space_id) {
                     space.set_colors(colors);
+                }
+                if let Some(transparency) = transparency {
+                    let active_has_colors =
+                        !super::super::theme::space_colors(settings.spaces.active())
+                            .colors()
+                            .is_empty();
+                    if !active_has_colors
+                        || transparency
+                            == super::super::appearance_preview::AppearancePreview::subtle_transparency()
+                    {
+                        settings.transparency = photon_core::Transparency::Subtle;
+                        settings.transparency_percent = None;
+                    } else {
+                        settings.transparency_percent = Some(transparency);
+                    }
+                }
+                if let Some(noise) = noise {
+                    settings.background_noise_intensity = noise;
                 }
                 if let Some(preset_id) = preset_id {
                     settings.spaces.set_preset_override(space_id, &preset_id);

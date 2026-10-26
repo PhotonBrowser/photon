@@ -46,10 +46,16 @@ impl AppearancePreview {
             .round() as u8
     }
     pub fn transparency(cx: &App) -> u8 {
-        if !Self::has_colors(cx) {
-            return Self::subtle_transparency();
-        }
         let settings = Settings::get(cx);
+        if !Self::has_colors(cx) {
+            return ((1.0
+                - crate::platform::theme_config::theme()
+                    .transparency
+                    .for_setting(settings.transparency)
+                    .window)
+                * 100.0)
+                .round() as u8;
+        }
         Self::get(cx)
             .transparency
             .or(settings.transparency_percent)

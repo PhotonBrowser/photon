@@ -44,7 +44,7 @@ fn picker_control(ink: u32) -> gpui::Div {
         .hover_style(|style| style.bg(rgb(ink).opacity(tokens().control_hover)))
 }
 
-pub(super) type TintChange = Rc<dyn Fn(WindowColor, SpaceColors, &mut App)>;
+pub(super) type TintChange = Rc<dyn Fn(WindowColor, SpaceColors, Option<u8>, Option<u8>, &mut App)>;
 
 #[derive(Clone, Copy, PartialEq)]
 enum Control {
@@ -58,6 +58,7 @@ pub(super) struct ThemePicker {
     id: ElementId,
     color: WindowColor,
     colors: SpaceColors,
+    space: Option<photon_core::SpaceId>,
     on_change: TintChange,
 }
 
@@ -65,12 +66,14 @@ pub(super) fn theme_picker(
     id: impl Into<ElementId>,
     color: WindowColor,
     colors: SpaceColors,
+    space: Option<photon_core::SpaceId>,
     on_change: TintChange,
 ) -> ThemePicker {
     ThemePicker {
         id: id.into(),
         color,
         colors,
+        space,
         on_change,
     }
 }
@@ -82,7 +85,13 @@ impl RenderOnce for ThemePicker {
             window.with_element_state(id, |state: Option<Entity<PickerState>>, _| {
                 let state = state.unwrap_or_else(|| {
                     cx.new(|cx| {
-                        PickerState::new(self.color, self.colors, self.on_change.clone(), cx)
+                        PickerState::new_for_space(
+                            self.color,
+                            self.colors,
+                            self.space,
+                            self.on_change.clone(),
+                            cx,
+                        )
                     })
                 });
                 (state.clone(), state)
@@ -90,6 +99,7 @@ impl RenderOnce for ThemePicker {
         });
         state.update(cx, |state, cx| {
             state.on_change = self.on_change;
+            state.space = self.space;
             if state.dragging.is_none() && !state.frame_pending {
                 if state.color != self.color || state.colors() != self.colors {
                     state.color = self.color;
@@ -128,7 +138,7 @@ struct PickerState {
     next_id: u64,
     grab: (f32, f32),
     drag_palette: Option<PaletteDrag>,
-    space: photon_core::SpaceId,
+    space: Option<photon_core::SpaceId>,
     noise: u8,
     transparency: u8,
     intensity_position: f32,
@@ -144,9 +154,21 @@ struct PickerState {
 }
 
 impl PickerState {
+    #[cfg(test)]
     fn new(
         color: WindowColor,
         colors: SpaceColors,
+        on_change: TintChange,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let space = Some(Settings::get(cx).spaces.active().id);
+        Self::new_for_space(color, colors, space, on_change, cx)
+    }
+
+    fn new_for_space(
+        color: WindowColor,
+        colors: SpaceColors,
+        space: Option<photon_core::SpaceId>,
         on_change: TintChange,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -167,7 +189,7 @@ impl PickerState {
             next_id: colors.colors().len() as u64,
             grab: (0.0, 0.0),
             drag_palette: None,
-            space: Settings::get(cx).spaces.active().id,
+            space,
             noise: Settings::get(cx).background_noise_intensity,
             transparency: AppearancePreview::transparency(cx),
             intensity_position: f32::from(100 - AppearancePreview::transparency(cx)) / 100.0,
@@ -193,27 +215,17 @@ impl PickerState {
     }
     fn flush(&mut self, cx: &mut Context<Self>) {
         self.frame_pending = false;
-        if std::mem::take(&mut self.dirty_tint) {
-            (self.on_change)(self.color, self.colors(), cx);
-        }
+        let tint = std::mem::take(&mut self.dirty_tint);
         let transparency = std::mem::take(&mut self.dirty_transparency);
         let noise = std::mem::take(&mut self.dirty_noise);
-        if transparency || noise {
-            Settings::update(cx, |settings| {
-                if transparency {
-                    if self.colors().colors().is_empty()
-                        || self.transparency == AppearancePreview::subtle_transparency()
-                    {
-                        settings.transparency = photon_core::Transparency::Subtle;
-                        settings.transparency_percent = None;
-                    } else {
-                        settings.transparency_percent = Some(self.transparency);
-                    }
-                }
-                if noise {
-                    settings.background_noise_intensity = self.noise;
-                }
-            });
+        if tint || transparency || noise {
+            (self.on_change)(
+                self.color,
+                self.colors(),
+                transparency.then_some(self.transparency),
+                noise.then_some(self.noise),
+                cx,
+            );
         }
         AppearancePreview::clear(cx.entity_id(), cx);
     }
@@ -223,9 +235,13 @@ impl PickerState {
         }
         AppearancePreview {
             owner: Some(cx.entity_id()),
-            tint: self
-                .dirty_tint
-                .then_some((self.space, self.color, self.colors())),
+            tint: self.space.and_then(|space| {
+                (self.dirty_tint && space == Settings::get(cx).spaces.active().id).then_some((
+                    space,
+                    self.color,
+                    self.colors(),
+                ))
+            }),
             transparency: self.dirty_transparency.then_some(self.transparency),
             noise: self.dirty_noise.then_some(self.noise),
         }
