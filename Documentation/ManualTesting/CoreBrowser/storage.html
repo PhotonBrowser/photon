@@ -1,0 +1,18 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Storage Test</title><style>:root{color-scheme:light dark;font:16px/1.55 system-ui,sans-serif}body{max-width:850px;margin:2rem auto;padding:0 1rem}section{border:1px solid #8886;border-radius:.7rem;padding:1rem;margin:1rem 0}button{font:inherit;padding:.4rem}.result{white-space:pre-wrap;overflow-wrap:anywhere}</style></head><body><p><a href="index.html">← Suite index</a></p><h1>Cookies and storage</h1><p>Set values, reload, close/reopen the tab, then restart the browser. Compare what persists. Local file storage support varies; serve this folder from localhost if needed.</p>
+<section><h2>localStorage</h2><button id="set">Set test value</button> <button id="read">Read</button> <button id="clear">Clear test value</button><p class="result" id="local"></p></section>
+<section><h2>sessionStorage</h2><button id="sess-set">Set session value</button> <button id="sess-read">Read</button><p class="result" id="session"></p></section>
+<section><h2>Cookies</h2><button id="cookie-set">Set cookie</button> <button id="cookie-read">Read</button><p class="result" id="cookie"></p><p>Check cookie persistence after reload and browser restart. This basic page cannot test Secure/SameSite cross-site policies without HTTPS.</p></section>
+<section><h2>IndexedDB</h2><button id="db-write">Write record</button> <button id="db-read">Read record</button><p class="result" id="db"></p></section>
+<script>
+const show=(id,v)=>document.getElementById(id).textContent=v;
+document.getElementById('set').onclick=()=>{try{localStorage.setItem('photon-test','saved-'+new Date().toISOString());show('local','Saved. Reload and press Read.')}catch(e){show('local','ERROR: '+e)}};
+document.getElementById('read').onclick=()=>{try{show('local',localStorage.getItem('photon-test')||'No value found')}catch(e){show('local','ERROR: '+e)}};
+document.getElementById('clear').onclick=()=>{try{localStorage.removeItem('photon-test');show('local','Cleared')}catch(e){show('local','ERROR: '+e)}};
+document.getElementById('sess-set').onclick=()=>{try{sessionStorage.setItem('photon-session','session-'+Date.now());show('session','Saved for this tab. Reload, then open a duplicate/new tab and read.')}catch(e){show('session','ERROR: '+e)}};
+document.getElementById('sess-read').onclick=()=>{try{show('session',sessionStorage.getItem('photon-session')||'No value found')}catch(e){show('session','ERROR: '+e)}};
+document.getElementById('cookie-set').onclick=()=>{document.cookie='photon_test=stored; max-age=604800; path=/; SameSite=Lax';show('cookie','Cookie set; reload and read.')};
+document.getElementById('cookie-read').onclick=()=>show('cookie',document.cookie||'No cookies visible');
+const openDB=()=>new Promise((resolve,reject)=>{const r=indexedDB.open('photon-test-db',1);r.onupgradeneeded=()=>r.result.createObjectStore('checks',{keyPath:'id'});r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)});
+document.getElementById('db-write').onclick=async()=>{try{const db=await openDB(),tx=db.transaction('checks','readwrite');tx.objectStore('checks').put({id:'record',value:'saved-'+Date.now()});tx.oncomplete=()=>show('db','Record saved. Reload and read.');tx.onerror=()=>show('db','ERROR: '+tx.error)}catch(e){show('db','ERROR: '+e)}};
+document.getElementById('db-read').onclick=async()=>{try{const db=await openDB(),r=db.transaction('checks').objectStore('checks').get('record');r.onsuccess=()=>show('db',JSON.stringify(r.result||'No record found'));r.onerror=()=>show('db','ERROR: '+r.error)}catch(e){show('db','ERROR: '+e)}};
+</script></body></html>

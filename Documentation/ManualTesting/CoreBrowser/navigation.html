@@ -1,0 +1,15 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Navigation Test</title><style>:root{color-scheme:light dark;font:16px/1.55 system-ui,sans-serif}body{max-width:850px;margin:2rem auto;padding:0 1rem}section{border:1px solid #8886;border-radius:.7rem;padding:1rem;margin:1rem 0}a,button{margin:.3rem}#log{white-space:pre-wrap;max-height:14rem;overflow:auto}html{scroll-behavior:smooth}</style></head><body>
+<p><a href="index.html">← Suite index</a></p><h1>Navigation and history</h1><p>Use Photon toolbar/shortcuts for browser navigation tests; the buttons below exercise page navigation and History API.</p>
+<section><h2>Links and targets</h2><p><a href="input-forms.html">Same tab link</a> · <a href="rendering.html" target="_blank">New tab/window target</a> · <a href="#lower">Jump to lower anchor</a> · <a href="https://example.com/" rel="noreferrer">External HTTPS link (network required)</a></p></section>
+<section><h2>History API</h2><button id="push">Push history entry</button><button id="replace">Replace current entry</button><button id="state">Show location and state</button><p id="stateout"></p><p>After pushing entries, use browser Back and Forward, then reload. Check whether URL, page state, and scroll restoration are sensible.</p></section>
+<section><h2>Reload and loading</h2><button onclick="location.reload()">Reload this page</button><button id="slow">Start 8-second navigation</button><p>Use browser Stop while the delayed navigation is loading. A redirect test can be done with <a href="https://httpbin.org/redirect/2">this external redirect chain</a> (network required).</p></section>
+<section id="lower"><h2>Anchor and scroll restoration</h2><p>Scroll away, follow another link, then Back. Check whether scroll position is restored.</p><div style="height:600px">Long spacer for scrolling.</div><a href="#top">Back to top</a></section>
+<section><h2>Event log</h2><pre id="log"></pre></section><script>
+const log=s=>{document.querySelector('#log').textContent+=s+'\n'};
+document.querySelector('#push').onclick=()=>{history.pushState({step:Date.now()},'',`?step=${Date.now()}`);log('pushState: '+location.href)};
+document.querySelector('#replace').onclick=()=>{history.replaceState({replaced:true},'',`?replaced=${Date.now()}`);log('replaceState: '+location.href)};
+document.querySelector('#state').onclick=()=>document.querySelector('#stateout').textContent=JSON.stringify({href:location.href,state:history.state,length:history.length});
+document.querySelector('#slow').onclick=()=>location.href='https://example.com/';
+window.addEventListener('popstate',e=>log('popstate: '+location.href+' state='+JSON.stringify(e.state)));
+window.addEventListener('pageshow',e=>log('pageshow persisted='+e.persisted));window.addEventListener('pagehide',e=>log('pagehide persisted='+e.persisted));
+</script></body></html>
