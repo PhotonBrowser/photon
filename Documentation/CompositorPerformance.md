@@ -105,6 +105,8 @@ In these runs each scroll frame re-rasterized the whole viewport, so GPU time sc
 
 **Current tree note (2026-10-26):** Engine now has conditional viewport scroll blitting in `ContextPresenter`: for eligible static display lists and integral viewport scroll deltas, it shifts the previous raster and paints the exposed strip. Static nested display lists qualify when their resources are immutable; animated or live nested content still takes the full repaint path. The measurements above predate that path, so the 4K estimate needs to be measured again before treating it as current.
 
+For a live scroll run, start Photon with `PHOTON_FRAME_PROFILE=1`. The five-second `Photon compositor profile` report includes `scroll blit` counts. `fractional_offset` means a precise scroll delta fell between device pixels and triggered a full viewport repaint; `used` means the previous raster was reused. The other counters identify why reuse was skipped.
+
 ## 8. Blank launch — not reproduced
 
 20 launches (12 with a local page, 8 with Wikipedia) all presented frames.
