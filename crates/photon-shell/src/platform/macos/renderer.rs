@@ -15,14 +15,16 @@ pub(in crate::platform) struct PagePresenter {
 }
 
 impl PagePresenter {
+    /// Creates a presenter with its own Core Animation page layer.
     pub(in crate::platform) fn new() -> Self {
         Self {
             layer: PageLayer::new(),
         }
     }
 
-    /// Shows `presented` and releases the frames it replaced. Returns whether
-    /// it is on screen already; here it is, and GPUI has nothing to draw.
+    /// Installs `presented` and releases the frames it replaced. Returns
+    /// whether it is on screen already; here it is, and GPUI has nothing to
+    /// draw.
     pub(in crate::platform) fn show(
         &mut self,
         presented: &mut PresentedSurface,
@@ -45,20 +47,23 @@ impl PagePresenter {
         true
     }
 
+    /// Places the native layer beneath GPUI's page cutout.
     pub(in crate::platform) fn place(&mut self, window: &gpui::Window, placement: PagePlacement) {
         self.layer.place(window, placement);
     }
 
+    /// Hides this page's native layer while its tab or window is hidden.
     pub(in crate::platform) fn hide(&mut self) {
         self.layer.hide();
     }
 
+    /// Removes this page's native layer from the GPUI window during shutdown.
     pub(in crate::platform) fn detach(&mut self) {
         self.layer.detach();
     }
 }
 
-/// Makes `next` the page's frame. The frames it replaced are released once
+/// Makes `next` the page's frame, retaining leases for replaced frames until
 /// it is displayed.
 pub(in crate::platform) fn replace_surface(
     previous: Option<PresentedSurface>,
@@ -70,8 +75,8 @@ pub(in crate::platform) fn replace_surface(
     next
 }
 
-/// The page's place in GPUI: a hole onto its Core Animation layer. Whatever
-/// is drawn after it, over the page, stays on top.
+/// Builds the GPUI cutout through which Core Animation displays the page,
+/// leaving later GPUI drawing above it.
 pub(in crate::platform) fn page_surface(
     _: Option<&PresentedSurface>,
     _: PageSurfacePalette,

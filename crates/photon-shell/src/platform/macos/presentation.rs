@@ -94,9 +94,10 @@ impl LeaseLedger {
     }
 
     /// Queues a held lease's release, once. A frame never displayed can be
-    /// reused at once. One Core Animation displayed is not reported finished
-    /// with: only Engine's compositor can see when the window server stops
-    /// reading its IOSurface, and it adds a store rather than wait.
+    /// reused at once. A frame Core Animation displayed is not reported
+    /// finished while the window server may still read it: only Engine's
+    /// compositor can see when the window server stops reading its IOSurface,
+    /// and it adds a store rather than wait.
     pub(in crate::platform) fn complete(&mut self, key: FrameKey) {
         if let Some(lease) = self.held.get_mut(&key)
             && !lease.completed

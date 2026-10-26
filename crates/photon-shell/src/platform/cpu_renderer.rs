@@ -15,6 +15,7 @@ use crate::platform::{
 pub(in crate::platform) struct PagePresenter;
 
 impl PagePresenter {
+    /// Creates the portable presenter, which relies on GPUI for display.
     pub(in crate::platform) fn new() -> Self {
         Self
     }
@@ -29,14 +30,17 @@ impl PagePresenter {
         false
     }
 
-    /// GPUI lays the page out itself; there is no native layer to place.
+    /// Leaves page placement to GPUI's normal layout and rendering path.
     pub(in crate::platform) fn place(&mut self, _: &gpui::Window, _: PagePlacement) {}
 
+    /// Hides native presentation; the portable presenter has no native layer.
     pub(in crate::platform) fn hide(&mut self) {}
 
+    /// Detaches native presentation; the portable presenter has no native layer.
     pub(in crate::platform) fn detach(&mut self) {}
 }
 
+/// Replaces a portable frame without retaining an Engine surface lease.
 pub(in crate::platform) fn replace_surface(
     _: Option<PresentedSurface>,
     next: PresentedSurface,
@@ -44,6 +48,7 @@ pub(in crate::platform) fn replace_surface(
     next
 }
 
+/// Builds the GPUI page surface and draws the copied CPU frame, if available.
 pub(in crate::platform) fn page_surface(
     presented: Option<&PresentedSurface>,
     palette: PageSurfacePalette,
