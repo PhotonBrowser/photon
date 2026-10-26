@@ -60,30 +60,10 @@ pub(in crate::platform) struct LeaseCounts {
     pub(in crate::platform) outstanding: usize,
 }
 
-#[derive(Default)]
-pub(in crate::platform) struct GpuActivity;
-
-impl GpuActivity {
-    pub(in crate::platform) fn wait_until_idle(&self) {}
-
-    pub(in crate::platform) fn counts(&self) -> (usize, usize, usize) {
-        (0, 0, 0)
-    }
-
-    pub(in crate::platform) fn submitted(&self) {}
-
-    pub(in crate::platform) fn completed(&self) {}
-}
-
-pub(in crate::platform) struct RetiredSurface {
-    pub(in crate::platform) key: FrameKey,
-}
-
 pub(in crate::platform) struct PresentedSurface {
     pub(in crate::platform) image: Arc<RenderImage>,
     pub(in crate::platform) key: FrameKey,
     pub(in crate::platform) navigation_id: Option<u64>,
-    pub(in crate::platform) retired_until_submitted: Arc<Mutex<Vec<RetiredSurface>>>,
 }
 
 impl PresentedSurface {
@@ -91,8 +71,9 @@ impl PresentedSurface {
         (self.key.generation, self.key.frame)
     }
 
-    pub(in crate::platform) fn retire(&self) -> RetiredSurface {
-        RetiredSurface { key: self.key }
+    /// Every frame lease this one holds, to release when the page closes.
+    pub(in crate::platform) fn into_release_keys(self) -> Vec<FrameKey> {
+        vec![self.key]
     }
 }
 
@@ -100,7 +81,6 @@ pub(in crate::platform) struct PresentationRuntime {
     latest: Mutex<Option<PresentedSurface>>,
     next_frame: AtomicU64,
     pub(in crate::platform) leases: Arc<Mutex<LeaseLedger>>,
-    pub(in crate::platform) gpu_activity: Arc<GpuActivity>,
     pub(in crate::platform) release_scheduler: Arc<AtomicPtr<c_void>>,
     navigation_timing: Option<Arc<NavigationTimingProfiler>>,
     _performance: Arc<PerformanceMonitor>,
@@ -110,7 +90,6 @@ pub(in crate::platform) struct PresentationRuntime {
 impl PresentationRuntime {
     pub(in crate::platform) fn new(
         leases: Arc<Mutex<LeaseLedger>>,
-        gpu_activity: Arc<GpuActivity>,
         navigation_timing: Option<Arc<NavigationTimingProfiler>>,
         performance: Arc<PerformanceMonitor>,
     ) -> anyhow::Result<Self> {
@@ -118,7 +97,6 @@ impl PresentationRuntime {
             latest: Mutex::new(None),
             next_frame: AtomicU64::new(0),
             leases,
-            gpu_activity,
             release_scheduler: Arc::new(AtomicPtr::new(std::ptr::null_mut())),
             navigation_timing,
             _performance: performance,
@@ -208,7 +186,6 @@ impl PresentationRuntime {
                 frame,
             },
             navigation_id,
-            retired_until_submitted: Arc::new(Mutex::new(Vec::new())),
         };
         let mut latest = self.latest.lock().unwrap();
         if latest
@@ -218,6 +195,11 @@ impl PresentationRuntime {
             *latest = Some(presented);
         }
         Some((1, frame, allocation_microseconds, copy_microseconds))
+    }
+
+    /// CPU frames are complete when published, so there is never a wait.
+    pub(in crate::platform) fn notify_when_latest_finished(&self, _: impl Fn() + 'static) -> bool {
+        false
     }
 
     pub(in crate::platform) fn take_surface(&self) -> Option<PresentedSurface> {

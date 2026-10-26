@@ -115,7 +115,7 @@ pub(super) unsafe extern "C" fn on_engine_frame(
             buffer_allocation_microseconds.saturating_add(local_allocation_microseconds),
             copy_microseconds.saturating_add(local_copy_microseconds),
         );
-        callbacks.request_redraw();
+        callbacks.request_redraw_when_frame_finished();
     }
 }
 pub(super) unsafe extern "C" fn on_engine_cursor(context: *mut c_void, cursor: i32) {
@@ -592,7 +592,7 @@ pub(super) unsafe extern "C" fn on_engine_native_frame(
     if callbacks.leases.lock().unwrap().has_pending() {
         callbacks.presentation.schedule_release_drain();
     }
-    callbacks.request_redraw();
+    callbacks.request_redraw_when_frame_finished();
 }
 
 #[cfg(all(target_os = "macos", not(feature = "ui-only")))]

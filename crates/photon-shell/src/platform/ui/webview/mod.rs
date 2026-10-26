@@ -14,7 +14,8 @@ use photon_performance::{PerformanceDiagnostics, performance_overlay};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use crate::platform::renderer::PresentedSurface;
+use crate::platform::PagePlacement;
+use crate::platform::renderer::{PagePresenter, PresentedSurface};
 use std::time::{Duration, Instant};
 
 use super::super::trace;
@@ -46,6 +47,7 @@ const ANIMATING_RESIZE_INTERVAL: Duration = Duration::from_millis(100);
 
 pub(in crate::platform) struct PhotonWebView {
     pub(super) external: Option<PresentedSurface>,
+    presenter: PagePresenter,
     navigation_surface_pending_render: Option<u64>,
     pub(in crate::platform) state: BrowserState,
     pub(in crate::platform) diagnostics: PerformanceDiagnostics,
@@ -153,7 +155,17 @@ impl PhotonWebView {
                 .record_navigation_surface_installed(navigation_id);
             self.navigation_surface_pending_render = Some(navigation_id);
         }
-        cx.notify();
+        let Some(presented) = self.external.as_mut() else {
+            return;
+        };
+        if self.presenter.show(presented, &self.session.presentation) {
+            if let Some(navigation_id) = self.navigation_surface_pending_render.take() {
+                self.session
+                    .record_navigation_surface_rendered(navigation_id);
+            }
+        } else {
+            cx.notify();
+        }
     }
 
     /// Re-renders the view and tells the chrome its page state changed.
@@ -241,6 +253,7 @@ impl PhotonWebView {
         if self.session.shutdown_started {
             return;
         }
+        self.presenter.detach();
         self.session
             .begin_shutdown_with_surface(self.external.take());
     }
@@ -307,6 +320,7 @@ impl PhotonWebView {
     pub(super) fn from_session(cx: &mut Context<Self>, session: EngineSession) -> Self {
         Self {
             external: None,
+            presenter: PagePresenter::new(),
             navigation_surface_pending_render: None,
             state: BrowserState::default(),
             diagnostics: PerformanceDiagnostics::default(),
@@ -487,7 +501,7 @@ impl Render for PhotonWebView {
             .id("photon-webview-viewport")
             .cursor(self.page_cursor)
             .on_prepaint(
-                cx.listener(|this, event: &gpui::InteractivityPrepaint, window, cx| {
+                cx.listener(move |this, event: &gpui::InteractivityPrepaint, window, cx| {
                     // Resize from the laid-out WebView bounds, not the native window
                     // bounds minus assumed titlebar/padding values. During live resize,
                     // those assumptions can differ by a frame and offset the page.
@@ -496,10 +510,20 @@ impl Render for PhotonWebView {
                         f32::from(event.bounds.origin.x),
                         f32::from(event.bounds.origin.y),
                     );
+                    let scale_factor = window.scale_factor();
                     this.update_viewport(
                         f32::from(event.bounds.size.width),
                         f32::from(event.bounds.size.height),
-                        window.scale_factor(),
+                        scale_factor,
+                    );
+                    this.presenter.place(
+                        window,
+                        PagePlacement {
+                            bounds: event.bounds,
+                            corner_radius: metrics::page_radius(),
+                            scale_factor,
+                            background: palette.page_background,
+                        },
                     );
                     // Follow the window across displays so Engine paces to the
                     // one it is on rather than a 60 Hz default.
@@ -606,13 +630,12 @@ impl Render for PhotonWebView {
             .overflow_hidden()
             .bg(gpui::rgb(palette.page_background));
         {
-            let page_surface = crate::platform::renderer::page_surface(
+            webview = webview.child(crate::platform::renderer::page_surface(
                 self.external.as_ref(),
                 crate::platform::PageSurfacePalette {
                     background: palette.page_background,
                 },
-            );
-            webview = webview.child(page_surface);
+            ));
             if let Some(navigation_id) = self.navigation_surface_pending_render.take() {
                 self.session
                     .record_navigation_surface_rendered(navigation_id);
@@ -628,5 +651,16 @@ impl Render for PhotonWebView {
             ));
         }
         webview
+    }
+}
+
+impl PhotonWebView {
+    /// Shows or hides the page: Engine pauses rendering while hidden, and a
+    /// native page layer hides so it cannot show through what replaces it.
+    pub(in crate::platform) fn set_page_visible(&mut self, visible: bool) {
+        self.session.set_visible(visible);
+        if !visible {
+            self.presenter.hide();
+        }
     }
 }

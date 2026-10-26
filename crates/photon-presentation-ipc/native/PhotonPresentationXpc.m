@@ -2,6 +2,7 @@
 // Copyright 2022-2025 Zed Industries, Inc.
 // Licensed under the Apache License, Version 2.0.
 #import <Foundation/Foundation.h>
+#import <IOSurface/IOSurface.h>
 #import <Metal/Metal.h>
 #import <mach/mach.h>
 #import <xpc/xpc.h>
@@ -181,11 +182,18 @@ static void PhotonStartSurfaceService(NSString* name)
                 xpc_dictionary_set_string(reply, "reply", "pong");
             } else if (strcmp(operation, "register") == 0) {
                 mach_port_t port = xpc_dictionary_copy_mach_send(request, "port");
-                BOOL accepted = port != MACH_PORT_NULL;
+                // Keep the surface itself rather than its send right. A send right
+                // marks the IOSurface in use for as long as it lives, and Engine
+                // reads that mark to tell when the window server has finished
+                // with a surface Core Animation displayed.
+                IOSurfaceRef surface = port != MACH_PORT_NULL ? IOSurfaceLookupFromMachPort(port) : NULL;
+                if (port != MACH_PORT_NULL)
+                    mach_port_deallocate(mach_task_self(), port);
+                BOOL accepted = surface != NULL;
                 if (accepted) {
                     @synchronized(PhotonSurfacePorts) {
                         PhotonSurfacePorts[key] = @{
-                            @"port" : @(port),
+                            @"surface" : (__bridge_transfer id)surface,
                             @"width" : @(xpc_dictionary_get_uint64(request, "width")),
                             @"height" : @(xpc_dictionary_get_uint64(request, "height")),
                             @"pixel_format" : @(xpc_dictionary_get_uint64(request, "pixel_format")),
@@ -199,7 +207,7 @@ static void PhotonStartSurfaceService(NSString* name)
                     xpc_dictionary_set_bool(reply, "accepted", false);
                 }
             } else if (strcmp(operation, "unregister") == 0) {
-                mach_port_t port = MACH_PORT_NULL;
+                BOOL retired = NO;
                 BOOL canRetire = YES;
                 NSString* prefix = [key stringByAppendingString:@"/"];
                 @synchronized(PhotonSurfacePorts) {
@@ -211,13 +219,11 @@ static void PhotonStartSurfaceService(NSString* name)
                     }
                     NSDictionary* entry = PhotonSurfacePorts[key];
                     if (canRetire && entry) {
-                        port = [entry[@"port"] unsignedIntValue];
                         [PhotonSurfacePorts removeObjectForKey:key];
+                        retired = YES;
                     }
                 }
-                if (port != MACH_PORT_NULL)
-                    mach_port_deallocate(mach_task_self(), port);
-                xpc_dictionary_set_bool(reply, "accepted", canRetire && port != MACH_PORT_NULL);
+                xpc_dictionary_set_bool(reply, "accepted", retired);
             } else if (strcmp(operation, "publish_frame") == 0 || strcmp(operation, "wait_frame") == 0) {
                 NSDictionary* frame_descriptor = nil;
                 NSArray<NSDictionary*>* waiters = nil;

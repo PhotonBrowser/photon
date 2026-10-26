@@ -6,6 +6,7 @@ pub(crate) mod default_browser;
 pub(crate) mod display;
 pub(crate) mod idle;
 pub(crate) mod motion_observer;
+mod page_layer;
 pub(crate) mod presentation;
 pub(crate) mod renderer;
 pub(crate) mod window_observer;

@@ -2,11 +2,6 @@
 #![allow(deprecated)]
 
 use anyhow::Context as _;
-use core_video::pixel_buffer::CVPixelBuffer;
-use gpui::{
-    ExternalMetalSurface, ExternalSurfaceDescriptor, ExternalTextureIdentity, MetalSharedEventWait,
-    size,
-};
 use io_surface::IOSurface;
 use mach2::{port::mach_port_t, traps::mach_task_self};
 use metal::SharedEvent;
@@ -15,15 +10,15 @@ use std::{
     collections::HashMap,
     ffi::c_void,
     sync::{
-        Arc, Condvar, Mutex,
-        atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering},
+        Arc, Mutex,
+        atomic::{AtomicBool, AtomicPtr, Ordering},
     },
     time::Instant,
 };
 
 use super::super::engine::navigation_timing::NavigationTimingProfiler;
 use crate::platform::engine_ffi::embedder;
-use crate::platform::{trace, verbose_trace_enabled};
+use crate::platform::trace;
 use photon_presentation_ipc::{BackingDescriptor, Channel};
 
 pub(in crate::platform) struct MachPortGuard(pub(in crate::platform) mach_port_t);
@@ -51,6 +46,7 @@ pub(in crate::platform) struct FrameReady {
 #[derive(Clone, Copy)]
 pub(in crate::platform) struct Release {
     pub(in crate::platform) key: FrameKey,
+    pub(in crate::platform) consumer_gpu_work_complete: bool,
 }
 
 /// Where a frame lease the Engine handed over has got to.
@@ -58,6 +54,8 @@ pub(in crate::platform) struct Release {
 struct Lease {
     accepted: bool,
     completed: bool,
+    /// Core Animation displayed it, so the window server may still read it.
+    presented: bool,
 }
 
 /// The frame leases still held, and how many passed each stage. A lease is
@@ -87,18 +85,29 @@ impl LeaseLedger {
     }
 
     pub(in crate::platform) fn present(&mut self, key: FrameKey) {
-        assert!(self.held.get(&key).is_some_and(|lease| lease.accepted));
-        self.counts.presented += 1;
+        let lease = self.held.get_mut(&key).expect("presented an unknown frame");
+        assert!(lease.accepted);
+        if !lease.presented {
+            lease.presented = true;
+            self.counts.presented += 1;
+        }
     }
 
-    /// Queues a held lease's release, once.
+    /// Queues a held lease's release, once. A frame never displayed can be
+    /// reused at once. A frame Core Animation displayed is not reported
+    /// finished while the window server may still read it: only Engine's
+    /// compositor can see when the window server stops reading its IOSurface,
+    /// and it adds a store rather than wait.
     pub(in crate::platform) fn complete(&mut self, key: FrameKey) {
         if let Some(lease) = self.held.get_mut(&key)
             && !lease.completed
         {
             lease.completed = true;
             self.counts.completed += 1;
-            self.pending.push(Release { key });
+            self.pending.push(Release {
+                key,
+                consumer_gpu_work_complete: !lease.presented,
+            });
         }
     }
 
@@ -137,74 +146,15 @@ pub(in crate::platform) struct LeaseCounts {
     pub(in crate::platform) outstanding: usize,
 }
 
-#[derive(Default)]
-pub(in crate::platform) struct GpuActivity {
-    progress: Mutex<GpuProgress>,
-    idle: Condvar,
-}
-
-#[derive(Default)]
-pub(in crate::platform) struct GpuProgress {
-    in_flight: usize,
-    submitted: usize,
-    completed: usize,
-}
-
-impl GpuActivity {
-    pub(in crate::platform) fn submitted(&self) {
-        let mut progress = self.progress.lock().unwrap();
-        progress.in_flight += 1;
-        progress.submitted += 1;
-    }
-
-    pub(in crate::platform) fn completed(&self) {
-        let mut progress = self.progress.lock().unwrap();
-        assert!(
-            progress.in_flight > 0,
-            "Metal completion without a matching submission"
-        );
-        progress.in_flight -= 1;
-        progress.completed += 1;
-        if progress.in_flight == 0 {
-            self.idle.notify_all();
-        }
-    }
-
-    pub(in crate::platform) fn wait_until_idle(&self) {
-        let mut progress = self.progress.lock().unwrap();
-        while progress.in_flight != 0 {
-            progress = self.idle.wait(progress).unwrap();
-        }
-    }
-
-    pub(in crate::platform) fn counts(&self) -> (usize, usize, usize) {
-        let progress = self.progress.lock().unwrap();
-        (progress.submitted, progress.completed, progress.in_flight)
-    }
-}
-
-/// How a presented frame is being read by GPUI-CE command buffers.
-#[derive(Default)]
-pub(in crate::platform) struct Sampling {
-    in_flight: AtomicUsize,
-    /// Set once a command buffer sampling a newer frame has been submitted, so
-    /// no command buffer submitted afterwards samples this one.
-    superseded: AtomicBool,
-}
-
-/// A frame no longer displayed, released to Engine once nothing samples it.
-pub(in crate::platform) struct RetiredSurface {
-    pub(in crate::platform) key: FrameKey,
-    sampling: Arc<Sampling>,
-}
-
+/// A frame shown, or about to be shown, in the page's Core Animation layer.
 pub(in crate::platform) struct PresentedSurface {
-    pub(in crate::platform) surface: ExternalMetalSurface,
+    pub(in crate::platform) iosurface: IOSurface,
+    pub(in crate::platform) visible_width: i32,
+    pub(in crate::platform) visible_height: i32,
     pub(in crate::platform) key: FrameKey,
     pub(in crate::platform) navigation_id: Option<u64>,
-    sampling: Arc<Sampling>,
-    /// Frames this one replaced; they are superseded when it is first submitted.
-    pub(in crate::platform) retired_until_submitted: Arc<Mutex<Vec<RetiredSurface>>>,
+    /// Frames this one replaced, released once it is displayed.
+    pub(in crate::platform) replaced: Vec<FrameKey>,
 }
 
 impl PresentedSurface {
@@ -212,17 +162,21 @@ impl PresentedSurface {
         (self.key.generation, self.key.frame)
     }
 
-    pub(in crate::platform) fn retire(&self) -> RetiredSurface {
-        RetiredSurface {
-            key: self.key,
-            sampling: self.sampling.clone(),
-        }
+    /// Every frame lease this one holds, to release when the page closes.
+    pub(in crate::platform) fn into_release_keys(mut self) -> Vec<FrameKey> {
+        self.replaced.push(self.key);
+        self.replaced
     }
 }
 
+/// An Engine backing store, held as its IOSurface alone. A CoreVideo buffer
+/// would mark the surface in use for as long as it lived, and Engine's
+/// compositor reads that mark to tell when the window server has finished
+/// with a surface it displayed.
 pub(in crate::platform) struct Backing {
-    image: CVPixelBuffer,
-    iosurface_id: u32,
+    iosurface: IOSurface,
+    width: i32,
+    height: i32,
 }
 
 fn schedule_release_drain(release_scheduler: &AtomicPtr<c_void>) {
@@ -240,7 +194,6 @@ pub(in crate::platform) struct PresentationRuntime {
     latest: Mutex<Option<FrameReady>>,
     latest_order: Mutex<(u64, u64)>,
     pub(in crate::platform) leases: Arc<Mutex<LeaseLedger>>,
-    pub(in crate::platform) gpu_activity: Arc<GpuActivity>,
     pub(in crate::platform) release_scheduler: Arc<AtomicPtr<c_void>>,
     navigation_timing: Option<Arc<NavigationTimingProfiler>>,
     performance: Arc<PerformanceMonitor>,
@@ -250,7 +203,6 @@ pub(in crate::platform) struct PresentationRuntime {
 impl PresentationRuntime {
     pub(in crate::platform) fn new(
         leases: Arc<Mutex<LeaseLedger>>,
-        gpu_activity: Arc<GpuActivity>,
         navigation_timing: Option<Arc<NavigationTimingProfiler>>,
         performance: Arc<PerformanceMonitor>,
     ) -> anyhow::Result<Self> {
@@ -265,7 +217,6 @@ impl PresentationRuntime {
             latest: Mutex::new(None),
             latest_order: Mutex::new((0, 0)),
             leases,
-            gpu_activity,
             release_scheduler: Arc::new(AtomicPtr::new(std::ptr::null_mut())),
             navigation_timing,
             performance,
@@ -342,9 +293,6 @@ impl PresentationRuntime {
         );
         #[allow(deprecated)]
         let iosurface_id = unsafe { io_surface::IOSurfaceGetID(raw_surface) };
-        let image = CVPixelBuffer::from_io_surface(&iosurface, None).map_err(|status| {
-            anyhow::anyhow!("CVPixelBufferCreateWithIOSurface failed: {status}")
-        })?;
         let import_duration = import_started.elapsed();
         let register_started = Instant::now();
         self.channel
@@ -352,7 +300,7 @@ impl PresentationRuntime {
         let register_duration = register_started.elapsed();
         let mut backings = self.backings.lock().unwrap();
         // Engine replaced its pool, so older generations never return. Frames
-        // already presented hold their own pixel buffer, and a late frame from
+        // already presented hold their own IOSurface, and a late frame from
         // an older generation is rejected as out of order or missing.
         let mut released = 0;
         backings.retain(|&(old_backing, old_generation), _| {
@@ -376,8 +324,9 @@ impl PresentationRuntime {
         backings.insert(
             (backing, generation),
             Backing {
-                image,
-                iosurface_id,
+                iosurface,
+                width: width as i32,
+                height: height as i32,
             },
         );
         trace(format_args!(
@@ -448,8 +397,49 @@ impl PresentationRuntime {
         ));
     }
 
+    /// Whether the producer has finished writing a frame. Core Animation
+    /// cannot wait for the producer's GPU work, so a frame is shown only once
+    /// that work is done.
+    fn producer_finished(&self, ready: &FrameReady) -> bool {
+        if ready.signal == 0 {
+            return true;
+        }
+        // `take_surface` releases a signaled frame without a consumer event.
+        self.consumer_event
+            .lock()
+            .unwrap()
+            .as_ref()
+            .is_none_or(|event| event.signaled_value() >= ready.signal)
+    }
+
+    /// Calls `on_finished` on the main thread once the newest frame's
+    /// producer work completes, and returns true; returns false when there is
+    /// no such wait because it is already finished or there is no frame.
+    pub(in crate::platform) fn notify_when_latest_finished(
+        &self,
+        on_finished: impl Fn() + 'static,
+    ) -> bool {
+        let Some(ready) = *self.latest.lock().unwrap() else {
+            return false;
+        };
+        if self.producer_finished(&ready) {
+            return false;
+        }
+        let Some(event) = self.consumer_event.lock().unwrap().clone() else {
+            return false;
+        };
+        notify_on_main_thread(&event, ready.signal, on_finished);
+        true
+    }
+
     pub(in crate::platform) fn take_surface(&self) -> Option<PresentedSurface> {
-        let ready = self.latest.lock().unwrap().take()?;
+        let ready = {
+            let mut latest = self.latest.lock().unwrap();
+            if !self.producer_finished(latest.as_ref()?) {
+                return None;
+            }
+            latest.take()?
+        };
         let backings = self.backings.lock().unwrap();
         let Some(backing) = backings.get(&(ready.key.backing, ready.key.generation)) else {
             self.leases.lock().unwrap().complete(ready.key);
@@ -467,8 +457,7 @@ impl PresentationRuntime {
             ));
             return None;
         }
-        let event = self.consumer_event.lock().unwrap().as_ref().cloned();
-        if ready.signal != 0 && event.is_none() {
+        if ready.signal != 0 && self.consumer_event.lock().unwrap().is_none() {
             self.leases.lock().unwrap().complete(ready.key);
             trace(format_args!(
                 "frame={} gen={} release=queued reason=missing-consumer-event",
@@ -476,174 +465,93 @@ impl PresentationRuntime {
             ));
             return None;
         }
-        if verbose_trace_enabled()
-            && let Some(event) = event.as_ref()
-        {
-            let producer_signaled = event.signaled_value();
-            trace(format_args!(
-                "frame={} gen={} producer-event signaled={} required={}",
-                ready.key.frame, ready.key.generation, producer_signaled, ready.signal
-            ));
-        }
-        let leases = self.leases.clone();
-        let gpu_activity = self.gpu_activity.clone();
-        let presented_leases = self.leases.clone();
         let navigation_id = self
             .navigation_timing
             .as_ref()
             .and_then(|profiler| profiler.navigation_id_for_first_surface());
-        let key = ready.key;
-        let image = backing.image.clone();
-        let sampling = Arc::new(Sampling::default());
-        let retired_until_submitted = Arc::new(Mutex::new(Vec::<RetiredSurface>::new()));
-        let submitted_retirements = retired_until_submitted.clone();
-        let submitted_sampling = sampling.clone();
-        let completed_sampling = sampling.clone();
-        let release_scheduler = self.release_scheduler.clone();
-        let submitted_release_scheduler = self.release_scheduler.clone();
-        let navigation_timing = self.navigation_timing.clone();
-        let submitted_performance = self.performance.clone();
-        let completed_performance = self.performance.clone();
-        let presented_performance = self.performance.clone();
-        let surface = ExternalMetalSurface::new(
-            ExternalSurfaceDescriptor {
-                identity: ExternalTextureIdentity {
-                    resource_id: key.backing,
-                    generation: key.generation,
-                    iosurface_id: backing.iosurface_id,
-                },
-                // Keep the pooled IOSurface dimensions stable for texture
-                // caching and layout, and pass the current frame's visible
-                // content size separately for sampling.
-                size: size(
-                    gpui::DevicePixels(image.get_width() as i32),
-                    gpui::DevicePixels(image.get_height() as i32),
-                ),
-                visible_size: size(
-                    gpui::DevicePixels(ready.width.min(image.get_width() as i32)),
-                    gpui::DevicePixels(ready.height.min(image.get_height() as i32)),
-                ),
-                pixel_format: image.get_pixel_format(),
-            },
-            image,
-            if ready.signal == 0 {
-                None
-            } else {
-                event.map(|event| MetalSharedEventWait {
-                    event,
-                    value: ready.signal,
-                })
-            },
-            {
-                let gpu_activity = gpu_activity.clone();
-                let leases = leases.clone();
-                // Command buffers on one queue are submitted in order, so once this
-                // frame is submitted, no later command buffer samples the frames it
-                // replaced. Each is released when its own last sampling completes,
-                // without waiting for this frame's GPU work.
-                move || {
-                    presented_leases.lock().unwrap().present(key);
-                    gpu_activity.submitted();
-                    submitted_sampling.in_flight.fetch_add(1, Ordering::SeqCst);
-                    let retired = std::mem::take(&mut *submitted_retirements.lock().unwrap());
-                    let mut released_any = false;
-                    for retired in retired {
-                        retired.sampling.superseded.store(true, Ordering::SeqCst);
-                        if retired.sampling.in_flight.load(Ordering::SeqCst) == 0 {
-                            leases.lock().unwrap().complete(retired.key);
-                            released_any = true;
-                            trace(format_args!(
-                                "frame={} gen={} release=queued superseded-by={}",
-                                retired.key.frame, retired.key.generation, key.frame
-                            ));
-                        }
-                    }
-                    if released_any {
-                        schedule_release_drain(&submitted_release_scheduler);
-                    }
-                }
-            },
-            move || {
-                gpu_activity.completed();
-                if let (Some(profiler), Some(navigation_id)) =
-                    (navigation_timing.as_ref(), navigation_id)
-                {
-                    profiler.record_surface_gpu_complete(navigation_id);
-                }
-                trace(format_args!(
-                    "frame={} gen={} command-buffer=completed",
-                    key.frame, key.generation
-                ));
-                // The ledger ignores a second completion if the submit side also saw
-                // this frame idle after superseding it.
-                if completed_sampling.in_flight.fetch_sub(1, Ordering::SeqCst) == 1
-                    && completed_sampling.superseded.load(Ordering::SeqCst)
-                {
-                    leases.lock().unwrap().complete(key);
-                    trace(format_args!(
-                        "frame={} gen={} release=queued after-last-sampling",
-                        key.frame, key.generation
-                    ));
-                    schedule_release_drain(&release_scheduler);
-                }
-            },
-        );
-        let surface = if presented_performance.is_frame_timing_active() {
-            let frame_timing_enabled = presented_performance.frame_timing_enabled_flag();
-            let submitted_performance = submitted_performance.clone();
-            let completed_performance = completed_performance.clone();
-            surface.with_gpu_sampling_feedback(
-                frame_timing_enabled,
-                move |drawable_id| {
-                    submitted_performance.record_gpu_submission(
-                        key.generation,
-                        key.frame,
-                        drawable_id,
-                    );
-                },
-                move |drawable_id| {
-                    completed_performance.record_gpu_completion_callback(
-                        key.generation,
-                        key.frame,
-                        drawable_id,
-                    );
-                },
-            )
-        } else {
-            surface
-        };
-        let surface = if presented_performance.is_frame_timing_active() {
-            let frame_timing_enabled = presented_performance.frame_timing_enabled_flag();
-            surface.with_drawable_presentation_feedback(
-                frame_timing_enabled,
-                move |drawable_id, presented_time_seconds| {
-                    presented_performance.record_drawable_presentation(
-                        key.generation,
-                        key.frame,
-                        drawable_id,
-                        presented_time_seconds,
-                    );
-                },
-            )
-        } else {
-            surface
-        };
         trace(format_args!(
             "frame={} gen={} surface-ready signal={}",
-            key.frame, key.generation, ready.signal
+            ready.key.frame, ready.key.generation, ready.signal
         ));
         Some(PresentedSurface {
-            surface,
-            key,
+            iosurface: backing.iosurface.clone(),
+            visible_width: ready.width.min(backing.width),
+            visible_height: ready.height.min(backing.height),
+            key: ready.key,
             navigation_id,
-            sampling,
-            retired_until_submitted,
+            replaced: Vec::new(),
         })
     }
 
+    /// Whether a frame is ready to install now.
     pub(in crate::platform) fn has_pending_frame(&self) -> bool {
-        self.latest.lock().unwrap().is_some()
+        self.latest
+            .lock()
+            .unwrap()
+            .is_some_and(|ready| self.producer_finished(&ready))
     }
+
+    /// Records that Core Animation now shows `presented`, and releases the
+    /// frames it replaced. Like Ladybird's view, the previous front buffer goes
+    /// back as soon as the next one is shown.
+    pub(in crate::platform) fn present(&self, presented: &mut PresentedSurface) {
+        let mut leases = self.leases.lock().unwrap();
+        leases.present(presented.key);
+        if presented.replaced.is_empty() {
+            return;
+        }
+        for key in presented.replaced.drain(..) {
+            leases.complete(key);
+            trace(format_args!(
+                "frame={} gen={} release=queued superseded-by={}",
+                key.frame, key.generation, presented.key.frame
+            ));
+        }
+        drop(leases);
+        schedule_release_drain(&self.release_scheduler);
+    }
+}
+
+/// The block signature `-[MTLSharedEvent notifyListener:atValue:block:]` requires.
+struct SharedEventNotificationEncoding;
+
+// SAFETY: MTLSharedEventNotificationBlock is `void (^)(id<MTLSharedEvent>, uint64_t)`.
+unsafe impl block2::ManualBlockEncoding for SharedEventNotificationEncoding {
+    type Arguments = (*mut objc2::runtime::AnyObject, u64);
+    type Return = ();
+    const ENCODING_CSTR: &'static std::ffi::CStr = c"v24@?0@8Q16";
+}
+
+/// Runs `on_signaled` on the main queue once `event` reaches `value`, without
+/// a thread waiting for it.
+fn notify_on_main_thread(event: &SharedEvent, value: u64, on_signaled: impl Fn() + 'static) {
+    use metal::foreign_types::ForeignType as _;
+    use objc2::{class, msg_send, rc::Retained, runtime::AnyObject};
+
+    thread_local! {
+        static MAIN_QUEUE_LISTENER: Retained<AnyObject> = {
+            let queue = dispatch2::DispatchQueue::main();
+            // SAFETY: MTLSharedEventListener's designated initializer takes a
+            // dispatch queue; the main queue lives for the process.
+            unsafe {
+                let listener: *mut AnyObject = msg_send![class!(MTLSharedEventListener), alloc];
+                let listener: *mut AnyObject = msg_send![listener, initWithDispatchQueue: queue];
+                Retained::from_raw(listener).expect("could not create a Metal event listener")
+            }
+        };
+    }
+    let block = block2::RcBlock::with_encoding::<_, _, _, SharedEventNotificationEncoding>(
+        move |_: *mut AnyObject, _: u64| on_signaled(),
+    );
+    MAIN_QUEUE_LISTENER.with(|listener| {
+        // SAFETY: Metal copies the block and calls it once on the listener's
+        // main queue, the thread that created it.
+        unsafe {
+            let event = event.as_ptr().cast::<AnyObject>();
+            let _: () =
+                msg_send![event, notifyListener: &**listener, atValue: value, block: &*block];
+        }
+    });
 }
 
 /// Uses the channel named by `photon run`, or creates a process-local channel

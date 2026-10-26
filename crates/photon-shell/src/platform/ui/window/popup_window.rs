@@ -54,7 +54,7 @@ pub(super) fn open_minimal_window(
         window.set_window_title(photon_brand::NAME);
         follow_appearance(&webview, window, cx);
         webview.update(cx, |view, cx| {
-            view.session.set_visible(true);
+            view.set_page_visible(true);
             if request.activate {
                 window.focus(&view.focus_handle, cx);
             }

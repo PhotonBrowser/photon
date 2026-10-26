@@ -301,7 +301,7 @@ impl Drop for NativeAttachment {
     }
 }
 
-fn appkit_host_view(window: &Window) -> Option<NonNull<NSView>> {
+pub(super) fn appkit_host_view(window: &Window) -> Option<NonNull<NSView>> {
     let handle = HasWindowHandle::window_handle(window).ok()?;
     let RawWindowHandle::AppKit(handle) = handle.as_raw() else {
         return None;
