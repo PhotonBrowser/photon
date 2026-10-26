@@ -19,6 +19,9 @@ use std::time::{Duration, Instant};
 
 use super::super::trace;
 
+#[cfg(target_os = "macos")]
+use crate::platform::macos::appkit::{AppKitIOSurfaceLayer, IOSurfaceLayerPlacement};
+
 #[cfg(unix)]
 mod automation;
 mod context_menu;
@@ -46,6 +49,8 @@ const ANIMATING_RESIZE_INTERVAL: Duration = Duration::from_millis(100);
 
 pub(in crate::platform) struct PhotonWebView {
     pub(super) external: Option<PresentedSurface>,
+    #[cfg(target_os = "macos")]
+    native_layer: AppKitIOSurfaceLayer,
     navigation_surface_pending_render: Option<u64>,
     pub(in crate::platform) state: BrowserState,
     pub(in crate::platform) diagnostics: PerformanceDiagnostics,
@@ -153,7 +158,41 @@ impl PhotonWebView {
                 .record_navigation_surface_installed(navigation_id);
             self.navigation_surface_pending_render = Some(navigation_id);
         }
+        // On macOS Core Animation shows the frame and GPUI has nothing to draw.
+        #[cfg(target_os = "macos")]
+        {
+            let _ = cx;
+            self.install_native_layer_frame();
+        }
+        #[cfg(not(target_os = "macos"))]
         cx.notify();
+    }
+
+    #[cfg(target_os = "macos")]
+    fn install_native_layer_frame(&mut self) {
+        let Some(presented) = self.external.as_mut() else {
+            return;
+        };
+        let identity = (
+            presented.key.backing,
+            presented.key.generation,
+            presented.key.frame,
+        );
+        if self.native_layer.shows(identity) {
+            return;
+        }
+
+        self.native_layer.set_surface(
+            identity,
+            &presented.iosurface,
+            presented.visible_width,
+            presented.visible_height,
+        );
+        self.session.presentation.present(presented);
+        if let Some(navigation_id) = self.navigation_surface_pending_render.take() {
+            self.session
+                .record_navigation_surface_rendered(navigation_id);
+        }
     }
 
     /// Re-renders the view and tells the chrome its page state changed.
@@ -241,6 +280,10 @@ impl PhotonWebView {
         if self.session.shutdown_started {
             return;
         }
+        #[cfg(target_os = "macos")]
+        self.native_layer.clear_surface();
+        #[cfg(target_os = "macos")]
+        self.native_layer.detach();
         self.session
             .begin_shutdown_with_surface(self.external.take());
     }
@@ -307,6 +350,8 @@ impl PhotonWebView {
     pub(super) fn from_session(cx: &mut Context<Self>, session: EngineSession) -> Self {
         Self {
             external: None,
+            #[cfg(target_os = "macos")]
+            native_layer: AppKitIOSurfaceLayer::new(),
             navigation_surface_pending_render: None,
             state: BrowserState::default(),
             diagnostics: PerformanceDiagnostics::default(),
@@ -487,7 +532,7 @@ impl Render for PhotonWebView {
             .id("photon-webview-viewport")
             .cursor(self.page_cursor)
             .on_prepaint(
-                cx.listener(|this, event: &gpui::InteractivityPrepaint, window, cx| {
+                cx.listener(move |this, event: &gpui::InteractivityPrepaint, window, cx| {
                     // Resize from the laid-out WebView bounds, not the native window
                     // bounds minus assumed titlebar/padding values. During live resize,
                     // those assumptions can differ by a frame and offset the page.
@@ -496,10 +541,21 @@ impl Render for PhotonWebView {
                         f32::from(event.bounds.origin.x),
                         f32::from(event.bounds.origin.y),
                     );
+                    let scale_factor = window.scale_factor();
                     this.update_viewport(
                         f32::from(event.bounds.size.width),
                         f32::from(event.bounds.size.height),
-                        window.scale_factor(),
+                        scale_factor,
+                    );
+                    #[cfg(target_os = "macos")]
+                    this.native_layer.place(
+                        window,
+                        IOSurfaceLayerPlacement {
+                            bounds: event.bounds,
+                            corner_radius: metrics::page_radius(),
+                            scale_factor,
+                            background_rgb: palette.page_background,
+                        },
                     );
                     // Follow the window across displays so Engine paces to the
                     // one it is on rather than a 60 Hz default.
@@ -606,13 +662,12 @@ impl Render for PhotonWebView {
             .overflow_hidden()
             .bg(gpui::rgb(palette.page_background));
         {
-            let page_surface = crate::platform::renderer::page_surface(
+            webview = webview.child(crate::platform::renderer::page_surface(
                 self.external.as_ref(),
                 crate::platform::PageSurfacePalette {
                     background: palette.page_background,
                 },
-            );
-            webview = webview.child(page_surface);
+            ));
             if let Some(navigation_id) = self.navigation_surface_pending_render.take() {
                 self.session
                     .record_navigation_surface_rendered(navigation_id);
@@ -628,5 +683,18 @@ impl Render for PhotonWebView {
             ));
         }
         webview
+    }
+}
+
+impl PhotonWebView {
+    /// Shows or hides the page: Engine pauses rendering while hidden, and on
+    /// macOS the direct page layer is hidden so it cannot cover what is shown
+    /// in its place.
+    pub(in crate::platform) fn set_page_visible(&mut self, visible: bool) {
+        self.session.set_visible(visible);
+        #[cfg(target_os = "macos")]
+        if !visible {
+            self.native_layer.hide();
+        }
     }
 }

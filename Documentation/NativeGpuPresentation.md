@@ -1,18 +1,21 @@
 # Native GPU presentation
 
-**Status: working on macOS.** Example.com has been displayed through the GPUI-CE Metal and IOSurface path, with GPU command buffers completing and no CPU page-pixel copies. An intermittent blank launch was observed during early development; it did not reproduce in 20 launches on 2026-10-09 (12 with a local page, 8 with Wikipedia), each of which presented frames.
+**Status: working on macOS.** Pages are shown directly by Core Animation from Engine's IOSurfaces, as in Ladybird's Qt view, with no CPU page-pixel copies and no GPUI drawing of page pixels. On 2026-10-26 an animated test page showed a new frame on 59.5–59.9 of every 60 display refreshes, measured from screen captures, and switching between tabs always showed the selected page.
 
 On macOS, the Photon Engine compositor paints Skia output into BGRA IOSurface-backed frame stores. Photon receives each frame's backing identity, generation, frame ID and producer `MTLSharedEvent` value over its native presentation broker. The Engine and GPUI-CE Metal devices are checked for matching registry IDs.
 
-Photon resolves and caches the IOSurface once per backing. GPUI-CE caches the imported Metal texture by resource ID, generation and actual IOSurface ID. It encodes the producer event wait in the same command buffer that samples the texture, draws directly to the native layer, and reports both submission and completion to Photon. There are no CPU page-pixel copies or GPUI image uploads in this path.
+Photon looks up each backing's IOSurface once and holds only the surface itself. A CoreVideo buffer or a Mach send right would mark the surface in use for as long as it lived, and the compositor reads that mark (`IOSurfaceIsInUse`) to tell when the window server has finished with a surface it displayed; the broker likewise keeps the surface rather than its port.
 
-Photon keeps the displayed Engine backing leased until it is replaced and nothing samples it: a command buffer sampling a newer frame has been submitted, and every command buffer that sampled the old frame has completed. The compositor allocates four backings for a client that samples them on its GPU, so it can render while Photon holds the displayed frame and the next one. While the window is fully occluded Photon marks the active view hidden, and Engine stops rendering frames GPUI-CE would not draw. At shutdown, the application disables new frame publication, waits for all tracked surface-sampling command buffers, releases pending and displayed leases, and asserts `submitted == completed == released` with `outstanding == 0`.
+Each web view owns a `CALayer` placed directly beneath GPUI-CE's window layer. GPUI-CE paints a rounded cutout where the page is (`Window::paint_cutout`), so Core Animation and the window server composite the page, and anything GPUI-CE draws over the page afterwards, such as tooltips, menus, the omnibox panel and dialogs, stays above it. Core Animation cannot wait for the producer's GPU work, so a frame is installed only once its producer `MTLSharedEvent` value has signaled; a Metal shared-event listener on the main queue wakes the view then, without a waiting thread. A hidden tab hides its layer.
+
+When a frame is shown, the frames it replaced are released at once, like Ladybird's view releasing its previous front buffer. A frame that was never shown is reported finished and can be reused immediately. One Core Animation displayed is not: the compositor does not render into it while the window server still reads it, and adds a backing store rather than wait. While the window is fully occluded Photon marks the active view hidden, and Engine stops rendering frames. At shutdown, the application disables new frame publication, releases pending and displayed leases, and checks `received == completed == released` with `outstanding == 0`.
 
 The XPC protocol, Rust client channel, and native Objective-C transport live in
 `crates/photon-presentation-ipc`. The small
 `crates/photon-presentation-broker` executable starts the service; the CLI
 command stages and registers that executable. It transports IOSurface Mach
-ports and shared-event handles between the Engine and Photon processes. GPUI-CE
-itself contains only generic external Metal surface rendering APIs.
+ports and shared-event handles between the Engine and Photon processes.
+`photon run` rebuilds the broker and restarts its service when the executable
+changes. GPUI-CE contains only the generic cutout primitive.
 
-`photon run --verbose --shutdown-after-seconds 5` provides a fixed-window trace. The latest verified run reported `submitted=4 completed=4 released=4 outstanding=0 gpu-in-flight=0`. The compositor profile reported zero GPU-to-CPU bitmap readback time, and repeated frames reused backing IDs 13–15. AppKit titlebar and window material styling remain separate work after interaction and resize validation.
+`photon run --verbose --shutdown-after-seconds 5` provides a fixed-window trace ending in the shutdown lease accounting. `EXTERNAL_IMAGE_LEASE_TRACE=1` adds the Engine side, including each release's `iosurface_in_use` state.

@@ -3,9 +3,10 @@
 //! The native view sits above GPUI's Metal-backed content, so it receives
 //! AppKit input and accessibility behavior without copying or repainting its
 //! pixels through GPUI. Its frame and attachment follow the GPUI element tree.
+#![allow(deprecated)]
 
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     ffi::c_void,
     ptr::NonNull,
     rc::Rc,
@@ -16,6 +17,7 @@ use gpui::{
     App, AsyncApp, Bounds, Element, ElementId, GlobalElementId, InspectorElementId, IntoElement,
     LayoutId, Pixels, Refineable, Size, Style, StyleRefinement, Styled, Visibility, Window, px,
 };
+use io_surface::IOSurface;
 use objc2::{
     DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send,
     rc::Retained,
@@ -27,10 +29,245 @@ use objc2_app_kit::{
     NSGlassEffectViewStyle, NSImage, NSSegmentDistribution, NSSegmentStyle,
     NSSegmentSwitchTracking, NSSegmentedControl, NSView,
 };
+use objc2_core_graphics::CGColor;
 use objc2_foundation::{NSObject, NSPoint, NSRect, NSSize, NSString};
+use objc2_quartz_core::{CALayer, CATransaction, kCACornerCurveContinuous, kCAGravityResize};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
 static NEXT_NATIVE_VIEW_ID: AtomicU64 = AtomicU64::new(1);
+
+/// A Core Animation layer that displays an Engine IOSurface directly.
+///
+/// The layer sits beneath GPUI's layer, which cuts a hole where the page is
+/// (see `Window::paint_cutout`). Core Animation and the window server
+/// composite the page without copying it through GPUI, and anything GPUI
+/// draws over the page, such as a tooltip or menu, stays above it.
+#[derive(Clone)]
+pub struct AppKitIOSurfaceLayer {
+    inner: Rc<IOSurfaceLayerInner>,
+}
+
+struct IOSurfaceLayerInner {
+    layer: Retained<CALayer>,
+    current_surface: RefCell<Option<IOSurface>>,
+    current_identity: RefCell<Option<(u64, u64, u64)>>,
+    contents_fraction: Cell<(f64, f64)>,
+}
+
+impl AppKitIOSurfaceLayer {
+    /// Creates a layer wrapper on GPUI's AppKit thread.
+    pub fn new() -> Self {
+        let _main_thread = MainThreadMarker::new()
+            .expect("Core Animation layers must be created on the AppKit main thread");
+        let layer = CALayer::layer();
+        layer.setMasksToBounds(true);
+        // SAFETY: Core Animation exposes these process-wide immutable values.
+        unsafe {
+            layer.setCornerCurve(kCACornerCurveContinuous);
+            layer.setContentsGravity(kCAGravityResize);
+        }
+        Self {
+            inner: Rc::new(IOSurfaceLayerInner {
+                layer,
+                current_surface: RefCell::new(None),
+                current_identity: RefCell::new(None),
+                contents_fraction: Cell::new((1.0, 1.0)),
+            }),
+        }
+    }
+
+    /// Shows a frame, without painting page pixels through GPUI.
+    pub fn set_surface(
+        &self,
+        identity: (u64, u64, u64),
+        surface: &IOSurface,
+        painted_width: i32,
+        painted_height: i32,
+    ) {
+        if self.shows(identity) {
+            return;
+        }
+        if painted_width <= 0 || painted_height <= 0 {
+            self.clear_surface();
+            return;
+        }
+
+        let _main_thread = MainThreadMarker::new()
+            .expect("Core Animation layers must be updated on the AppKit main thread");
+        let width = unsafe { io_surface::IOSurfaceGetWidth(surface.obj) } as f64;
+        let height = unsafe { io_surface::IOSurfaceGetHeight(surface.obj) } as f64;
+        if width <= 0.0 || height <= 0.0 {
+            self.clear_surface();
+            return;
+        }
+
+        // A resize can pad the surface beyond what was painted; show only
+        // the painted part.
+        let contents_fraction = (
+            f64::from(painted_width).min(width) / width,
+            f64::from(painted_height).min(height) / height,
+        );
+        self.inner.contents_fraction.set(contents_fraction);
+        CATransaction::begin();
+        CATransaction::setDisableActions(true);
+        self.inner.layer.setContentsRect(iosurface_contents_rect(
+            &self.inner.layer,
+            contents_fraction,
+        ));
+        // IOSurface is a Core Foundation object accepted by CALayer.contents.
+        // Keep our own retained reference until a later transaction replaces it.
+        let contents = unsafe { &*surface.obj.cast::<AnyObject>() };
+        unsafe { self.inner.layer.setContents(Some(contents)) };
+        // Ladybird's Qt view also asks for a window display cycle, to commit
+        // with Qt's own backing store and keep Qt routing mouse events to its
+        // native view. AppKit routes events to GPUI's view by view, not by
+        // layer, and GPUI has nothing new to draw.
+        CATransaction::commit();
+        *self.inner.current_surface.borrow_mut() = Some(surface.clone());
+        *self.inner.current_identity.borrow_mut() = Some(identity);
+    }
+
+    /// Whether the layer already shows this frame.
+    pub fn shows(&self, identity: (u64, u64, u64)) -> bool {
+        *self.inner.current_identity.borrow() == Some(identity)
+    }
+
+    /// Clears the layer while GPUI draws the page instead.
+    pub fn clear_surface(&self) {
+        if self.inner.current_identity.borrow().is_none() {
+            return;
+        }
+        let _main_thread = MainThreadMarker::new()
+            .expect("Core Animation layers must be updated on the AppKit main thread");
+        CATransaction::begin();
+        CATransaction::setDisableActions(true);
+        unsafe { self.inner.layer.setContents(None) };
+        CATransaction::commit();
+        *self.inner.current_surface.borrow_mut() = None;
+        *self.inner.current_identity.borrow_mut() = None;
+        self.inner.contents_fraction.set((1.0, 1.0));
+    }
+
+    /// Positions the layer beneath the page's hole in GPUI's layer, from the
+    /// page's GPUI prepaint.
+    pub fn place(&self, window: &Window, placement: IOSurfaceLayerPlacement) {
+        let Some(host) = appkit_host_view(window) else {
+            self.detach();
+            return;
+        };
+        // SAFETY: GPUI owns its AppKit window view throughout prepaint.
+        let host = unsafe { host.as_ref() };
+        let host_layer = host
+            .layer()
+            .expect("GPUI's AppKit host view must have a Core Animation layer");
+        let parent_layer = host_layer
+            .superlayer()
+            .expect("GPUI's AppKit host layer must have a superlayer");
+        let layer = &self.inner.layer;
+        let attached = layer
+            .superlayer()
+            .is_some_and(|parent| std::ptr::eq(&*parent, &*parent_layer));
+        CATransaction::begin();
+        CATransaction::setDisableActions(true);
+        if !attached {
+            // Directly beneath GPUI's layer. A page attached later, like a
+            // link preview over its page, lies above those attached before.
+            layer.removeFromSuperlayer();
+            parent_layer.insertSublayer_below(layer, Some(&host_layer));
+        }
+
+        let bounds = placement.bounds;
+        let host_page_bounds = NSRect::new(
+            NSPoint::new(
+                f64::from(bounds.origin.x.as_f32()),
+                f64::from(bounds.origin.y.as_f32()),
+            ),
+            NSSize::new(
+                f64::from(bounds.size.width.as_f32()),
+                f64::from(bounds.size.height.as_f32()),
+            ),
+        );
+        layer.setGeometryFlipped(parent_layer.isGeometryFlipped());
+        layer.setContentsRect(iosurface_contents_rect(
+            layer,
+            self.inner.contents_fraction.get(),
+        ));
+        layer.setFrame(parent_layer.convertRect_fromLayer(host_page_bounds, Some(&host_layer)));
+        layer.setCornerRadius(f64::from(placement.corner_radius));
+        layer.setContentsScale(f64::from(placement.scale_factor));
+        // Shown until the first frame arrives, as the page's own background.
+        let [red, green, blue] = placement.background_rgb.to_be_bytes()[1..] else {
+            unreachable!()
+        };
+        let background = CGColor::new_srgb(
+            f64::from(red) / 255.0,
+            f64::from(green) / 255.0,
+            f64::from(blue) / 255.0,
+            1.0,
+        );
+        layer.setBackgroundColor(Some(&background));
+        layer.setHidden(false);
+        CATransaction::commit();
+    }
+
+    /// Hides the layer when its page stops being shown, as for a background
+    /// tab. A hidden page gets no GPUI prepaint, so `place` cannot hide it,
+    /// and its last frame would show through the next page's hole. The next
+    /// `place` shows it again.
+    pub fn hide(&self) {
+        if MainThreadMarker::new().is_none() {
+            return;
+        }
+        CATransaction::begin();
+        CATransaction::setDisableActions(true);
+        self.inner.layer.setHidden(true);
+        CATransaction::commit();
+    }
+
+    /// Removes this layer from the window when the page is torn down.
+    pub fn detach(&self) {
+        self.inner.layer.removeFromSuperlayer();
+    }
+}
+
+/// Where a page's layer goes, from the page's GPUI layout.
+pub struct IOSurfaceLayerPlacement {
+    /// The page's bounds in the window.
+    pub bounds: Bounds<Pixels>,
+    pub corner_radius: f32,
+    pub scale_factor: f32,
+    /// The page's background, as `0xRRGGBB`.
+    pub background_rgb: u32,
+}
+
+impl Default for AppKitIOSurfaceLayer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Drop for IOSurfaceLayerInner {
+    fn drop(&mut self) {
+        if MainThreadMarker::new().is_some() {
+            self.layer.removeFromSuperlayer();
+        }
+    }
+}
+
+fn iosurface_contents_rect(layer: &CALayer, contents_fraction: (f64, f64)) -> NSRect {
+    let (width_fraction, height_fraction) = contents_fraction;
+    if layer.contentsAreFlipped() {
+        NSRect::new(
+            NSPoint::new(0.0, 0.0),
+            NSSize::new(width_fraction, height_fraction),
+        )
+    } else {
+        NSRect::new(
+            NSPoint::new(0.0, 1.0 - height_fraction),
+            NSSize::new(width_fraction, height_fraction),
+        )
+    }
+}
 
 /// A retained AppKit view that can be mounted in a GPUI layout tree.
 ///

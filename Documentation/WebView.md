@@ -18,11 +18,12 @@ narrow native embedder API. The active tab receives Engine visibility and focus
 updates; inactive tabs retain their page state without rendering frames.
 
 On macOS the Engine publishes IOSurface-backed BGRA frames with producer
-`MTLSharedEvent` values. Photon imports and caches each backing, draws it through
-GPUI-CE's generic external Metal surface, and releases old Engine leases only
-after GPU completion. During shutdown Photon disables new publications, waits
-for in-flight sampling command buffers, drains all leases, and reports/asserts
-zero outstanding frames.
+`MTLSharedEvent` values. Once a frame's producer work is done, Photon shows it
+in the view's own Core Animation layer beneath GPUI-CE, which leaves a hole
+where the page is, so browser UI drawn over the page stays on top. See
+[native GPU presentation](NativeGpuPresentation.md). During shutdown Photon
+disables new publications, drains all leases, and reports zero outstanding
+frames.
 
 A two-finger swipe sideways goes back or forward through the tab's history.
 The Engine's compositor scrolls the page first, and only a sideways scroll

@@ -563,7 +563,7 @@ impl BrowserWindow {
             {
                 return None;
             }
-            view.session.set_visible(false);
+            view.set_page_visible(false);
             view.session.set_focus(false);
             Some(SleepingTab {
                 state: view.state.clone(),

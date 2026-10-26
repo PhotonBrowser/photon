@@ -33,6 +33,7 @@ pub(super) struct PageDetails {
 }
 
 pub(super) struct CallbackState {
+    pub(super) self_ref: Weak<CallbackState>,
     pub(super) task_id: u64,
     pub(super) presentation: Arc<PresentationRuntime>,
     #[cfg(target_os = "macos")]
@@ -54,6 +55,21 @@ impl CallbackState {
     pub(super) fn set_ui_wake(&self, wake: UiWake) {
         *self.ui_wake.lock().unwrap() = Some(wake);
         self.request_redraw();
+    }
+
+    /// Redraws once the newest page frame's GPU work completes, so a frame
+    /// reaches GPUI only when its window frame can sample it without waiting.
+    #[cfg(target_os = "macos")]
+    pub(super) fn request_redraw_when_frame_finished(&self) {
+        let callbacks = self.self_ref.clone();
+        let waiting = self.presentation.notify_when_latest_finished(move || {
+            if let Some(callbacks) = callbacks.upgrade() {
+                callbacks.request_redraw();
+            }
+        });
+        if !waiting {
+            self.request_redraw();
+        }
     }
 
     pub(super) fn request_redraw(&self) {
@@ -82,7 +98,9 @@ impl CallbackState {
                                 && view.diagnostics != diagnostics
                             {
                                 view.diagnostics = diagnostics;
-                                cx.notify();
+                                if view.performance_overlay_enabled {
+                                    cx.notify();
+                                }
                             }
                         })
                     })
@@ -331,6 +349,7 @@ pub(super) fn deliver_pending_releases(callbacks: &CallbackState) {
                 release.key.backing,
                 release.key.generation,
                 release.key.frame,
+                release.consumer_gpu_work_complete,
             );
         }
         trace(format_args!(

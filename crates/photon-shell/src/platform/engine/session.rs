@@ -13,9 +13,7 @@ use std::{
     },
 };
 
-use super::super::presentation::{
-    GpuActivity, LeaseLedger, PresentationRuntime, PresentedSurface, RetiredSurface,
-};
+use super::super::presentation::{FrameKey, LeaseLedger, PresentationRuntime, PresentedSurface};
 use super::callbacks::*;
 use super::navigation_timing::{NavigationTimingProfiler, navigation_profile_enabled};
 use super::{EngineRuntime, UiWake, ZoomStep};
@@ -43,8 +41,8 @@ pub(in crate::platform) struct EngineSession {
     callbacks: Arc<CallbackState>,
     pub(in crate::platform) presentation: Arc<PresentationRuntime>,
     leases: Arc<Mutex<LeaseLedger>>,
-    pub(in crate::platform) gpu_activity: Arc<GpuActivity>,
-    final_surface_releases: Option<Arc<Mutex<Vec<RetiredSurface>>>>,
+    /// The frame leases the page still held when it began to close.
+    final_surface_releases: Option<Vec<FrameKey>>,
     display: Option<u64>,
     pub(in crate::platform) shutdown_started: bool,
     finished: bool,
@@ -273,10 +271,6 @@ impl EngineSession {
         let leases = Arc::new(Mutex::new(LeaseLedger::default()));
         #[cfg(not(target_os = "macos"))]
         let leases = Arc::new(Mutex::new(LeaseLedger));
-        #[cfg(target_os = "macos")]
-        let gpu_activity = Arc::new(GpuActivity::default());
-        #[cfg(not(target_os = "macos"))]
-        let gpu_activity = Arc::new(GpuActivity);
         let performance = Arc::new(PerformanceMonitor::default());
         let navigation_timing =
             navigation_profile_enabled().then(|| Arc::new(NavigationTimingProfiler::default()));
@@ -292,18 +286,16 @@ impl EngineSession {
         )]
         let presentation = Arc::new(PresentationRuntime::new(
             leases.clone(),
-            gpu_activity.clone(),
             navigation_timing.clone(),
             performance.clone(),
         )?);
         presentation
             .release_scheduler
             .store(runtime.runtime, Ordering::Release);
-        #[expect(
-            clippy::arc_with_non_send_sync,
-            reason = "shared with Engine callbacks through a raw context pointer"
-        )]
-        let callbacks = Arc::new(CallbackState {
+        // Shared with Engine callbacks through a raw context pointer; the weak
+        // self-reference lets a frame's GPU-completion wakeup outlive no view.
+        let callbacks = Arc::new_cyclic(|self_ref| CallbackState {
+            self_ref: self_ref.clone(),
             task_id: NEXT_PERFORMANCE_TASK_ID.fetch_add(1, Ordering::Relaxed),
             presentation: presentation.clone(),
             #[cfg(target_os = "macos")]
@@ -375,7 +367,6 @@ impl EngineSession {
             callbacks,
             presentation: presentation.clone(),
             leases,
-            gpu_activity,
             final_surface_releases: None,
             display: None,
             shutdown_started: false,
@@ -745,24 +736,14 @@ impl EngineSession {
         &mut self,
         presented: Option<PresentedSurface>,
     ) {
-        let final_releases = if let Some(presented) = presented {
-            let releases = presented.retired_until_submitted.clone();
-            let mut pending = releases.lock().unwrap();
-            if !pending.iter().any(|retired| retired.key == presented.key) {
-                pending.push(presented.retire());
-            }
-            drop(pending);
-            releases
-        } else {
-            Arc::new(Mutex::new(Vec::new()))
-        };
-        self.begin_shutdown(final_releases);
+        self.begin_shutdown(
+            presented
+                .map(PresentedSurface::into_release_keys)
+                .unwrap_or_default(),
+        );
     }
 
-    pub(in crate::platform) fn begin_shutdown(
-        &mut self,
-        final_surface_releases: Arc<Mutex<Vec<RetiredSurface>>>,
-    ) {
+    pub(in crate::platform) fn begin_shutdown(&mut self, final_surface_releases: Vec<FrameKey>) {
         if self.shutdown_started {
             return;
         }
@@ -781,18 +762,14 @@ impl EngineSession {
         if self.finished {
             return;
         }
-        self.gpu_activity.wait_until_idle();
-        if let Some(final_releases) = self.final_surface_releases.take() {
-            for release in std::mem::take(&mut *final_releases.lock().unwrap()) {
-                self.leases.lock().unwrap().complete(release.key);
-            }
+        for key in self.final_surface_releases.take().unwrap_or_default() {
+            self.leases.lock().unwrap().complete(key);
         }
         self.presentation.stop_accepting_frames();
         self.drain_releases();
         let leases = self.leases.lock().unwrap().counts();
-        let (gpu_submitted, gpu_completed, gpu_in_flight) = self.gpu_activity.counts();
         trace(format_args!(
-            "shutdown accounting received={} accepted={} presented={} lease-completed={} released={} outstanding={} gpu-submitted={gpu_submitted} gpu-completed={gpu_completed} gpu-in-flight={gpu_in_flight}",
+            "shutdown accounting received={} accepted={} presented={} lease-completed={} released={} outstanding={}",
             leases.received,
             leases.accepted,
             leases.presented,
@@ -800,16 +777,14 @@ impl EngineSession {
             leases.released,
             leases.outstanding,
         ));
-        // A miscount here means a frame or command buffer was lost, which is
-        // worth knowing but not worth taking the browser down as a tab closes.
+        // A miscount here means a frame was lost, which is worth knowing but
+        // not worth taking the browser down as a tab closes.
         let balanced = leases.outstanding == 0
             && leases.received == leases.completed
-            && leases.completed == leases.released
-            && gpu_submitted == gpu_completed
-            && gpu_in_flight == 0;
+            && leases.completed == leases.released;
         if !balanced {
             trace(format_args!(
-                "warning: shutdown accounting is unbalanced; presentation frames or native GPU work were left over"
+                "warning: shutdown accounting is unbalanced; presentation frames were left over"
             ));
         }
         self.presentation
@@ -841,7 +816,7 @@ fn resolve_address(input: &str) -> anyhow::Result<CString> {
 impl Drop for EngineSession {
     fn drop(&mut self) {
         if !self.finished {
-            self.begin_shutdown(Arc::new(Mutex::new(Vec::new())));
+            self.begin_shutdown(Vec::new());
             self.finish_shutdown();
         }
     }

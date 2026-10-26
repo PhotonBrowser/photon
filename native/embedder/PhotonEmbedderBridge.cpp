@@ -390,11 +390,12 @@ extern "C" void photon_view_set_display_metadata(void* view,
 extern "C" void photon_view_release_native_frame(void* view,
     uint64_t backing_id,
     uint64_t generation,
-    uint64_t frame_id)
+    uint64_t frame_id,
+    bool consumer_gpu_work_complete)
 {
     if (view)
         static_cast<ViewHandle*>(view)->view->release_native_frame(
-            backing_id, generation, frame_id);
+            backing_id, generation, frame_id, consumer_gpu_work_complete);
 }
 
 extern "C" bool photon_view_set_native_metal_presentation(void* view,

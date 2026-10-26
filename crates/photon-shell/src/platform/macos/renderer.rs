@@ -1,42 +1,40 @@
-//! macOS page renderer: Engine frames arrive as externally presented Metal surfaces.
+//! macOS page renderer: Core Animation shows Engine's IOSurface in a layer
+//! beneath GPUI's, and GPUI leaves a hole where the page is.
 
-use gpui::{AnyElement, ObjectFit, SurfaceSource, prelude::*, px, surface};
+use gpui::{AnyElement, prelude::*, px};
 
 use crate::platform::{PageSurfacePalette, metrics};
 
 pub(in crate::platform) use super::presentation::PresentedSurface;
 
+/// Makes `next` the page's frame. The frames it replaced are released once
+/// it is displayed.
 pub(in crate::platform) fn replace_surface(
     previous: Option<PresentedSurface>,
-    next: PresentedSurface,
+    mut next: PresentedSurface,
 ) -> PresentedSurface {
     if let Some(previous) = previous {
-        let pending = std::mem::take(&mut *previous.retired_until_submitted.lock().unwrap());
-        let mut retired = next.retired_until_submitted.lock().unwrap();
-        retired.push(previous.retire());
-        retired.extend(pending);
+        next.replaced.extend(previous.into_release_keys());
     }
     next
 }
 
+/// The page's place in GPUI: a hole onto its Core Animation layer. Whatever
+/// is drawn after it, over the page, stays on top.
 pub(in crate::platform) fn page_surface(
-    presented: Option<&PresentedSurface>,
-    palette: PageSurfacePalette,
+    _: Option<&PresentedSurface>,
+    _: PageSurfacePalette,
 ) -> AnyElement {
-    let mut page = gpui::div()
-        .size_full()
-        .rounded(px(metrics::page_radius()))
-        .rounded_smoothing(metrics::page_smoothing())
-        .bg(gpui::rgb(palette.background));
-    if let Some(presented) = presented {
-        page = page.child(
-            surface(SurfaceSource::ExternalMetal(presented.surface.clone()))
-                .size_full()
-                .object_fit(ObjectFit::Fill)
-                .relative()
-                .rounded(px(metrics::page_radius()))
-                .rounded_smoothing(metrics::page_smoothing()),
-        );
-    }
-    page.into_any_element()
+    gpui::canvas(
+        |_, _, _| {},
+        |bounds, _, window, _| {
+            window.paint_cutout(
+                bounds,
+                px(metrics::page_radius()).into(),
+                metrics::page_smoothing(),
+            )
+        },
+    )
+    .size_full()
+    .into_any_element()
 }

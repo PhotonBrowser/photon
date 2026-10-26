@@ -382,7 +382,7 @@ impl BrowserWindow {
                     self.activate_tab(active_tab, false, window, cx);
                 }
             } else if let Some(webview) = self.active_webview() {
-                webview.update(cx, |view, _| view.session.set_visible(false));
+                webview.update(cx, |view, _| view.set_page_visible(false));
                 self.wake_tab_sleep_scheduler();
             } else {
                 self.wake_tab_sleep_scheduler();
