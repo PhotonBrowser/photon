@@ -20,6 +20,7 @@ const HELPER_PROCESS_TARGETS: &[&str] = &[
     "RequestServer",
     "ImageDecoder",
     "MediaServer",
+    "VideoDecoderServer",
     "AudioServer",
 ];
 
@@ -653,7 +654,6 @@ fn run_hot_reload_macos(
         }
         if verbose {
             process.env("PHOTON_VERBOSE", "1");
-            process.env("GPUI_EXTERNAL_SURFACE_TRACE", "1");
         }
         if let Some(url) = url {
             process.env("PHOTON_URL", url);
@@ -830,6 +830,9 @@ fn run_direct_macos(
     )?;
     let mut process = Command::new(executable);
     process
+        // Photon restores browser state itself. Don't let AppKit block a
+        // launch with its crash-recovery window-restoration alert.
+        .args(["-ApplePersistenceIgnoreState", "YES"])
         .current_dir(root)
         .env("PHOTON_HELPER_DIRECTORY", helper_dir)
         .env("PHOTON_PRESENTATION_XPC_SERVICE", service)
@@ -847,7 +850,6 @@ fn run_direct_macos(
         .env("DYLD_LIBRARY_PATH", runtime_library_path(&engine));
     if verbose {
         process.env("PHOTON_VERBOSE", "1");
-        process.env("GPUI_EXTERNAL_SURFACE_TRACE", "1");
     }
     if let Some(url) = url {
         process.env("PHOTON_URL", url);
