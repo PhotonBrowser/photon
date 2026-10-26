@@ -33,8 +33,7 @@ pub(super) struct PageDetails {
 }
 
 pub(super) struct CallbackState {
-    /// Lets a macOS frame's GPU-completion wakeup reach this state.
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    /// Lets a frame's GPU-completion wakeup reach this state.
     pub(super) self_ref: Weak<CallbackState>,
     pub(super) task_id: u64,
     pub(super) presentation: Arc<PresentationRuntime>,
@@ -59,9 +58,7 @@ impl CallbackState {
         self.request_redraw();
     }
 
-    /// Redraws once the newest page frame's GPU work completes, so a frame
-    /// reaches GPUI only when its window frame can sample it without waiting.
-    #[cfg(target_os = "macos")]
+    /// Presents the newest page frame once its producer's GPU work is done.
     pub(super) fn request_redraw_when_frame_finished(&self) {
         let callbacks = self.self_ref.clone();
         let waiting = self.presentation.notify_when_latest_finished(move || {

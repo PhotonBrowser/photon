@@ -197,6 +197,11 @@ impl PresentationRuntime {
         Some((1, frame, allocation_microseconds, copy_microseconds))
     }
 
+    /// CPU frames are complete when published, so there is never a wait.
+    pub(in crate::platform) fn notify_when_latest_finished(&self, _: impl Fn() + 'static) -> bool {
+        false
+    }
+
     pub(in crate::platform) fn take_surface(&self) -> Option<PresentedSurface> {
         self.latest.lock().unwrap().take()
     }
