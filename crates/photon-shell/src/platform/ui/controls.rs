@@ -678,6 +678,7 @@ pub(super) fn themed_text_input(
     palette: ThemeColors,
 ) -> EditableTextElement {
     input
+        .text_color(rgb(palette.text_primary))
         .caret_color(rgb_to_hsla(rgb(palette.chosen)))
         .selection_color(rgb_to_hsla(rgba(palette.selection)))
         .caret_blink_interval_500ms()
