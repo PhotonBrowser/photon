@@ -6,11 +6,11 @@
 //! it through the functions here.
 
 use gpui::{App, BorrowAppContext, Global, Task};
-use photon_core::SearchEngines;
-use photon_core::{ClearBrowsingData, History, HistoryEntry, Suggestions};
+use photon_core::{ClearBrowsingData, History, HistoryEntry};
 use photon_storage::{DataUsage, Profile, ProfileWriteTicket};
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use super::super::engine::EngineRuntime;
@@ -30,7 +30,7 @@ struct MostVisitedPages {
 /// Visited pages, past searches and the icons pages showed.
 #[derive(Default)]
 pub(super) struct BrowsingHistory {
-    history: History,
+    history: Arc<History>,
     /// Shared by new tab pages; icon loads do not invalidate page rankings.
     most_visited: RefCell<Option<MostVisitedPages>>,
     /// Where the history is saved; `None` keeps it in memory only.
@@ -54,7 +54,7 @@ pub(in crate::platform) fn load_browsing_history(
     cx: &mut App,
 ) {
     cx.set_global(BrowsingHistory {
-        history,
+        history: Arc::new(history),
         profile,
         ..BrowsingHistory::default()
     });
@@ -80,12 +80,12 @@ impl BrowsingHistory {
         cx.update_global(update)
     }
 
-    /// What the omnibox offers for `input`.
-    pub(super) fn suggestions(input: &str, engines: &SearchEngines, cx: &App) -> Suggestions {
-        match cx.try_global::<Self>() {
-            Some(browsing) => browsing.history.omnibox_suggestions_with(input, engines),
-            None => History::default().omnibox_suggestions_with(input, engines),
-        }
+    /// A cheap snapshot for running an omnibox query away from the UI thread.
+    pub(super) fn suggestion_history(cx: &App) -> Arc<History> {
+        cx.try_global::<Self>().map_or_else(
+            || Arc::new(History::default()),
+            |browsing| browsing.history.clone(),
+        )
     }
 
     /// The pages visited most often, for a new tab page.
@@ -268,7 +268,7 @@ impl BrowsingHistory {
     /// shortly.
     fn change(cx: &mut App, change: impl FnOnce(&mut History) -> bool) {
         Self::update(cx, |browsing, cx| {
-            let changed = change(&mut browsing.history);
+            let changed = change(Arc::make_mut(&mut browsing.history));
             if changed {
                 *browsing.most_visited.get_mut() = None;
             }
@@ -309,11 +309,11 @@ impl BrowsingHistory {
             .detach();
     }
 
-    fn snapshot(&self) -> Option<(Profile, History)> {
+    fn snapshot(&self) -> Option<(Profile, Arc<History>)> {
         Some((self.profile.clone()?, self.history.clone()))
     }
 
-    fn snapshot_for_write(&self) -> Option<(Profile, History, ProfileWriteTicket)> {
+    fn snapshot_for_write(&self) -> Option<(Profile, Arc<History>, ProfileWriteTicket)> {
         let profile = self.profile.clone()?;
         let ticket = profile.begin_history_write();
         Some((profile, self.history.clone(), ticket))

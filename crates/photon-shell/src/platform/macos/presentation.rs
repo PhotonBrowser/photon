@@ -23,7 +23,7 @@ use std::{
 
 use super::super::engine::navigation_timing::NavigationTimingProfiler;
 use crate::platform::engine_ffi::embedder;
-use crate::platform::trace;
+use crate::platform::{trace, verbose_trace_enabled};
 use photon_presentation_ipc::{BackingDescriptor, Channel};
 
 pub(in crate::platform) struct MachPortGuard(pub(in crate::platform) mach_port_t);
@@ -476,7 +476,7 @@ impl PresentationRuntime {
             ));
             return None;
         }
-        if std::env::var_os("PHOTON_VERBOSE").is_some()
+        if verbose_trace_enabled()
             && let Some(event) = event.as_ref()
         {
             let producer_signaled = event.signaled_value();

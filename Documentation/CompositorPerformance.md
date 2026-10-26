@@ -101,7 +101,9 @@ A long page with text, gradients, shadows and SVG images scrolled continuously b
 | WebContent rendering update (p50) | 0.5 ms | 0.4 ms |
 | GPUI-CE draw (p50) | 0.7 ms | 0.8 ms |
 
-Each scroll frame re-rasterizes the whole viewport, so GPU time scales with pixels. A full 4K window (8.3 MP) extrapolates to about 7.7 ms p50 and 12 ms p90, over the 8.3 ms budget of 120 Hz. Caching rasterized scroll content instead of repainting the viewport each frame would address it.
+In these runs each scroll frame re-rasterized the whole viewport, so GPU time scaled with pixels. A full 4K window (8.3 MP) extrapolated to about 7.7 ms p50 and 12 ms p90, over the 8.3 ms budget of 120 Hz.
+
+**Current tree note (2026-10-26):** Engine now has conditional viewport scroll blitting in `ContextPresenter`: for eligible static display lists and integral viewport scroll deltas, it shifts the previous raster and paints the exposed strip. The measurements above predate that path, so the 4K estimate needs to be measured again before treating it as current.
 
 ## 8. Blank launch — not reproduced
 
@@ -186,7 +188,7 @@ Pitfalls for this measurement: repeated test loads of GitHub got its error page,
 - [x] ~~Create pipeline states ahead of first use~~: Skia's Metal precompile already starts each pipeline's creation asynchronously and leaves it in Apple's cache; sampled on a warmed YouTube visit, creating a pipeline at first use took 1–2 ms (section 11)
 - [x] Cache the menus and dialogs over the window like the chrome, so a page frame rebuilds only the root, the page frame and the page (section 11)
 - [ ] Send the video and SVG fixes upstream to Ladybird: branches are on `TheoSlater/ladybird`; opening PRs from the CLI was refused by GitHub, so open them from the web
-- [ ] Cache rasterized scroll content so 4K scrolling fits the 120 Hz GPU budget
+- [ ] Measure 120 Hz scrolling at 4K with the current viewport scroll-blit path
 - [x] Profile scrolling (section 7)
 - [x] Chase the intermittent blank launch (not reproduced, section 8)
 - [ ] Profile the slow Skia flushes on first paint of heavy pages (section 9)

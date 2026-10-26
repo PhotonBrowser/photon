@@ -101,10 +101,13 @@ pub(crate) struct PageSurfacePalette {
     pub(crate) background: u32,
 }
 
-fn trace(args: std::fmt::Arguments<'_>) {
-    // Read once: traces run on every frame, including in GPU completion handlers.
+pub(crate) fn verbose_trace_enabled() -> bool {
     static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    if *ENABLED.get_or_init(|| std::env::var_os("PHOTON_VERBOSE").is_some()) {
+    *ENABLED.get_or_init(|| std::env::var_os("PHOTON_VERBOSE").is_some())
+}
+
+fn trace(args: std::fmt::Arguments<'_>) {
+    if verbose_trace_enabled() {
         eprintln!("[PhotonWebView/GPUI-CE] {args}");
     }
 }

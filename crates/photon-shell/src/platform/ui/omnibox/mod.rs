@@ -11,7 +11,7 @@ mod rows;
 mod site_info;
 
 use gpui::{
-    Context, Entity, EventEmitter, Focusable, MouseButton, Render, Subscription, Window,
+    Context, Entity, EventEmitter, Focusable, MouseButton, Render, Subscription, Task, Window,
     prelude::*, px, rgb, rgb_to_hsla, rgba,
 };
 use gpui_elements::editable_text::{
@@ -83,6 +83,9 @@ pub(super) struct Omnibox {
     /// What the typed text could open. While there are any, the field opens
     /// into a panel listing them.
     suggestions: Vec<Suggestion>,
+    /// The current background history query, canceled when input changes.
+    suggestion_task: Option<Task<()>>,
+    suggestion_generation: u64,
     /// The suggestion Enter opens.
     selected: usize,
     /// The suggestion under the pointer.
@@ -177,6 +180,8 @@ impl Omnibox {
             invalid: false,
             site_info_open: false,
             suggestions: Vec::new(),
+            suggestion_task: None,
+            suggestion_generation: 0,
             selected: 0,
             hovered: None,
             typed: String::new(),
