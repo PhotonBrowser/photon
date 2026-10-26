@@ -8,12 +8,6 @@ use crate::support::{invoke, output, stage};
 pub(super) fn ensure(root: &Path, verbose: bool) -> Result<String, String> {
     let root = root.canonicalize().map_err(|error| error.to_string())?;
     let (service, domain, target) = service_location(&root)?;
-    if service_is_registered(&target) {
-        if verbose {
-            println!("Photon presentation broker: {service} (already registered)");
-        }
-        return Ok(service);
-    }
 
     stage("Build Photon presentation broker");
     invoke(
@@ -33,6 +27,41 @@ pub(super) fn ensure(root: &Path, verbose: bool) -> Result<String, String> {
     let directory = std::env::temp_dir().join(format!("photon-presentation-{service}"));
     std::fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
     let executable = directory.join("presentation_broker");
+    let staged_is_current = std::fs::read(&built)
+        .ok()
+        .zip(std::fs::read(&executable).ok())
+        .is_some_and(|(built, staged)| built == staged);
+    if service_is_registered(&target) {
+        if staged_is_current {
+            if verbose {
+                println!("Photon presentation broker: {service} (already registered)");
+            }
+            return Ok(service);
+        }
+        // A registered broker keeps running its old executable. Replace it by
+        // renaming a copy over it, then restart the service on the new one.
+        stage("Restart Photon presentation broker");
+        let staged = directory.join(".presentation_broker.new");
+        std::fs::copy(&built, &staged)
+            .and_then(|_| std::fs::rename(&staged, &executable))
+            .map_err(|error| {
+                format!(
+                    "could not stage Photon presentation broker {}: {error}",
+                    executable.display()
+                )
+            })?;
+        let restarted = Command::new("launchctl")
+            .args(["kickstart", "-k", &target])
+            .status()
+            .map_err(|error| format!("cannot start launchctl: {error}"))?;
+        if !restarted.success() {
+            return Err(format!(
+                "could not restart Photon presentation broker {target}"
+            ));
+        }
+        return Ok(service);
+    }
+
     std::fs::copy(&built, &executable).map_err(|error| {
         format!(
             "could not stage Photon presentation broker {}: {error}",
