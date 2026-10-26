@@ -329,8 +329,12 @@ fn secondary_selection_becomes_primary_and_dragging_moves_the_palette_together(
             .find(|handle| handle.id == state.selected)
             .unwrap();
         assert!(
-            (primary.x.value() - (x + 0.1)).abs() < 0.001,
-            "primary follows the pointer directly"
+            (primary.x.target() - (x + 0.1)).abs() < 0.001,
+            "primary spring targets the pointer"
+        );
+        assert!(
+            primary.x.is_running(),
+            "primary follows the pointer using an interruptible spring"
         );
         assert!(
             state

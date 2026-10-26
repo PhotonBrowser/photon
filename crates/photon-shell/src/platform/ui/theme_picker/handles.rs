@@ -160,6 +160,7 @@ impl PickerState {
         };
         let lightness = f32::from(after.lightness) - f32::from(before.lightness);
         let mut changed = false;
+        let motion = Settings::motion(cx);
         for handle in self.handles.iter_mut().filter(|handle| !handle.removing) {
             if let Some((_, original)) = anchor.colors.iter().find(|(id, _)| *id == handle.id) {
                 let next = shifted(*original, hue, lightness);
@@ -167,8 +168,8 @@ impl PickerState {
                 handle.tint = next;
             }
             if handle.id == self.selected {
-                handle.x.jump_to(center.0);
-                handle.y.jump_to(center.1);
+                handle.x.animate_to(center.0, Speed::Standard, &motion);
+                handle.y.animate_to(center.1, Speed::Standard, &motion);
             }
         }
         self.arrange_followers(true, cx);
