@@ -103,7 +103,7 @@ A long page with text, gradients, shadows and SVG images scrolled continuously b
 
 In these runs each scroll frame re-rasterized the whole viewport, so GPU time scaled with pixels. A full 4K window (8.3 MP) extrapolated to about 7.7 ms p50 and 12 ms p90, over the 8.3 ms budget of 120 Hz.
 
-**Current tree note (2026-10-26):** Engine now has conditional viewport scroll blitting in `ContextPresenter`: for eligible static display lists and integral viewport scroll deltas, it shifts the previous raster and paints the exposed strip. The measurements above predate that path, so the 4K estimate needs to be measured again before treating it as current.
+**Current tree note (2026-10-26):** Engine now has conditional viewport scroll blitting in `ContextPresenter`: for eligible static display lists and integral viewport scroll deltas, it shifts the previous raster and paints the exposed strip. Static nested display lists qualify when their resources are immutable; animated or live nested content still takes the full repaint path. The measurements above predate that path, so the 4K estimate needs to be measured again before treating it as current.
 
 ## 8. Blank launch — not reproduced
 
