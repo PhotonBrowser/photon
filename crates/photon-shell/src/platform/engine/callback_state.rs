@@ -33,6 +33,8 @@ pub(super) struct PageDetails {
 }
 
 pub(super) struct CallbackState {
+    /// Lets a macOS frame's GPU-completion wakeup reach this state.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     pub(super) self_ref: Weak<CallbackState>,
     pub(super) task_id: u64,
     pub(super) presentation: Arc<PresentationRuntime>,
