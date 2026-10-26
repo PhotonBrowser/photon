@@ -1,11 +1,13 @@
 //! The grid of favourite sites at the top of the sidebar.
 
-use gpui::{AnyElement, FontWeight, MouseButton, Role, div, prelude::*, px, rgb, rgba};
+use gpui::{
+    AnyElement, App, FontWeight, MouseButton, Role, Window, div, prelude::*, px, rgb, rgba,
+};
 
+use super::super::animated_icons::{animated_icon, dismiss_x, favourite_star};
 use super::super::button::icon_button;
 use super::super::controls::FocusRing;
 use super::super::controls::{OwnsClicks, Pressable};
-use super::super::icons::{close_icon, favourite_star_icon};
 use super::super::layout::{h_stack, v_stack};
 use super::super::tabs::{DraggedTab, TabDrop, TabPrepaint};
 use super::super::tooltip::label_tooltip;
@@ -74,6 +76,10 @@ pub(in super::super) fn favourites_grid(
 }
 
 /// Empty favourites area, which teaches new users to menu-favourite a tab.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the hint needs its drop and prepaint handlers and the window to animate its icons"
+)]
 pub(in super::super) fn favourites_empty_state(
     palette: ThemeColors,
     on_dismiss: ClickHandler,
@@ -82,13 +88,23 @@ pub(in super::super) fn favourites_empty_state(
     collapsed: bool,
     show_guidance: bool,
     show_drag_label: bool,
+    window: &mut Window,
+    cx: &mut App,
 ) -> impl IntoElement {
     let dismiss = icon_button(
         "sidebar-favourites-hint-dismiss",
         "Dismiss favourites hint",
         true,
         metrics::ICON_BUTTON_SIZE,
-        close_icon(palette.text_secondary, metrics::CHIP_CLOSE_ICON_SIZE),
+        animated_icon(
+            "sidebar-favourites-hint-dismiss",
+            dismiss_x(),
+            palette.text_secondary,
+            metrics::CHIP_CLOSE_ICON_SIZE,
+            window,
+            cx,
+        )
+        .size_full(),
         palette,
         on_dismiss,
     );
@@ -129,9 +145,13 @@ pub(in super::super) fn favourites_empty_state(
         .on_drop(move |dragged: &DraggedTab, window, cx| on_drop(dragged, window, cx))
         .on_prepaint(move |prepaint, window, cx| on_prepaint(prepaint.bounds, window, cx))
         .when(collapsed, |hint| {
-            hint.child(favourite_star_icon(
+            hint.child(animated_icon(
+                "sidebar-favourites-hint-star",
+                favourite_star(),
                 palette.chosen,
                 metrics::SIDEBAR_FAVOURITES_HINT_ICON_SIZE,
+                window,
+                cx,
             ))
         })
         .when(!collapsed, |hint| {
@@ -143,9 +163,13 @@ pub(in super::super) fn favourites_empty_state(
                     .justify_center()
                     .rounded(px(metrics::SIDEBAR_FAVOURITES_HINT_BADGE_SIZE / 2.0))
                     .bg(rgba(palette.chosen))
-                    .child(favourite_star_icon(
+                    .child(animated_icon(
+                        "sidebar-favourites-hint-star",
+                        favourite_star(),
                         palette.on_chosen,
                         metrics::SIDEBAR_FAVOURITES_HINT_ICON_SIZE,
+                        window,
+                        cx,
                     )),
             )
         })

@@ -1,11 +1,11 @@
 //! The sidebar's vertical tab list: pinned tabs, then today's tabs under a
 //! row that opens a new tab. Collapsed to icons, each is a square tile.
 
-use gpui::{AnyElement, Role, div, prelude::*, px, rgb, rgba};
+use gpui::{AnyElement, App, Role, Window, div, prelude::*, px, rgb, rgba};
 
+use super::super::animated_icons::{animated_icon, plus};
 use super::super::controls::FocusRing;
 use super::super::controls::{OwnsClicks, Pressable};
-use super::super::icons::add_icon;
 use super::super::layout::{h_stack, v_stack};
 use super::super::motion::ReorderGroup;
 use super::super::sidebar::collapsed_tile;
@@ -19,7 +19,8 @@ use super::{
 use std::time::Duration;
 
 /// The tabs, one row each: pinned tabs above a divider, then today's tabs
-/// and a row that opens a new tab. Collapsed, each row is only its icon.
+/// and a row that opens a new tab. Collapsed, each row is only its icon. The
+/// result borrows nothing, so the caller can keep using `cx`.
 #[expect(
     clippy::too_many_arguments,
     reason = "passes the distinct drag, focus, and layout callbacks for this list"
@@ -37,7 +38,9 @@ pub(in super::super) fn tab_list(
     palette: ThemeColors,
     pinned_reorder: ReorderGroup<u64>,
     today_reorder: ReorderGroup<u64>,
-) -> impl IntoElement {
+    window: &mut Window,
+    cx: &mut App,
+) -> impl IntoElement + use<> {
     let spacing = metrics::SidebarSpacing::new(collapsed);
     let suppress_tooltips = tabs.iter().any(|tab| tab.suppress_tooltips);
     let has_live_pinned = tabs.iter().any(|tab| tab.pinned);
@@ -120,6 +123,8 @@ pub(in super::super) fn tab_list(
         suppress_tooltips,
         if new_tab_at_end { focus_index } else { 0 },
         palette,
+        window,
+        cx,
     )
     .on_drag_over::<DraggedTab>(move |style, _, _, _| style.bg(rgba(palette.hover_surface)))
     .on_drop(move |dragged: &DraggedTab, window, cx| on_drop_into_today(dragged, window, cx));
@@ -246,6 +251,8 @@ fn new_tab_row(
     suppress_tooltip: bool,
     focus_index: isize,
     palette: ThemeColors,
+    window: &mut Window,
+    cx: &mut App,
 ) -> gpui_motion::PressScaleElement<gpui::Stateful<gpui::Div>> {
     let row = h_stack()
         .id("browser-new-tab")
@@ -262,9 +269,13 @@ fn new_tab_row(
         .pressable()
         .on_click(on_click)
         .relative()
-        .child(add_icon(
+        .child(animated_icon(
+            "browser-new-tab",
+            plus(),
             palette.text_secondary,
             metrics::SidebarSpacing::new(collapsed).icon_size,
+            window,
+            cx,
         ));
     if collapsed {
         let row = collapsed_tile(row).justify_center();

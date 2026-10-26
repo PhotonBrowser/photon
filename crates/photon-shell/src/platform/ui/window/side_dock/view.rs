@@ -6,8 +6,8 @@
 use gpui::{AnyElement, Context, Div, Stateful, Window, div, prelude::*, px};
 use photon_core::{Command, DockRegion};
 
+use super::super::super::animated_icons::{animated_icon, sidebar_hide, sidebar_show};
 use super::super::super::button::toolbar_button;
-use super::super::super::icons::{sidebar_expand_icon, sidebar_icon};
 use super::super::super::layout::{Elevated, Elevation, Raised, v_stack};
 use super::super::super::motion::{AnimateIn, Edge, slide_in};
 use super::super::super::pages::SETTINGS;
@@ -133,7 +133,7 @@ impl BrowserWindow {
         region: DockRegion,
         width: f32,
         palette: ThemeColors,
-        window: &Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
         let layout = WorkspaceLayout::current(cx);
@@ -147,6 +147,7 @@ impl BrowserWindow {
                 collapsed_tile(self.sidebar_toggle(
                     metrics::SIDEBAR_COLLAPSED_ICON_SIZE,
                     palette,
+                    window,
                     cx,
                 ))
                 .tooltip(label_tooltip(self.sidebar_toggle_label(), palette))
@@ -155,7 +156,7 @@ impl BrowserWindow {
             navigation_column(fullscreen, leading, toggle)
         } else {
             let toggle = has_toggle.then(|| {
-                self.sidebar_toggle(metrics::TOOLBAR_ICON_SIZE, palette, cx)
+                self.sidebar_toggle(metrics::TOOLBAR_ICON_SIZE, palette, window, cx)
                     .into_any_element()
             });
             let controls = layout
@@ -172,16 +173,19 @@ impl BrowserWindow {
         &self,
         icon_size: f32,
         palette: ThemeColors,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> gpui_motion::PressScaleElement<Stateful<Div>> {
         let sidebar = &self.sidebar;
         let color = palette.text_secondary;
         let label = self.sidebar_toggle_label();
-        let icon = if sidebar.docked() && sidebar.shows_icons() {
-            sidebar_expand_icon(color, icon_size).into_any_element()
+        let motion = if sidebar.docked() && sidebar.shows_icons() {
+            sidebar_show()
         } else {
-            sidebar_icon(color, icon_size).into_any_element()
+            sidebar_hide()
         };
+        let icon =
+            animated_icon("toolbar-sidebar-icon", motion, color, icon_size, window, cx).size_full();
         toolbar_button(
             "toolbar-sidebar",
             label,
@@ -230,10 +234,10 @@ impl BrowserWindow {
                     self.omnibox.clone().into_any_element(),
                 )),
                 ComponentId::FavouritesPanel => self
-                    .sidebar_favourites(collapsed, palette, cx)
+                    .sidebar_favourites(collapsed, palette, window, cx)
                     .map(SidebarSection::Favourites),
                 ComponentId::VerticalTabs => Some(SidebarSection::Tabs(
-                    self.sidebar_tabs(collapsed, palette, cx),
+                    self.sidebar_tabs(collapsed, palette, window, cx),
                 )),
                 ComponentId::SidebarFooter => Some(SidebarSection::Footer(
                     self.sidebar_footer(collapsed, palette, window, cx),
@@ -255,6 +259,7 @@ impl BrowserWindow {
         &self,
         collapsed: bool,
         palette: ThemeColors,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
         let space = Settings::get(cx).spaces.active();
@@ -297,6 +302,8 @@ impl BrowserWindow {
                 collapsed,
                 should_show_favourites_guidance(hint_dismissed),
                 should_show_favourites_drag_label(hint_dismissed, dragging_over_favourites),
+                window,
+                cx,
             )
             .into_any_element(),
         )
@@ -307,6 +314,7 @@ impl BrowserWindow {
         &self,
         collapsed: bool,
         palette: ThemeColors,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let space = self.current_space(cx);
@@ -348,6 +356,8 @@ impl BrowserWindow {
             self.tab_reorder_groups
                 .group(TabDragAxis::Vertical, false)
                 .clone(),
+            window,
+            cx,
         );
         match self
             .spaces

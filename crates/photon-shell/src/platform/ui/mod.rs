@@ -1,5 +1,6 @@
 //! GPUI views and window composition.
 
+mod animated_icons;
 mod button;
 mod color_picker;
 mod command_palette;

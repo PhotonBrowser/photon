@@ -1,9 +1,13 @@
 //! Monochrome shell icons, tinted with the caller's color.
 //!
+//! Monochrome shell icons, tinted with the caller's color.
+//!
 //! Icons come from [Lucide](https://lucide.dev) (ISC license), vendored
 //! unchanged from `lucide-static` in `assets/icons/lucide/`. To add one,
 //! download it from the same version into that folder and load it with
-//! `lucide!`.
+//! `lucide!`. [Heroicons](https://heroicons.com) (MIT license) icons live in
+//! `assets/icons/heroicons/` and load with `heroicon!`. Icons that move on
+//! hover are in `animated_icons`.
 
 use gpui::{
     Image, ImageFormat, Transformation, hsla, hsla_to_rgba, prelude::*, px, radians, rgb,
@@ -27,6 +31,20 @@ macro_rules! lucide {
         ))
     };
 }
+
+/// A vendored Heroicons icon's SVG, by its Heroicons name.
+macro_rules! heroicon {
+    ($name:literal) => {
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/assets/icons/heroicons/",
+            $name,
+            ".svg"
+        ))
+    };
+}
+
+pub(super) use {heroicon, lucide};
 
 /// The browser's logo. The original grey tones are tinted with the active
 /// window colour, including both ends of a window gradient.
@@ -85,7 +103,7 @@ fn tinted_gradient(name: &str, grey: u32, start: u32, end: u32) -> String {
 }
 
 /// An icon from `data`, `size` square, tinted `color`.
-fn icon(data: &'static [u8], color: u32, size: f32) -> gpui::Svg {
+pub(super) fn icon(data: &'static [u8], color: u32, size: f32) -> gpui::Svg {
     svg()
         .data(data)
         .size(px(size))
@@ -124,11 +142,6 @@ pub(super) fn sidebar_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("panel-left"), color, size)
 }
 
-/// A sidebar with an arrow out of it, for expanding the collapsed sidebar.
-pub(super) fn sidebar_expand_icon(color: u32, size: f32) -> impl IntoElement {
-    icon(lucide!("panel-left-open"), color, size)
-}
-
 /// A pencil, for customising.
 pub(super) fn edit_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("pencil"), color, size)
@@ -163,21 +176,11 @@ pub(super) fn minimize_window_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("minus"), color, size)
 }
 
-/// A filled star, for the empty favourites hint.
-pub(super) fn favourite_star_icon(color: u32, size: f32) -> impl IntoElement {
-    svg()
-        .data(br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="m12 2.5 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5-5.8-3.1-5.8 3.1 1.1-6.5-4.7-4.6 6.5-.9z"/></svg>"##)
-        .size(px(size))
-        .flex_shrink_0()
-        .text_color(rgb(color))
-}
+/// A filled star, which marks a favourite.
+pub(super) const FAVOURITE_STAR_SVG: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="m12 2.5 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5-5.8-3.1-5.8 3.1 1.1-6.5-4.7-4.6 6.5-.9z"/></svg>"##;
 
 pub(super) fn add_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("plus"), color, size)
-}
-
-pub(super) fn more_icon(color: u32, size: f32) -> impl IntoElement {
-    icon(lucide!("ellipsis-vertical"), color, size)
 }
 
 pub(super) fn check_icon(color: u32, size: f32) -> impl IntoElement {

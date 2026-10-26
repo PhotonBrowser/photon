@@ -689,6 +689,13 @@ pub(super) fn button_jiggle_spring() -> Spring {
     Spring::new(1_600.0, 80.0, 1.0).expect("Photon button jiggle spring parameters are positive")
 }
 
+/// The default spring for icons that move on hover, taken from
+/// heroicons-animated's cog: it settles in under a second, overshooting its
+/// target slightly.
+pub(super) fn hover_icon_spring() -> Spring {
+    Spring::new(50.0, 10.0, 1.0).expect("Photon hover icon spring parameters are positive")
+}
+
 fn press_scale<E: StatefulInteractiveElement + Styled + IntoElement + 'static>(
     mut element: E,
     scale: f32,
