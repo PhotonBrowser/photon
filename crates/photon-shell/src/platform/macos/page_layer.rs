@@ -12,10 +12,10 @@ use std::cell::{Cell, RefCell};
 
 use gpui::Window;
 use io_surface::IOSurface;
-use objc2::{MainThreadMarker, rc::Retained, runtime::AnyObject};
+use objc2::{MainThreadMarker, msg_send, rc::Retained, runtime::AnyObject};
 use objc2_core_graphics::CGColor;
-use objc2_foundation::{NSPoint, NSRect, NSSize};
-use objc2_quartz_core::{CALayer, CATransaction, kCACornerCurveContinuous, kCAGravityResize};
+use objc2_foundation::{NSDictionary, NSNull, NSPoint, NSRect, NSSize, NSString};
+use objc2_quartz_core::{CALayer, kCACornerCurveContinuous, kCAGravityResize};
 
 use super::appkit::appkit_host_view;
 use crate::platform::PagePlacement;
@@ -39,6 +39,29 @@ impl PageLayer {
             .expect("Core Animation layers must be created on the AppKit main thread");
         let layer = CALayer::layer();
         layer.setMasksToBounds(true);
+        // Without animations, changes join the main thread's implicit
+        // transaction: the one GPUI-CE presents a frame whose cutout moved
+        // with, so the page and its hole reach the screen together.
+        let keys = [
+            "bounds",
+            "position",
+            "hidden",
+            "contents",
+            "contentsRect",
+            "contentsScale",
+            "backgroundColor",
+            "cornerRadius",
+            "onOrderIn",
+            "onOrderOut",
+        ]
+        .map(NSString::from_str);
+        let null = NSNull::null();
+        let actions = NSDictionary::from_slices(
+            &keys.iter().map(|key| &**key).collect::<Vec<_>>(),
+            &vec![&*null; keys.len()],
+        );
+        // SAFETY: NSNull is a valid CAAction that disables an animation.
+        let _: () = unsafe { msg_send![&*layer, setActions: &*actions] };
         // SAFETY: Core Animation exposes these process-wide immutable values.
         unsafe {
             layer.setCornerCurve(kCACornerCurveContinuous);
@@ -83,18 +106,15 @@ impl PageLayer {
             f64::from(painted_height).min(height) / height,
         );
         self.contents_fraction.set(contents_fraction);
-        CATransaction::begin();
-        CATransaction::setDisableActions(true);
         self.layer
             .setContentsRect(contents_rect(&self.layer, contents_fraction));
         // IOSurface is a Core Foundation object accepted by CALayer.contents.
         let contents = unsafe { &*surface.obj.cast::<AnyObject>() };
         unsafe { self.layer.setContents(Some(contents)) };
-        // Ladybird's Qt view also asks for a window display cycle, to commit
-        // with Qt's own backing store and keep Qt routing mouse events to its
-        // native view. AppKit routes events to GPUI's view by view, not by
-        // layer, and GPUI has nothing new to draw.
-        CATransaction::commit();
+        // The main thread's implicit transaction commits this. Ladybird's Qt
+        // view also asks for a window display cycle, to commit with Qt's own
+        // backing store and keep Qt routing mouse events to its native view;
+        // AppKit routes events to GPUI's view by view, not by layer.
         *self.current_surface.borrow_mut() = Some(surface.clone());
         self.current_identity.set(Some(identity));
     }
@@ -103,10 +123,7 @@ impl PageLayer {
         if self.current_identity.get().is_none() {
             return;
         }
-        CATransaction::begin();
-        CATransaction::setDisableActions(true);
         unsafe { self.layer.setContents(None) };
-        CATransaction::commit();
         *self.current_surface.borrow_mut() = None;
         self.current_identity.set(None);
         self.contents_fraction.set((1.0, 1.0));
@@ -150,8 +167,6 @@ impl PageLayer {
             return;
         }
 
-        CATransaction::begin();
-        CATransaction::setDisableActions(true);
         if !attached {
             // Directly beneath GPUI's layer. A page attached later, like a
             // link preview over its page, lies above those attached before.
@@ -173,7 +188,6 @@ impl PageLayer {
         );
         layer.setBackgroundColor(Some(&background));
         layer.setHidden(false);
-        CATransaction::commit();
         self.placed.set(Some((placement, frame, flipped)));
     }
 
@@ -182,10 +196,7 @@ impl PageLayer {
     /// last frame would show through the next page's hole. The next `place`
     /// shows it again.
     pub(super) fn hide(&self) {
-        CATransaction::begin();
-        CATransaction::setDisableActions(true);
         self.layer.setHidden(true);
-        CATransaction::commit();
     }
 
     /// Removes the layer from its window, as when the page closes.

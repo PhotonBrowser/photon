@@ -60,7 +60,9 @@ objc2-core-graphics = { version = "0.3.2", default-features = false, features = 
   "CGColor",
 ] }
 objc2-foundation = { version = "0.3.2", default-features = false, features = [
+  "NSDictionary",
   "NSGeometry",
+  "NSNull",
   "NSObject",
   "NSString",
 ] }
