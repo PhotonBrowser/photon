@@ -68,6 +68,7 @@ pub(super) mod embedder {
 
     pub(crate) type SelectDropdownCallback =
         unsafe extern "C" fn(*mut c_void, f64, f64, f64, *const SelectItem, usize);
+    #[cfg(not(feature = "ui-only"))]
     pub(crate) type EngineProcessCallback = unsafe extern "C" fn(
         *mut c_void,
         u64,
