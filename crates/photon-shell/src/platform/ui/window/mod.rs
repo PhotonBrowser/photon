@@ -67,7 +67,7 @@ use super::tabs::{RevealedIcon, TabDragAxis, TabReorderGroups};
 use super::theme::{ThemeColors, palette};
 use crate::platform::permission_coordinator::PermissionCoordinator;
 use alerts::{AlertCenter, EngineNotice, NoticeExpiry};
-use content::{BrowserTab, TabContent, create_webview};
+use content::{BrowserTab, TabContent, create_webview, follow_appearance};
 use peek::PeekState;
 use permissions::PermissionPromptEntry;
 use popups::PendingPopup;
@@ -647,6 +647,10 @@ fn open_browser_window(
             browser.bind_tab_reorder_groups(cx);
             match (initial_webview, startup_page) {
                 (Some(webview), _) => {
+                    // Initial startup URLs bypass the regular webview insertion
+                    // helper, so apply the page preference before first layout
+                    // starts the deferred navigation.
+                    follow_appearance(&webview, window, cx);
                     let content = TabContent::Web(webview);
                     browser.insert_content(0, content, true, window, cx);
                 }
