@@ -263,7 +263,6 @@ impl BrowserWindow {
                 }
                 cx.stop_propagation();
             }))
-            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .child(popover_surface(
                 overlay.label,
                 overlay.role,
@@ -273,23 +272,13 @@ impl BrowserWindow {
                 overlay.palette,
                 cx,
             ));
-        let close_left = cx.listener(|this, _: &MouseDownEvent, window, cx| {
+        let close = cx.listener(|this, _: &MouseDownEvent, window, cx| {
             this.close_context_popover(window, cx);
+            cx.stop_propagation();
         });
-        let close_right = cx.listener(|this, _: &MouseDownEvent, window, cx| {
-            this.close_context_popover(window, cx);
-        });
-        deferred(
-            div()
-                .absolute()
-                .inset_0()
-                .occlude()
-                .on_mouse_down(MouseButton::Left, close_left)
-                .on_mouse_down(MouseButton::Right, close_right)
-                .child(popup),
-        )
-        .priority(8)
-        .into_any_element()
+        deferred(popup.occlude().on_mouse_down_out(close))
+            .priority(8)
+            .into_any_element()
     }
 
     fn context_menu_row(
@@ -479,4 +468,73 @@ fn menu_surface_inset() -> f32 {
 
 fn menu_content_max_height(viewport_height: Pixels) -> Pixels {
     px((f32::from(viewport_height) - menu_surface_inset()).max(0.0))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::super::menu::menu_action_with_state;
+    use crate::platform::ui::theme::{AccentColor, preview_palette};
+    use gpui::{
+        Context, InteractiveElement, IntoElement, Modifiers, MouseDownEvent, ParentElement, Render,
+        Role, Styled, Window, deferred, div, point, px,
+    };
+    use std::{cell::Cell, rc::Rc};
+
+    struct MenuClickTestView {
+        clicked: Rc<Cell<usize>>,
+        dismissed: Rc<Cell<usize>>,
+    }
+
+    impl Render for MenuClickTestView {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            let clicked = self.clicked.clone();
+            let dismissed = self.dismissed.clone();
+            let palette = preview_palette(false, AccentColor::Blue);
+            let row = menu_action_with_state(
+                "test-menu-row",
+                "Choose item",
+                Role::MenuItem,
+                false,
+                false,
+                Box::new(move |_, _, _| clicked.set(clicked.get() + 1)),
+                palette,
+            );
+            let outside_click = move |_: &MouseDownEvent, _: &mut Window, cx: &mut gpui::App| {
+                dismissed.set(dismissed.get() + 1);
+                cx.stop_propagation();
+            };
+
+            div().size_full().child(
+                deferred(
+                    div()
+                        .absolute()
+                        .left(px(20.0))
+                        .top(px(20.0))
+                        .w(px(180.0))
+                        .occlude()
+                        .on_mouse_down_out(outside_click)
+                        .child(div().w(px(180.0)).child(row)),
+                )
+                .priority(8),
+            )
+        }
+    }
+
+    #[gpui::test]
+    fn menu_rows_receive_clicks_without_dismissing_the_popover(cx: &mut gpui::TestAppContext) {
+        let clicked = Rc::new(Cell::new(0));
+        let dismissed = Rc::new(Cell::new(0));
+        let (_view, cx) = cx.add_window_view({
+            let clicked = clicked.clone();
+            let dismissed = dismissed.clone();
+            move |_, _| MenuClickTestView { clicked, dismissed }
+        });
+
+        cx.simulate_click(point(px(40.0), px(30.0)), Modifiers::none());
+        assert_eq!(clicked.get(), 1);
+        assert_eq!(dismissed.get(), 0);
+
+        cx.simulate_click(point(px(240.0), px(120.0)), Modifiers::none());
+        assert_eq!(dismissed.get(), 1);
+    }
 }
