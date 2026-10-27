@@ -6,10 +6,10 @@
 use gpui::{AnyElement, Context, Div, Stateful, Window, div, prelude::*, px};
 use photon_core::{Command, DockRegion};
 
-use super::super::super::animated_icons::{animated_icon, sidebar_hide, sidebar_show};
 use super::super::super::button::toolbar_button;
+use super::super::super::icons::sidebar_icon;
 use super::super::super::layout::{Elevated, Elevation, Raised, v_stack};
-use super::super::super::motion::{AnimateIn, Edge, slide_in};
+use super::super::super::motion::{AnimateIn, Edge, slide_in, translated};
 use super::super::super::pages::SETTINGS;
 use super::super::super::settings::Settings;
 use super::super::super::sidebar::{
@@ -52,7 +52,7 @@ impl BrowserWindow {
         out: f32,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> Stateful<Div> {
+    ) -> AnyElement {
         let palette = self.palette(window, cx);
         let layout = WorkspaceLayout::current(cx);
         let sidebar = &self.sidebar;
@@ -72,6 +72,7 @@ impl BrowserWindow {
         } else {
             (full_width, sidebar.expanded())
         };
+        let opacity = if sidebar.is_moving() { 1.0 } else { opacity };
         // Right-clicking its empty space opens the browser menu.
         let content = v_stack()
             .absolute()
@@ -112,9 +113,9 @@ impl BrowserWindow {
                 .on_scroll_wheel(cx.listener(|this, event, _, cx| this.swipe_spaces(event, cx))),
         );
         panel = if leading {
-            panel.left(offset + px(reveal_inset))
+            panel.left(if over_page { px(reveal_inset) } else { offset })
         } else {
-            panel.right(offset + px(reveal_inset))
+            panel.right(if over_page { px(reveal_inset) } else { offset })
         };
         if over_page {
             panel = panel
@@ -123,7 +124,13 @@ impl BrowserWindow {
                     this.revealed_sidebar_hovered(*hovered, cx);
                 }));
         }
-        panel.child(content)
+        let panel = panel.child(content);
+        if over_page {
+            let translation = if leading { offset } else { -offset };
+            translated(panel, gpui::point(translation, px(0.0))).into_any_element()
+        } else {
+            panel.into_any_element()
+        }
     }
 
     /// The sidebar's top: a row beside the window controls with the toggle
@@ -173,19 +180,17 @@ impl BrowserWindow {
         &self,
         icon_size: f32,
         palette: ThemeColors,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> gpui_motion::PressScaleElement<Stateful<Div>> {
-        let sidebar = &self.sidebar;
         let color = palette.text_secondary;
         let label = self.sidebar_toggle_label();
-        let motion = if sidebar.docked() && sidebar.shows_icons() {
-            sidebar_show()
-        } else {
-            sidebar_hide()
-        };
-        let icon =
-            animated_icon("toolbar-sidebar-icon", motion, color, icon_size, window, cx).size_full();
+        let icon = div()
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(sidebar_icon(color, icon_size));
         toolbar_button(
             "toolbar-sidebar",
             label,
@@ -309,7 +314,8 @@ impl BrowserWindow {
         )
     }
 
-    /// The space's tabs, sliding in from the side the space came from.
+    /// The space's tabs, sliding in from the side the space came from unless
+    /// the sidebar itself is already moving.
     fn sidebar_tabs(
         &self,
         collapsed: bool,
@@ -318,11 +324,12 @@ impl BrowserWindow {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let space = self.current_space(cx);
+        let sidebar_moving = self.sidebar.is_moving();
         let listed = self.listed_tabs(cx);
-        let items = self.tab_items_for_indices(listed, cx);
+        let items = self.tab_items_for_indices(listed, sidebar_moving, cx);
         let new_tab_at_end =
             Settings::get(cx).new_tab_position == photon_core::NewTabPosition::AfterLast;
-        let new_tab_button_motion = if new_tab_at_end {
+        let new_tab_button_motion = if new_tab_at_end && !sidebar_moving {
             self.new_tab_button_motion()
         } else {
             None
@@ -359,18 +366,19 @@ impl BrowserWindow {
             window,
             cx,
         );
-        match self
-            .spaces
-            .arriving_from(slide_in(Edge::Left).total_duration(&Settings::motion(cx)))
-        {
+        let motion = Settings::motion(cx);
+        let can_animate_space_arrival = !sidebar_moving
+            && self.sidebar.docked()
+            && !self.sidebar.over_page()
+            && self.sidebar.shown() >= 1.0;
+        match self.spaces.arriving_from(
+            slide_in(Edge::Left).total_duration(&motion),
+            can_animate_space_arrival,
+        ) {
             Some(edge) => div()
                 .w_full()
                 .child(tabs)
-                .animate_in(
-                    ("space-tabs", space as usize),
-                    slide_in(edge),
-                    &Settings::motion(cx),
-                )
+                .animate_in(("space-tabs", space as usize), slide_in(edge), &motion)
                 .into_any_element(),
             None => tabs.into_any_element(),
         }
@@ -406,7 +414,11 @@ impl BrowserWindow {
 }
 
 /// The floating raised surface under a sidebar revealed over the page.
-fn revealed_surface(palette: ThemeColors) -> Div {
+fn revealed_surface(mut palette: ThemeColors) -> Div {
+    // This surface floats over a live Engine page. Refiltering that page
+    // through a large backdrop blur on every page frame stalls animation and
+    // makes the rest of the browser feel choppy, so keep only the themed tint.
+    palette.raised_blur = 0.0;
     div()
         .absolute()
         .inset_0()

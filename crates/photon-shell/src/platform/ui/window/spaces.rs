@@ -7,8 +7,8 @@ use gpui::{
     Subscription, TouchPhase, Window, div, prelude::*,
 };
 use photon_core::{SpaceId, WindowColor};
-use std::rc::Rc;
 use std::time::Instant;
+use std::{cell::Cell, rc::Rc};
 
 use super::super::input::physical_horizontal_delta;
 use super::super::modal::{MODAL_MOTION, modal};
@@ -31,8 +31,8 @@ pub(super) struct SpacesState {
     /// The space the window last showed, to notice when it changes.
     shown: SpaceId,
     /// The edge the shown space came in from, and when, so it slides in
-    /// only just after switching.
-    switched: Option<(Edge, Instant)>,
+    /// only just after switching while the sidebar is already settled open.
+    switched: Cell<Option<(Edge, Instant)>>,
     /// How far the current two-finger swipe has moved, and whether it has
     /// already switched.
     swipe: f32,
@@ -53,7 +53,7 @@ impl SpacesState {
     pub(super) fn new(shown: SpaceId) -> Self {
         Self {
             shown,
-            switched: None,
+            switched: Cell::new(None),
             swipe: 0.0,
             swiped: false,
             editor: None,
@@ -62,9 +62,14 @@ impl SpacesState {
     }
 
     /// The edge to slide the sidebar in from, just after switching space.
-    pub(super) fn arriving_from(&self, duration: std::time::Duration) -> Option<Edge> {
+    pub(super) fn arriving_from(
+        &self,
+        duration: std::time::Duration,
+        allowed: bool,
+    ) -> Option<Edge> {
         self.switched
-            .filter(|(_, at)| at.elapsed() < duration)
+            .take()
+            .filter(|(_, at)| allowed && at.elapsed() < duration)
             .map(|(edge, _)| edge)
     }
 }
@@ -110,7 +115,13 @@ impl BrowserWindow {
             Edge::Left
         };
         self.spaces.shown = active;
-        self.spaces.switched = Some((edge, Instant::now()));
+        let sidebar_is_settled = self.sidebar.docked()
+            && !self.sidebar.over_page()
+            && !self.sidebar.is_moving()
+            && self.sidebar.shown() >= 1.0;
+        self.spaces
+            .switched
+            .set(sidebar_is_settled.then_some((edge, Instant::now())));
         let shows_spaces = self.shows_spaces(cx);
         if shows_spaces {
             // The space container has its own entrance. Drop pending row

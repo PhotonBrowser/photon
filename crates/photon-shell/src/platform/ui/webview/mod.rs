@@ -41,10 +41,6 @@ pub(in crate::platform) use form_controls::{SelectDropdown, SelectItem, install_
 
 static MOUSE_MOVE_TRACE_COUNT: AtomicUsize = AtomicUsize::new(0);
 
-/// How often the page is laid out again while the window's layout
-/// animates, as when the sidebar slides; the drawn frame stretches between.
-const ANIMATING_RESIZE_INTERVAL: Duration = Duration::from_millis(100);
-
 pub(in crate::platform) struct PhotonWebView {
     pub(super) external: Option<PresentedSurface>,
     presenter: PagePresenter,
@@ -81,9 +77,7 @@ pub(in crate::platform) struct PhotonWebView {
     pub(super) session: EngineSession,
     pub(super) focus_handle: FocusHandle,
     pub(super) last_viewport: Option<(i32, i32, u32)>,
-    /// When the Engine was last given a new viewport.
-    last_resize: Option<Instant>,
-    /// Whether the window's layout is animating around the page.
+    /// Whether the window's layout is moving the page around or changing its size.
     layout_animating: bool,
     /// The window the page was last drawn in, where its menus open.
     window: Option<AnyWindowHandle>,
@@ -289,21 +283,15 @@ impl PhotonWebView {
         if self.last_viewport == Some(viewport) || width <= 0 || height <= 0 {
             return;
         }
-        // While the layout animates, lay the page out a few times rather
-        // than every frame; the size once it settles always goes through.
+        // Resizing an Engine viewport is synchronous and can stall the UI.
+        // Keep the current surface while the shell animates its bounds; the
+        // native page layer scales it, then the settled bounds are sent once.
         let same_scale = self
             .last_viewport
             .is_some_and(|(_, _, last_scale)| last_scale == viewport.2);
-        if self.layout_animating
-            && same_scale
-            && self
-                .last_resize
-                .is_some_and(|last| last.elapsed() < ANIMATING_RESIZE_INTERVAL)
-        {
+        if self.layout_animating && same_scale {
             return;
         }
-        self.last_resize = Some(Instant::now());
-
         self.session.resize(width, height, f64::from(scale));
         trace(format_args!(
             "viewport logical={width}x{height} dpr={scale:.2} physical={}x{}",
@@ -341,7 +329,6 @@ impl PhotonWebView {
             loading_since: None,
             dialogs: PageDialogs::default(),
             window: None,
-            last_resize: None,
             layout_animating: false,
             session,
             focus_handle: cx.focus_handle(),

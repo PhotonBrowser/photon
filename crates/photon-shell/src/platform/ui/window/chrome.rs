@@ -4,7 +4,7 @@
 use gpui::{AnyElement, Context, Div, Window, div, prelude::*, px};
 use photon_core::{Command, DockRegion};
 
-use super::super::animated_icons::{animated_icon, back_arrow, forward_arrow, reload_arrow};
+use super::super::animated_icons::{animated_icon, reload_arrow};
 use super::super::button::{menu_button, toolbar_button};
 use super::super::icons::{back_icon, close_icon, forward_icon, reload_icon};
 use super::super::layout::{h_stack, v_stack};
@@ -159,13 +159,7 @@ impl BrowserWindow {
         match component {
             ComponentId::BackButton => {
                 let enabled = self.navigation_state(cx).can_go_back;
-                let icon = if enabled {
-                    animated_icon("toolbar-back-icon", back_arrow(), color, size, window, cx)
-                        .size_full()
-                        .into_any_element()
-                } else {
-                    back_icon(color, size).into_any_element()
-                };
+                let icon = back_icon(color, size).into_any_element();
                 toolbar_button(
                     "toolbar-back",
                     "Go back",
@@ -181,20 +175,7 @@ impl BrowserWindow {
             }
             ComponentId::ForwardButton => {
                 let enabled = self.navigation_state(cx).can_go_forward;
-                let icon = if enabled {
-                    animated_icon(
-                        "toolbar-forward-icon",
-                        forward_arrow(),
-                        color,
-                        size,
-                        window,
-                        cx,
-                    )
-                    .size_full()
-                    .into_any_element()
-                } else {
-                    forward_icon(color, size).into_any_element()
-                };
+                let icon = forward_icon(color, size).into_any_element();
                 toolbar_button(
                     "toolbar-forward",
                     "Go forward",

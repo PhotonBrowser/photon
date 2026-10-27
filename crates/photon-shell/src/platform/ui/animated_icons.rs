@@ -55,12 +55,6 @@ impl AnimatedIcon {
         self
     }
 
-    /// Moves the drawing by logical pixels. Layout and the hover area stay put.
-    pub(super) fn translate(mut self, x: f32, y: f32) -> Self {
-        self.hovered = self.hovered.translate(x, y);
-        self
-    }
-
     /// Replaces the default spring with one of this stiffness and damping.
     pub(super) fn spring(mut self, stiffness: f32, damping: f32) -> Self {
         self.transition = Transition::Spring(
@@ -185,29 +179,6 @@ pub(super) fn dismiss_x() -> AnimatedIcon {
 /// grows on hover, where heroicons-animated squashes and stretches it.
 pub(super) fn favourite_star() -> AnimatedIcon {
     AnimatedIcon::new(FAVOURITE_STAR_SVG).scale(1.2)
-}
-
-/// The sidebar toggle while the sidebar is shown: its panel slides left, out
-/// of the way.
-pub(super) fn sidebar_hide() -> AnimatedIcon {
-    AnimatedIcon::new(lucide!("panel-left")).translate(-2.0, 0.0)
-}
-
-/// The sidebar toggle while the sidebar is hidden: its arrow slides right, out
-/// of the panel.
-pub(super) fn sidebar_show() -> AnimatedIcon {
-    AnimatedIcon::new(lucide!("panel-left-open")).translate(2.0, 0.0)
-}
-
-/// The back arrow. heroicons-animated pulses its head by 3 pixels, which this
-/// framework cannot draw, so the whole arrow moves 2 pixels back instead.
-pub(super) fn back_arrow() -> AnimatedIcon {
-    AnimatedIcon::new(lucide!("arrow-left")).translate(-2.0, 0.0)
-}
-
-/// The forward arrow. It moves 2 pixels forward, mirroring `back_arrow`.
-pub(super) fn forward_arrow() -> AnimatedIcon {
-    AnimatedIcon::new(lucide!("arrow-right")).translate(2.0, 0.0)
 }
 
 /// The reload arrow, keeping its Lucide glyph. The turn and spring are

@@ -161,15 +161,16 @@ impl SidebarState {
     }
 
     pub(super) fn is_moving(&self) -> bool {
-        [
-            &self.shown,
-            &self.expanded,
-            &self.tucked,
-            &self.reveal,
-            &self.resize_overshoot,
-        ]
-        .into_iter()
-        .any(Tween::is_running)
+        self.resize_dragging
+            || [
+                &self.shown,
+                &self.expanded,
+                &self.tucked,
+                &self.reveal,
+                &self.resize_overshoot,
+            ]
+            .into_iter()
+            .any(Tween::is_running)
     }
 
     /// Finishes decorative tweens if the application or platform disables motion.
@@ -278,7 +279,7 @@ impl SidebarState {
         }
         self.revealed = revealed;
         self.reveal
-            .animate_to(progress(revealed), Speed::Standard, &Settings::motion(cx));
+            .animate_to(progress(revealed), Speed::Quick, &Settings::motion(cx));
         true
     }
 

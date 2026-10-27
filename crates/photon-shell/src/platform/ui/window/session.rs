@@ -9,6 +9,8 @@
 #[cfg(not(feature = "ui-only"))]
 use gpui::Window;
 use gpui::{App, BorrowAppContext, Context, Global, Task};
+#[cfg(not(feature = "ui-only"))]
+use photon_core::BrowserState;
 use photon_core::{Session, SessionTab, WindowSession};
 use photon_storage::{Profile, ProfileWriteTicket};
 #[cfg(not(feature = "ui-only"))]
@@ -23,7 +25,7 @@ use super::super::super::trace;
 use super::super::pages::find_page;
 use super::BrowserWindow;
 #[cfg(not(feature = "ui-only"))]
-use super::content::create_webview;
+use super::content::{SleepingTab, TabContent, create_webview};
 #[cfg(not(feature = "ui-only"))]
 use super::open_browser_window;
 use super::tab_summary::tab_summary;
@@ -219,12 +221,39 @@ impl BrowserWindow {
     #[cfg(not(feature = "ui-only"))]
     fn restore_tabs(&mut self, saved: &WindowSession, window: &mut Window, cx: &mut Context<Self>) {
         let first = self.tabs.len();
-        for tab in &saved.tabs {
+        let active_position = saved
+            .active
+            .filter(|&position| position < saved.tabs.len())
+            .unwrap_or(0);
+        let mut active = None;
+        for (position, tab) in saved.tabs.iter().enumerate() {
             let index = self.tabs.len();
             match find_page(&tab.url) {
                 Some(page) => {
                     let content = self.new_page(page, cx);
                     self.insert_tab_at_immediately(index, content, None, false, window, cx);
+                }
+                None if position != active_position => {
+                    // Creating each Engine view synchronously initializes a
+                    // page on the UI thread. Restore background tabs as
+                    // sleeping placeholders and create their views only when
+                    // selected, so a large session cannot stall window setup
+                    // or immediately compete with the active page for CPU.
+                    self.insert_tab_at_immediately(
+                        index,
+                        TabContent::Sleeping(SleepingTab {
+                            state: BrowserState {
+                                url: tab.url.clone(),
+                                title: tab.title.clone(),
+                                ..BrowserState::default()
+                            },
+                            favicon: None,
+                        }),
+                        None,
+                        false,
+                        window,
+                        cx,
+                    );
                 }
                 None => {
                     let Some(webview) = create_webview(cx, self.runtime.clone(), &tab.url) else {
@@ -240,9 +269,11 @@ impl BrowserWindow {
                 }
             }
             self.tabs[index].space = tab.space;
+            if position == active_position {
+                active = Some(index);
+            }
         }
-        let active = saved.active.map_or(first, |position| first + position);
-        if active < self.tabs.len() {
+        if let Some(active) = active.or_else(|| (first < self.tabs.len()).then_some(first)) {
             self.activate_tab(active, true, window, cx);
         } else if self.tabs.is_empty() && self.tab_axis(cx) == super::TabDragAxis::Horizontal {
             self.open_tab(window, cx);

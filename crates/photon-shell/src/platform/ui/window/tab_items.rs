@@ -45,17 +45,22 @@ impl BrowserWindow {
     }
 
     pub(super) fn tab_items(&self, cx: &mut Context<Self>) -> Vec<TabItem> {
-        self.tab_items_for_indices(0..self.tabs.len(), cx)
+        self.tab_items_for_indices(0..self.tabs.len(), false, cx)
     }
 
     pub(super) fn tab_items_for_indices(
         &self,
         indices: impl IntoIterator<Item = usize>,
+        suppress_motion: bool,
         cx: &mut Context<Self>,
     ) -> Vec<TabItem> {
         let browser = cx.entity().downgrade();
-        let animations = Settings::get(cx).animations;
-        let motion_settings = Settings::motion(cx);
+        let mut animations = Settings::get(cx).animations;
+        let mut motion_settings = Settings::motion(cx);
+        if suppress_motion {
+            animations.enabled = false;
+            motion_settings.enabled = false;
+        }
         let axis = self.tab_axis(cx);
         let suppress_tooltips = self.tab_drag_active();
         indices
@@ -146,7 +151,8 @@ impl BrowserWindow {
                     1.0
                 };
                 let offset_scale = f32::from(animations.effect_strength_percent.min(300)) / 100.0;
-                let motion = if entry_appearing && axis == super::super::tabs::TabDragAxis::Vertical
+                let motion = if suppress_motion
+                    || (entry_appearing && axis == super::super::tabs::TabDragAxis::Vertical)
                 {
                     None
                 } else if entry_appearing {
@@ -164,7 +170,8 @@ impl BrowserWindow {
                     .tab_position_animations
                     .get(&stable_id)
                     .is_some_and(|animation| animation.axis == axis);
-                let reorder_transition = if position_animation
+                let reorder_transition = if suppress_motion
+                    || position_animation
                     || (entry_appearing && axis == super::super::tabs::TabDragAxis::Vertical)
                 {
                     gpui_motion::Transition::Instant
@@ -297,10 +304,14 @@ impl BrowserWindow {
                         .filter(|drag| drag.id == stable_id)
                         .map(|drag| drag.visual_offset)
                         .unwrap_or_else(|| {
-                            super::tab_position_animation_offset(
-                                self.tab_position_animations.get(&stable_id),
-                                axis,
-                            )
+                            if suppress_motion {
+                                0.0
+                            } else {
+                                super::tab_position_animation_offset(
+                                    self.tab_position_animations.get(&stable_id),
+                                    axis,
+                                )
+                            }
                         }),
                     dragging: self.tab_drag_layout.as_ref().is_some_and(|drag| {
                         drag.id == stable_id
