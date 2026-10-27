@@ -191,8 +191,8 @@ impl CallbackState {
         self.update_webview(move |view, cx| view.request_dialog(request, cx));
     }
 
-    pub(super) fn handle_engine_crash(&self) {
-        self.update_webview(|view, cx| view.handle_engine_crash(cx));
+    pub(super) fn handle_engine_crash(&self, failed_url: Option<String>) {
+        self.update_webview(move |view, cx| view.handle_engine_crash(failed_url, cx));
     }
 
     pub(super) fn set_find_result(&self, result: FindResult) {

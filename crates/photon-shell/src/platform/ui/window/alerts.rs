@@ -233,7 +233,14 @@ impl BrowserWindow {
         }
         self.active_webview().is_some_and(|webview| {
             webview.update(cx, |view, cx| {
-                let mut dismissed = view.crash_notice.take().is_some();
+                let mut dismissed = if matches!(
+                    view.crash_notice.as_ref(),
+                    Some(CrashNotice::KeepsCrashing { .. })
+                ) {
+                    false
+                } else {
+                    view.crash_notice.take().is_some()
+                };
                 if view.state.error.take().is_some() {
                     dismissed = true;
                 }
@@ -324,7 +331,7 @@ impl BrowserWindow {
                 }
             }
             None if zoom_notice.is_some() => zoom_notice?,
-            None => match webview.as_ref()?.read(cx).crash_notice {
+            None => match webview.as_ref()?.read(cx).crash_notice.as_ref() {
                 Some(CrashNotice::Reloading) => Notice {
                     id: ElementId::Name("page-reloading".into()),
                     icon: ChipIcon::Working(step),
@@ -336,16 +343,10 @@ impl BrowserWindow {
                     id: ElementId::Name("page-reloaded".into()),
                     icon: ChipIcon::Done,
                     message: SharedString::new_static("Page reloaded"),
-                    expires_at: Some(at + RECOVERED_NOTICE_DURATION),
+                    expires_at: Some(*at + RECOVERED_NOTICE_DURATION),
                     action: None,
                 },
-                Some(CrashNotice::KeepsCrashing) => Notice {
-                    id: ElementId::Name("page-keeps-crashing".into()),
-                    icon: ChipIcon::Problem,
-                    message: SharedString::new_static("This page keeps crashing"),
-                    expires_at: None,
-                    action: Some(NoticeAction::Reload),
-                },
+                Some(CrashNotice::KeepsCrashing { .. }) => return None,
                 None => {
                     // The Engine's error is for the log; the chip says it plainly.
                     webview.as_ref()?.read(cx).state.error.as_ref()?;

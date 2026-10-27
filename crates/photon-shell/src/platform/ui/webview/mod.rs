@@ -50,7 +50,7 @@ pub(in crate::platform) struct PhotonWebView {
     pub(in crate::platform) performance_overlay_enabled: bool,
     #[cfg(unix)]
     performance_diagnostics_session_active: bool,
-    /// What the tab's crash chip says, if anything.
+    /// How this tab presents its last crash and recovery.
     pub(in crate::platform) crash_notice: Option<CrashNotice>,
     crashes: PageCrashes,
     /// The page's zoom level as a factor, 1.0 being 100%.
@@ -451,7 +451,10 @@ impl PhotonWebView {
             let reply = self.dialogs.navigation_started();
             self.send_dialog_reply(reply, cx);
         }
-        if self.crash_notice == Some(CrashNotice::KeepsCrashing) {
+        if matches!(
+            self.crash_notice.as_ref(),
+            Some(CrashNotice::KeepsCrashing { .. })
+        ) {
             if command == BrowserCommand::Reload {
                 self.crashes.reload_requested();
                 self.crash_notice = Some(CrashNotice::Reloading);
@@ -636,6 +639,9 @@ impl Render for PhotonWebView {
                 &self.diagnostics,
                 palette.performance_palette,
             ));
+        }
+        if let Some(overlay) = self.crash_overlay(palette, cx) {
+            webview = webview.child(overlay);
         }
         webview
     }

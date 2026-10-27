@@ -771,10 +771,10 @@ fn tab_value(
                 .webview()
                 .map(|webview| {
                     let view = webview.read(cx);
-                    let error_state = view.crash_notice.map(|notice| match notice {
+                    let error_state = view.crash_notice.as_ref().map(|notice| match notice {
                         super::super::CrashNotice::Reloading => "recovering_from_crash",
                         super::super::CrashNotice::Reloaded(_) => "recovered_from_crash",
-                        super::super::CrashNotice::KeepsCrashing => "page_crashed",
+                        super::super::CrashNotice::KeepsCrashing { .. } => "page_crashed",
                     });
                     (
                         Some(view.state.url.clone()),

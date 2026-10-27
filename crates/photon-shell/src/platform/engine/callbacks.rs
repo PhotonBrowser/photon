@@ -159,10 +159,13 @@ pub(super) unsafe extern "C" fn on_engine_error(context: *mut c_void, message: *
 }
 
 pub(super) unsafe extern "C" fn on_engine_crash(context: *mut c_void, url: *const c_char) {
-    let url = unsafe { engine_string(url) }.unwrap_or_else(|| "unknown page".into());
-    eprintln!("Photon Engine: WebContent process crashed while displaying {url}");
+    let url = unsafe { engine_string(url) };
+    eprintln!(
+        "Photon Engine: WebContent process crashed while displaying {}",
+        url.as_deref().unwrap_or("unknown page")
+    );
     if !context.is_null() {
-        unsafe { &*(context.cast::<CallbackState>()) }.handle_engine_crash();
+        unsafe { &*(context.cast::<CallbackState>()) }.handle_engine_crash(url);
     }
 }
 

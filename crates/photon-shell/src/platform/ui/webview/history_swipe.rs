@@ -310,8 +310,10 @@ impl PhotonWebView {
         self.history_swipe.phase = HistorySwipePhase::Committing;
         let reply = self.dialogs.navigation_started();
         self.send_dialog_reply(reply, cx);
-        if let Some(notice) = self.crash_notice
-            && notice != super::crashes::CrashNotice::Reloading
+        if self
+            .crash_notice
+            .as_ref()
+            .is_some_and(|notice| !matches!(notice, super::crashes::CrashNotice::Reloading))
         {
             self.crash_notice = None;
             self.state_changed(cx);
