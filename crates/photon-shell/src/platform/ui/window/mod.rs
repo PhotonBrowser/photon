@@ -351,6 +351,7 @@ impl BrowserWindow {
             window_settings::apply_background_style(window, background_style);
             self.window_background_style = background_style;
         }
+        self.update_page_color_schemes(window, cx);
         for webview in self.tabs.iter().filter_map(|tab| tab.content.webview()) {
             webview.update(cx, |_, cx| cx.notify());
         }
@@ -358,6 +359,18 @@ impl BrowserWindow {
         self.wake_tab_sleep_scheduler();
         self.animate_spinner(cx);
         cx.notify();
+    }
+
+    fn update_page_color_schemes(&mut self, window: &Window, cx: &mut App) {
+        let appearance = Settings::appearance(window.appearance(), cx);
+        for webview in self
+            .tabs
+            .iter()
+            .filter_map(|tab| tab.content.webview())
+            .chain(self.peek_webview())
+        {
+            webview.update(cx, |view, _| view.update_color_scheme(appearance));
+        }
     }
 
     fn window_changed(
@@ -477,7 +490,10 @@ fn open_browser_window(
         let omnibox = cx.new(|cx| Omnibox::new(window, cx));
         cx.new(move |cx: &mut Context<BrowserWindow>| {
             let appearance_subscription =
-                cx.observe_window_appearance(window, |_, _, cx| cx.notify());
+                cx.observe_window_appearance(window, |this: &mut BrowserWindow, window, cx| {
+                    this.update_page_color_schemes(window, cx);
+                    cx.notify();
+                });
             let activation_subscription =
                 cx.observe_window_activation(window, |this: &mut BrowserWindow, window, cx| {
                     if window.is_window_active()

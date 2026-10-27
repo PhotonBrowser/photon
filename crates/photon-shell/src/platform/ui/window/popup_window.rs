@@ -97,7 +97,11 @@ pub(super) fn open_minimal_window(
                     |this, window, cx| {
                         let animations = Settings::get(cx).animations;
                         window_settings::configure_native_controls(window, &animations);
-                        this.webview.update(cx, |_, cx| cx.notify());
+                        this.webview.update(cx, |view, cx| {
+                            let appearance = Settings::appearance(window.appearance(), cx);
+                            view.update_color_scheme(appearance);
+                            cx.notify();
+                        });
                         cx.notify();
                     },
                 ),

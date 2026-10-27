@@ -376,7 +376,11 @@ impl PhotonWebView {
                     cx.notify();
                 }
             }),
-            cx.observe_window_appearance(window, |_, _, cx| cx.notify()),
+            cx.observe_window_appearance(window, |this, window, cx| {
+                let appearance = Settings::appearance(window.appearance(), cx);
+                this.update_color_scheme(appearance);
+                cx.notify();
+            }),
         ];
         self.sync_engine_focus(window);
     }
