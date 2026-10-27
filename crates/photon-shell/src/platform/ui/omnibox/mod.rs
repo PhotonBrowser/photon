@@ -12,7 +12,7 @@ mod site_info;
 
 use gpui::{
     Context, Entity, EventEmitter, Focusable, MouseButton, Render, Subscription, Task, Window,
-    prelude::*, px, rgb, rgb_to_hsla, rgba,
+    prelude::*, px, rgb, rgba,
 };
 use gpui_elements::editable_text::{
     EditableTextState, StringStorage, TextChanged,
@@ -342,14 +342,6 @@ impl Render for Omnibox {
             .h(px(style.height))
             .rounded(px(style.radius))
             .bg(rgba(palette.surface))
-            .border_1()
-            .border_color(if self.invalid {
-                rgb_to_hsla(rgba(palette.field_error_border))
-            } else if editing {
-                rgb_to_hsla(rgba(palette.chosen))
-            } else {
-                gpui::transparent_black()
-            })
             .text_size(px(style.font_size))
             .text_color(rgb(palette.text_primary))
             // Clicks on the field's padding or icon edit the address rather than
