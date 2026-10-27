@@ -302,7 +302,7 @@ impl BrowserWindow {
                 let action = action.boxed_clone();
                 let click = Box::new(cx.listener(move |this, _, window, cx| {
                     this.close_context_menu(window, cx);
-                    cx.dispatch_action(action.as_ref());
+                    window.dispatch_action(action.as_ref().boxed_clone(), cx);
                 }));
                 menu_action_with_state(
                     ("browser-context-menu", index),
@@ -475,20 +475,27 @@ mod tests {
     use super::super::super::menu::menu_action_with_state;
     use crate::platform::ui::theme::{AccentColor, preview_palette};
     use gpui::{
-        Context, InteractiveElement, IntoElement, Modifiers, MouseDownEvent, ParentElement, Render,
-        Role, Styled, Window, deferred, div, point, px,
+        Context, FocusHandle, InteractiveElement, IntoElement, Modifiers, MouseDownEvent,
+        ParentElement, Render, Role, Styled, Window, deferred, div, point, px,
     };
     use std::{cell::Cell, rc::Rc};
+
+    #[derive(Clone, PartialEq, gpui::Action)]
+    #[action(namespace = test, no_json)]
+    struct MenuTestAction;
 
     struct MenuClickTestView {
         clicked: Rc<Cell<usize>>,
         dismissed: Rc<Cell<usize>>,
+        action_received: Rc<Cell<usize>>,
+        focus: FocusHandle,
     }
 
     impl Render for MenuClickTestView {
-        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
             let clicked = self.clicked.clone();
             let dismissed = self.dismissed.clone();
+            let action_received = self.action_received.clone();
             let palette = preview_palette(false, AccentColor::Blue);
             let row = menu_action_with_state(
                 "test-menu-row",
@@ -496,7 +503,10 @@ mod tests {
                 Role::MenuItem,
                 false,
                 false,
-                Box::new(move |_, _, _| clicked.set(clicked.get() + 1)),
+                Box::new(cx.listener(move |_, _, window, cx| {
+                    clicked.set(clicked.get() + 1);
+                    window.dispatch_action(Box::new(MenuTestAction), cx);
+                })),
                 palette,
             );
             let outside_click = move |_: &MouseDownEvent, _: &mut Window, cx: &mut gpui::App| {
@@ -504,19 +514,25 @@ mod tests {
                 cx.stop_propagation();
             };
 
-            div().size_full().child(
-                deferred(
-                    div()
-                        .absolute()
-                        .left(px(20.0))
-                        .top(px(20.0))
-                        .w(px(180.0))
-                        .occlude()
-                        .on_mouse_down_out(outside_click)
-                        .child(div().w(px(180.0)).child(row)),
+            div()
+                .track_focus(&self.focus)
+                .size_full()
+                .on_action(cx.listener(move |_, _: &MenuTestAction, _, cx| {
+                    action_received.set(action_received.get() + 1);
+                }))
+                .child(
+                    deferred(
+                        div()
+                            .absolute()
+                            .left(px(20.0))
+                            .top(px(20.0))
+                            .w(px(180.0))
+                            .occlude()
+                            .on_mouse_down_out(outside_click)
+                            .child(div().w(px(180.0)).child(row)),
+                    )
+                    .priority(8),
                 )
-                .priority(8),
-            )
         }
     }
 
@@ -524,14 +540,27 @@ mod tests {
     fn menu_rows_receive_clicks_without_dismissing_the_popover(cx: &mut gpui::TestAppContext) {
         let clicked = Rc::new(Cell::new(0));
         let dismissed = Rc::new(Cell::new(0));
+        let action_received = Rc::new(Cell::new(0));
         let (_view, cx) = cx.add_window_view({
             let clicked = clicked.clone();
             let dismissed = dismissed.clone();
-            move |_, _| MenuClickTestView { clicked, dismissed }
+            let action_received = action_received.clone();
+            move |window, cx| {
+                let view = MenuClickTestView {
+                    clicked,
+                    dismissed,
+                    action_received,
+                    focus: cx.focus_handle(),
+                };
+                window.focus(&view.focus, cx);
+                view
+            }
         });
 
         cx.simulate_click(point(px(40.0), px(30.0)), Modifiers::none());
+        cx.run_until_parked();
         assert_eq!(clicked.get(), 1);
+        assert_eq!(action_received.get(), 1);
         assert_eq!(dismissed.get(), 0);
 
         cx.simulate_click(point(px(240.0), px(120.0)), Modifiers::none());
