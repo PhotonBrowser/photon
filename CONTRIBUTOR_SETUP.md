@@ -22,10 +22,23 @@ The system dependency option installs Ladybird's Homebrew build packages. Setup 
 
 ## Linux
 
-Ubuntu 24.04 is the CI-checked distribution; other Linux distributions may work if they meet Ladybird's current requirements. Install Rust with rustup, Python 3 with pip, Git, a C++23-capable compiler, CMake 3.30+, Ninja 1.10+, Qt 6.10+ development packages, NASM, and the distribution-specific libraries listed in [Ladybird's Linux build instructions](Engine/Documentation/BuildInstructionsLadybird.md). Some distributions need newer compiler, CMake, or Qt packages than their standard repositories provide.
+Ubuntu 24.04 is the CI-checked distribution; other Linux distributions may work if they meet Ladybird's current requirements.
+
+To work on the GPUI shell without downloading or preparing the Engine, install Rust with rustup and Git, then run:
 
 ```sh
-git clone --recurse-submodules https://github.com/PhotonBrowser/photon.git
+git clone https://github.com/PhotonBrowser/photon.git
+cd photon
+./photon setup --ui-only
+photon run --ui
+```
+
+This initializes GPUI-CE and skips Engine, Qt, Python, CMake, Ninja, C++ compiler, and clang-format setup. It still needs the native desktop libraries required by GPUI-CE and a graphical Linux session. Web pages and Engine-backed form controls are unavailable in this mode. You can run the full setup later; it initializes the Engine and keeps the existing GPUI-CE worktree.
+
+For the full browser, install Python 3 with pip, a C++23-capable compiler, CMake 3.30+, Ninja 1.10+, Qt 6.10+ development packages, NASM, and the distribution-specific libraries listed in [Ladybird's Linux build instructions](Engine/Documentation/BuildInstructionsLadybird.md). Some distributions need newer compiler, CMake, or Qt packages than their standard repositories provide.
+
+```sh
+git clone https://github.com/PhotonBrowser/photon.git
 cd photon
 ./photon setup
 photon check
@@ -34,7 +47,7 @@ photon build
 photon run
 ```
 
-Setup does not install Linux packages. `photon check` and `photon test` pass in Ubuntu CI. `photon build` and `photon run` are implemented using the portable Linux Engine and GPUI paths, but need a working graphical session and have not yet been verified as end-to-end runtime paths by CI. `photon run --ui` launches the shell without the Engine and cannot load web pages.
+Setup does not install Linux packages. `photon check` and `photon test` pass in Ubuntu CI. `photon build` and full `photon run` use the portable Linux Engine and GPUI paths, but need a working graphical session and have not yet been verified as end-to-end runtime paths by CI. `photon run --ui` launches the shell without the Engine and cannot load web pages.
 
 ## Recover an existing checkout
 

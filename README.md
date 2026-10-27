@@ -28,6 +28,19 @@ before launching Photon.
 Setup installs or refreshes the `photon` command and `ph` alias in Cargo's bin directory. Make
 sure `~/.cargo/bin` is on your `PATH` to use `photon` without the `./` prefix.
 
+To work on the GPUI shell on Linux without setting up Ladybird Engine, clone
+without submodules and use the UI-only path:
+
+```sh
+git clone https://github.com/PhotonBrowser/photon.git
+cd photon
+./photon setup --ui-only
+photon run --ui
+```
+
+This opens the New Tab page and Photon-owned settings pages; web pages require
+the full Engine setup.
+
 ## Develop Photon
 
 Start with [contributor setup](CONTRIBUTOR_SETUP.md), then use the [build guide](Documentation/Building.md) and [architecture guide](Documentation/Architecture.md). See [contribution guidance](CONTRIBUTING.md) for pull requests and the [roadmap](Documentation/Roadmap.md) for planned work.
