@@ -517,7 +517,7 @@ mod tests {
             div()
                 .track_focus(&self.focus)
                 .size_full()
-                .on_action(cx.listener(move |_, _: &MenuTestAction, _, cx| {
+                .on_action(cx.listener(move |_, _: &MenuTestAction, _, _cx| {
                     action_received.set(action_received.get() + 1);
                 }))
                 .child(

@@ -3,11 +3,11 @@
 use gpui::{
     A11ySubtreeBuilder, App, Bounds, Element, ElementId, FocusHandle, GlobalElementId,
     InspectorElementId, IntoElement, LayoutId, Pixels, Point, SpringConfig,
-    StatefulInteractiveElement, Styled, Window,
+    StatefulInteractiveElement, Styled, Window, rgba,
 };
 use gpui_motion::{
-    CustomEasing, Easing, Frame, Motion, MotionElement, MotionValue, PressScaleElement, Spring,
-    StyleMotion, StyleProperty, StyleTarget, Target,
+    Color, CustomEasing, Easing, Frame, Motion, MotionElement, MotionValue, PressScaleElement,
+    Spring, StyleMotion, StyleProperty, StyleTarget, Target,
 };
 use std::{
     sync::OnceLock,
@@ -208,7 +208,7 @@ impl Curve {
     pub const SNAPPY: Self = Self::Spring(SpringConfig::new(420.0, 32.0, 1.0));
     pub const BOUNCY: Self = Self::Spring(SpringConfig::new(300.0, 14.0, 1.0));
 
-    fn transition(self, duration: Duration) -> gpui_motion::Transition {
+    pub(super) fn transition(self, duration: Duration) -> gpui_motion::Transition {
         if duration.is_zero() {
             return gpui_motion::Transition::Instant;
         }
@@ -227,6 +227,22 @@ impl Curve {
             ),
         }
     }
+}
+
+/// Converts an opaque RGB theme token into the motion engine's linear-light color.
+pub(super) fn motion_rgb_color(token: u32) -> Color {
+    Color::rgb(token)
+}
+
+/// Converts an RGBA theme token into the motion engine's linear-light color.
+pub(super) fn motion_rgba_color(token: u32) -> Color {
+    let color = rgba(token);
+    Color::rgba(
+        f64::from(color.color.red),
+        f64::from(color.color.green),
+        f64::from(color.color.blue),
+        f64::from(color.alpha),
+    )
 }
 
 #[derive(Clone, Copy, Debug)]

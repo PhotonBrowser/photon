@@ -136,6 +136,7 @@ pub(super) const SIDEBAR_OMNIBOX_HEIGHT: f32 = 38.0;
 pub(super) const SIDEBAR_OMNIBOX_FONT_SIZE: f32 = 15.0;
 pub(super) const SIDEBAR_OMNIBOX_BUTTON_INSET: f32 = 4.0;
 pub(super) const SIDEBAR_OMNIBOX_TEXT_INSET: f32 = TOOLBAR_BUTTON_SIZE + SIDEBAR_PADDING;
+pub(super) const OMNIBOX_TEXT_TRANSITION_OPACITY: f32 = 0.5;
 pub(super) const OMNIBOX_BORDER_WIDTH: f32 = 1.0;
 pub(super) const OMNIBOX_HORIZONTAL_PADDING: f32 = 12.0;
 pub(super) const OMNIBOX_GAP: f32 = 8.0;
