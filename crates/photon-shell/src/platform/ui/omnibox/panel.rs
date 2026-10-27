@@ -2,6 +2,7 @@
 
 use gpui::{AnyElement, Context, Focusable, deferred, prelude::*, px, rgb, rgba};
 use gpui_elements::editable_text::text_input;
+use photon_core::DockRegion;
 use std::rc::Rc;
 
 use super::super::button::toolbar_button;
@@ -23,10 +24,10 @@ impl Omnibox {
         &self,
         palette: ThemeColors,
         editing: bool,
+        style: FieldStyle,
         cx: &mut Context<Self>,
     ) -> gpui::Div {
         let input_focus = self.input.focus_handle(cx).tab_index(3).tab_stop(true);
-        let style = FieldStyle::current(cx);
         let icon = (!style.trailing_site_info && (style.idle_icon || !self.suggestions.is_empty()))
             .then(|| self.field_icon(palette, cx));
         let site_info_open = self.site_info_open;
@@ -145,6 +146,8 @@ impl Omnibox {
     pub(super) fn site_info_popover(
         &self,
         palette: ThemeColors,
+        style: FieldStyle,
+        workspace_layout: &WorkspaceLayout,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let site = photon_core::display_domain(&self.page_url(cx));
@@ -152,8 +155,6 @@ impl Omnibox {
             .webview
             .as_ref()
             .and_then(|webview| webview.read(cx).state.connection_secure);
-        let style = FieldStyle::current(cx);
-        let workspace_layout = WorkspaceLayout::current(cx);
         let opens_toward_page =
             workspace_layout.sidebar_region() != Some(photon_core::DockRegion::Trailing);
         let popover_width = if style.trailing_site_info {
@@ -213,6 +214,8 @@ impl Omnibox {
     pub(super) fn open_panel(
         &self,
         palette: ThemeColors,
+        style: FieldStyle,
+        sidebar_region: Option<DockRegion>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let rows = suggestion_rows(
@@ -225,18 +228,17 @@ impl Omnibox {
         );
         // Line up with the closed field, whose border the panel replaces.
         let border = px(-metrics::OMNIBOX_BORDER_WIDTH);
+        let panel = v_stack().id("omnibox-panel").absolute().top(border);
+        // The sidebar is narrow, so grow suggestions toward the page.
+        let panel = match (style.trailing_site_info, sidebar_region) {
+            (true, Some(DockRegion::Trailing)) => panel.right(border).w_full(),
+            (true, _) => panel.left(border).w_full(),
+            (false, _) => panel.left(border).right(border),
+        }
+        .min_w(px(metrics::OMNIBOX_PANEL_MIN_WIDTH));
         deferred(
-            v_stack()
-                .id("omnibox-panel")
-                .absolute()
-                .top(border)
-                .left(border)
-                .right(border)
-                // A narrow field opens into a panel that reaches over the page.
-                .when(!FieldStyle::current(cx).trailing_site_info, |panel| {
-                    panel.min_w(px(metrics::OMNIBOX_PANEL_MIN_WIDTH))
-                })
-                .rounded_t(px(FieldStyle::current(cx).radius))
+            panel
+                .rounded_t(px(style.radius))
                 .rounded_b(px(metrics::omnibox_panel_bottom_radius()))
                 .border_1()
                 .border_color(rgba(palette.menu_border))
@@ -244,7 +246,7 @@ impl Omnibox {
                 .elevated(Elevation::High)
                 .occlude()
                 .owns_clicks()
-                .child(self.field_content(palette, true, cx))
+                .child(self.field_content(palette, true, style, cx))
                 .child(rows.animate_in(
                     "omnibox-suggestions-appear",
                     fade(),

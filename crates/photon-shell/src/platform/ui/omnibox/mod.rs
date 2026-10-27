@@ -62,10 +62,6 @@ impl FieldStyle {
             },
         }
     }
-
-    fn current(cx: &gpui::App) -> Self {
-        Self::for_layout(WorkspaceLayout::current(cx).omnibox_placement())
-    }
 }
 
 pub(super) struct Omnibox {
@@ -335,7 +331,8 @@ impl Render for Omnibox {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = palette(window, cx);
         let editing = self.is_editing(window, cx);
-        let style = FieldStyle::current(cx);
+        let workspace_layout = WorkspaceLayout::current(cx);
+        let style = FieldStyle::for_layout(workspace_layout.omnibox_placement());
         let field_box = h_stack()
             .id("titlebar-omnibox")
             .relative()
@@ -371,11 +368,11 @@ impl Render for Omnibox {
         let mut field_box = self.handle_editing_keys(field_box, cx);
         // The open panel draws the field's content itself, in the same place.
         field_box = if editing && !self.suggestions.is_empty() {
-            field_box.child(self.open_panel(palette, cx))
+            field_box.child(self.open_panel(palette, style, workspace_layout.sidebar_region(), cx))
         } else {
-            field_box.child(self.field_content(palette, editing, cx))
+            field_box.child(self.field_content(palette, editing, style, cx))
         };
-        field_box = field_box.child(self.site_info_popover(palette, cx));
+        field_box = field_box.child(self.site_info_popover(palette, style, &workspace_layout, cx));
         if self.invalid {
             field_box = field_box.aria_description(INVALID_ADDRESS_DESCRIPTION);
         }
