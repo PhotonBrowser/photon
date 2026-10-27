@@ -50,7 +50,9 @@ impl BrowserWindow {
                     this.sync_dialog(window, cx);
                     cx.notify();
                 }
-                WebViewEvent::ContextMenuRequested | WebViewEvent::NewWebViewRequested(_) => {}
+                WebViewEvent::ContextMenuRequested
+                | WebViewEvent::SelectDropdownRequested
+                | WebViewEvent::NewWebViewRequested(_) => {}
             },
         );
         webview.update(cx, |view, _| view.set_page_visible(true));

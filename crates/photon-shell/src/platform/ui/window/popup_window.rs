@@ -78,6 +78,7 @@ pub(super) fn open_minimal_window(
                         }
                         // A site window has no menus or tabs of its own.
                         WebViewEvent::ContextMenuRequested
+                        | WebViewEvent::SelectDropdownRequested
                         | WebViewEvent::OpenInNewTab { .. }
                         | WebViewEvent::Peek(_) => {}
                     }

@@ -68,6 +68,7 @@ use super::theme::{ThemeColors, palette};
 use crate::platform::permission_coordinator::PermissionCoordinator;
 use alerts::{AlertCenter, EngineNotice, NoticeExpiry};
 use content::{BrowserTab, TabContent, create_webview, follow_appearance};
+use context_menu::{ContextMenuState, SelectDropdownState};
 use peek::PeekState;
 use permissions::PermissionPromptEntry;
 use popups::PendingPopup;
@@ -132,6 +133,12 @@ pub(in crate::platform) struct BrowserWindow {
     peek: PeekState,
     /// The keyboard shortcuts dialog, while open.
     shortcuts_dialog: Option<(Entity<ShortcutsDialog>, Subscription)>,
+    /// The context menu shown over this window, if any.
+    context_menu: Option<ContextMenuState>,
+    /// A page's open `<select>` popup, if any.
+    select_dropdown: Option<SelectDropdownState>,
+    /// Holds keyboard focus while a custom context menu is open.
+    context_menu_focus: FocusHandle,
     shortcuts_dialog_presence: Presence<Entity<ShortcutsDialog>>,
     /// The command palette, while open.
     command_palette: Option<Entity<CommandPalette>>,
@@ -462,6 +469,8 @@ impl BrowserWindow {
             .children(dialog)
             .children(self.popup_confirmation(palette, cx))
             .children(self.permission_prompt(palette, cx))
+            .children(self.select_dropdown_overlay(window, cx))
+            .children(self.context_menu_overlay(window, cx))
             .into_any_element()
     }
 }
@@ -594,6 +603,9 @@ fn open_browser_window(
                 find_bar_presence: Presence::default(),
                 peek: PeekState::default(),
                 shortcuts_dialog: None,
+                context_menu: None,
+                select_dropdown: None,
+                context_menu_focus: cx.focus_handle(),
                 shortcuts_dialog_presence: Presence::default(),
                 command_palette: None,
                 command_palette_presence: Presence::default(),

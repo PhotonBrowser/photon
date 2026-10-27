@@ -37,7 +37,7 @@ pub(in crate::platform) use context_menu::{PageMenu, PageMenuItem};
 pub(in crate::platform) use crashes::CrashNotice;
 pub(in crate::platform) use favicon::Favicon;
 pub(in crate::platform) use find::FindResult;
-pub(in crate::platform) use form_controls::{SelectDropdown, SelectItem, install_form_controls};
+pub(in crate::platform) use form_controls::{SelectDropdown, SelectItem};
 
 static MOUSE_MOVE_TRACE_COUNT: AtomicUsize = AtomicUsize::new(0);
 
@@ -63,6 +63,8 @@ pub(in crate::platform) struct PhotonWebView {
     recorded: history::Recorded,
     /// The context menu the page last asked for.
     pub(in crate::platform) context_menu: Option<PageMenu>,
+    /// The `<select>` menu waiting for the browser window to present it.
+    select_dropdown_request: Option<SelectDropdown>,
     /// The latest result of a find-in-page search.
     pub(in crate::platform) find_result: Option<FindResult>,
     /// The page's icon, shown in its tab while the page is not loading.
@@ -108,6 +110,8 @@ pub(in crate::platform) enum WebViewEvent {
     },
     /// A link was shift-clicked, to show in a preview over the page.
     Peek(String),
+    /// The page asked the shell to show a styled `<select>` popup.
+    SelectDropdownRequested,
 }
 
 impl EventEmitter<WebViewEvent> for PhotonWebView {}
@@ -319,6 +323,7 @@ impl PhotonWebView {
             crashes: PageCrashes::default(),
             recorded: history::Recorded::default(),
             context_menu: None,
+            select_dropdown_request: None,
             find_result: None,
             zoom_level: 1.0,
             page_unresponsive: false,
@@ -478,6 +483,14 @@ impl PhotonWebView {
 
     pub(super) fn omnibox_url(&self) -> String {
         self.state.url.clone()
+    }
+
+    pub(in crate::platform) fn viewport_origin(&self) -> (f32, f32) {
+        self.input.viewport_origin()
+    }
+
+    pub(in crate::platform) fn take_select_dropdown_request(&mut self) -> Option<SelectDropdown> {
+        self.select_dropdown_request.take()
     }
 }
 

@@ -304,6 +304,18 @@ impl BrowserWindow {
                     this.open_page_menu(window, cx);
                 }
                 WebViewEvent::ContextMenuRequested => {}
+                WebViewEvent::SelectDropdownRequested
+                    if this.active_webview().as_ref() == Some(webview) =>
+                {
+                    let dropdown =
+                        webview.update(cx, |view, _| view.take_select_dropdown_request());
+                    if let Some(dropdown) = dropdown {
+                        this.show_select_dropdown(webview.clone(), dropdown, window, cx);
+                    }
+                }
+                WebViewEvent::SelectDropdownRequested => {
+                    webview.update(cx, |view, _| view.session.select_dropdown_closed(None));
+                }
                 WebViewEvent::OpenInNewTab { url, activate } => {
                     this.open_tab_beside(webview, url, *activate, window, cx);
                 }

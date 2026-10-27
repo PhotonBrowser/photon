@@ -143,10 +143,15 @@ impl BrowserWindow {
         }
     }
 
-    /// Opens the native menu for the tab at `index`.
-    pub(super) fn show_tab_menu(&mut self, index: usize, window: &Window, cx: &mut Context<Self>) {
+    /// Opens the shared GPUI menu for the tab at `index`.
+    pub(super) fn show_tab_menu(
+        &mut self,
+        index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let items = self.tab_menu_items(index, cx);
-        super::context_menu::show_window_context_menu(window, items, cx);
+        self.show_context_menu(window, items, cx);
     }
 
     /// The menu for the tab at `index`: reloading, duplicating, pinning and

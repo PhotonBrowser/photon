@@ -79,6 +79,42 @@ pub(super) fn menu_action(
     menu_item(id, label, tab_index, Role::MenuItem, palette).on_click(on_click)
 }
 
+/// An action row that can also show its checked and disabled states.
+pub(super) fn menu_action_with_state(
+    id: impl Into<ElementId>,
+    label: impl Into<SharedString>,
+    role: Role,
+    selected: bool,
+    disabled: bool,
+    on_click: ClickHandler,
+    palette: ThemeColors,
+) -> impl IntoElement {
+    let label = label.into();
+    let disabled_opacity = crate::platform::theme_config::theme()
+        .opacity
+        .disabled_control;
+    let row = menu_row(id, label, role)
+        .aria_selected(selected)
+        .aria_disabled(disabled)
+        .tab_index(if disabled { -1 } else { 0 })
+        .child(if selected {
+            check_icon(palette.text_secondary, metrics::TOOLBAR_ICON_SIZE).into_any_element()
+        } else {
+            div()
+                .size(px(metrics::TOOLBAR_ICON_SIZE))
+                .into_any_element()
+        })
+        .opacity(if disabled { disabled_opacity } else { 1.0 })
+        .when(!disabled, |row| {
+            row.hover_style(|style| style.bg(rgba(palette.hover_surface)))
+                .on_click(on_click)
+        });
+    pressable(row)
+        .enabled(!disabled)
+        .focus_ring(palette)
+        .rounded(px(metrics::menu_item_radius()))
+}
+
 /// An option in a list box, such as a dropdown's menu, checked while chosen.
 pub(super) fn menu_option(
     id: impl Into<ElementId>,
@@ -141,7 +177,10 @@ pub(super) fn menu_switch(
 }
 
 /// A small heading over the rows or control that follow it.
-pub(super) fn menu_heading(label: &'static str, palette: ThemeColors) -> impl IntoElement {
+pub(super) fn menu_heading(
+    label: impl Into<SharedString>,
+    palette: ThemeColors,
+) -> impl IntoElement {
     div()
         .w_full()
         .px(px(metrics::MENU_ITEM_HORIZONTAL_PADDING))
@@ -149,7 +188,7 @@ pub(super) fn menu_heading(label: &'static str, palette: ThemeColors) -> impl In
         .pb(px(metrics::MENU_ITEM_GAP))
         .text_size(px(metrics::TAB_FONT_SIZE))
         .text_color(rgb(palette.text_secondary))
-        .child(label)
+        .child(label.into())
 }
 
 /// Lines up a control, such as a segmented choice, with the menu's rows.
