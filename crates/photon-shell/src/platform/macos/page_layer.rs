@@ -139,12 +139,26 @@ impl PageLayer {
         };
         // SAFETY: GPUI owns its AppKit window view throughout prepaint.
         let host = unsafe { host.as_ref() };
-        let host_layer = host
-            .layer()
-            .expect("GPUI's AppKit host view must have a Core Animation layer");
-        let parent_layer = host_layer
-            .superlayer()
-            .expect("GPUI's AppKit host layer must have a superlayer");
+        let Some(host_layer) = host.layer() else {
+            self.layer.setHidden(true);
+            self.placed.set(None);
+            return;
+        };
+
+        // GPUI's CAMetalLayer can be the root layer while its AppKit parent
+        // is not layer-backed yet. Promote the parent when available so the
+        // page can sit beside GPUI's layer. If the host is itself the root,
+        // attach the page behind its contents instead.
+        let mut parent_layer = host_layer.superlayer();
+        if parent_layer.is_none() {
+            // SAFETY: AppKit view hierarchy access runs on the main thread.
+            if let Some(parent_view) = unsafe { host.superview() } {
+                parent_view.setWantsLayer(true);
+                parent_layer = host_layer.superlayer();
+            }
+        }
+        let has_sibling_layer = parent_layer.is_some();
+        let parent_layer = parent_layer.unwrap_or_else(|| host_layer.clone());
         let layer = &self.layer;
         let attached = layer
             .superlayer()
@@ -168,10 +182,18 @@ impl PageLayer {
         }
 
         if !attached {
-            // Directly beneath GPUI's layer. A page attached later, like a
-            // link preview over its page, lies above those attached before.
             layer.removeFromSuperlayer();
-            parent_layer.insertSublayer_below(layer, Some(&host_layer));
+            if has_sibling_layer {
+                // Directly beneath GPUI's layer. A page attached later, like
+                // a link preview over its page, lies above those attached before.
+                parent_layer.insertSublayer_below(layer, Some(&host_layer));
+                layer.setZPosition(0.0);
+            } else {
+                // A root layer has no sibling slot. Keep the page behind the
+                // GPUI contents so the painted cutout exposes it.
+                parent_layer.addSublayer(layer);
+                layer.setZPosition(-1.0);
+            }
         }
         layer.setGeometryFlipped(flipped);
         layer.setContentsRect(contents_rect(layer, self.contents_fraction.get()));
