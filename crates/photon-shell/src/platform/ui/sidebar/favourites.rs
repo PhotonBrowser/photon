@@ -1,10 +1,8 @@
 //! The grid of favourite sites at the top of the sidebar.
 
-use gpui::{
-    AnyElement, App, FontWeight, MouseButton, Role, Window, div, prelude::*, px, rgb, rgba,
-};
+use gpui::{AnyElement, App, MouseButton, Role, Window, div, prelude::*, px, rgb, rgba};
 
-use super::super::animated_icons::{animated_icon, dismiss_x, favourite_star};
+use super::super::animated_icons::{animated_icon, dismiss_x};
 use super::super::button::icon_button;
 use super::super::controls::FocusRing;
 use super::super::controls::{OwnsClicks, Pressable};
@@ -130,54 +128,18 @@ pub(in super::super) fn favourites_empty_state(
                 + 2.0 * metrics::SIDEBAR_FAVOURITES_HINT_PADDING))
                 .justify_center()
         })
-        .rounded(px(metrics::sidebar_item_radius()))
-        .border_1()
+        .rounded(px(metrics::SIDEBAR_FAVOURITES_HINT_RADIUS))
+        .border_2()
         .border_dashed()
         .border_dashed_length(metrics::SIDEBAR_FAVOURITES_HINT_DASH_LENGTH)
         .border_dashed_gap(metrics::SIDEBAR_FAVOURITES_HINT_DASH_GAP)
-        .border_color(rgba(palette.soft_accent_border))
-        .bg(rgba(palette.surface))
-        .on_drag_over::<DraggedTab>(move |style, _, _, _| {
-            style
-                .bg(rgba(palette.hover_surface))
-                .border_color(rgba(palette.chosen))
-        })
+        .border_color(rgb(palette.text_secondary))
         .on_drop(move |dragged: &DraggedTab, window, cx| on_drop(dragged, window, cx))
         .on_prepaint(move |prepaint, window, cx| on_prepaint(prepaint.bounds, window, cx))
-        .when(collapsed, |hint| {
-            hint.child(animated_icon(
-                "sidebar-favourites-hint-star",
-                favourite_star(),
-                palette.chosen,
-                metrics::SIDEBAR_FAVOURITES_HINT_ICON_SIZE,
-                window,
-                cx,
-            ))
-        })
-        .when(!collapsed, |hint| {
-            hint.child(
-                div()
-                    .size(px(metrics::SIDEBAR_FAVOURITES_HINT_BADGE_SIZE))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .rounded(px(metrics::SIDEBAR_FAVOURITES_HINT_BADGE_SIZE / 2.0))
-                    .bg(rgba(palette.chosen))
-                    .child(animated_icon(
-                        "sidebar-favourites-hint-star",
-                        favourite_star(),
-                        palette.on_chosen,
-                        metrics::SIDEBAR_FAVOURITES_HINT_ICON_SIZE,
-                        window,
-                        cx,
-                    )),
-            )
-        })
         .when(!collapsed && show_drag_label, |hint| {
             hint.child(
                 div()
                     .text_size(px(metrics::SIDEBAR_FAVOURITES_HINT_TITLE_SIZE))
-                    .font_weight(FontWeight::SEMIBOLD)
                     .text_color(rgb(palette.text_primary))
                     .text_center()
                     .child("Drag to add favourites"),

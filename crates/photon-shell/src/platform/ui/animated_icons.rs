@@ -18,7 +18,7 @@ use gpui::{App, Div, ElementId, Stateful, Window, div, prelude::*, px};
 use gpui_motion::{Spring, SvgFrame, SvgMotion, SvgMotionState, SvgTarget, Transition};
 use std::time::{Duration, Instant};
 
-use super::icons::{FAVOURITE_STAR_SVG, heroicon, icon, lucide};
+use super::icons::{heroicon, icon, lucide};
 use super::motion::{MotionConfig, hover_icon_spring};
 use super::settings::Settings;
 
@@ -173,12 +173,6 @@ pub(super) fn browser_menu_dots() -> AnimatedIcon {
 /// which this framework cannot draw, so it turns a quarter instead.
 pub(super) fn dismiss_x() -> AnimatedIcon {
     AnimatedIcon::new(heroicon!("x-mark")).rotate(90.0)
-}
-
-/// A filled star, which marks a favourite, so it keeps its filled shape. It
-/// grows on hover, where heroicons-animated squashes and stretches it.
-pub(super) fn favourite_star() -> AnimatedIcon {
-    AnimatedIcon::new(FAVOURITE_STAR_SVG).scale(1.2)
 }
 
 /// The reload arrow, keeping its Lucide glyph. The turn and spring are

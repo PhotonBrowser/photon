@@ -176,9 +176,6 @@ pub(super) fn minimize_window_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("minus"), color, size)
 }
 
-/// A filled star, which marks a favourite.
-pub(super) const FAVOURITE_STAR_SVG: &[u8] = br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="m12 2.5 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5-5.8-3.1-5.8 3.1 1.1-6.5-4.7-4.6 6.5-.9z"/></svg>"##;
-
 pub(super) fn add_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("plus"), color, size)
 }
