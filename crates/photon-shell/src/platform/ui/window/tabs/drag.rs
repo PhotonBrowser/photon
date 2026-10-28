@@ -578,9 +578,25 @@ impl BrowserWindow {
             .is_some_and(|bounds| bounds.contains(&position))
     }
 
+    /// Where a dropped tab becomes a favourite: the favourites and the gap
+    /// around them, stopping short of the tab list so reordering the first
+    /// tab still works.
     fn favourites_drop_bounds(&self, cx: &App) -> Option<gpui::Bounds<gpui::Pixels>> {
-        self.favourites_bounds
-            .or_else(|| self.empty_favourites_reveal_bounds(cx))
+        let Some(favourites) = self.favourites_bounds else {
+            return self.empty_favourites_reveal_bounds(cx);
+        };
+        let reach = gpui::px(super::super::super::metrics::SIDEBAR_FAVOURITES_DROP_REACH);
+        let top = favourites.origin.y - reach;
+        let mut bottom = favourites.bottom() + reach;
+        if let Some(tabs) = self.tab_container_bounds
+            && tabs.origin.y >= favourites.bottom()
+        {
+            bottom = bottom.min(tabs.origin.y);
+        }
+        Some(gpui::Bounds::from_corners(
+            gpui::point(favourites.origin.x - reach, top),
+            gpui::point(favourites.right() + reach, bottom),
+        ))
     }
 
     /// When the empty-state hint was dismissed, keep a small, invisible
@@ -1008,6 +1024,19 @@ impl BrowserWindow {
             return;
         }
 
+        // Released over the favourites' reach, which can lie outside the
+        // drawn tiles that receive drops directly.
+        let favourite_drop = self.tab_drag_layout.as_ref().and_then(|drag| {
+            (drag.source_window == window.window_handle()
+                && drag.phase == super::super::TabDragPhase::DraggingOverFavourites
+                && drag.target_window.is_none()
+                && self.is_favourites_drop_position(release_position, cx))
+            .then_some(drag.id)
+        });
+        if let Some(id) = favourite_drop {
+            self.favourite_dropped_tab(id, cx);
+        }
+
         let release_target = self.tab_drag_layout.as_ref().and_then(|drag| {
             (drag.source_window == window.window_handle()
                 && matches!(
@@ -1389,15 +1418,6 @@ impl BrowserWindow {
     }
 
     fn add_dragged_favourite(&mut self, id: u64, cx: &mut Context<Self>) {
-        let Some(index) = self.tab_index_by_id(id) else {
-            return;
-        };
-        if matches!(&self.tabs[index].content, TabContent::Page(_)) {
-            return;
-        }
-        let Some(shortcut) = super::super::pinned::pin_for(&self.tabs[index], cx) else {
-            return;
-        };
         if self
             .favourites_drag_hover
             .is_some_and(|(_, hovered_id)| hovered_id == id)
@@ -1407,6 +1427,23 @@ impl BrowserWindow {
         }
         self.clear_previous_target(cx);
         self.tab_drag_layout = None;
+        self.favourite_dropped_tab(id, cx);
+    }
+
+    /// Makes the dragged tab a favourite, unless it cannot be one or already
+    /// is.
+    fn favourite_dropped_tab(&mut self, id: u64, cx: &mut Context<Self>) {
+        let Some(index) = self.tab_index_by_id(id) else {
+            return;
+        };
+        if self.tabs[index].favourite.is_some()
+            || matches!(&self.tabs[index].content, TabContent::Page(_))
+        {
+            return;
+        }
+        let Some(shortcut) = super::super::pinned::pin_for(&self.tabs[index], cx) else {
+            return;
+        };
         self.add_favourite(index, shortcut, cx);
     }
 

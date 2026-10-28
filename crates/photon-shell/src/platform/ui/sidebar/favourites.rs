@@ -1,12 +1,16 @@
 //! The grid of favourite sites at the top of the sidebar.
 
-use gpui::{AnyElement, App, MouseButton, Role, Window, div, prelude::*, px, rgb, rgba};
+use gpui::{
+    AnyElement, App, ElementId, MouseButton, Role, SharedString, Window, div, prelude::*, px, rgb,
+    rgba,
+};
 
 use super::super::animated_icons::{animated_icon, dismiss_x};
 use super::super::button::icon_button;
 use super::super::controls::FocusRing;
 use super::super::controls::{OwnsClicks, Pressable};
 use super::super::layout::{h_stack, v_stack};
+use super::super::motion::{AnimateIn, Curve, Entrance, MotionConfig, Speed};
 use super::super::tabs::{DraggedTab, TabDrop, TabPrepaint};
 use super::super::tooltip::label_tooltip;
 use super::super::{ClickHandler, MouseDownHandler, metrics, theme::ThemeColors};
@@ -14,6 +18,11 @@ use super::collapsed_tile;
 
 /// A favourite site's tile.
 pub(in super::super) struct FavouriteTile {
+    /// The page the favourite opens, which also keys its tile, so tiles keep
+    /// their state as others come and go.
+    pub(in super::super) url: String,
+    /// Whether the favourite was just added, so its tile scales in.
+    pub(in super::super) appearing: bool,
     pub(in super::super) label: String,
     /// The site's icon, or a placeholder.
     pub(in super::super) icon: AnyElement,
@@ -25,14 +34,22 @@ pub(in super::super) struct FavouriteTile {
 }
 
 /// Rows of tiles, filling each row so tiles stay the same width. Collapsed
-/// to icons, a column of square tiles.
+/// to icons, a column of square tiles. While a tab is dragged over them, a
+/// slot shows where it will land.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the grid needs its drop state, handlers and motion settings"
+)]
 pub(in super::super) fn favourites_grid(
     tiles: Vec<FavouriteTile>,
     collapsed: bool,
     palette: ThemeColors,
+    drop_hover: bool,
+    has_room: bool,
     on_drop: TabDrop,
     on_prepaint: TabPrepaint,
     suppress_tooltips: bool,
+    motion: &MotionConfig,
 ) -> impl IntoElement {
     let columns = if collapsed {
         1
@@ -40,14 +57,17 @@ pub(in super::super) fn favourites_grid(
         metrics::SIDEBAR_FAVOURITE_COLUMNS
     };
     let gap = metrics::SidebarSpacing::new(collapsed).favourite_gap;
+    let mut cells: Vec<AnyElement> = tiles
+        .into_iter()
+        .map(|tile| favourite_tile(tile, collapsed, suppress_tooltips, palette, motion))
+        .collect();
+    if drop_hover && has_room {
+        cells.push(drop_slot(collapsed, palette, motion));
+    }
     let mut rows = Vec::new();
-    let mut tiles = tiles.into_iter().enumerate().peekable();
-    while tiles.peek().is_some() {
-        let row: Vec<AnyElement> = tiles
-            .by_ref()
-            .take(columns)
-            .map(|(index, tile)| favourite_tile(index, tile, collapsed, suppress_tooltips, palette))
-            .collect();
+    let mut cells = cells.into_iter().peekable();
+    while cells.peek().is_some() {
+        let row: Vec<AnyElement> = cells.by_ref().take(columns).collect();
         let filler = columns - row.len();
         rows.push(
             h_stack()
@@ -63,14 +83,36 @@ pub(in super::super) fn favourites_grid(
         .aria_label("Favourites")
         .w_full()
         .gap(px(gap))
-        .on_drag_over::<DraggedTab>(move |style, _, _, _| {
-            style
-                .border_1()
-                .border_color(rgba(palette.soft_accent_border))
-        })
         .on_drop(move |dragged: &DraggedTab, window, cx| on_drop(dragged, window, cx))
         .on_prepaint(move |prepaint, window, cx| on_prepaint(prepaint.bounds, window, cx))
         .children(rows)
+}
+
+/// How a favourite's tile grows in when it is added.
+const fn favourite_entrance() -> Entrance {
+    Entrance::new()
+        .fade_from(0.0)
+        .scale_from(metrics::SIDEBAR_FAVOURITE_ENTRANCE_SCALE)
+        .curve(Curve::Overshoot)
+        .speed(Speed::Standard)
+}
+
+/// The empty tile a dragged tab will fill, outlined as a drop target.
+fn drop_slot(collapsed: bool, palette: ThemeColors, motion: &MotionConfig) -> AnyElement {
+    let slot = div()
+        .rounded(px(metrics::sidebar_item_radius()))
+        .border_2()
+        .border_dashed()
+        .border_dashed_length(metrics::SIDEBAR_FAVOURITES_HINT_DASH_LENGTH)
+        .border_dashed_gap(metrics::SIDEBAR_FAVOURITES_HINT_DASH_GAP)
+        .border_color(rgba(palette.soft_accent_border))
+        .bg(rgba(palette.surface_hover));
+    let slot = if collapsed {
+        collapsed_tile(slot)
+    } else {
+        slot.flex_1().h(px(metrics::SIDEBAR_FAVOURITE_HEIGHT))
+    };
+    slot.animate_in("sidebar-favourite-drop-slot", favourite_entrance(), motion)
 }
 
 /// Empty favourites area, which teaches new users to menu-favourite a tab.
@@ -166,16 +208,20 @@ pub(in super::super) fn favourites_empty_state(
 }
 
 fn favourite_tile(
-    index: usize,
     tile: FavouriteTile,
     collapsed: bool,
     suppress_tooltips: bool,
     palette: ThemeColors,
+    motion: &MotionConfig,
 ) -> AnyElement {
+    let id = ElementId::from(SharedString::from(format!(
+        "sidebar-favourite-{}",
+        tile.url
+    )));
     let tooltip =
         (collapsed && !suppress_tooltips).then(|| label_tooltip(tile.label.clone(), palette));
     let tile_element = h_stack()
-        .id(("sidebar-favourite", index))
+        .id(id.clone())
         .role(Role::Button)
         .aria_label(tile.label)
         .aria_selected(tile.active)
@@ -199,12 +245,17 @@ fn favourite_tile(
         .on_click(tile.on_open)
         .child(tile.icon)
         .when_some(tooltip, |tile, tooltip| tile.tooltip(tooltip));
-    if collapsed {
-        return collapsed_tile(tile_element).into_any_element();
+    let tile_element = if collapsed {
+        collapsed_tile(tile_element)
+    } else {
+        tile_element
+            .flex_1()
+            .h(px(metrics::SIDEBAR_FAVOURITE_HEIGHT))
+            .rounded(px(metrics::sidebar_item_radius()))
+    };
+    if tile.appearing {
+        tile_element.animate_in((id, "entrance"), favourite_entrance(), motion)
+    } else {
+        tile_element.into_any_element()
     }
-    tile_element
-        .flex_1()
-        .h(px(metrics::SIDEBAR_FAVOURITE_HEIGHT))
-        .rounded(px(metrics::sidebar_item_radius()))
-        .into_any_element()
 }

@@ -413,6 +413,12 @@ pub(super) const SIDEBAR_FAVOURITES_HINT_DISMISS_INSET: f32 = 2.0;
 pub(super) const SIDEBAR_FAVOURITES_HINT_RADIUS: f32 = 8.0;
 pub(super) const SIDEBAR_FAVOURITES_HINT_DASH_LENGTH: f32 = 5.0;
 pub(super) const SIDEBAR_FAVOURITES_HINT_DASH_GAP: f32 = 2.5;
+/// How far the favourites drop target reaches around the favourites, into
+/// the gap above the tabs, so a tab need not land exactly on a tile.
+pub(super) const SIDEBAR_FAVOURITES_DROP_REACH: f32 =
+    2.0 * SIDEBAR_SEPARATOR_MARGIN + MENU_SEPARATOR_HEIGHT;
+/// The size a newly added favourite grows from.
+pub(super) const SIDEBAR_FAVOURITE_ENTRANCE_SCALE: f32 = 0.6;
 pub(super) const SIDEBAR_FOOTER_HEIGHT: f32 = 40.0;
 pub(super) const SIDEBAR_SEPARATOR_MARGIN: f32 = 8.0;
 pub(super) const SIDEBAR_SEPARATOR_INSET: f32 = 10.0;

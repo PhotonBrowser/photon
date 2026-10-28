@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::new_tab::{Shortcut, site_name};
+use super::new_tab::Shortcut;
 use super::settings::WindowColor;
 use super::workspace::WorkspaceLayout;
 
@@ -154,15 +154,15 @@ impl Space {
         self.colors = Some(colors);
     }
 
-    /// The favourite for `url`'s site, if there is one in this space.
+    /// The favourite at exactly `url`, if there is one in this space. A site
+    /// can be favourited more than once, at different pages.
     pub fn favourite_for(&self, url: &str) -> Option<&Shortcut> {
-        let site = site_name(url);
         self.favourites
             .iter()
-            .find(|favourite| site_name(&favourite.url) == site)
+            .find(|favourite| favourite.url == url)
     }
 
-    /// Adds a site to this space's favourites, unless it is already there or
+    /// Adds a page to this space's favourites, unless it is already there or
     /// the favourites are full. Returns whether it was added.
     pub fn add_favourite(&mut self, favourite: Shortcut) -> bool {
         if self.favourites.len() >= MAX_FAVOURITES || self.favourite_for(&favourite.url).is_some() {
@@ -172,12 +172,18 @@ impl Space {
         true
     }
 
-    /// Removes the favourite for `url`'s site from this space.
+    /// Removes the favourite at `url` from this space.
     pub fn remove_favourite(&mut self, url: &str) {
-        let site = site_name(url);
-        self.favourites
-            .retain(|favourite| site_name(&favourite.url) != site);
+        self.favourites.retain(|favourite| favourite.url != url);
     }
+}
+
+fn tolerant_color<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<WindowColor, D::Error> {
+    let name = String::deserialize(deserializer)?;
+    let named = serde::de::value::StrDeserializer::<D::Error>::new(&name);
+    Ok(WindowColor::deserialize(named).unwrap_or_default())
 }
 
 /// The name a new space is given: "Space 2" for the second.
@@ -436,13 +442,23 @@ mod tests {
         assert!(spaces.get(second).unwrap().favourites.is_empty());
         assert!(!spaces.get_mut(first).unwrap().add_favourite(Shortcut {
             title: "Example again".to_owned(),
-            url: "https://www.example.com/other".to_owned(),
+            url: "https://example.com/".to_owned(),
         }));
+        let other_page = Shortcut {
+            title: "Another page".to_owned(),
+            url: "https://example.com/other".to_owned(),
+        };
+        assert!(
+            spaces
+                .get_mut(first)
+                .unwrap()
+                .add_favourite(other_page.clone())
+        );
         spaces
             .get_mut(first)
             .unwrap()
             .remove_favourite("https://example.com/");
-        assert!(spaces.get(first).unwrap().favourites.is_empty());
+        assert_eq!(spaces.get(first).unwrap().favourites, [other_page]);
     }
 
     #[test]

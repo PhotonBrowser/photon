@@ -126,6 +126,8 @@ pub(in crate::platform) struct BrowserWindow {
     tab_auto_scroll_at: Option<Instant>,
     favourites_bounds: Option<Bounds<Pixels>>,
     favourites_drag_hover: Option<(AnyWindowHandle, u64)>,
+    /// The favourite added most recently, which scales in as its tile appears.
+    added_favourite: Option<String>,
     incoming_tab_drag: Option<IncomingTabDrag>,
     tab_position_animations: HashMap<u64, TabPositionAnimation>,
     tab_reorder_groups: TabReorderGroups,
@@ -631,6 +633,7 @@ fn open_browser_window(
                 tab_auto_scroll_at: None,
                 favourites_bounds: None,
                 favourites_drag_hover: None,
+                added_favourite: None,
                 incoming_tab_drag: None,
                 tab_position_animations: HashMap::new(),
                 tab_reorder_groups: TabReorderGroups::new(),

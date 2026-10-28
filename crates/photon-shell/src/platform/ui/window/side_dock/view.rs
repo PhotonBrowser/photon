@@ -4,7 +4,7 @@
 //! between icons and labels.
 
 use gpui::{AnyElement, Context, Div, Stateful, Window, div, prelude::*, px};
-use photon_core::{Command, DockRegion};
+use photon_core::{Command, DockRegion, MAX_FAVOURITES};
 
 use super::super::super::button::toolbar_button;
 use super::super::super::icons::sidebar_icon;
@@ -274,6 +274,7 @@ impl BrowserWindow {
             space.favourites.clone(),
             space.favourites_hint_dismissed,
         );
+        let dragging_over_favourites = self.favourites_drag_hover.is_some();
         let tiles = self.favourite_tiles(&saved, collapsed, palette, cx);
         if !tiles.is_empty() {
             return Some(
@@ -281,14 +282,16 @@ impl BrowserWindow {
                     tiles,
                     collapsed,
                     palette,
+                    dragging_over_favourites,
+                    saved.len() < MAX_FAVOURITES,
                     self.favourite_drop_handler(cx),
                     self.favourite_bounds_handler(cx),
                     self.tab_drag_active(),
+                    &Settings::motion(cx),
                 )
                 .into_any_element(),
             );
         }
-        let dragging_over_favourites = self.favourites_drag_hover.is_some();
         if !should_show_empty_favourites_hint(hint_dismissed, collapsed, dragging_over_favourites) {
             return None;
         }

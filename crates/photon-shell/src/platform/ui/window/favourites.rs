@@ -6,12 +6,15 @@ use gpui::{
 };
 use photon_core::{MAX_FAVOURITES, Shortcut, SpaceId, site_name};
 
+use super::super::Favicon;
+
 use super::super::history::BrowsingHistory;
 use super::super::icons::globe_icon;
 use super::super::settings::Settings;
 use super::super::sidebar::FavouriteTile;
 use super::super::{metrics, theme::ThemeColors};
 use super::BrowserWindow;
+use super::content::{BrowserTab, TabContent};
 use super::menu::{MenuCommand, command_item};
 use super::pinned::pin_for;
 
@@ -40,7 +43,13 @@ impl BrowserWindow {
             .iter()
             .enumerate()
             .map(|(index, favourite)| {
-                let icon = match BrowsingHistory::favicon(&favourite.url, cx) {
+                // The open tab's icon is current; the saved one stands in
+                // while the favourite has no tab.
+                let favicon = self
+                    .favourite_tab(&favourite.url, active_space)
+                    .and_then(|tab| tab_favicon(&self.tabs[tab], cx))
+                    .or_else(|| BrowsingHistory::favicon(&favourite.url, cx));
+                let icon = match favicon {
                     Some(favicon) => img(ImageSource::Render(favicon.image))
                         .size(px(icon_size))
                         .object_fit(ObjectFit::Contain)
@@ -49,6 +58,8 @@ impl BrowserWindow {
                 };
                 let url = favourite.url.clone();
                 FavouriteTile {
+                    url: favourite.url.clone(),
+                    appearing: self.added_favourite.as_deref() == Some(favourite.url.as_str()),
                     label: if favourite.title.trim().is_empty() {
                         site_name(&favourite.url)
                     } else {
@@ -101,17 +112,17 @@ impl BrowserWindow {
         if matches!(&tab.content, super::content::TabContent::Page(_)) {
             return None;
         }
-        let shortcut = pin_for(tab, cx)?;
-        let space = self.tabs[index].space;
-        let saved = Settings::get(cx).spaces.get(space)?;
-        if saved.favourite_for(&shortcut.url).is_some() {
+        let space = tab.space;
+        if let Some(url) = tab.favourite.clone() {
             return Some(command_item(
                 "Remove from Favourites",
-                MenuCommand::RemoveFavourite {
-                    url: shortcut.url,
-                    space,
-                },
+                MenuCommand::RemoveFavourite { url, space },
             ));
+        }
+        let shortcut = pin_for(tab, cx)?;
+        let saved = Settings::get(cx).spaces.get(space)?;
+        if saved.favourite_for(&shortcut.url).is_some() {
+            return None;
         }
         (saved.favourites.len() < MAX_FAVOURITES).then(|| {
             command_item(
@@ -137,6 +148,14 @@ impl BrowserWindow {
         let Some(space_id) = self.tabs.get(index).map(|tab| tab.space) else {
             return;
         };
+        let full = Settings::get(cx)
+            .spaces
+            .get(space_id)
+            .is_some_and(|space| space.favourites.len() >= MAX_FAVOURITES);
+        if full {
+            self.show_action_alert("Favourites are full", cx);
+            return;
+        }
         let mut added = false;
         Settings::update(cx, |settings| {
             if let Some(space) = settings.spaces.get_mut(space_id) {
@@ -146,6 +165,12 @@ impl BrowserWindow {
         if !added {
             return;
         }
+        // Kept under the favourite's own address, so the tile keeps its icon
+        // after the tab closes or moves on to another page.
+        if let Some(favicon) = tab_favicon(&self.tabs[index], cx) {
+            BrowsingHistory::set_favicon(&url, &favicon, cx);
+        }
+        self.added_favourite = Some(url.clone());
         // Marked first, as unpinning moves the tab.
         self.tabs[index].favourite = Some(url);
         if self.tabs[index].pin.is_some() {
@@ -155,28 +180,24 @@ impl BrowserWindow {
         cx.notify();
     }
 
-    /// Removes the favourite for `url`'s site. Its tab returns to the tab
-    /// list.
+    /// Removes the favourite at `url`. Its tab returns to the tab list.
     pub(super) fn remove_favourite(
         &mut self,
         url: &str,
         space_id: SpaceId,
         cx: &mut Context<Self>,
     ) {
-        let site = site_name(url);
         let existed = Settings::get(cx)
             .spaces
             .get(space_id)
             .is_some_and(|space| space.favourite_for(url).is_some());
         for tab in &mut self.tabs {
-            if tab.space == space_id
-                && tab
-                    .favourite
-                    .as_deref()
-                    .is_some_and(|owner| site_name(owner) == site)
-            {
+            if tab.space == space_id && tab.favourite.as_deref() == Some(url) {
                 tab.favourite = None;
             }
+        }
+        if self.added_favourite.as_deref() == Some(url) {
+            self.added_favourite = None;
         }
         Settings::update(cx, |settings| {
             if let Some(space) = settings.spaces.get_mut(space_id) {
@@ -215,5 +236,14 @@ impl BrowserWindow {
                 MenuCommand::RemoveFavourite { url, space },
             )])
             .collect()
+    }
+}
+
+/// The icon a tab shows now, whether awake or asleep.
+fn tab_favicon(tab: &BrowserTab, cx: &gpui::App) -> Option<Favicon> {
+    match &tab.content {
+        TabContent::Web(webview) => webview.read(cx).favicon.clone(),
+        TabContent::Sleeping(sleeping) => sleeping.favicon.clone(),
+        TabContent::Page(_) => None,
     }
 }

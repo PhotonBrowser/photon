@@ -24,6 +24,9 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        // Measured again as the favourites draw, so a target that is no
+        // longer shown stops catching dropped tabs.
+        self.favourites_bounds = None;
         let layout = WorkspaceLayout::current(cx);
         let tucked = 1.0 - self.sidebar.chrome_shown();
         let mut root = div().size_full().relative();
