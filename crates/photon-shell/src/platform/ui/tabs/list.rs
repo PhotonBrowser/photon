@@ -8,6 +8,7 @@ use super::super::controls::FocusRing;
 use super::super::controls::{OwnsClicks, Pressable};
 use super::super::layout::{h_stack, v_stack};
 use super::super::motion::ReorderGroup;
+use super::super::motion::SurfaceFade;
 use super::super::sidebar::collapsed_tile;
 use super::super::tooltip::label_tooltip;
 use super::super::{ClickHandler, metrics, theme::ThemeColors};
@@ -193,7 +194,8 @@ fn tab_row(parts: TabParts, palette: ThemeColors, reorder: &ReorderGroup<u64>) -
     let row = if parts.active {
         row.bg(rgba(palette.selected_surface))
     } else {
-        row.hover_style(|style| style.bg(rgba(palette.hover_surface)))
+        row.surface_fade()
+            .hover_style(|style| style.bg(rgba(palette.hover_surface)))
     };
     let close = if parts.active {
         parts.close
@@ -233,7 +235,8 @@ fn tab_tile(parts: TabParts, palette: ThemeColors, reorder: &ReorderGroup<u64>) 
     let tile = if parts.active {
         tile.bg(rgba(palette.selected_surface))
     } else {
-        tile.hover_style(|style| style.bg(rgba(palette.hover_surface)))
+        tile.surface_fade()
+            .hover_style(|style| style.bg(rgba(palette.hover_surface)))
     };
     let tile = animate_tab_motion(
         tile.child(parts.icon),
@@ -264,6 +267,7 @@ fn new_tab_row(
         .rounded(px(metrics::sidebar_item_radius()))
         .text_size(px(metrics::SIDEBAR_FONT_SIZE))
         .text_color(rgb(palette.text_secondary))
+        .surface_fade()
         .hover_style(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
         .pressable()

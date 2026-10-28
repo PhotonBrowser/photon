@@ -20,6 +20,7 @@ use super::icons::{
     audio_icon, close_icon, globe_icon, loading_spinner, photon_logo, sleeping_icon,
 };
 use super::layout::h_stack;
+use super::motion::SurfaceFade;
 use super::motion::{
     AnimateIn, AnimateSpring, Entrance, ReorderAxis, ReorderGroup, SpringSpec, pop,
 };
@@ -619,6 +620,7 @@ fn audio_control_button(
         .size(px(metrics::TAB_AUDIO_BUTTON_SIZE))
         .rounded(px(metrics::control_radius()))
         .text_color(rgb(icon_color))
+        .surface_fade()
         .hover_style(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
         .pressable()
@@ -647,6 +649,7 @@ fn close_tab_button(
         .justify_center()
         .size(px(metrics::TAB_CLOSE_BUTTON_SIZE))
         .rounded(px(metrics::control_radius()))
+        .surface_fade()
         .hover_style(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
         .pressable()

@@ -9,6 +9,7 @@ use super::super::button::{menu_button, toolbar_button};
 use super::super::controls::{FocusRing, RovingAxis, RovingFocus};
 use super::super::controls::{OwnsClicks, Pressable};
 use super::super::layout::{h_stack, v_stack};
+use super::super::motion::SurfaceFade;
 use super::super::tooltip::label_tooltip;
 use super::super::{ClickHandler, MouseDownHandler, metrics, theme::ThemeColors};
 
@@ -185,6 +186,7 @@ fn space_dot(
         .items_center()
         .justify_center()
         .rounded_full()
+        .surface_fade()
         .hover_style(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
         .pressable()

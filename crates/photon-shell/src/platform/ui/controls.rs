@@ -13,6 +13,7 @@ use gpui_elements::editable_text::EditableTextElement;
 
 use super::icons::check_icon;
 use super::layout::{ControlSurface, Elevated, Elevation, h_stack};
+use super::motion::SurfaceFade;
 use super::motion::{AnimateIn, fade};
 use super::motion::{control_thumb_transition, pressable, pressable_with_focus};
 use super::{ClickHandler, metrics, theme::ThemeColors};
@@ -299,10 +300,12 @@ impl RenderOnce for ChoiceGroup {
                     segment
                         .bg(rgb(palette.chosen))
                         .text_color(rgb(palette.on_chosen))
+                        .surface_fade()
                         .hover_style(|style| style.bg(rgb(palette.chosen_hover)))
                 } else {
                     segment
                         .text_color(rgb(palette.text_primary))
+                        .surface_fade()
                         .hover_style(|style| style.bg(rgba(palette.hover_surface)))
                 }
             });
@@ -433,11 +436,13 @@ impl RenderOnce for Switch {
             .when(visual_on, |track| {
                 track
                     .bg(rgb(palette.chosen))
+                    .surface_fade()
                     .hover_style(|style| style.bg(rgb(palette.chosen_hover)))
             })
             .when(!visual_on, |track| {
                 track
                     .bg(rgba(palette.selected_surface))
+                    .surface_fade()
                     .hover_style(|style| style.bg(rgba(palette.hover_surface)))
             })
             .child(

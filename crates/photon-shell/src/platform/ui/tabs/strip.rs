@@ -7,6 +7,7 @@ use super::super::controls::{OwnsClicks, Pressable};
 use super::super::icons::add_icon;
 use super::super::layout::h_stack;
 use super::super::motion::ReorderGroup;
+use super::super::motion::SurfaceFade;
 use super::super::{ClickHandler, metrics, theme::ThemeColors};
 use super::{
     DraggedTab, TabDragAxis, TabDragMove, TabDrop, TabItem, TabParts, TabPrepaint,
@@ -157,7 +158,8 @@ fn strip_tab(
         let tab = if parts.active {
             tab.bg(rgba(palette.selected_surface))
         } else {
-            tab.hover_style(|style| style.bg(rgba(palette.hover_surface)))
+            tab.surface_fade()
+                .hover_style(|style| style.bg(rgba(palette.hover_surface)))
         };
         let tab = animate_tab_motion(
             tab.child(parts.icon),
@@ -191,7 +193,8 @@ fn strip_tab(
     let tab = if parts.active {
         tab.bg(rgba(palette.selected_surface))
     } else {
-        tab.hover_style(|style| style.bg(rgba(palette.hover_surface)))
+        tab.surface_fade()
+            .hover_style(|style| style.bg(rgba(palette.hover_surface)))
     };
     let tab = animate_tab_motion(
         tab.child(parts.icon)
@@ -221,6 +224,7 @@ fn new_tab_button(
         .size(px(metrics::TAB_HEIGHT))
         .rounded(px(metrics::control_radius()))
         .text_color(rgb(palette.text_secondary))
+        .surface_fade()
         .hover_style(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks()
         .pressable()

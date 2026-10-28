@@ -6,6 +6,7 @@ use super::ClickHandler;
 use super::animated_icons::{animated_icon, browser_menu_dots};
 use super::controls::{FocusRing, OwnsClicks};
 use super::layout::{ControlSurface, h_stack};
+use super::motion::SurfaceFade;
 use super::motion::{icon_pressable, pressable};
 use super::{metrics, theme::ThemeColors};
 use gpui_motion::PressScaleElement;
@@ -118,6 +119,7 @@ pub(super) fn button(
     let button = jiggle_button(pressable(button).enabled(enabled), enabled);
     match kind {
         ButtonKind::Primary => button
+            .surface_fade()
             .hover_style(|style| {
                 style
                     .bg(rgb(palette.chosen_hover))
@@ -129,9 +131,11 @@ pub(super) fn button(
                     .border_color(rgb(palette.chosen_hover))
             }),
         ButtonKind::Secondary => button
+            .surface_fade()
             .hover_style(|style| style.bg(rgba(palette.surface_hover)))
             .active_style(|style| style.bg(rgba(palette.surface_hover))),
         ButtonKind::Destructive => button
+            .surface_fade()
             .hover_style(|style| style.bg(rgba(palette.error_hover_surface)))
             .active_style(|style| style.bg(rgba(palette.error_hover_surface))),
     }
@@ -170,6 +174,7 @@ pub(super) fn icon_button(
     let button = if enabled {
         button
             .tab_index(0)
+            .surface_fade()
             .hover_style(|style| style.bg(rgba(palette.hover_surface)))
             .active_style(|style| style.bg(rgba(palette.hover_surface)))
             .owns_clicks()
@@ -205,6 +210,7 @@ pub(super) fn toolbar_button(
     let button = if enabled {
         button
             .tab_index(tab_index)
+            .surface_fade()
             .hover_style(|style| style.bg(rgba(palette.hover_surface)))
             .active_style(|style| style.bg(rgba(palette.hover_surface)))
             .owns_clicks()
@@ -239,6 +245,7 @@ pub(super) fn menu_button(
         .justify_center()
         .size(px(metrics::TOOLBAR_BUTTON_SIZE))
         .rounded(px(metrics::control_radius()))
+        .surface_fade()
         .hover_style(|style| style.bg(rgba(palette.hover_surface)))
         .active_style(|style| style.bg(rgba(palette.hover_surface)))
         .owns_clicks();

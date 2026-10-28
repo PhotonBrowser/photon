@@ -133,7 +133,7 @@ folder, then add a function that loads it with `lucide!("name")`.
 
 [`gpui-motion`](../crates/gpui-motion/README.md) provides reusable animation
 mechanics. The shell's
-[`motion.rs`](../crates/photon-shell/src/platform/ui/motion.rs) keeps Photon
+[`motion/`](../crates/photon-shell/src/platform/ui/motion/) keeps Photon
 visual presets and distances. An `Entrance` describes an element effect,
 composed from:
 
@@ -178,7 +178,28 @@ chips, the find bar, dialogs and the customise menu work this way.
 Layout that animates as a whole, such as the sidebar opening while the page
 narrows beside it, uses a `Tween`: a value from 0 to 1 that eases in and out
 toward its target and can turn back midway without jumping. Its owner reads
-it as it draws and asks for another frame while it runs.
+it as it draws and asks for another frame while it runs. When several parts of
+the window follow the same motion, sample it with `value_at` at one instant per
+frame, as the sidebar does, rather than `value`, which reads the clock on every
+call and lets the parts drift apart.
+
+Photon's motion leans on springs, as Arc's does. A spring can be turned back
+midway and keeps its momentum, where a fixed-length curve restarts from rest.
+Menus and popovers (`popover`) and the find bar spring in on `Curve::SNAPPY`,
+with a slight scale, drop and blur. Toasts, peeks and spaces arriving use the
+softer `Curve::SMOOTH`. Springs leave on an ease-out of the entrance's exit
+duration, so `Presence` can unmount them on time. The sidebar opens, closes,
+collapses and tucks away for Zen mode on `SIDEBAR_LAYOUT_SPRING`, which is
+critically damped so the page beside it never overshoots. The sidebar revealed
+over the page uses the quicker, slightly livelier `SIDEBAR_REVEAL_SPRING`. A
+spring ignores the quick, standard and gentle durations, but still jumps
+straight to rest when motion is off or reduced.
+
+Surfaces fade between their resting, hovered, pressed and selected colours
+rather than switching at once: call `.surface_fade()` (from `SurfaceFade` in
+`motion/press.rs`) before `.hover_style(...)`. Buttons, icon buttons, controls,
+tab rows, the tab strip and the sidebar footer use it. Colour fades stay on
+under reduced motion, since nothing moves.
 
 The shell adapts its persisted animation preferences and the current
 system reduced-motion preference into `gpui_motion::MotionConfig`. When motion
@@ -207,6 +228,6 @@ switching tabs. Animate only what just changed:
   `Elevation`, and floating backgrounds behind `raised`.
 - Build menus and popovers from `menu.rs`, and controls from `controls.rs`,
   so hover, selected, chosen and focus look the same everywhere.
-- Animate with `motion.rs`, and only on a change.
+- Animate with `motion/`, and only on a change.
 - Take the browser's name, page scheme and logo from `photon-brand`, never
   literals (see [Profile and branding](Profile.md)).

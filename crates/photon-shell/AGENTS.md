@@ -23,7 +23,7 @@ shadows, and `raised` for the background of anything floating over the page;
 overlay-specific measurements belong to `photon-performance`. Avoid color,
 dimension, shadow, blur, or brand literals in views. Build menus and popovers
 from `platform/ui/menu.rs` and controls from `platform/ui/controls.rs`. Animate
-with `platform/ui/motion.rs`, and only when something changes, never just because
+with `platform/ui/motion/`, and only when something changes, never just because
 a view reappears.
 
 Read and change settings through the `Settings` global and the history
