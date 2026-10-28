@@ -15,7 +15,7 @@ use std::{
 use gpui::{
     App, AsyncApp, Bounds, DispatchPhase, Element, ElementId, GlobalElementId, InspectorElementId,
     IntoElement, LayoutId, MouseButton, MouseDownEvent, MouseUpEvent, Pixels, Refineable, Size,
-    Style, StyleRefinement, Styled, Visibility, Window, px,
+    Style, StyleRefinement, Styled, Visibility, Window, px, size,
 };
 use objc2::{
     DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send,
@@ -359,6 +359,9 @@ impl AppKitGlassBackdrop {
         container.setWantsLayer(true);
         let container_layer = container.layer()?;
         container_layer.setMasksToBounds(true);
+        // Fade the glass as one picture; fading its layers separately lets
+        // the edge highlights glow through as it goes.
+        container_layer.setAllowsGroupOpacity(true);
         let tint = CAGradientLayer::new();
         // Without implicit animations the tint follows the field and window
         // in the same transaction as GPUI's frame.
@@ -416,7 +419,9 @@ impl IntoElement for AppKitGlassBackdrop {
 
 impl Element for AppKitGlassBackdrop {
     type RequestLayoutState = Style;
-    type PrepaintState = ();
+    /// The painted bounds, after the element's style scale, and where the
+    /// glass fell in the order native views were placed.
+    type PrepaintState = (Bounds<Pixels>, u64);
 
     fn id(&self) -> Option<ElementId> {
         Some(ElementId::named_usize(
@@ -453,15 +458,22 @@ impl Element for AppKitGlassBackdrop {
         let global_id = id.expect("glass backdrop elements always have a stable id");
         let visible = style.visibility == Visibility::Visible;
         let alpha = style.opacity.unwrap_or(1.0).clamp(0.0, 1.0);
+        // GPUI paints a style scale about the element's centre without moving
+        // its layout, so the native glass follows that painted size.
+        let scale = style.scale;
+        let bounds = Bounds::centered_at(
+            bounds.center(),
+            size(
+                bounds.size.width * scale.width,
+                bounds.size.height * scale.height,
+            ),
+        );
         let inner = self.inner.clone();
-        let radius = self.corner_radius;
+        let radius = self.corner_radius * scale.width.min(scale.height);
         let tint = self.window_tint.clone();
         let viewport = window.viewport_size();
         window.with_element_state(global_id, |state: Option<GlassAttachment>, window| {
-            let mut attachment = state.unwrap_or_else(|| GlassAttachment {
-                inner,
-                parent: None,
-            });
+            let mut attachment = state.unwrap_or_else(|| GlassAttachment::new(inner));
             if let Some(host) = appkit_host_view(window) {
                 // SAFETY: GPUI's live AppKit window owns this view throughout
                 // this prepaint call.
@@ -481,26 +493,49 @@ impl Element for AppKitGlassBackdrop {
             }
             ((), attachment)
         });
+        (bounds, super::page_layer::next_placement_order())
     }
 
     fn paint(
         &mut self,
-        _id: Option<&GlobalElementId>,
+        id: Option<&GlobalElementId>,
         _inspector_id: Option<&InspectorElementId>,
-        bounds: Bounds<Pixels>,
-        _style: &mut Self::RequestLayoutState,
-        _prepaint: &mut Self::PrepaintState,
+        _bounds: Bounds<Pixels>,
+        style: &mut Self::RequestLayoutState,
+        (bounds, placed): &mut Self::PrepaintState,
         window: &mut Window,
         _cx: &mut App,
     ) {
+        // Every page has been placed by now, as GPUI prepaints the whole
+        // frame before painting any of it.
+        if let Some(host) = appkit_host_view(window) {
+            // SAFETY: GPUI's live AppKit window owns this view while painting.
+            let host = unsafe { host.as_ref() };
+            let global_id = id.expect("glass backdrop elements always have a stable id");
+            let inner = self.inner.clone();
+            window.with_element_state(global_id, |state: Option<GlassAttachment>, _| {
+                // Prepaint always leaves an attachment.
+                let mut attachment = state.unwrap_or_else(|| GlassAttachment::new(inner));
+                if let Some(beneath_pages) =
+                    super::page_layer::page_placed_over(host, *bounds, attachment.placed, *placed)
+                {
+                    attachment.beneath_pages = beneath_pages;
+                }
+                attachment.placed = *placed;
+                attachment.order(host, attachment.beneath_pages);
+                ((), attachment)
+            });
+        }
         // Clear whatever GPUI painted here before, such as the window tint,
         // so the glass shows through as itself. The element's later children
         // still draw over it.
         if !self.inner.container.isHidden() {
-            window.paint_cutout(bounds, self.corner_radius.into(), 0.0);
+            let radius = self.corner_radius * style.scale.width.min(style.scale.height);
+            window.paint_cutout(*bounds, radius.into(), 0.0);
         }
         // The glass lies beneath GPUI's view and never receives AppKit hits,
         // so hand it the presses GPUI sees over it.
+        let bounds = *bounds;
         let glass = self.inner.glass.clone();
         window.on_mouse_event(move |event: &MouseDownEvent, phase, _, _| {
             if phase == DispatchPhase::Capture
@@ -534,6 +569,22 @@ fn forward_current_event(
 struct GlassAttachment {
     inner: Rc<AppKitGlassBackdropInner>,
     parent: Option<NonNull<NSView>>,
+    /// What AppKit was last given, so unchanged frames touch nothing.
+    applied: Option<AppliedGlass>,
+    /// Where the glass was last painted in the placement order.
+    placed: u64,
+    beneath_pages: bool,
+}
+
+#[derive(PartialEq)]
+struct AppliedGlass {
+    bounds: Bounds<Pixels>,
+    viewport: Size<Pixels>,
+    host_bounds: NSRect,
+    visible: bool,
+    alpha: f32,
+    radius: Pixels,
+    tint: GlassWindowTint,
 }
 
 struct GlassPlacement<'a> {
@@ -546,6 +597,16 @@ struct GlassPlacement<'a> {
 }
 
 impl GlassAttachment {
+    fn new(inner: Rc<AppKitGlassBackdropInner>) -> Self {
+        Self {
+            inner,
+            parent: None,
+            applied: None,
+            placed: 0,
+            beneath_pages: false,
+        }
+    }
+
     fn place(&mut self, host: &NSView, placement: GlassPlacement<'_>) {
         let GlassPlacement {
             bounds,
@@ -561,6 +622,26 @@ impl GlassAttachment {
             return;
         };
         let container = &self.inner.container;
+        let applied = AppliedGlass {
+            bounds,
+            viewport,
+            host_bounds: host.bounds(),
+            visible,
+            alpha,
+            radius,
+            tint: tint.clone(),
+        };
+        if self.parent == Some(NonNull::from(&*parent)) && self.applied.as_ref() == Some(&applied) {
+            return;
+        }
+        let tint_changed = self.applied.as_ref().is_none_or(|last| {
+            last.tint != applied.tint || last.bounds != bounds || last.viewport != viewport
+        });
+        let radius_changed = self
+            .applied
+            .as_ref()
+            .is_none_or(|last| last.radius != radius);
+        self.applied = Some(applied);
         // SAFETY: as above.
         let current_parent = unsafe { container.superview() };
         if !current_parent
@@ -597,13 +678,53 @@ impl GlassAttachment {
         container.setHidden(
             !visible || bounds.size.width == Pixels::ZERO || bounds.size.height == Pixels::ZERO,
         );
-        if let Some(layer) = container.layer() {
-            layer.setCornerRadius(radius.as_f32() as f64);
-        }
         let glass = &self.inner.glass;
         glass.setFrame(container.bounds());
-        glass.setCornerRadius(radius.as_f32() as f64);
-        self.place_tint(bounds, viewport, container.isFlipped(), tint);
+        if radius_changed {
+            if let Some(layer) = container.layer() {
+                layer.setCornerRadius(radius.as_f32() as f64);
+            }
+            glass.setCornerRadius(radius.as_f32() as f64);
+        }
+        if tint_changed {
+            self.place_tint(bounds, viewport, container.isFlipped(), tint);
+        }
+    }
+
+    /// Keeps the glass in GPUI's paint order among the pages, which share one
+    /// host beneath GPUI's view: beneath them when one drawn after the glass
+    /// covers it, as a peek covers the chrome, and above them otherwise, as
+    /// the chrome over a page or a popover is.
+    fn order(&self, host: &NSView, beneath_pages: bool) {
+        let Some(parent) = self.parent else {
+            return;
+        };
+        // SAFETY: the parent is attached and accessed on the main thread.
+        let parent = unsafe { parent.as_ref() };
+        let container = &*self.inner.container;
+        let subviews = parent.subviews();
+        let (mut glass, mut pages) = (None, None);
+        for index in 0..subviews.count() {
+            let view = subviews.objectAtIndex(index);
+            if std::ptr::eq(&*view, container) {
+                glass = Some(index);
+            } else if super::page_layer::is_page_host(&view) {
+                pages = Some((index, view));
+            }
+        }
+        let (Some(glass), Some((pages, page_host))) = (glass, pages) else {
+            return;
+        };
+        if (glass < pages) == beneath_pages {
+            return;
+        }
+        container.removeFromSuperview();
+        let (relative_to, ordering) = if beneath_pages {
+            (&*page_host, NSWindowOrderingMode::Below)
+        } else {
+            (host, NSWindowOrderingMode::Below)
+        };
+        parent.addSubview_positioned_relativeTo(container, ordering, Some(relative_to));
     }
 
     /// Lays the window-sized tint gradient under the field so the slice the
@@ -662,6 +783,7 @@ impl GlassAttachment {
     }
 
     fn detach(&mut self) {
+        self.applied = None;
         let Some(parent) = self.parent.take() else {
             return;
         };
@@ -701,8 +823,20 @@ fn disable_layer_actions(layer: &CAGradientLayer) {
 }
 
 impl Drop for GlassAttachment {
+    /// A frame that does not draw the element drops its attachment. Hide the
+    /// glass rather than remove it: inserting a glass view again makes AppKit
+    /// materialize it afresh, flashing the glass and the tint beneath it
+    /// whenever the field comes back, as when the sidebar reopens.
     fn drop(&mut self) {
-        self.detach();
+        if self.parent.is_some() {
+            self.inner.container.setHidden(true);
+        }
+    }
+}
+
+impl Drop for AppKitGlassBackdropInner {
+    fn drop(&mut self) {
+        self.container.removeFromSuperview();
     }
 }
 

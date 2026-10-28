@@ -107,6 +107,9 @@ pub(in crate::platform) struct BrowserWindow {
     theme_picker_space: Option<SpaceId>,
     theme_picker_anchor: Option<Point<Pixels>>,
     theme_picker_presence: Presence<SpaceId>,
+    /// Native Liquid Glass behind the theme popover, on macOS 26+.
+    #[cfg(target_os = "macos")]
+    theme_picker_glass: Option<crate::platform::AppKitGlassBackdrop>,
     tab_focus_handles: Vec<FocusHandle>,
     /// Closes today's tabs left unused, when the setting asks.
     _archive_task: Task<()>,
@@ -479,7 +482,7 @@ impl BrowserWindow {
         let dialog = self.dialog.overlay(cx);
         div()
             .size_full()
-            .children(self.peek_overlay(palette, cx))
+            .children(self.peek_overlay(palette, window, cx))
             .children(self.theme_picker_popup_overlay(window, cx))
             .children(self.space_editor_overlay(palette, cx))
             .children(self.shortcuts_dialog_overlay(palette, cx))
@@ -621,6 +624,8 @@ fn open_browser_window(
                 theme_picker_space: None,
                 theme_picker_anchor: None,
                 theme_picker_presence: Presence::default(),
+                #[cfg(target_os = "macos")]
+                theme_picker_glass: crate::platform::AppKitGlassBackdrop::new(),
                 tab_focus_handles: Vec::new(),
                 _archive_task: BrowserWindow::archive_unused_tabs_regularly(window, cx),
                 tab_sleep_waker,
@@ -731,7 +736,7 @@ fn open_browser_window(
                 if !restoring_session && browser.tab_axis(cx) == TabDragAxis::Horizontal {
                     browser.open_tab(window, cx);
                 } else {
-                    browser.show_empty_new_tab_page(window, cx);
+                    browser.show_empty_new_tab_page(!restoring_session, window, cx);
                 }
             }
             browser

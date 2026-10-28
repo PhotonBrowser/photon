@@ -20,12 +20,12 @@ pub(in super::super) struct Entrance {
     curve: Curve,
     exit_curve: Option<Curve>,
     opacity_from: Option<f32>,
-    fade_in: bool,
     offset_from: Option<(f32, f32)>,
     blur_from: Option<f32>,
     grow: Option<(f32, f32)>,
     scale_from: Option<f32>,
     scale_origin_left: Option<f32>,
+    exit_scale: Option<f32>,
 }
 
 impl Entrance {
@@ -37,12 +37,12 @@ impl Entrance {
             curve: Curve::EaseOut,
             exit_curve: None,
             opacity_from: None,
-            fade_in: true,
             offset_from: None,
             blur_from: None,
             grow: None,
             scale_from: None,
             scale_origin_left: None,
+            exit_scale: None,
         }
     }
 
@@ -62,10 +62,9 @@ impl Entrance {
         self
     }
 
-    /// Fades on exit while starting the entrance fully visible.
-    pub const fn fade_out_only(mut self) -> Self {
-        self.opacity_from = Some(0.0);
-        self.fade_in = false;
+    /// Leaves at a different scale than it enters from.
+    pub const fn scale_exit_to(mut self, scale: f32) -> Self {
+        self.exit_scale = Some(scale);
         self
     }
 
@@ -208,8 +207,10 @@ impl Default for Entrance {
 pub(in super::super) fn theme_picker_entrance(width: f32) -> Entrance {
     let tokens = &crate::platform::theme_config::theme().motion.theme_picker;
     Entrance::new()
-        .fade_out_only()
+        .fade_from(0.0)
+        .blur_from(tokens.blur_from)
         .scale_from_left(tokens.scale_from, width)
+        .scale_exit_to(tokens.scale_to)
         .curve(Curve::Spring(SpringConfig::new(
             tokens.spring.stiffness,
             tokens.spring.damping,
@@ -235,7 +236,7 @@ pub(super) fn apply_entrance<E: Styled + gpui::IntoElement + 'static>(
     base_offset: (f32, f32),
 ) -> gpui::AnyElement {
     let (shown, hidden, blur) = entrance.targets(config, base_offset);
-    let (target, mut initial, delay, duration) = match transition {
+    let (target, initial, delay, duration) = match transition {
         Transition::Enter => (
             shown,
             hidden,
@@ -243,15 +244,19 @@ pub(super) fn apply_entrance<E: Styled + gpui::IntoElement + 'static>(
             entrance.resolved_duration(config),
         ),
         Transition::Exit => (
-            hidden,
+            match entrance.exit_scale {
+                Some(scale) => {
+                    let mut exit = entrance;
+                    exit.scale_from = Some(scale);
+                    exit.targets(config, base_offset).1
+                }
+                None => hidden,
+            },
             shown,
             Duration::ZERO,
             entrance.exit_duration(config),
         ),
     };
-    if transition == Transition::Enter && !entrance.fade_in {
-        initial = initial.opacity(1.0);
-    }
     let curve = match transition {
         Transition::Enter => entrance.curve,
         // A spring takes as long as it takes, but an exit must finish within
@@ -372,15 +377,6 @@ pub(in super::super) const fn toast() -> Entrance {
         .blur_from(4.0)
         .curve(Curve::SMOOTH)
         .speed(Speed::Gentle)
-}
-
-/// Rises into place without fading or scaling, for content drawn natively
-/// beneath GPUI, which can follow a move but not a fade, and which a
-/// changing size would make lay out again on every frame.
-pub(in super::super) const fn glide() -> Entrance {
-    Entrance::new()
-        .slide_from(Edge::Bottom, distance::SHIFT)
-        .curve(Curve::SMOOTH)
 }
 
 pub(in super::super) const fn fall() -> Entrance {

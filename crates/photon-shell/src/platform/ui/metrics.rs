@@ -51,8 +51,8 @@ pub(super) const WINDOW_CONTROL_EDGE_INSET: f32 = 8.0;
 pub(super) const WINDOW_CONTROL_GROUP_WIDTH: f32 =
     TOOLBAR_BUTTON_SIZE * 3.0 + WINDOW_CONTROL_GAP * 2.0;
 
-pub(super) const MENU_WIDTH: f32 = 220.0;
-pub(super) const SITE_INFO_WIDTH: f32 = 240.0;
+pub(super) const MENU_WIDTH: f32 = 200.0;
+pub(super) const SITE_INFO_WIDTH: f32 = 220.0;
 /// The site information button's icon in the address field.
 pub(super) const SITE_INFO_BUTTON_ICON_SIZE: f32 = 16.0;
 /// A row in the site information popover, and its leading icon.
@@ -67,14 +67,14 @@ pub(super) const KBD_FONT_SIZE: f32 = 11.0;
 /// Space between a shortcut's keycaps.
 pub(super) const KBD_GAP: f32 = 2.0;
 /// Space above the first and below the last menu row.
-pub(super) const MENU_PADDING: f32 = 4.0;
-pub(super) const MENU_FONT_SIZE: f32 = 13.0;
-pub(super) const MENU_ITEM_HEIGHT: f32 = 28.0;
-pub(super) const MENU_ITEM_HORIZONTAL_PADDING: f32 = 12.0;
+pub(super) const MENU_PADDING: f32 = 3.0;
+pub(super) const MENU_FONT_SIZE: f32 = 12.0;
+pub(super) const MENU_ITEM_HEIGHT: f32 = 26.0;
+pub(super) const MENU_ITEM_HORIZONTAL_PADDING: f32 = 10.0;
 pub(super) const MENU_ITEM_GAP: f32 = 2.0;
 pub(super) const MENU_SEPARATOR_HEIGHT: f32 = 1.0;
 /// Space above and below a menu separator.
-pub(super) const MENU_SEPARATOR_MARGIN: f32 = 4.0;
+pub(super) const MENU_SEPARATOR_MARGIN: f32 = 3.0;
 /// The shared weight of a one-pixel outline, used when deriving nested radii.
 pub(super) const SURFACE_BORDER_WIDTH: f32 = 1.0;
 
@@ -463,6 +463,15 @@ pub(super) const SPACE_DOT_GAP: f32 = 2.0;
 /// between its buttons and the page.
 pub(super) const PEEK_INSET_FRACTION: f32 = 0.08;
 pub(super) const PEEK_CONTROL_GAP: f32 = 6.0;
+/// The width of the preview's copy around the clicked link it grows from.
+pub(super) const PEEK_MORPH_ORIGIN_WIDTH: f32 = 120.0;
+/// How much faster than it grows the preview card fades: at 2.5 it is fully
+/// opaque two fifths of the way out, and fades over the last two fifths back.
+pub(super) const PEEK_CARD_FADE_RATE: f32 = 2.5;
+/// The height of the pill holding the preview's buttons.
+pub(super) fn peek_controls_height() -> f32 {
+    ICON_BUTTON_SIZE + MENU_PADDING * 2.0 + SURFACE_BORDER_WIDTH * 2.0
+}
 
 // Arc-style theme controls: shared geometry and bounded rendering work.
 pub(super) const PICKER_WIDTH: f32 = 344.0;

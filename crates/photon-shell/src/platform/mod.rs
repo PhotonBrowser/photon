@@ -111,6 +111,11 @@ pub(crate) struct PagePlacement {
     pub(crate) scale_factor: f32,
     /// Shown until the page's first frame, as `0xRRGGBB`.
     pub(crate) background: u32,
+    /// The page is laid out at another size and scaled to fill `bounds`, as
+    /// while a preview grows into place.
+    pub(crate) scaled: bool,
+    /// How opaque the page is, as while a preview fades away.
+    pub(crate) opacity: f32,
 }
 
 pub(crate) fn verbose_trace_enabled() -> bool {

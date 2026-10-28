@@ -152,6 +152,16 @@ pub(in super::super) const SIDEBAR_LAYOUT_SPRING: TweenCurve =
 pub(in super::super) const SIDEBAR_REVEAL_SPRING: TweenCurve =
     TweenCurve::Spring(SpringConfig::new(480.0, 38.0, 1.0));
 
+/// A peeked link growing into its preview: underdamped, so the card swells
+/// just past its frame and settles back with a soft bounce.
+pub(in super::super) const PEEK_MORPH_SPRING: TweenCurve =
+    TweenCurve::Spring(SpringConfig::new(340.0, 25.0, 1.0));
+
+/// The preview shrinking back into its link: critically damped, since
+/// overshooting a point would turn the card inside out.
+pub(in super::super) const PEEK_CLOSE_SPRING: TweenCurve =
+    TweenCurve::Spring(SpringConfig::new(420.0, 41.0, 1.0));
+
 pub(in super::super) const SIDEBAR_RESIZE_SPRING: TweenCurve =
     TweenCurve::Spring(SpringConfig::new(520.0, 30.0, 1.0));
 

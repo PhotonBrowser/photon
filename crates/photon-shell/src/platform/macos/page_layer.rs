@@ -10,17 +10,21 @@
 
 use std::cell::{Cell, RefCell};
 
-use gpui::Window;
+use gpui::{Bounds, Pixels, Window};
 use io_surface::IOSurface;
 use objc2::{MainThreadMarker, msg_send, rc::Retained, runtime::AnyObject};
+use objc2_app_kit::{NSView, NSWindowOrderingMode};
 use objc2_core_graphics::CGColor;
 use objc2_foundation::{NSDictionary, NSNull, NSPoint, NSRect, NSSize, NSString};
 use objc2_quartz_core::{
-    CALayer, kCACornerCurveContinuous, kCAGravityBottomLeft, kCAGravityTopLeft,
+    CALayer, kCACornerCurveContinuous, kCAGravityBottomLeft, kCAGravityResize, kCAGravityTopLeft,
 };
 
 use super::appkit::appkit_host_view;
 use crate::platform::PagePlacement;
+
+/// How much more the layer is rounded than GPUI's cutout, in points.
+const CORNER_INSET: f32 = 1.5;
 
 /// Identifies a frame by Engine backing, generation and frame number.
 pub(super) type FrameIdentity = (u64, u64, u64);
@@ -31,6 +35,9 @@ pub(super) struct PageLayer {
     current_surface: RefCell<Option<IOSurface>>,
     current_identity: Cell<Option<FrameIdentity>>,
     contents_fraction: Cell<(f64, f64)>,
+    /// The colour at the painted frame's edge, as 0xRRGGBB, which fills
+    /// uncovered area while Engine lays out at a new size.
+    edge_color: Cell<Option<u32>>,
     /// What `place` last applied, so an unchanged layout touches nothing.
     placed: Cell<Option<(PagePlacement, NSRect, bool)>>,
 }
@@ -48,6 +55,7 @@ impl PageLayer {
             "bounds",
             "position",
             "hidden",
+            "opacity",
             "contents",
             "contentsRect",
             "contentsScale",
@@ -74,6 +82,7 @@ impl PageLayer {
             current_surface: RefCell::new(None),
             current_identity: Cell::new(None),
             contents_fraction: Cell::new((1.0, 1.0)),
+            edge_color: Cell::new(None),
             placed: Cell::new(None),
         }
     }
@@ -113,6 +122,15 @@ impl PageLayer {
         // IOSurface is a Core Foundation object accepted by CALayer.contents.
         let contents = unsafe { &*surface.obj.cast::<AnyObject>() };
         unsafe { self.layer.setContents(Some(contents)) };
+        // Engine's reported page background can differ from what the page
+        // shows at its edge, and flashes through as the window grows.
+        let edge_color = edge_color(surface, painted_width, painted_height);
+        if edge_color.is_some() && edge_color != self.edge_color.get() {
+            self.edge_color.set(edge_color);
+            if let Some((placement, _, _)) = self.placed.get() {
+                set_background_color(&self.layer, edge_color.unwrap_or(placement.background));
+            }
+        }
         // The main thread's implicit transaction commits this. Ladybird's Qt
         // view also asks for a window display cycle, to commit with Qt's own
         // backing store and keep Qt routing mouse events to its native view;
@@ -129,6 +147,7 @@ impl PageLayer {
         *self.current_surface.borrow_mut() = None;
         self.current_identity.set(None);
         self.contents_fraction.set((1.0, 1.0));
+        self.edge_color.set(None);
     }
 
     /// Positions the layer beneath the page's hole in GPUI's layer. Runs in
@@ -141,26 +160,35 @@ impl PageLayer {
         };
         // SAFETY: GPUI owns its AppKit window view throughout prepaint.
         let host = unsafe { host.as_ref() };
+        let entry = (
+            &*self.layer as *const CALayer as usize,
+            host as *const NSView as usize,
+            placement.bounds,
+            next_placement_order(),
+        );
+        PAGE_PLACEMENTS.with_borrow_mut(|pages| {
+            pages.retain(|&(key, ..)| key != entry.0);
+            pages.push(entry);
+        });
         let Some(host_layer) = host.layer() else {
             self.layer.setHidden(true);
             self.placed.set(None);
             return;
         };
 
-        // GPUI's CAMetalLayer can be the root layer while its AppKit parent
-        // is not layer-backed yet. Promote the parent when available so the
-        // page can sit beside GPUI's layer. If the host is itself the root,
-        // attach the page behind its contents instead.
-        let mut parent_layer = host_layer.superlayer();
-        if parent_layer.is_none() {
-            // SAFETY: AppKit view hierarchy access runs on the main thread.
-            if let Some(parent_view) = unsafe { host.superview() } {
-                parent_view.setWantsLayer(true);
-                parent_layer = host_layer.superlayer();
-            }
-        }
-        let has_sibling_layer = parent_layer.is_some();
-        let parent_layer = parent_layer.unwrap_or_else(|| host_layer.clone());
+        // Pages live in a layer-hosting view of Photon's own beneath GPUI's,
+        // never in a layer AppKit manages: with a Liquid Glass window the
+        // parent is the glass's content, and changing its sublayers, as when a
+        // page hides or a preview attaches, makes the glass redraw the whole
+        // window. If GPUI's view has no parent, the page sits behind its
+        // contents instead.
+        // SAFETY: AppKit view hierarchy access runs on the main thread.
+        let page_host = unsafe { host.superview() }.map(|parent| page_host_view(host, &parent));
+        let has_sibling_layer = page_host.is_some();
+        let parent_layer = match page_host.as_ref().and_then(|view| view.layer()) {
+            Some(layer) => layer,
+            None => host_layer.clone(),
+        };
         let layer = &self.layer;
         let attached = layer
             .superlayer()
@@ -189,13 +217,9 @@ impl PageLayer {
             ),
             NSSize::new(width, height),
         );
-        // SAFETY: AppKit view hierarchy access runs on the main thread.
-        let parent_view = has_sibling_layer
-            .then(|| unsafe { host.superview() })
-            .flatten();
         let frame = snap_to_pixels(
-            match parent_view {
-                Some(parent_view) => host.convertRect_toView(host_page_bounds, Some(&parent_view)),
+            match &page_host {
+                Some(page_host) => host.convertRect_toView(host_page_bounds, Some(page_host)),
                 None => host_page_bounds,
             },
             f64::from(placement.scale_factor),
@@ -208,9 +232,9 @@ impl PageLayer {
         if !attached {
             layer.removeFromSuperlayer();
             if has_sibling_layer {
-                // Directly beneath GPUI's layer. A page attached later, like
-                // a link preview over its page, lies above those attached before.
-                parent_layer.insertSublayer_below(layer, Some(&host_layer));
+                // A page attached later, like a link preview over its page,
+                // lies above those attached before.
+                parent_layer.addSublayer(layer);
                 layer.setZPosition(0.0);
             } else {
                 // A root layer has no sibling slot. Keep the page behind the
@@ -220,20 +244,25 @@ impl PageLayer {
             }
         }
         layer.setGeometryFlipped(flipped);
-        set_contents_gravity(layer);
+        set_contents_gravity(layer, placement.scaled);
         layer.setContentsRect(contents_rect(layer, self.contents_fraction.get()));
         layer.setFrame(frame);
-        layer.setCornerRadius(f64::from(placement.corner_radius));
+        // Core Animation's continuous corner and GPUI's smoothed cutout differ
+        // slightly, and where the layer reached past the hole its page showed
+        // through the translucent window as a light hairline. Round the layer
+        // a little more, so its corner always lies inside the hole.
+        let corner_radius = if placement.corner_radius > 0.0 {
+            placement.corner_radius + CORNER_INSET
+        } else {
+            0.0
+        };
+        layer.setCornerRadius(f64::from(corner_radius));
+        layer.setOpacity(placement.opacity.clamp(0.0, 1.0));
         layer.setContentsScale(f64::from(placement.scale_factor));
-        // Shown until the first frame arrives, as the page's own background.
-        let [_, red, green, blue] = placement.background.to_be_bytes();
-        let background = CGColor::new_srgb(
-            f64::from(red) / 255.0,
-            f64::from(green) / 255.0,
-            f64::from(blue) / 255.0,
-            1.0,
-        );
-        layer.setBackgroundColor(Some(&background));
+        // Shown until the first frame arrives, as the page's own background,
+        // then as the colour at the frame's edge.
+        let background = self.edge_color.get().unwrap_or(placement.background);
+        set_background_color(layer, background);
         layer.setHidden(false);
         self.placed.set(Some((placement, frame, flipped)));
     }
@@ -243,11 +272,13 @@ impl PageLayer {
     /// last frame would show through the next page's hole. The next `place`
     /// shows it again.
     pub(super) fn hide(&self) {
+        forget_placement(&self.layer);
         self.layer.setHidden(true);
     }
 
     /// Removes the layer from its window, as when the page closes.
     pub(super) fn detach(&self) {
+        forget_placement(&self.layer);
         self.clear_surface();
         self.layer.removeFromSuperlayer();
         self.placed.set(None);
@@ -258,6 +289,112 @@ impl Drop for PageLayer {
     fn drop(&mut self) {
         self.layer.removeFromSuperlayer();
     }
+}
+
+/// A page layer, its GPUI view, its bounds and its place in the order.
+type PagePlaced = (usize, usize, Bounds<Pixels>, u64);
+
+thread_local! {
+    /// Counts native placements in GPUI's prepaint order, which is its paint
+    /// order, so glass can tell which pages were drawn after it.
+    static PLACEMENT_ORDER: Cell<u64> = const { Cell::new(0) };
+    /// Where each shown page was last placed, by layer: its GPUI view, its
+    /// bounds and its place in the placement order.
+    static PAGE_PLACEMENTS: RefCell<Vec<PagePlaced>> =
+        const { RefCell::new(Vec::new()) };
+}
+
+/// The next number in the order native views are placed in.
+pub(super) fn next_placement_order() -> u64 {
+    PLACEMENT_ORDER.with(|order| {
+        let next = order.get() + 1;
+        order.set(next);
+        next
+    })
+}
+
+/// Whether a page overlapping `bounds` in the GPUI view `host` was drawn
+/// over something placed at `placed`, as a peek is over chrome: `Some(true)`
+/// when one was placed after it, `Some(false)` when they were all placed
+/// after `previous` and before it, or none overlaps. Pages not placed since
+/// `previous`, as in a frame GPUI reused, decide nothing.
+pub(super) fn page_placed_over(
+    host: &NSView,
+    bounds: Bounds<Pixels>,
+    previous: u64,
+    placed: u64,
+) -> Option<bool> {
+    let host = host as *const NSView as usize;
+    PAGE_PLACEMENTS.with_borrow(|pages| {
+        let mut decided = Some(false);
+        let mut fresh = false;
+        for &(_, page_host, page_bounds, order) in pages.iter() {
+            if page_host != host || !page_bounds.intersects(&bounds) {
+                continue;
+            }
+            if order > placed {
+                return Some(true);
+            }
+            if order > previous {
+                fresh = true;
+            } else if !fresh {
+                decided = None;
+            }
+        }
+        if fresh { Some(false) } else { decided }
+    })
+}
+
+fn forget_placement(layer: &CALayer) {
+    let layer = layer as *const CALayer as usize;
+    PAGE_PLACEMENTS.with_borrow_mut(|pages| pages.retain(|&(key, ..)| key != layer));
+}
+
+thread_local! {
+    /// Each window's page host, by the GPUI view it lies beneath.
+    static PAGE_HOSTS: RefCell<Vec<(usize, Retained<NSView>)>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Whether `view` is a window's page host.
+pub(super) fn is_page_host(view: &NSView) -> bool {
+    PAGE_HOSTS.with_borrow(|hosts| hosts.iter().any(|(_, host)| std::ptr::eq(&**host, view)))
+}
+
+/// The layer-hosting view that holds a window's pages, directly beneath
+/// GPUI's view `host` in `parent`, created the first time it is needed.
+fn page_host_view(host: &NSView, parent: &NSView) -> Retained<NSView> {
+    let key = std::ptr::from_ref(host) as usize;
+    PAGE_HOSTS.with_borrow_mut(|hosts| {
+        // A closed window's host goes with it; its address may be reused.
+        hosts.retain(|(_, view)| unsafe { view.superview() }.is_some());
+        let existing = hosts.iter().find(|(host_key, view)| {
+            *host_key == key
+                && unsafe { view.superview() }
+                    .is_some_and(|current| std::ptr::eq(&*current, parent))
+        });
+        let view = match existing {
+            Some((_, view)) => view.clone(),
+            None => {
+                let mtm = MainThreadMarker::new()
+                    .expect("page hosts are created on the AppKit main thread");
+                let view = NSView::initWithFrame(mtm.alloc(), host.frame());
+                // A layer-hosting view: AppKit leaves its layer tree to us.
+                view.setLayer(Some(&CALayer::layer()));
+                view.setWantsLayer(true);
+                parent.addSubview_positioned_relativeTo(
+                    &view,
+                    NSWindowOrderingMode::Below,
+                    Some(host),
+                );
+                hosts.push((key, view.clone()));
+                view
+            }
+        };
+        if view.frame() != host.frame() {
+            view.setFrame(host.frame());
+        }
+        view
+    })
 }
 
 /// Aligns the frame's edges to device pixels, as GPUI aligns the cutout's,
@@ -279,7 +416,13 @@ fn snap_to_pixels(frame: NSRect, scale: f64) -> NSRect {
 /// Pins frames to the page's visual top-left at their own size, as WebKit
 /// does. While Engine lays out at a new size, the last frame stays sharp and
 /// unscaled, and the layer's background, the page's own, fills the rest.
-fn set_contents_gravity(layer: &CALayer) {
+/// A `scaled` page is stretched to the layer instead.
+fn set_contents_gravity(layer: &CALayer, scaled: bool) {
+    if scaled {
+        // SAFETY: Core Animation exposes these process-wide immutable values.
+        layer.setContentsGravity(unsafe { kCAGravityResize });
+        return;
+    }
     // Gravity's top is the layer's maximum y unless its contents are flipped,
     // as in `contents_rect`.
     // SAFETY: Core Animation exposes these process-wide immutable values.
@@ -301,4 +444,43 @@ fn contents_rect(layer: &CALayer, (width, height): (f64, f64)) -> NSRect {
         1.0 - height
     };
     NSRect::new(NSPoint::new(0.0, y), NSSize::new(width, height))
+}
+
+fn set_background_color(layer: &CALayer, rgb: u32) {
+    let [_, red, green, blue] = rgb.to_be_bytes();
+    let color = CGColor::new_srgb(
+        f64::from(red) / 255.0,
+        f64::from(green) / 255.0,
+        f64::from(blue) / 255.0,
+        1.0,
+    );
+    layer.setBackgroundColor(Some(&color));
+}
+
+/// Reads the colour midway down the frame's painted right edge, as 0xRRGGBB.
+/// Engine paints BGRA surfaces; other layouts are left to the page background.
+fn edge_color(surface: &IOSurface, painted_width: i32, painted_height: i32) -> Option<u32> {
+    const READ_ONLY: u32 = 1;
+    let obj = surface.obj;
+    // SAFETY: the surface is retained by `surface`, and is locked read-only
+    // around the read, which stays within its painted bounds.
+    unsafe {
+        if io_surface::IOSurfaceGetBytesPerElement(obj) != 4 {
+            return None;
+        }
+        let x = usize::try_from(painted_width).ok()?.checked_sub(1)?;
+        let y = usize::try_from(painted_height).ok()? / 2;
+        if x >= io_surface::IOSurfaceGetWidth(obj) || y >= io_surface::IOSurfaceGetHeight(obj) {
+            return None;
+        }
+        if io_surface::IOSurfaceLock(obj, READ_ONLY, std::ptr::null_mut()) != 0 {
+            return None;
+        }
+        let base = io_surface::IOSurfaceGetBaseAddress(obj).cast::<u8>();
+        let row = io_surface::IOSurfaceGetBytesPerRow(obj);
+        let pixel = std::slice::from_raw_parts(base.add(y * row + x * 4), 4);
+        let [blue, green, red, _] = [pixel[0], pixel[1], pixel[2], pixel[3]];
+        io_surface::IOSurfaceUnlock(obj, READ_ONLY, std::ptr::null_mut());
+        Some(u32::from_be_bytes([0, red, green, blue]))
+    }
 }

@@ -110,6 +110,11 @@ pub(in crate::platform) struct PhotonWebView {
     hovered_link: Option<String>,
     /// The page has an element in fullscreen.
     page_fullscreen: bool,
+    /// The size the page is laid out at, when it is scaled to its bounds
+    /// rather than laid out at them.
+    layout_size: Option<gpui::Size<gpui::Pixels>>,
+    /// How opaque the page is drawn, as while a preview fades.
+    page_opacity: f32,
     input: WebViewInput,
     history_swipe: history_swipe::HistorySwipe,
     pub(super) _quit_subscription: Option<Subscription>,
@@ -413,6 +418,8 @@ impl PhotonWebView {
             sent_dark_color_scheme: None,
             hovered_link: None,
             page_fullscreen: false,
+            layout_size: None,
+            page_opacity: 1.0,
             input: WebViewInput::default(),
             history_swipe: history_swipe::HistorySwipe::default(),
             _quit_subscription: None,
@@ -628,9 +635,10 @@ impl Render for PhotonWebView {
                         f32::from(event.bounds.origin.y),
                     );
                     let scale_factor = window.scale_factor();
+                    let layout_size = this.layout_size.unwrap_or(event.bounds.size);
                     this.update_viewport(
-                        f32::from(event.bounds.size.width),
-                        f32::from(event.bounds.size.height),
+                        f32::from(layout_size.width),
+                        f32::from(layout_size.height),
                         scale_factor,
                     );
                     this.presenter.place(
@@ -640,6 +648,8 @@ impl Render for PhotonWebView {
                             corner_radius: radius,
                             scale_factor,
                             background: page_background,
+                            scaled: this.layout_size.is_some(),
+                            opacity: this.page_opacity,
                         },
                     );
                     // Follow the window across displays so Engine paces to the
@@ -658,7 +668,9 @@ impl Render for PhotonWebView {
             .on_action(cx.listener(|this, _: &Paste, _, _| this.edit(EditCommand::Paste)))
             .on_action(cx.listener(|this, _: &SelectAll, _, _| this.edit(EditCommand::SelectAll)))
             .on_mouse_down_all(move |event, phase, hitbox, window, app| {
-                if phase != gpui::DispatchPhase::Bubble || !hitbox.contains(&event.position) {
+                // Hovered rather than contained: a preview or menu over the page
+                // occludes it, and what happens there is not the page's.
+                if phase != gpui::DispatchPhase::Bubble || !hitbox.is_hovered(window) {
                     return;
                 }
                 weak_mouse_down
@@ -680,8 +692,8 @@ impl Render for PhotonWebView {
                     })
                     .ok();
             })
-            .on_mouse_up_all(move |event, phase, hitbox, _window, app| {
-                if phase != gpui::DispatchPhase::Bubble || !hitbox.contains(&event.position) {
+            .on_mouse_up_all(move |event, phase, hitbox, window, app| {
+                if phase != gpui::DispatchPhase::Bubble || !hitbox.is_hovered(window) {
                     return;
                 }
                 weak_mouse_up
@@ -690,14 +702,14 @@ impl Render for PhotonWebView {
                     })
                     .ok();
             })
-            .on_mouse_move_all(move |event, phase, hitbox, _window, app| {
+            .on_mouse_move_all(move |event, phase, hitbox, window, app| {
                 // Forward pointer motion during capture so child elements in the
                 // external surface cannot stop propagation before the page sees it.
                 if phase != gpui::DispatchPhase::Capture {
                     return;
                 }
                 let move_count = MOUSE_MOVE_TRACE_COUNT.fetch_add(1, Ordering::Relaxed);
-                let inside_viewport = hitbox.contains(&event.position);
+                let inside_viewport = hitbox.is_hovered(window);
                 if move_count < 5 || move_count.is_multiple_of(60) {
                     trace(format_args!(
                         "mouse-move #{move_count} phase={phase:?} position=({}, {}) inside={inside_viewport} bounds={:?}",
@@ -782,6 +794,18 @@ impl Render for PhotonWebView {
 }
 
 impl PhotonWebView {
+    /// Lays the page out at `size` and scales it to wherever it is drawn, so
+    /// moving between sizes, as a preview growing into place, never makes the
+    /// page lay out again. `None` lays it out at its drawn size again.
+    pub(in crate::platform) fn set_layout_size(&mut self, size: Option<gpui::Size<gpui::Pixels>>) {
+        self.layout_size = size;
+    }
+
+    /// Fades the page's native layer, which GPUI's opacity cannot reach.
+    pub(in crate::platform) fn set_page_opacity(&mut self, opacity: f32) {
+        self.page_opacity = opacity;
+    }
+
     /// Shows or hides the page: Engine pauses rendering while hidden, and a
     /// native page layer hides so it cannot show through what replaces it.
     pub(in crate::platform) fn set_page_visible(&mut self, visible: bool) {
