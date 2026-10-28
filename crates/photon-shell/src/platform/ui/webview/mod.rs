@@ -20,6 +20,10 @@ use std::time::{Duration, Instant};
 
 use super::super::trace;
 
+/// How long a resize may await its frame before another is sent anyway, as
+/// when the page is too busy to present.
+const RESIZE_FRAME_TIMEOUT: Duration = Duration::from_millis(100);
+
 #[cfg(unix)]
 mod automation;
 mod context_menu;
@@ -89,8 +93,12 @@ pub(in crate::platform) struct PhotonWebView {
     pub(super) session: EngineSession,
     pub(super) focus_handle: FocusHandle,
     pub(super) last_viewport: Option<(i32, i32, u32)>,
-    /// Whether the window's layout is moving the page around or changing its size.
-    layout_animating: bool,
+    /// When the last resize was sent, until the page presents a frame.
+    resize_awaiting_frame: Option<Instant>,
+    /// The latest size held back while a resize awaits its frame.
+    deferred_viewport: Option<(f32, f32, f32)>,
+    /// The page's own background colour as 0xRRGGBB, once Engine reports it.
+    page_background: Option<u32>,
     /// The window the page was last drawn in, where its menus open.
     window: Option<AnyWindowHandle>,
     /// The color scheme last sent to Engine, `true` for dark.
@@ -151,6 +159,11 @@ impl PhotonWebView {
         let Some(presented) = self.session.take_presented_surface() else {
             return;
         };
+        // The page has laid out since the last resize; send one held back.
+        self.resize_awaiting_frame = None;
+        if let Some((width, height, scale)) = self.deferred_viewport.take() {
+            self.update_viewport(width, height, scale);
+        }
         let navigation_id = presented.navigation_id;
         let (generation, frame_id) = presented.timing_identity();
         self.session.record_surface_install(generation, frame_id);
@@ -293,10 +306,12 @@ impl PhotonWebView {
         }
     }
 
-    /// Tells the page whether the window's layout is animating around it,
-    /// so it is laid out only now and then until the layout settles.
-    pub(in crate::platform) fn set_layout_animating(&mut self, animating: bool) {
-        self.layout_animating = animating;
+    /// Uses the page's own background where it has not painted.
+    pub(in crate::platform) fn set_page_background(&mut self, rgb: u32, cx: &mut Context<Self>) {
+        if self.page_background != Some(rgb) {
+            self.page_background = Some(rgb);
+            cx.notify();
+        }
     }
 
     /// Takes another tab's page size, so a tab opened in the background
@@ -312,17 +327,29 @@ impl PhotonWebView {
         let height = height.round() as i32;
         let viewport = (width, height, scale.to_bits());
         if self.last_viewport == Some(viewport) || width <= 0 || height <= 0 {
+            // Back at the size Engine has; a held-back size is stale.
+            if self.last_viewport == Some(viewport) {
+                self.deferred_viewport = None;
+            }
             return;
         }
-        // Resizing an Engine viewport is synchronous and can stall the UI.
-        // Keep the current surface while the shell animates its bounds; the
-        // native page layer scales it, then the settled bounds are sent once.
         let same_scale = self
             .last_viewport
             .is_some_and(|(_, _, last_scale)| last_scale == viewport.2);
-        if self.layout_animating && same_scale {
+        // Engine lays out each size it is sent, so sizes sent faster than it
+        // presents only queue work. While a resize awaits its frame, hold the
+        // latest size back; the frame sends it. The layer keeps the last
+        // frame at its size meanwhile, over the page's background colour.
+        if same_scale
+            && self
+                .resize_awaiting_frame
+                .is_some_and(|sent| sent.elapsed() < RESIZE_FRAME_TIMEOUT)
+        {
+            self.deferred_viewport = Some((width as f32, height as f32, scale));
             return;
         }
+        self.deferred_viewport = None;
+        self.resize_awaiting_frame = Some(Instant::now());
         self.session.resize(width, height, f64::from(scale));
         trace(format_args!(
             "viewport logical={width}x{height} dpr={scale:.2} physical={}x{}",
@@ -365,7 +392,9 @@ impl PhotonWebView {
             spinner_reveal: None,
             dialogs: PageDialogs::default(),
             window: None,
-            layout_animating: false,
+            resize_awaiting_frame: None,
+            deferred_viewport: None,
+            page_background: None,
             session,
             focus_handle: cx.focus_handle(),
             last_viewport: None,
@@ -559,6 +588,8 @@ impl Render for PhotonWebView {
         let appearance = Settings::appearance(window.appearance(), cx);
         self.update_color_scheme(appearance);
         let palette = palette(window, cx);
+        // Shown where the page has not painted, as while it lays out at a new size.
+        let page_background = self.page_background.unwrap_or(palette.page_background);
         let weak_this = cx.entity().downgrade();
         let weak_mouse_down = weak_this.clone();
         let weak_mouse_up = weak_this.clone();
@@ -589,7 +620,7 @@ impl Render for PhotonWebView {
                             bounds: event.bounds,
                             corner_radius: metrics::page_radius(),
                             scale_factor,
-                            background: palette.page_background,
+                            background: page_background,
                         },
                     );
                     // Follow the window across displays so Engine paces to the
@@ -695,12 +726,12 @@ impl Render for PhotonWebView {
             .rounded(px(metrics::page_radius()))
             .rounded_smoothing(metrics::page_smoothing())
             .overflow_hidden()
-            .bg(gpui::rgb(palette.page_background));
+            .bg(gpui::rgb(page_background));
         {
             webview = webview.child(crate::platform::renderer::page_surface(
                 self.external.as_ref(),
                 crate::platform::PageSurfacePalette {
-                    background: palette.page_background,
+                    background: page_background,
                 },
             ));
             if let Some(navigation_id) = self.navigation_surface_pending_render.take() {

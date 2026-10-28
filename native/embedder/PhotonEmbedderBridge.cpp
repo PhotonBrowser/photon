@@ -51,6 +51,7 @@ Photon::ViewCallbacks make_view_callbacks(
     auto new_web_view_callback = callbacks.new_web_view_callback;
     auto find_result_callback = callbacks.find_result_callback;
     auto zoom_callback = callbacks.zoom_callback;
+    auto page_background_callback = callbacks.page_background_callback;
     auto page_unresponsive_callback = callbacks.page_unresponsive_callback;
     auto context_menu_callback = callbacks.context_menu_callback;
     auto open_in_new_tab_callback = callbacks.open_in_new_tab_callback;
@@ -187,6 +188,10 @@ Photon::ViewCallbacks make_view_callbacks(
     result.zoom_changed = [=](double zoom_level) {
         if (zoom_callback)
             zoom_callback(callback_data, zoom_level);
+    };
+    result.page_background_changed = [=](uint8_t red, uint8_t green, uint8_t blue) {
+        if (page_background_callback)
+            page_background_callback(callback_data, (uint32_t { red } << 16) | (uint32_t { green } << 8) | blue);
     };
     result.page_unresponsive_changed = [=](bool unresponsive) {
         if (page_unresponsive_callback)

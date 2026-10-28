@@ -41,9 +41,6 @@ impl Render for BrowserWindow {
         if moving {
             self.request_motion_frame(window, cx);
         }
-        if let Some(webview) = self.active_webview() {
-            webview.update(cx, |view, _| view.set_layout_animating(moving));
-        }
         self.place_window_controls(window, cx);
         let browser = cx.entity().downgrade();
         if std::mem::take(&mut self.state_changed) {

@@ -204,6 +204,10 @@ impl CallbackState {
         self.update_webview(move |view, cx| view.set_zoom_level(zoom_level, cx));
     }
 
+    pub(super) fn set_page_background(&self, rgb: u32) {
+        self.update_webview(move |view, cx| view.set_page_background(rgb, cx));
+    }
+
     pub(super) fn set_page_unresponsive(&self, unresponsive: bool) {
         self.update_webview(move |view, cx| view.set_page_unresponsive(unresponsive, cx));
     }

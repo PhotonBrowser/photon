@@ -47,6 +47,9 @@ using PhotonFindResultCallback = void (*)(void*, size_t, bool, size_t);
 // Called with the page's zoom level as a factor, 1.0 being 100%.
 using PhotonZoomCallback = void (*)(void*, double);
 using PhotonPageUnresponsiveCallback = void (*)(void*, bool);
+// Called with the page's background colour as 0xRRGGBB, shown where the page
+// has not painted yet, as while it lays out at a new size.
+using PhotonPageBackgroundCallback = void (*)(void*, uint32_t);
 // One context menu item. A separator has no text.
 struct PhotonContextMenuItem {
     bool separator;
@@ -142,6 +145,7 @@ struct PhotonViewCallbacks {
     PhotonFilePickerCallback file_picker_callback;
     PhotonPermissionCallback permission_callback;
     PhotonPermissionCancelledCallback permission_cancelled_callback;
+    PhotonPageBackgroundCallback page_background_callback;
 #if defined(__APPLE__)
     bool native_metal_presentation;
     PhotonNativeBackingCallback native_backing_callback;

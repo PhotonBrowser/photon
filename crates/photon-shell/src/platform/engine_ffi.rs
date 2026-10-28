@@ -162,6 +162,7 @@ pub(super) mod embedder {
         >,
         pub permission_cancelled_callback:
             Option<unsafe extern "C" fn(*mut c_void, u64, *const c_char)>,
+        pub page_background_callback: Option<unsafe extern "C" fn(*mut c_void, u32)>,
         #[cfg(target_os = "macos")]
         pub native_metal_presentation: bool,
         #[cfg(target_os = "macos")]

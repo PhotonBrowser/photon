@@ -15,7 +15,9 @@ use io_surface::IOSurface;
 use objc2::{MainThreadMarker, msg_send, rc::Retained, runtime::AnyObject};
 use objc2_core_graphics::CGColor;
 use objc2_foundation::{NSDictionary, NSNull, NSPoint, NSRect, NSSize, NSString};
-use objc2_quartz_core::{CALayer, kCACornerCurveContinuous, kCAGravityResize};
+use objc2_quartz_core::{
+    CALayer, kCACornerCurveContinuous, kCAGravityBottomLeft, kCAGravityTopLeft,
+};
 
 use super::appkit::appkit_host_view;
 use crate::platform::PagePlacement;
@@ -49,6 +51,7 @@ impl PageLayer {
             "contents",
             "contentsRect",
             "contentsScale",
+            "contentsGravity",
             "backgroundColor",
             "cornerRadius",
             "onOrderIn",
@@ -65,7 +68,6 @@ impl PageLayer {
         // SAFETY: Core Animation exposes these process-wide immutable values.
         unsafe {
             layer.setCornerCurve(kCACornerCurveContinuous);
-            layer.setContentsGravity(kCAGravityResize);
         }
         Self {
             layer,
@@ -196,6 +198,7 @@ impl PageLayer {
             }
         }
         layer.setGeometryFlipped(flipped);
+        set_contents_gravity(layer);
         layer.setContentsRect(contents_rect(layer, self.contents_fraction.get()));
         layer.setFrame(frame);
         layer.setCornerRadius(f64::from(placement.corner_radius));
@@ -233,6 +236,23 @@ impl Drop for PageLayer {
     fn drop(&mut self) {
         self.layer.removeFromSuperlayer();
     }
+}
+
+/// Pins frames to the page's visual top-left at their own size, as WebKit
+/// does. While Engine lays out at a new size, the last frame stays sharp and
+/// unscaled, and the layer's background, the page's own, fills the rest.
+fn set_contents_gravity(layer: &CALayer) {
+    // Gravity's top is the layer's maximum y unless its contents are flipped,
+    // as in `contents_rect`.
+    // SAFETY: Core Animation exposes these process-wide immutable values.
+    let gravity = unsafe {
+        if layer.contentsAreFlipped() {
+            kCAGravityBottomLeft
+        } else {
+            kCAGravityTopLeft
+        }
+    };
+    layer.setContentsGravity(gravity);
 }
 
 /// The painted part of the surface, measured from its visual top-left.

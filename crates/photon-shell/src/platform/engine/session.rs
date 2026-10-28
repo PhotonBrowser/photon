@@ -341,6 +341,7 @@ impl EngineSession {
             file_picker_callback: Some(on_engine_file_picker),
             permission_callback: Some(on_engine_permission_request),
             permission_cancelled_callback: Some(on_engine_permission_cancelled),
+            page_background_callback: Some(on_engine_page_background),
             #[cfg(target_os = "macos")]
             native_metal_presentation: true,
             #[cfg(target_os = "macos")]

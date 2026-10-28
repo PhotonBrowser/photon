@@ -191,6 +191,12 @@ pub(super) unsafe extern "C" fn on_engine_zoom(context: *mut c_void, zoom_level:
     }
 }
 
+pub(super) unsafe extern "C" fn on_engine_page_background(context: *mut c_void, rgb: u32) {
+    if !context.is_null() {
+        unsafe { &*(context.cast::<CallbackState>()) }.set_page_background(rgb);
+    }
+}
+
 pub(super) unsafe extern "C" fn on_engine_page_unresponsive(
     context: *mut c_void,
     unresponsive: bool,
