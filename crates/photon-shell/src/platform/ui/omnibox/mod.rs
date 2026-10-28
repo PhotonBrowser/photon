@@ -18,8 +18,9 @@ use gpui_elements::editable_text::{
     EditableTextState, StringStorage, TextChanged,
     actions::{Enter, Escape},
 };
-use photon_core::Suggestion;
+use photon_core::{History, Suggestion};
 use photon_core::{OmniboxTarget, display_address, display_domain, resolve_with};
+use std::sync::Arc;
 
 use super::history::BrowsingHistory;
 use super::layout::h_stack;
@@ -88,6 +89,9 @@ pub(super) struct Omnibox {
     /// The current background history query, canceled when input changes.
     suggestion_task: Option<Task<()>>,
     suggestion_generation: u64,
+    /// The history the suggestions were made from. Icon loads update the
+    /// history global without changing it, and must not suggest again.
+    suggested_from: Option<Arc<History>>,
     /// The suggestion Enter opens.
     selected: usize,
     /// The suggestion under the pointer.
@@ -131,7 +135,7 @@ impl Omnibox {
             }),
         ];
         let history_subscription =
-            cx.observe_global::<BrowsingHistory>(|this, cx| this.text_changed(cx));
+            cx.observe_global::<BrowsingHistory>(|this, cx| this.history_changed(cx));
         let this = cx.entity().downgrade();
         let keystroke_subscription = cx.intercept_keystrokes(move |event, window, cx| {
             this.update(cx, |this, cx| {
@@ -189,6 +193,7 @@ impl Omnibox {
             suggestions: Vec::new(),
             suggestion_task: None,
             suggestion_generation: 0,
+            suggested_from: None,
             selected: 0,
             hovered: None,
             typed: String::new(),
@@ -344,7 +349,8 @@ impl Omnibox {
 
     fn submit(&mut self, _: &Enter, window: &mut Window, cx: &mut Context<Self>) {
         cx.stop_propagation();
-        if !self.suggestions.is_empty() {
+        // Rows still showing for earlier text would open the wrong thing.
+        if !self.suggestions.is_empty() && self.suggestion_task.is_none() {
             self.choose(self.selected, window, cx);
             return;
         }

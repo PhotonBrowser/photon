@@ -138,11 +138,6 @@ impl Curve {
     }
 }
 
-/// Converts an opaque RGB theme token into the motion engine's linear-light color.
-pub(super) fn motion_rgb_color(token: u32) -> Color {
-    Color::rgb(token)
-}
-
 /// Converts an RGBA theme token into the motion engine's linear-light color.
 pub(super) fn motion_rgba_color(token: u32) -> Color {
     let color = rgba(token);

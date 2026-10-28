@@ -419,7 +419,7 @@ impl ThemeColors {
             )),
             soft_accent_border: to_rgba_token(accent.opacity(opacity.soft_accent_border)),
             on_chosen: contrasting_text(accent),
-            suggestion_address: to_rgb_token(accent),
+            suggestion_address: to_rgb_token(legible_on(accent, colors.text, colors.container)),
             modal_backdrop: to_rgba_token(
                 color(if dark {
                     &theme.colors.modal_backdrop.dark
@@ -561,8 +561,11 @@ pub(super) fn tint_swatch(tint: SpaceTint) -> u32 {
     to_rgb_token(tint_background(tint))
 }
 
-/// Relative luminance chooses the more legible of black and white ink.
-pub(super) fn contrasting_text(background: Rgba) -> u32 {
+/// The contrast tinted text, such as suggestion addresses, keeps against
+/// what it sits on: WCAG's minimum for body text.
+const MIN_TINTED_TEXT_CONTRAST: f32 = 4.5;
+
+fn relative_luminance(color: Rgba) -> f32 {
     let linear = |v: f32| {
         if v <= 0.04045 {
             v / 12.92
@@ -570,9 +573,29 @@ pub(super) fn contrasting_text(background: Rgba) -> u32 {
             ((v + 0.055) / 1.055).powf(2.4)
         }
     };
-    let luminance = 0.2126 * linear(background.color.red)
-        + 0.7152 * linear(background.color.green)
-        + 0.0722 * linear(background.color.blue);
+    0.2126 * linear(color.color.red)
+        + 0.7152 * linear(color.color.green)
+        + 0.0722 * linear(color.color.blue)
+}
+
+fn contrast_ratio(a: Rgba, b: Rgba) -> f32 {
+    let (a, b) = (relative_luminance(a), relative_luminance(b));
+    (a.max(b) + 0.05) / (a.min(b) + 0.05)
+}
+
+/// `tint`, moved toward `text` only as far as it takes to read on
+/// `background`, so a dark accent stays legible on a dark surface.
+fn legible_on(tint: Rgba, text: Rgba, background: Rgba) -> Rgba {
+    const STEPS: u8 = 10;
+    (0..=STEPS)
+        .map(|step| mix_colors(text, tint, f32::from(step) / f32::from(STEPS)))
+        .find(|candidate| contrast_ratio(*candidate, background) >= MIN_TINTED_TEXT_CONTRAST)
+        .unwrap_or(text)
+}
+
+/// Relative luminance chooses the more legible of black and white ink.
+pub(super) fn contrasting_text(background: Rgba) -> u32 {
+    let luminance = relative_luminance(background);
     let tokens = &crate::platform::theme_config::theme().picker;
     if luminance > 0.179 {
         to_rgb_token(color(&tokens.ink_dark))
@@ -654,6 +677,21 @@ pub(super) fn tint_background(tint: SpaceTint) -> Rgba {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tinted_text_lightens_a_dark_accent_on_a_dark_surface() {
+        let navy = rgb(0x1a2a4a);
+        let white = rgb(0xffffff);
+        let panel = rgb(0x262626);
+        let legible = legible_on(navy, white, panel);
+        assert!(contrast_ratio(legible, panel) >= MIN_TINTED_TEXT_CONTRAST);
+        assert_ne!(to_rgb_token(legible), to_rgb_token(white));
+        let bright = rgb(0x8ab4f8);
+        assert_eq!(
+            to_rgb_token(legible_on(bright, white, panel)),
+            to_rgb_token(bright)
+        );
+    }
     #[test]
     fn explicit_gradient_keeps_each_colour_and_collapses_back_to_a_solid() {
         let a = SpaceTint {

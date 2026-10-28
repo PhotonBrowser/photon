@@ -11,7 +11,7 @@ use super::super::controls::themed_text_input;
 use super::super::icons::{search_icon_sized, shield_icon, sliders_horizontal_icon};
 use super::super::layout::{Elevated, Elevation, Raised};
 use super::super::layout::{h_stack, v_stack};
-use super::super::motion::{AnimateIn, Curve, Speed, fade, popover, translated};
+use super::super::motion::{AnimateIn, fade, popover, translated};
 use super::super::workspace_layout::WorkspaceLayout;
 use super::super::{metrics, theme::ThemeColors};
 use super::rows::{SuggestionActions, icon_slot, suggestion_icon, suggestion_rows};
@@ -77,25 +77,14 @@ impl Omnibox {
         } else {
             site_info_button
         };
-        let motion = super::super::settings::Settings::motion(cx);
-        let text_color = if editing {
-            palette.text_primary
-        } else {
-            palette.text_secondary
-        };
-        let input = gpui_motion::MotionElement::new(
-            "omnibox-input-text-motion",
-            input,
-            gpui_motion::Motion::new(gpui_motion::Target::default().opacity(1.0)),
-        )
-        .style_motion(
-            gpui_motion::StyleMotion::new(gpui_motion::StyleTarget::default().color(
-                gpui_motion::ColorProperty::Text,
-                super::super::motion::motion_rgb_color(text_color),
-            ))
-            .transition(Curve::EaseOut.transition(motion.duration(Speed::Gentle))),
-        )
-        .into_any_element();
+        // The page's address rests quieter than text being edited.
+        let input = input
+            .text_color(rgb(if editing {
+                palette.text_primary
+            } else {
+                palette.text_secondary
+            }))
+            .into_any_element();
         let input = if centered_sidebar {
             h_stack()
                 .relative()

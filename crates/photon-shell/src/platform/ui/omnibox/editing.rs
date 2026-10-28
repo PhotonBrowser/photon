@@ -11,6 +11,7 @@ use photon_core::SuggestionKind;
 use super::super::history::BrowsingHistory;
 use super::super::settings::Settings;
 use super::Omnibox;
+use std::sync::Arc;
 
 impl Omnibox {
     /// Suggests what the typed text could open and completes a visited
@@ -33,22 +34,36 @@ impl Omnibox {
         cx.notify();
     }
 
+    /// Suggests again when the history itself changes while suggesting, as
+    /// when a row is forgotten, but not when it only loads a page icon.
+    pub(super) fn history_changed(&mut self, cx: &mut Context<Self>) {
+        let history = BrowsingHistory::suggestion_history(cx);
+        let unchanged = self
+            .suggested_from
+            .as_ref()
+            .is_some_and(|from| Arc::ptr_eq(from, &history));
+        if unchanged || self.typed.is_empty() {
+            return;
+        }
+        self.suggest(false, cx);
+    }
+
     /// Suggests for the text as typed, highlighting the first suggestion and
     /// completing it inline when `complete`. Without a completion the field
     /// and its caret are left as they are.
     fn suggest(&mut self, complete: bool, cx: &mut Context<Self>) {
         self.suggestion_generation = self.suggestion_generation.wrapping_add(1);
         let generation = self.suggestion_generation;
-        self.suggestion_task = None;
-        self.suggestions.clear();
+        // The rows for the earlier text stay until the new ones arrive, so the
+        // panel neither closes nor replays its entrance between keystrokes.
         self.completion = None;
         self.selected = 0;
-        self.hovered = None;
 
         let typed = self.typed.clone();
         let query_text = typed.clone();
         let engines = Settings::search_engines(cx);
         let history = BrowsingHistory::suggestion_history(cx);
+        self.suggested_from = Some(history.clone());
         self.suggestion_task = Some(cx.spawn(async move |this, cx| {
             let suggestions = cx
                 .background_executor()
@@ -59,7 +74,9 @@ impl Omnibox {
                 if this.suggestion_generation != generation || this.typed != typed {
                     return;
                 }
+                this.suggestion_task = None;
                 this.suggestions = suggestions.rows;
+                this.hovered = this.hovered.filter(|&index| index < this.suggestions.len());
                 this.completion = suggestions.completion.filter(|_| complete);
                 if let Some(completion) = this.completion.clone() {
                     let selection_start = this.typed.len();
@@ -104,6 +121,7 @@ impl Omnibox {
     pub(super) fn close_suggestions(&mut self, cx: &mut Context<Self>) {
         self.suggestion_generation = self.suggestion_generation.wrapping_add(1);
         self.suggestion_task = None;
+        self.suggested_from = None;
         self.typed.clear();
         self.completion = None;
         self.selected = 0;
