@@ -26,7 +26,7 @@ pub(super) const FIND_BAR_MOTION: Entrance = fall();
 pub(super) struct CloseFindBar;
 
 pub(super) struct FindBar {
-    webview: Entity<PhotonWebView>,
+    pub(super) webview: Entity<PhotonWebView>,
     input: Entity<EditableTextState>,
     _subscriptions: [Subscription; 3],
 }

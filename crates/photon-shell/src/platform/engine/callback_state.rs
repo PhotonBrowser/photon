@@ -173,6 +173,7 @@ impl CallbackState {
             view.cancel_file_picker(cx);
             view.dialogs.navigation_committed();
             view.history_swipe_navigation_committed();
+            view.clear_find_result(cx);
         });
     }
 

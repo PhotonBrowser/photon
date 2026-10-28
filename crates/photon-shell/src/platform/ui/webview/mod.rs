@@ -5,7 +5,7 @@ use super::input::{EditCommand, WebViewInput};
 use super::{metrics, settings::Settings, theme::palette};
 use gpui::{
     AnyWindowHandle, Context, CursorStyle, EventEmitter, FocusHandle, InteractiveElement,
-    KeyDownEvent, KeyUpEvent, MouseButton, NavigationDirection, Render, Subscription, Window,
+    KeyDownEvent, KeyUpEvent, MouseButton, NavigationDirection, Render, Subscription, Task, Window,
     WindowAppearance, div, prelude::*, px,
 };
 use gpui_elements::editable_text::actions::{Copy, Cut, Paste, Redo, SelectAll, Undo};
@@ -67,6 +67,11 @@ pub(in crate::platform) struct PhotonWebView {
     select_dropdown_request: Option<SelectDropdown>,
     /// The latest result of a find-in-page search.
     pub(in crate::platform) find_result: Option<FindResult>,
+    /// Whether a search is under way, so results arriving after it ended are dropped.
+    find_active: bool,
+    /// Find requests sent whose result has not arrived. The page answers each
+    /// in order, so only the answer to the latest, at zero, is current.
+    find_pending: usize,
     /// The page's icon, shown in its tab while the page is not loading.
     pub(in crate::platform) favicon: Option<Favicon>,
     /// Whether the page is playing audio and whether its tab is muted.
@@ -74,6 +79,9 @@ pub(in crate::platform) struct PhotonWebView {
     pub(in crate::platform) audio_muted: bool,
     /// When the current load started.
     loading_since: Option<Instant>,
+    /// Redraws the tab once the spinner delay passes, as the spinner's own
+    /// animation timer does not run when animations are off.
+    spinner_reveal: Option<Task<()>>,
     /// The page's JavaScript dialog, which the window shows over the page.
     pub(in crate::platform) dialogs: PageDialogs,
     pub(super) session: EngineSession,
@@ -185,6 +193,7 @@ impl PhotonWebView {
         }
         if state.loading != self.state.loading {
             self.loading_since = state.loading.then(Instant::now);
+            self.spinner_reveal = state.loading.then(|| self.reveal_spinner_later(cx));
         }
         self.state.apply(EngineEvent::ViewStateChanged(state));
         self.state_changed(cx);
@@ -245,6 +254,22 @@ impl PhotonWebView {
                 since.elapsed()
                     >= Duration::from_millis(u64::from(animations.loading_spinner_delay_ms()))
             })
+    }
+
+    /// Redraws once the spinner delay has passed, if the page is still loading.
+    fn reveal_spinner_later(&self, cx: &mut Context<Self>) -> Task<()> {
+        let delay = Duration::from_millis(u64::from(
+            Settings::get(cx).animations.loading_spinner_delay_ms(),
+        ));
+        cx.spawn(async move |view, cx| {
+            cx.background_executor().timer(delay).await;
+            let _ = view.update(cx, |view, cx| {
+                view.spinner_reveal = None;
+                if view.state.loading {
+                    view.state_changed(cx);
+                }
+            });
+        })
     }
 
     pub(super) fn prepare_shutdown(&mut self) {
@@ -325,6 +350,8 @@ impl PhotonWebView {
             context_menu: None,
             select_dropdown_request: None,
             find_result: None,
+            find_active: false,
+            find_pending: 0,
             zoom_level: 1.0,
             page_unresponsive: false,
             page_cursor: CursorStyle::Arrow,
@@ -332,6 +359,7 @@ impl PhotonWebView {
             audio_playing: false,
             audio_muted: false,
             loading_since: None,
+            spinner_reveal: None,
             dialogs: PageDialogs::default(),
             window: None,
             layout_animating: false,

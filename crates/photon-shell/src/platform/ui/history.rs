@@ -9,8 +9,9 @@ use gpui::{App, BorrowAppContext, Global, Task};
 use photon_core::{ClearBrowsingData, History, HistoryEntry};
 use photon_storage::{DataUsage, Profile, ProfileWriteTicket};
 use std::cell::RefCell;
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use super::super::engine::EngineRuntime;
@@ -42,6 +43,44 @@ pub(super) struct BrowsingHistory {
     next_favicon_load: u64,
     /// The pending save.
     save: Option<Task<()>>,
+    /// Orders icon saves against pruning, which run off the main thread.
+    favicon_writes: Arc<FaviconWrites>,
+}
+
+/// Keeps an icon saved before a page was forgotten from landing after the
+/// prune that removes it.
+#[derive(Default)]
+struct FaviconWrites {
+    /// Held while an icon is saved or pruned.
+    lock: Mutex<()>,
+    /// Bumped when the history is cleared; saves queued earlier are dropped.
+    generation: AtomicU64,
+    /// Pages forgotten one at a time, whose queued saves are dropped. A page
+    /// leaves it when its icon is kept again, on a later visit.
+    forgotten: Mutex<HashSet<String>>,
+}
+
+impl FaviconWrites {
+    fn forget(&self, url: &str) {
+        self.forgotten
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .insert(url.to_owned());
+    }
+
+    fn remember(&self, url: &str) {
+        self.forgotten
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .remove(url);
+    }
+
+    fn is_forgotten(&self, url: &str) -> bool {
+        self.forgotten
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .contains(url)
+    }
 }
 
 impl Global for BrowsingHistory {}
@@ -206,8 +245,20 @@ impl BrowsingHistory {
                 return;
             };
             let (url, favicon) = (url.to_owned(), favicon.clone());
+            let writes = browsing.favicon_writes.clone();
+            let generation = writes.generation.load(Ordering::SeqCst);
+            writes.remember(&url);
             cx.background_executor()
                 .spawn(async move {
+                    let _held = writes
+                        .lock
+                        .lock()
+                        .unwrap_or_else(|error| error.into_inner());
+                    if writes.generation.load(Ordering::SeqCst) != generation
+                        || writes.is_forgotten(&url)
+                    {
+                        return;
+                    }
                     if let Err(error) = profile.save_favicon(&url, favicon.pixels()) {
                         trace(format_args!("saving page icon: {error}"));
                     }
@@ -221,12 +272,13 @@ impl BrowsingHistory {
         Self::update(cx, |browsing, _| {
             browsing.favicons.remove(url);
             browsing.favicon_loads.remove(url);
+            browsing.favicon_writes.forget(url);
         });
         Self::change(cx, |history| {
             history.remove_page(url);
             true
         });
-        Self::prune_favicons(cx);
+        Self::prune_favicons(false, cx);
     }
 
     /// Forgets a past search.
@@ -255,7 +307,7 @@ impl BrowsingHistory {
                 browsing.favicons.clear();
                 browsing.favicon_loads.clear();
             });
-            Self::prune_favicons(cx);
+            Self::prune_favicons(true, cx);
         }
         let app = cx.to_async();
         runtime.clear_browsing_data(&request, move || {
@@ -295,13 +347,27 @@ impl BrowsingHistory {
         });
     }
 
-    /// Removes saved icons of pages no longer in the history, off the main thread.
-    fn prune_favicons(cx: &mut App) {
-        let Some((profile, history)) = Self::update(cx, |browsing, _| browsing.snapshot()) else {
+    /// Removes saved icons of pages no longer in the history, off the main
+    /// thread. Clearing the whole history also drops every icon save still
+    /// queued; forgetting one page drops only its own.
+    fn prune_favicons(clearing: bool, cx: &mut App) {
+        let Some((profile, history, writes)) = Self::update(cx, |browsing, _| {
+            let writes = browsing.favicon_writes.clone();
+            if clearing {
+                writes.generation.fetch_add(1, Ordering::SeqCst);
+            }
+            browsing
+                .snapshot()
+                .map(|(profile, history)| (profile, history, writes))
+        }) else {
             return;
         };
         cx.background_executor()
             .spawn(async move {
+                let _held = writes
+                    .lock
+                    .lock()
+                    .unwrap_or_else(|error| error.into_inner());
                 if let Err(error) = profile.prune_favicons(&history) {
                     trace(format_args!("removing page icons: {error}"));
                 }

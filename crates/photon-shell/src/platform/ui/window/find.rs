@@ -43,16 +43,15 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.find_bar.take().is_none() {
+        let Some((bar, _)) = self.find_bar.take() else {
             return;
-        }
-        if let Some(webview) = self.active_webview() {
-            webview.update(cx, |view, cx| {
-                view.end_find(cx);
-                if focus_page {
-                    window.focus(&view.focus_handle, cx);
-                }
-            });
+        };
+        // End the search on the page it ran in, which may no longer be active.
+        let webview = bar.read(cx).webview.clone();
+        webview.update(cx, |view, cx| view.end_find(cx));
+        if focus_page && let Some(active) = self.active_webview() {
+            let focus_handle = active.read(cx).focus_handle.clone();
+            window.focus(&focus_handle, cx);
         }
         cx.notify();
     }
