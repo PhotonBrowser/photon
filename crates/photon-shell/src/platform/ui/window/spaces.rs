@@ -190,6 +190,7 @@ impl BrowserWindow {
                         this.switch_space(id, cx);
                     }));
                 SpaceDot {
+                    id,
                     name: space.name.clone(),
                     color: space.tint.map_or_else(
                         || match space.color {

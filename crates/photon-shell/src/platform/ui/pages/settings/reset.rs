@@ -29,19 +29,23 @@ impl SettingsPage {
     }
 
     fn ask_to_reset(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.remember_dialog_focus(window, cx);
         window.focus(&self.reset_focus, cx);
-        self.set_confirming_reset(true, cx);
-    }
-
-    fn set_confirming_reset(&mut self, confirming: bool, cx: &mut Context<Self>) {
-        self.confirming_reset = confirming;
+        self.confirming_reset = true;
         cx.notify();
     }
 
-    fn reset(&mut self, cx: &mut Context<Self>) {
+    /// Closes the dialog, giving focus back to what opened it.
+    fn close_reset_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.confirming_reset = false;
+        self.restore_dialog_focus(window, cx);
+        cx.notify();
+    }
+
+    fn reset(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         Settings::update(cx, |settings| settings.reset_preferences());
         super::super::super::show_alert(cx, "Settings reset");
-        self.set_confirming_reset(false, cx);
+        self.close_reset_dialog(window, cx);
     }
 
     /// The dialog asking to reset, while open or closing.
@@ -63,13 +67,13 @@ impl SettingsPage {
             .aria_label("Reset settings")
             .aria_modal(true)
             .track_focus(&self.reset_focus)
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 if event.keystroke.modifiers.modified() {
                     return;
                 }
                 // Enter does not reset: only the button does.
                 if event.keystroke.key == "escape" {
-                    this.set_confirming_reset(false, cx);
+                    this.close_reset_dialog(window, cx);
                     cx.stop_propagation();
                 }
             }))
@@ -91,7 +95,7 @@ impl SettingsPage {
                         ButtonSize::Regular,
                         palette,
                         Box::new(
-                            cx.listener(|this, _, _, cx| this.set_confirming_reset(false, cx)),
+                            cx.listener(|this, _, window, cx| this.close_reset_dialog(window, cx)),
                         ),
                     ))
                     .child(button(
@@ -101,7 +105,7 @@ impl SettingsPage {
                         true,
                         ButtonSize::Regular,
                         palette,
-                        Box::new(cx.listener(|this, _, _, cx| this.reset(cx))),
+                        Box::new(cx.listener(|this, _, window, cx| this.reset(window, cx))),
                     )),
             );
         Some(modal("settings-reset-modal", transition, palette, panel, cx).into_any_element())

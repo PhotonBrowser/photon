@@ -150,13 +150,30 @@ impl RovingFocus {
         window: &mut Window,
         cx: &mut App,
     ) -> Self {
+        let keys = (0..actions.len()).collect();
+        Self::keyed(id, selected, keys, actions, window, cx)
+    }
+
+    /// Like `new`, but each item's focus is keyed by its stable `keys`
+    /// entry rather than its position, so focus follows an item when the
+    /// items are reordered or one is removed.
+    pub(super) fn keyed<K: std::fmt::Display>(
+        id: &'static str,
+        selected: usize,
+        keys: Vec<K>,
+        actions: Vec<Rc<ClickHandler>>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Self {
+        debug_assert_eq!(keys.len(), actions.len());
         let selected = selected.min(actions.len().saturating_sub(1));
         let actions = Rc::new(actions);
-        let handles = (0..actions.len())
-            .map(|index| {
+        let handles = keys
+            .iter()
+            .map(|key| {
                 window
                     .use_keyed_state(
-                        ElementId::Name(format!("{id}-focus-{index}").into()),
+                        ElementId::Name(format!("{id}-focus-{key}").into()),
                         cx,
                         |_, cx| cx.focus_handle(),
                     )
@@ -354,6 +371,7 @@ pub(super) fn switch(
         on_toggle,
         on_activate,
         dragged,
+        disabled: false,
     }
 }
 
@@ -366,6 +384,16 @@ pub(super) struct Switch {
     on_toggle: Rc<ClickHandler>,
     on_activate: Rc<ClickHandler>,
     dragged: Rc<Cell<bool>>,
+    disabled: bool,
+}
+
+impl Switch {
+    /// Shows the switch dimmed, ignoring the pointer, for something that
+    /// cannot be changed.
+    pub(super) fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
 }
 
 impl RenderOnce for Switch {
@@ -378,6 +406,7 @@ impl RenderOnce for Switch {
             on_toggle,
             on_activate,
             dragged,
+            disabled,
         } = self;
         let animations = super::settings::Settings::motion(cx);
         let interaction = window.use_keyed_state(
@@ -470,6 +499,16 @@ impl RenderOnce for Switch {
                 .aria_toggled(toggled(on))
                 .tab_index(0)
                 .focus_ring(palette);
+        }
+        if disabled {
+            let opacity = crate::platform::theme_config::theme()
+                .opacity
+                .disabled_control;
+            return control
+                .aria_disabled(true)
+                .tab_index(-1)
+                .opacity(opacity)
+                .child(track);
         }
         let interaction_on_down = interaction.clone();
         let interaction_on_drag = interaction.clone();

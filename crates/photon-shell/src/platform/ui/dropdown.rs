@@ -109,6 +109,7 @@ impl RenderOnce for Dropdown {
             .map(|option| ((option.label, option.chosen), Rc::from(option.on_choose)))
             .unzip();
         let menu_palette = super::theme::palette(window, cx);
+        let last_index = labels.len().saturating_sub(1);
         let menu = transition.map(|transition| {
             let rows = labels
                 .into_iter()
@@ -116,16 +117,29 @@ impl RenderOnce for Dropdown {
                 .enumerate()
                 .map(|(index, ((label, chosen), on_choose))| {
                     let set_open = set_open.clone();
-                    menu_option(
-                        (id, index),
-                        label,
-                        chosen,
-                        Box::new(move |event, window, cx| {
-                            on_choose(event, window, cx);
-                            set_open(false, window, cx);
-                        }),
-                        menu_palette,
-                    )
+                    // The first and last options hold focus at the ends, rather
+                    // than Up or Down leaving the menu.
+                    div()
+                        .on_key_down(move |event: &KeyDownEvent, _, cx| {
+                            let at_end = match event.keystroke.key.as_str() {
+                                "up" => index == 0,
+                                "down" => index == last_index,
+                                _ => false,
+                            };
+                            if at_end && !event.keystroke.modifiers.modified() {
+                                cx.stop_propagation();
+                            }
+                        })
+                        .child(menu_option(
+                            (id, index),
+                            label,
+                            chosen,
+                            Box::new(move |event, window, cx| {
+                                on_choose(event, window, cx);
+                                set_open(false, window, cx);
+                            }),
+                            menu_palette,
+                        ))
                 });
             let close = set_open.clone();
             let close_on_escape = set_open.clone();
@@ -188,7 +202,9 @@ impl RenderOnce for Dropdown {
             .pressable_with_focus(focus.clone())
             .on_click(move |_, window, cx| toggle(!open, window, cx))
             // Closed, Up and Down step through the options without opening
-            // the menu, as a native pop-up button does.
+            // the menu, as a native pop-up button does. Open, they move focus
+            // into the menu, onto the chosen option, whose rows then take Up,
+            // Down, Enter, Space and Escape.
             .on_key_down(move |event: &KeyDownEvent, window, cx| {
                 if event.keystroke.modifiers.modified() {
                     return;
@@ -199,8 +215,16 @@ impl RenderOnce for Dropdown {
                         cx.stop_propagation();
                         return;
                     }
-                    "down" if !open => 1,
-                    "up" if !open => -1,
+                    "down" | "up" if open => {
+                        // The rows follow the control in focus order.
+                        for _ in 0..=chosen_index.unwrap_or(0) {
+                            window.focus_next(cx);
+                        }
+                        cx.stop_propagation();
+                        return;
+                    }
+                    "down" => 1,
+                    "up" => -1,
                     _ => return,
                 };
                 cx.stop_propagation();

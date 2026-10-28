@@ -3,7 +3,8 @@
 use crate::platform::shortcuts::action_for_command;
 use gpui::{
     App, Context, Entity, EventEmitter, FocusHandle, Focusable, FontWeight, HighlightStyle,
-    MouseButton, Render, Role, StyledText, Subscription, Window, div, prelude::*, px, rgb, rgba,
+    MouseButton, Render, Role, ScrollHandle, StyledText, Subscription, Window, div, prelude::*, px,
+    rgb, rgba,
 };
 use gpui_elements::editable_text::{
     EditableTextState, StringStorage, TextChanged,
@@ -34,6 +35,8 @@ pub(super) struct CommandPalette {
     availability: CommandAvailability,
     matches: Vec<CommandMatch>,
     selected: usize,
+    /// Keeps the selected row in view as the keyboard moves it.
+    results_scroll: ScrollHandle,
     _input_subscriptions: [Subscription; 2],
 }
 
@@ -46,7 +49,10 @@ impl CommandPalette {
         let input = cx.new(|cx| EditableTextState::new(StringStorage::default(), cx));
         let focus_handle = input.focus_handle(cx);
         let input_subscriptions = [
+            // New text ranks the commands anew, so Enter runs the best match.
             cx.subscribe(&input, |this, _, _: &TextChanged, cx| {
+                this.selected = 0;
+                this.results_scroll.scroll_to_item(0);
                 this.update_matches(cx)
             }),
             cx.observe(&input, |_, _, cx| cx.notify()),
@@ -58,6 +64,7 @@ impl CommandPalette {
             availability,
             matches: Vec::new(),
             selected: 0,
+            results_scroll: ScrollHandle::new(),
             _input_subscriptions: input_subscriptions,
         };
         palette.update_matches(cx);
@@ -107,6 +114,7 @@ impl CommandPalette {
         } else {
             self.selected - 1
         };
+        self.results_scroll.scroll_to_item(self.selected);
         cx.notify();
         true
     }
@@ -262,6 +270,7 @@ impl Render for CommandPalette {
                 .aria_label("Browser commands")
                 .max_h(px(metrics::COMMAND_PALETTE_MAX_RESULTS_HEIGHT))
                 .overflow_y_scroll()
+                .track_scroll(&self.results_scroll)
                 .elastic_scroll(
                     crate::platform::supports_elastic_scroll() && Settings::get(cx).elastic_scroll,
                 )

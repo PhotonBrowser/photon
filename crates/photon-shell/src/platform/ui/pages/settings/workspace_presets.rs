@@ -51,6 +51,7 @@ impl SettingsPage {
             .find(|preset| preset.id == id)
             .cloned();
         if let Some(preset) = preset {
+            self.remember_dialog_focus(window, cx);
             self.pending_delete_preset = Some(preset);
             window.focus(&self.delete_preset_focus, cx);
             cx.notify();
@@ -76,6 +77,7 @@ impl SettingsPage {
             },
             |preset| preset.layout.clone(),
         );
+        self.remember_dialog_focus(window, cx);
         window.focus(&name.focus_handle(cx), cx);
         self.workspace_preset_draft = Some(WorkspacePresetDraft {
             preset_id: preset.map(|preset| preset.id),
@@ -104,7 +106,7 @@ impl SettingsPage {
         }
     }
 
-    fn save_workspace_preset(&mut self, cx: &mut Context<Self>) {
+    fn save_workspace_preset(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(draft) = self.workspace_preset_draft.as_ref() else {
             return;
         };
@@ -149,15 +151,17 @@ impl SettingsPage {
         };
         super::super::super::show_alert(cx, message);
         self.workspace_preset_draft = None;
+        self.restore_dialog_focus(window, cx);
         cx.notify();
     }
 
-    fn cancel_workspace_preset(&mut self, cx: &mut Context<Self>) {
+    fn cancel_workspace_preset(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.workspace_preset_draft = None;
+        self.restore_dialog_focus(window, cx);
         cx.notify();
     }
 
-    fn confirm_delete_workspace_preset(&mut self, cx: &mut Context<Self>) {
+    fn confirm_delete_workspace_preset(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(preset) = self.pending_delete_preset.as_ref().cloned() else {
             return;
         };
@@ -177,11 +181,13 @@ impl SettingsPage {
             super::super::super::show_alert(cx, format!("Deleted layout preset “{name}”"));
         }
         self.pending_delete_preset = None;
+        self.restore_dialog_focus(window, cx);
         cx.notify();
     }
 
-    fn cancel_delete_workspace_preset(&mut self, cx: &mut Context<Self>) {
+    fn cancel_delete_workspace_preset(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.pending_delete_preset = None;
+        self.restore_dialog_focus(window, cx);
         cx.notify();
     }
 
@@ -236,13 +242,13 @@ impl SettingsPage {
             .aria_label(title)
             .aria_modal(true)
             .track_focus(&draft.name.focus_handle(cx))
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 if event.keystroke.modifiers.modified() {
                     return;
                 }
                 match event.keystroke.key.as_str() {
-                    "enter" => this.save_workspace_preset(cx),
-                    "escape" => this.cancel_workspace_preset(cx),
+                    "enter" => this.save_workspace_preset(window, cx),
+                    "escape" => this.cancel_workspace_preset(window, cx),
                     _ => return,
                 }
                 cx.stop_propagation();
@@ -271,7 +277,9 @@ impl SettingsPage {
                     true,
                     ButtonSize::Regular,
                     palette,
-                    Box::new(cx.listener(|this, _, _, cx| this.cancel_workspace_preset(cx))),
+                    Box::new(
+                        cx.listener(|this, _, window, cx| this.cancel_workspace_preset(window, cx)),
+                    ),
                 ))
                 .child(button(
                     "settings-preset-save",
@@ -284,7 +292,9 @@ impl SettingsPage {
                     true,
                     ButtonSize::Regular,
                     palette,
-                    Box::new(cx.listener(|this, _, _, cx| this.save_workspace_preset(cx))),
+                    Box::new(
+                        cx.listener(|this, _, window, cx| this.save_workspace_preset(window, cx)),
+                    ),
                 )),
         );
         Some(
@@ -321,13 +331,13 @@ impl SettingsPage {
             .aria_label("Delete layout preset")
             .aria_modal(true)
             .track_focus(&self.delete_preset_focus)
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 if event.keystroke.modifiers.modified() {
                     return;
                 }
                 // Enter does not delete: only the button does.
                 if event.keystroke.key == "escape" {
-                    this.cancel_delete_workspace_preset(cx);
+                    this.cancel_delete_workspace_preset(window, cx);
                     cx.stop_propagation();
                 }
             }))
@@ -344,9 +354,9 @@ impl SettingsPage {
                         true,
                         ButtonSize::Regular,
                         palette,
-                        Box::new(
-                            cx.listener(|this, _, _, cx| this.cancel_delete_workspace_preset(cx)),
-                        ),
+                        Box::new(cx.listener(|this, _, window, cx| {
+                            this.cancel_delete_workspace_preset(window, cx)
+                        })),
                     ))
                     .child(button(
                         "settings-delete-preset-confirm",
@@ -355,9 +365,9 @@ impl SettingsPage {
                         true,
                         ButtonSize::Regular,
                         palette,
-                        Box::new(
-                            cx.listener(|this, _, _, cx| this.confirm_delete_workspace_preset(cx)),
-                        ),
+                        Box::new(cx.listener(|this, _, window, cx| {
+                            this.confirm_delete_workspace_preset(window, cx)
+                        })),
                     )),
             );
         Some(

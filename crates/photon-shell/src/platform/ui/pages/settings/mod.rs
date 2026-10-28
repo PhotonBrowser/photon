@@ -28,8 +28,8 @@ use super::super::{ClickHandler, metrics, theme::ThemeColors, theme::page_palett
 use super::layout::{heading, scrolling_column, secondary_text};
 use super::{PageContext, PageDefinition, PageIcon};
 use gpui::{
-    AnyElement, Context, ElementId, FocusHandle, FontWeight, Render, Role, Subscription, Window,
-    div, prelude::*, px, rgb, rgba,
+    AnyElement, App, Context, ElementId, FocusHandle, FontWeight, Render, Role, Subscription,
+    Window, div, prelude::*, px, rgb, rgba,
 };
 use gpui_elements::editable_text::EditableTextState;
 use photon_core::{SidebarSide, TabLayout, WorkspacePreset};
@@ -141,6 +141,8 @@ pub(in super::super) struct SettingsPage {
     pending_delete_preset: Option<WorkspacePreset>,
     delete_preset_presence: Presence<()>,
     delete_preset_focus: FocusHandle,
+    /// What had focus before a dialog took it, given back when it closes.
+    dialog_return_focus: Option<FocusHandle>,
     _settings_observer: Subscription,
 }
 
@@ -154,6 +156,18 @@ struct WorkspacePresetDraft {
 }
 
 impl SettingsPage {
+    /// Remembers what has focus, before a dialog takes it.
+    fn remember_dialog_focus(&mut self, window: &Window, cx: &App) {
+        self.dialog_return_focus = window.focused(cx);
+    }
+
+    /// Gives focus back to what had it before a dialog opened.
+    fn restore_dialog_focus(&mut self, window: &mut Window, cx: &mut App) {
+        if let Some(focus) = self.dialog_return_focus.take() {
+            window.focus(&focus, cx);
+        }
+    }
+
     fn new(context: PageContext, cx: &mut Context<Self>) -> Self {
         Self {
             context,
@@ -168,6 +182,7 @@ impl SettingsPage {
             pending_delete_preset: None,
             delete_preset_presence: Presence::default(),
             delete_preset_focus: cx.focus_handle(),
+            dialog_return_focus: None,
             // Follow changes made here, on the new tab page, or in another window.
             _settings_observer: cx.observe_global::<Settings>(|_, cx| cx.notify()),
         }

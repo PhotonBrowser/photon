@@ -21,6 +21,8 @@ pub(in super::super) struct FooterActions {
 
 /// A space, shown as a dot of its colour.
 pub(in super::super) struct SpaceDot {
+    /// The space's stable id, which keys its focus and press state.
+    pub(in super::super) id: photon_core::SpaceId,
     pub(in super::super) name: String,
     /// The space's colour, as an RGB token.
     pub(in super::super) color: u32,
@@ -40,9 +42,10 @@ pub(in super::super) fn footer(
 ) -> gpui::AnyElement {
     let focus = (spaces.len() > 1).then(|| {
         let selected = spaces.iter().position(|space| space.active).unwrap_or(0);
-        RovingFocus::new(
+        RovingFocus::keyed(
             "sidebar-spaces",
             selected,
+            spaces.iter().map(|space| space.id).collect(),
             spaces.iter().map(|space| space.on_select.clone()).collect(),
             window,
             cx,
@@ -174,7 +177,9 @@ fn space_dot(
         metrics::SPACE_DOT_SIZE
     };
     h_stack()
-        .id(("sidebar-space", index))
+        .id(gpui::ElementId::Name(
+            format!("sidebar-space-{}", space.id).into(),
+        ))
         .role(Role::Tab)
         .aria_label(space.name)
         .aria_selected(space.active)

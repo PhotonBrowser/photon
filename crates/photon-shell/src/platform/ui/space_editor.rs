@@ -178,9 +178,13 @@ impl SpaceEditor {
         cx.notify();
     }
 
-    fn cancel_preset_creation(&mut self, cx: &mut Context<Self>) {
+    /// Abandons the new preset, clearing its name and returning focus to the
+    /// space's name, as the preset field disappears.
+    fn cancel_preset_creation(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.creating_preset = false;
         self.invalid_preset = false;
+        self.preset_name.update(cx, |name, cx| name.emplace("", cx));
+        window.focus(&self.name.focus_handle(cx), cx);
         cx.notify();
     }
 
@@ -270,7 +274,7 @@ impl Render for SpaceEditor {
                 palette,
                 Box::new(cx.listener(|this, _, window, cx| {
                     if this.creating_preset {
-                        this.cancel_preset_creation(cx);
+                        this.cancel_preset_creation(window, cx);
                     } else {
                         this.start_preset_creation(window, cx);
                     }
