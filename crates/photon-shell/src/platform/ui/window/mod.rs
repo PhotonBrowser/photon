@@ -731,8 +731,10 @@ fn open_browser_window(
         })
     })?;
     let handle = gpui::AnyWindowHandle::from(handle);
+    // The window still active is the one this was opened from.
+    let opener = cx.active_window().map(|window| window.window_id().as_u64());
     cx.global_mut::<BrowserWindowRegistry>()
-        .register(handle.window_id().as_u64());
+        .register(handle.window_id().as_u64(), opener);
     let handle = handle
         .downcast::<BrowserWindow>()
         .expect("browser window registry received a different window type");

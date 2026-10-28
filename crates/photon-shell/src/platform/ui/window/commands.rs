@@ -1,7 +1,7 @@
 //! Running commands from shortcuts, menus and other browser controls.
 
 use gpui::{App, ClipboardItem, Context, Window};
-use photon_core::{BrowserCommand, Command, CommandAvailability};
+use photon_core::{BrowserCommand, Command, CommandAvailability, WindowSession};
 
 use super::super::super::engine::ZoomStep;
 use super::super::pages::SETTINGS;
@@ -24,8 +24,10 @@ impl BrowserWindow {
             Command::CloseTab => {
                 if let Some(active_tab) = self.active_tab {
                     self.close_tab(active_tab, window, cx);
-                } else if self.tabs.is_empty() && !Settings::get(cx).close_window_with_last_tab {
-                    cx.quit();
+                } else if self.tabs.is_empty() && !Self::closes_with_last_tab(window, cx) {
+                    // Closes this window only; other windows stay open.
+                    self.record_session_state(WindowSession::default(), cx);
+                    window.remove_window();
                 }
             }
             Command::ReloadPage => self.dispatch_command(BrowserCommand::Reload, window, cx),

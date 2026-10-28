@@ -292,6 +292,10 @@ fn keep_engine_warm_briefly(cx: &mut App) {
     let deadline_for_close = idle_deadline.clone();
     let app = cx.to_async();
     cx.on_window_closed(move |cx, _| {
+        // Only the last window closing lets the app go; the others keep it.
+        if !cx.windows().is_empty() {
+            return;
+        }
         let timeout = Duration::from_secs(u64::from(Settings::get(cx).engine_idle_timeout_seconds));
         if timeout.is_zero() {
             cx.quit();

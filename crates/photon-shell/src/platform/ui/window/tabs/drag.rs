@@ -1538,7 +1538,7 @@ impl BrowserWindow {
                 omnibox.set_content(None, None, window, cx)
             });
             if self.tab_axis(cx) == TabDragAxis::Horizontal
-                && !Settings::get(cx).close_window_with_last_tab
+                && !Self::closes_with_last_tab(window, cx)
             {
                 self.open_tab(window, cx);
             } else {

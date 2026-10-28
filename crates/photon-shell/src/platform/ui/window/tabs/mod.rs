@@ -640,8 +640,7 @@ impl BrowserWindow {
             return;
         }
         let id = self.tabs[index].id;
-        let closes_last_window_tab =
-            self.tabs.len() == 1 && Settings::get(cx).close_window_with_last_tab;
+        let closes_last_window_tab = self.tabs.len() == 1 && Self::closes_with_last_tab(window, cx);
         crate::platform::automation_lifecycle_trace(format_args!(
             "tab_close_request tab_id={} index={} count={} active_tab={:?} closes_last_window_tab={}",
             id,
@@ -676,7 +675,7 @@ impl BrowserWindow {
             return;
         }
         let removed = self.tabs[index].clone();
-        let closes_window = self.tabs.len() == 1 && Settings::get(cx).close_window_with_last_tab;
+        let closes_window = self.tabs.len() == 1 && Self::closes_with_last_tab(window, cx);
         if let Some(webview) = removed.content.webview() {
             let permission_view_id = webview.read(cx).session.permission_view_id();
             self.cancel_permissions_for_view(permission_view_id, window, cx);
@@ -727,7 +726,7 @@ impl BrowserWindow {
                 omnibox.set_content(None, None, window, cx)
             });
             if self.tab_axis(cx) == TabDragAxis::Horizontal
-                && !Settings::get(cx).close_window_with_last_tab
+                && !Self::closes_with_last_tab(window, cx)
             {
                 self.open_tab(window, cx);
             } else if self.empty_page.is_none() {
