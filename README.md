@@ -11,6 +11,9 @@
   <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
+<img width="2592" height="1644" alt="image" src="https://github.com/user-attachments/assets/59500315-d983-4af4-b105-4d102498ccc7" />
+
+
 ## Run from source
 
 Install the platform prerequisites in [contributor setup](CONTRIBUTOR_SETUP.md) first.
