@@ -24,7 +24,7 @@ use super::super::icons::{
 use super::super::layout::{h_stack, v_stack};
 use super::super::motion::{AnimateIn, Entrance, Presence, fade};
 use super::super::settings::Settings;
-use super::super::{ClickHandler, metrics, theme::ThemeColors, theme::palette};
+use super::super::{ClickHandler, metrics, theme::ThemeColors, theme::page_palette as palette};
 use super::layout::{heading, scrolling_column, secondary_text};
 use super::{PageContext, PageDefinition, PageIcon};
 use gpui::{
@@ -249,10 +249,12 @@ impl Render for SettingsPage {
             }
             _ => content.into_any_element(),
         };
-        let reset_dialog = self.reset_dialog(palette, cx);
-        let workspace_preset_dialog = self.workspace_preset_dialog(palette, cx);
-        let workspace_preset_delete_dialog = self.workspace_preset_delete_dialog(palette, cx);
+        let menu_palette = super::super::theme::palette(window, cx);
+        let reset_dialog = self.reset_dialog(menu_palette, cx);
+        let workspace_preset_dialog = self.workspace_preset_dialog(menu_palette, cx);
+        let workspace_preset_delete_dialog = self.workspace_preset_delete_dialog(menu_palette, cx);
         h_stack()
+            .text_color(rgb(palette.text_primary))
             .relative()
             .size_full()
             .items_start()

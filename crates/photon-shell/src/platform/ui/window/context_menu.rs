@@ -8,8 +8,10 @@ use gpui::{
 
 use super::super::menu::{menu_action_with_state, menu_heading, menu_separator, popover_surface};
 use super::super::motion::Transition;
+use super::super::settings::Settings;
 use super::super::{PhotonWebView, SelectDropdown, SelectItem, metrics, theme::ThemeColors};
 use super::BrowserWindow;
+use super::menu::{MenuCommand, command_item};
 
 pub(super) struct ContextMenuState {
     position: Point<Pixels>,
@@ -160,6 +162,7 @@ impl BrowserWindow {
     }
 
     pub(super) fn show_browser_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.theme_picker_anchor = Some(window.mouse_position());
         let items = self.browser_menu_items(cx);
         self.show_context_menu(window, items, cx);
     }
@@ -400,6 +403,11 @@ impl BrowserWindow {
             items.push(MenuItem::action("Sidebar as Icons", ToggleSidebarIcons).checked(icons));
         }
         items.extend([
+            command_item(
+                "Edit Theme…",
+                MenuCommand::EditTheme(Settings::get(cx).spaces.active().id),
+            ),
+            MenuItem::separator(),
             MenuItem::action("Zen Mode", ToggleZenMode).checked(self.sidebar.zen()),
             MenuItem::separator(),
             MenuItem::action("Keyboard Shortcuts", ShowKeyboardShortcuts),
@@ -473,7 +481,7 @@ fn menu_content_max_height(viewport_height: Pixels) -> Pixels {
 #[cfg(test)]
 mod tests {
     use super::super::super::menu::menu_action_with_state;
-    use crate::platform::ui::theme::{AccentColor, preview_palette};
+    use crate::platform::ui::theme::palette;
     use gpui::{
         Context, FocusHandle, InteractiveElement, IntoElement, Modifiers, MouseDownEvent,
         ParentElement, Render, Role, Styled, Window, deferred, div, point, px,
@@ -492,11 +500,11 @@ mod tests {
     }
 
     impl Render for MenuClickTestView {
-        fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
             let clicked = self.clicked.clone();
             let dismissed = self.dismissed.clone();
             let action_received = self.action_received.clone();
-            let palette = preview_palette(false, AccentColor::Blue);
+            let palette = palette(window, cx);
             let row = menu_action_with_state(
                 "test-menu-row",
                 "Choose item",
@@ -538,6 +546,14 @@ mod tests {
 
     #[gpui::test]
     fn menu_rows_receive_clicks_without_dismissing_the_popover(cx: &mut gpui::TestAppContext) {
+        cx.update(|cx| {
+            super::super::super::settings::load_settings(
+                None,
+                photon_core::BrowserSettings::default(),
+                None,
+                cx,
+            );
+        });
         let clicked = Rc::new(Cell::new(0));
         let dismissed = Rc::new(Cell::new(0));
         let action_received = Rc::new(Cell::new(0));

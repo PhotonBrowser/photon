@@ -389,7 +389,8 @@ impl Omnibox {
 
 impl Render for Omnibox {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let palette = palette(window, cx);
+        let menu_palette = palette(window, cx);
+        let palette = super::theme::chrome_palette(window, cx);
         let editing = self.is_editing(window, cx);
         let workspace_layout = WorkspaceLayout::current(cx);
         let style = FieldStyle::for_layout(workspace_layout.omnibox_placement());
@@ -458,7 +459,7 @@ impl Render for Omnibox {
         // The open panel draws the field's content itself, in the same place.
         field_box = if editing && !self.suggestions.is_empty() {
             field_box.child(self.open_panel(
-                palette,
+                menu_palette,
                 style,
                 workspace_layout.sidebar_region(),
                 address_text_offset,
@@ -475,7 +476,8 @@ impl Render for Omnibox {
                 cx,
             ))
         };
-        field_box = field_box.child(self.site_info_popover(palette, style, &workspace_layout, cx));
+        field_box =
+            field_box.child(self.site_info_popover(menu_palette, style, &workspace_layout, cx));
         if self.invalid {
             field_box = field_box.aria_description(INVALID_ADDRESS_DESCRIPTION);
         }

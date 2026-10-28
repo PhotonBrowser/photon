@@ -12,6 +12,92 @@ pub type SpaceId = u64;
 /// How many favourites a space holds.
 pub const MAX_FAVOURITES: usize = 12;
 
+/// A custom window tint, stored in bounded integer units for stable profiles.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[serde(default)]
+pub struct SpaceTint {
+    /// Hue in degrees; resolution wraps values into one turn.
+    pub hue: u16,
+    pub saturation: u8,
+    pub lightness: u8,
+}
+
+impl Default for SpaceTint {
+    fn default() -> Self {
+        Self {
+            hue: 216,
+            saturation: 55,
+            lightness: 65,
+        }
+    }
+}
+
+/// Maximum independent colours in a space gradient.
+pub const MAX_SPACE_COLORS: usize = 3;
+
+/// A bounded palette, shared by profile storage and the native theme picker.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[serde(from = "RawSpaceColors")]
+pub struct SpaceColors {
+    colors: [SpaceTint; MAX_SPACE_COLORS],
+    count: u8,
+    primary: u8,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct RawSpaceColors {
+    colors: [SpaceTint; MAX_SPACE_COLORS],
+    count: u8,
+    primary: u8,
+}
+
+impl From<RawSpaceColors> for SpaceColors {
+    fn from(raw: RawSpaceColors) -> Self {
+        let count = usize::from(raw.count).min(MAX_SPACE_COLORS);
+        Self::from_colors(&raw.colors[..count]).with_primary(usize::from(raw.primary))
+    }
+}
+
+impl Default for SpaceColors {
+    fn default() -> Self {
+        Self::from_colors(&[])
+    }
+}
+
+impl SpaceColors {
+    /// Keep zero to three colours; an empty palette follows the default theme.
+    pub fn from_colors(colors: &[SpaceTint]) -> Self {
+        let count = colors.len().min(MAX_SPACE_COLORS);
+        let mut result = Self {
+            colors: [SpaceTint::default(); MAX_SPACE_COLORS],
+            count: count as u8,
+            primary: 0,
+        };
+        for (target, source) in result.colors.iter_mut().zip(colors.iter()) {
+            *target = *source;
+        }
+        result
+    }
+    /// The selected colour's index, bounded to the stored palette.
+    pub fn primary_index(&self) -> usize {
+        usize::from(self.primary).min(self.colors().len().saturating_sub(1))
+    }
+    /// The primary colour, absent when the space follows the default theme.
+    pub fn primary(&self) -> Option<SpaceTint> {
+        self.colors().get(self.primary_index()).copied()
+    }
+    /// Select a primary colour without reordering or changing the others.
+    pub fn with_primary(mut self, index: usize) -> Self {
+        self.primary = index.min(self.colors().len().saturating_sub(1)) as u8;
+        self
+    }
+    /// The active colours, or an empty slice for the default theme.
+    pub fn colors(&self) -> &[SpaceTint] {
+        &self.colors[..usize::from(self.count).min(MAX_SPACE_COLORS)]
+    }
+}
+
 /// One space.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default)]
@@ -20,6 +106,10 @@ pub struct Space {
     pub name: String,
     /// The colour the window takes while the space is shown.
     pub color: WindowColor,
+    /// Fine-grained colour selected in the theme picker; absent for legacy presets.
+    pub tint: Option<SpaceTint>,
+    /// Independent colours selected in the theme picker; absent in legacy profiles.
+    pub colors: Option<SpaceColors>,
     /// Whether that colour fades into a neighbouring one.
     pub gradient: bool,
     /// Tabs pinned in this space, at the addresses they were pinned at,
@@ -41,6 +131,8 @@ impl Default for Space {
             id: 1,
             name: default_name(1),
             color: WindowColor::default(),
+            tint: None,
+            colors: None,
             gradient: false,
             pinned_tabs: Vec::new(),
             favourites: Vec::new(),
@@ -52,6 +144,16 @@ impl Default for Space {
 }
 
 impl Space {
+    /// Set the authoritative palette while retaining legacy tint metadata.
+    pub fn set_colors(&mut self, colors: SpaceColors) {
+        self.tint = colors.primary();
+        if self.tint.is_none() {
+            self.color = WindowColor::System;
+        }
+        self.gradient = colors.colors().len() > 1;
+        self.colors = Some(colors);
+    }
+
     /// The favourite for `url`'s site, if there is one in this space.
     pub fn favourite_for(&self, url: &str) -> Option<&Shortcut> {
         let site = site_name(url);
@@ -158,6 +260,8 @@ impl Spaces {
             id,
             name,
             color,
+            tint: None,
+            colors: None,
             gradient,
             pinned_tabs: Vec::new(),
             favourites: Vec::new(),
@@ -236,6 +340,8 @@ impl Spaces {
     pub fn reset_colors(&mut self) {
         for space in &mut self.spaces {
             space.color = WindowColor::default();
+            space.tint = None;
+            space.colors = None;
             space.gradient = false;
         }
     }
@@ -403,5 +509,92 @@ mod tests {
 
         spaces.validate_layout_overrides();
         assert_eq!(spaces.get(id).unwrap().layout_override, None);
+    }
+
+    #[test]
+    fn legacy_spaces_keep_presets_and_custom_tints_round_trip() {
+        let legacy: Space = serde_json::from_str(r#"{"id":4,"color":"blue"}"#).unwrap();
+        assert_eq!(legacy.color, WindowColor::Blue);
+        assert_eq!(legacy.tint, None);
+        let tint = SpaceTint {
+            hue: 278,
+            saturation: 63,
+            lightness: 42,
+        };
+        let custom = Space {
+            tint: Some(tint),
+            ..legacy
+        };
+        let saved = serde_json::to_string(&custom).unwrap();
+        assert_eq!(serde_json::from_str::<Space>(&saved).unwrap(), custom);
+    }
+
+    #[test]
+    fn independent_gradient_colours_survive_storage_and_respect_bounds() {
+        let a = SpaceTint {
+            hue: 205,
+            saturation: 61,
+            lightness: 42,
+        };
+        let b = SpaceTint {
+            hue: 270,
+            saturation: 48,
+            lightness: 60,
+        };
+        let c = SpaceTint {
+            hue: 150,
+            saturation: 55,
+            lightness: 52,
+        };
+        let colors = SpaceColors::from_colors(&[a, b, c, a]);
+        assert_eq!(colors.colors(), &[a, b, c]);
+        assert_eq!(SpaceColors::from_colors(&[]).colors().len(), 0);
+        let mut space = Space::default();
+        space.set_colors(colors);
+        let saved = serde_json::to_string(&space).unwrap();
+        let restored: Space = serde_json::from_str(&saved).unwrap();
+        assert_eq!(restored.colors.unwrap().colors(), &[a, b, c]);
+        assert!(restored.gradient);
+        assert_eq!(restored.tint, Some(a));
+        space.set_colors(SpaceColors::from_colors(&[c]));
+        assert!(!space.gradient);
+        assert_eq!(space.tint, Some(c));
+    }
+
+    #[test]
+    fn primary_selection_is_bounded_and_survives_storage() {
+        let a = SpaceTint::default();
+        let b = SpaceTint { hue: 25, ..a };
+        let colors = SpaceColors::from_colors(&[a, b]).with_primary(1);
+        let mut space = Space::default();
+        space.set_colors(colors);
+        assert_eq!(space.tint, Some(b));
+        assert_eq!(colors.colors(), &[a, b]);
+        let restored: Space =
+            serde_json::from_str(&serde_json::to_string(&space).unwrap()).unwrap();
+        assert_eq!(restored.colors.unwrap().primary_index(), 1);
+        assert_eq!(restored.tint, Some(b));
+        assert_eq!(colors.with_primary(99).primary_index(), 1);
+        assert_eq!(SpaceColors::default().with_primary(99).primary(), None);
+    }
+
+    #[test]
+    fn reset_colors_clears_custom_tints() {
+        let mut spaces = Spaces::default();
+        let id = spaces.active().id;
+        spaces
+            .get_mut(id)
+            .unwrap()
+            .set_colors(SpaceColors::from_colors(&[
+                SpaceTint::default(),
+                SpaceTint {
+                    hue: 120,
+                    ..SpaceTint::default()
+                },
+            ]));
+        spaces.reset_colors();
+        assert_eq!(spaces.active().tint, None);
+        assert_eq!(spaces.active().colors, None);
+        assert_eq!(spaces.active().color, WindowColor::System);
     }
 }

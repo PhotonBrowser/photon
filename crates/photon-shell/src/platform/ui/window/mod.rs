@@ -6,7 +6,6 @@ mod alerts;
 mod app;
 #[cfg(unix)]
 mod automation;
-mod background_noise;
 mod chrome;
 mod command_palette;
 mod commands;
@@ -34,6 +33,7 @@ mod tab_menu;
 mod tab_summary;
 mod tabs;
 mod task_manager;
+mod theme_picker_popup;
 mod title;
 mod workspace;
 mod zoom;
@@ -43,7 +43,7 @@ use gpui::{
     AnyElement, AnyWindowHandle, App, Bounds, Context, Entity, FocusHandle, Pixels, Point, Render,
     ScrollHandle, Subscription, Task, WeakEntity, Window, WindowHandle, div, prelude::*,
 };
-use photon_core::{BrowserCommand, TabSleepMode, WindowBackgroundStyle};
+use photon_core::{BrowserCommand, SpaceId, TabSleepMode, WindowBackgroundStyle};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::rc::Rc;
@@ -54,6 +54,7 @@ use super::super::engine::EngineRuntime;
 use super::super::trace;
 use super::super::window_observer::WindowObserver;
 use super::super::window_settings;
+use super::appearance_preview::AppearancePreview;
 use super::command_palette::CommandPalette;
 use super::find_bar::FindBar;
 use super::history::BrowsingHistory;
@@ -101,6 +102,10 @@ pub(in crate::platform) struct BrowserWindow {
     sidebar: SidebarState,
     /// The space shown, switching between spaces, and the space dialog.
     spaces: SpacesState,
+    /// The active-space theme popover and the point its context menu came from.
+    theme_picker_space: Option<SpaceId>,
+    theme_picker_anchor: Option<Point<Pixels>>,
+    theme_picker_presence: Presence<SpaceId>,
     tab_focus_handles: Vec<FocusHandle>,
     /// Closes today's tabs left unused, when the setting asks.
     _archive_task: Task<()>,
@@ -193,6 +198,9 @@ pub(in crate::platform) struct BrowserWindow {
     /// Redraws as the window comes to the front, so the menu bar follows it.
     _activation_subscription: Subscription,
     _settings_subscription: Subscription,
+    _preview_subscription: Subscription,
+    backdrop: Entity<workspace::WindowBackdrop>,
+    preview_foreground: Option<u32>,
     _chrome_subscription: Subscription,
     _window_observer: Option<WindowObserver>,
     /// Removes this window from the app registry and saved session on release.
@@ -345,9 +353,11 @@ impl BrowserWindow {
 
     /// Redraws the chrome and every tab for changed settings, such as the theme.
     fn settings_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.preview_foreground = None;
         if self.tabs.is_empty() && self.tab_axis(cx) == TabDragAxis::Horizontal {
             self.open_tab(window, cx);
         }
+        self.backdrop.update(cx, |_, cx| cx.notify());
         let tab_sleep_mode = Settings::get(cx).tab_sleep_mode;
         if tab_sleep_mode != self.tab_sleep_mode {
             self.tab_sleep_mode = tab_sleep_mode;
@@ -462,6 +472,7 @@ impl BrowserWindow {
         div()
             .size_full()
             .children(self.peek_overlay(palette, cx))
+            .children(self.theme_picker_popup_overlay(window, cx))
             .children(self.space_editor_overlay(palette, cx))
             .children(self.shortcuts_dialog_overlay(palette, cx))
             .children(self.command_palette_overlay(window, cx))
@@ -501,6 +512,8 @@ fn open_browser_window(
             let appearance_subscription =
                 cx.observe_window_appearance(window, |this: &mut BrowserWindow, window, cx| {
                     this.update_page_color_schemes(window, cx);
+                    this.preview_foreground = None;
+                    this.backdrop.update(cx, |_, cx| cx.notify());
                     cx.notify();
                 });
             let activation_subscription =
@@ -525,6 +538,22 @@ fn open_browser_window(
                 cx.set_global(AlertCenter::default());
             }
             let alert_subscription = cx.observe_global::<AlertCenter>(|_, cx| cx.notify());
+            let backdrop = cx.new(|_| workspace::WindowBackdrop);
+            let preview_subscription = cx.observe_global_in::<AppearancePreview>(
+                window,
+                |this: &mut BrowserWindow, window, cx| {
+                    this.backdrop.update(cx, |_, cx| cx.notify());
+                    // Tint changes do not change chrome layout. Rebuild it only
+                    // when the foreground crosses the black/white contrast threshold.
+                    let ink = super::theme::chrome_palette(window, cx).text_primary;
+                    if this.preview_foreground != Some(ink) {
+                        this.preview_foreground = Some(ink);
+                        this.chrome.update(cx, |_, cx| cx.notify());
+                        this.omnibox.update(cx, |_, cx| cx.notify());
+                        this.overlays.update(cx, |_, cx| cx.notify());
+                    }
+                },
+            );
             let browser = cx.entity().downgrade();
             let chrome = cx.new(|_| BrowserChrome {
                 browser: browser.clone(),
@@ -578,6 +607,9 @@ fn open_browser_window(
                 overlays,
                 sidebar: SidebarState::new(cx),
                 spaces: SpacesState::new(Settings::get(cx).spaces.active().id),
+                theme_picker_space: None,
+                theme_picker_anchor: None,
+                theme_picker_presence: Presence::default(),
                 tab_focus_handles: Vec::new(),
                 _archive_task: BrowserWindow::archive_unused_tabs_regularly(window, cx),
                 tab_sleep_waker,
@@ -636,6 +668,9 @@ fn open_browser_window(
                 _appearance_subscription: appearance_subscription,
                 _activation_subscription: activation_subscription,
                 _settings_subscription: settings_subscription,
+                _preview_subscription: preview_subscription,
+                preview_foreground: None,
+                backdrop,
                 _chrome_subscription: chrome_subscription,
                 _window_observer: window_observer,
                 window_background_style: Settings::get(cx).window_background_style,

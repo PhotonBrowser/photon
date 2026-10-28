@@ -109,7 +109,11 @@ impl BrowserWindow {
         } else {
             self.with_browser_menu(area.w_full(), cx)
         };
-        titlebar(content, window, self.palette(window, cx))
+        titlebar(
+            content,
+            window,
+            super::super::theme::chrome_palette(window, cx),
+        )
     }
 
     pub(super) fn render_component(
@@ -120,7 +124,7 @@ impl BrowserWindow {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         if component == ComponentId::TabStrip {
-            let palette = self.palette(window, cx);
+            let palette = super::super::theme::chrome_palette(window, cx);
             let browser = cx.entity().downgrade();
             let on_drag_move: TabDragMove =
                 std::rc::Rc::new(move |event, phase, hitbox, window, cx| {
@@ -154,7 +158,7 @@ impl BrowserWindow {
             };
         }
 
-        let palette = self.palette(window, cx);
+        let palette = super::super::theme::chrome_palette(window, cx);
         let (color, size) = (palette.text_secondary, metrics::TOOLBAR_ICON_SIZE);
         match component {
             ComponentId::BackButton => {

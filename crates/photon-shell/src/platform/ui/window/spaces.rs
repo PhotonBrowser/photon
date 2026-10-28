@@ -104,6 +104,9 @@ impl BrowserWindow {
     pub(super) fn follow_space(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let spaces = &Settings::get(cx).spaces;
         let active = spaces.active().id;
+        if self.theme_picker_space.is_some_and(|space| space != active) {
+            self.theme_picker_space = None;
+        }
         if self.spaces.shown == active {
             return;
         }
@@ -188,10 +191,13 @@ impl BrowserWindow {
                     }));
                 SpaceDot {
                     name: space.name.clone(),
-                    color: match space.color {
-                        WindowColor::System => palette.text_secondary,
-                        color => window_color_swatch(color, palette),
-                    },
+                    color: space.tint.map_or_else(
+                        || match space.color {
+                            WindowColor::System => palette.text_secondary,
+                            color => window_color_swatch(color),
+                        },
+                        super::super::theme::tint_swatch,
+                    ),
                     active: id == active,
                     on_select: Rc::new(on_select),
                     on_context_menu: Box::new(cx.listener(
@@ -250,15 +256,19 @@ impl BrowserWindow {
         if let SpaceEditorEvent::Save {
             name,
             color,
-            gradient,
+            colors,
+            transparency,
+            noise,
             preset_id,
             new_preset,
         } = event
         {
-            let (name, color, gradient, preset_id, new_preset) = (
+            let (name, color, colors, transparency, noise, preset_id, new_preset) = (
                 name.clone(),
                 *color,
-                *gradient,
+                *colors,
+                *transparency,
+                *noise,
                 preset_id.clone(),
                 new_preset.clone(),
             );
@@ -289,15 +299,40 @@ impl BrowserWindow {
                             space.name = name.clone();
                         }
                         space.color = color;
-                        space.gradient = gradient;
+                        space.set_colors(colors);
                         id
                     }
                     None => {
-                        let id = settings.spaces.add(Some(name.clone()), color, gradient);
+                        let id = settings.spaces.add(
+                            Some(name.clone()),
+                            color,
+                            colors.colors().len() > 1,
+                        );
                         settings.spaces.activate(id);
                         id
                     }
                 };
+                if let Some(space) = settings.spaces.get_mut(space_id) {
+                    space.set_colors(colors);
+                }
+                if let Some(transparency) = transparency {
+                    let active_has_colors =
+                        !super::super::theme::space_colors(settings.spaces.active())
+                            .colors()
+                            .is_empty();
+                    if !active_has_colors
+                        || transparency
+                            == super::super::appearance_preview::AppearancePreview::subtle_transparency()
+                    {
+                        settings.transparency = photon_core::Transparency::Subtle;
+                        settings.transparency_percent = None;
+                    } else {
+                        settings.transparency_percent = Some(transparency);
+                    }
+                }
+                if let Some(noise) = noise {
+                    settings.background_noise_intensity = noise;
+                }
                 if let Some(preset_id) = preset_id {
                     settings.spaces.set_preset_override(space_id, &preset_id);
                 } else {

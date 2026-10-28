@@ -115,10 +115,15 @@ impl BrowserWindow {
             }))
     }
 
-    /// Escape dismisses a notice chip. Menus and dialogs handle their own
-    /// Escape before it gets here.
+    /// Escape closes the theme picker or dismisses a notice chip.
     fn escape(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         if event.keystroke.key != "escape" {
+            return;
+        }
+        if self.theme_picker_space.is_some() {
+            self.dismiss_theme_picker(window, cx);
+            window.prevent_default();
+            cx.stop_propagation();
             return;
         }
         if !self.dismiss_notice(cx) {

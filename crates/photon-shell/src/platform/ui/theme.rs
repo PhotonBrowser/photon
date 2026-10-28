@@ -7,12 +7,12 @@ use gpui::{
     App, Background, ColorExt, Rgba, Window, WindowAppearance, hsla, hsla_to_rgba,
     linear_color_stop, linear_gradient, rgb, rgb_to_hsla, rgba,
 };
-use photon_core::{ThemeMode, Transparency, WindowColor};
+use photon_core::{Space, SpaceColors, SpaceTint, Transparency, WindowColor};
 use photon_performance::PerformancePalette;
-use std::cell::RefCell;
-use std::collections::HashMap;
 
+use super::appearance_preview::AppearancePreview;
 use super::settings::Settings;
+use std::{cell::RefCell, collections::VecDeque};
 
 /// The window colours, as hues, and how they tint each appearance.
 mod window_color {
@@ -57,30 +57,6 @@ pub(super) enum AccentColor {
 }
 
 impl AccentColor {
-    pub(super) const ALL: [Self; 8] = [
-        Self::Graphite,
-        Self::Blue,
-        Self::Green,
-        Self::Red,
-        Self::Orange,
-        Self::Teal,
-        Self::Purple,
-        Self::Pink,
-    ];
-
-    pub(super) fn name(self) -> &'static str {
-        match self {
-            Self::Graphite => "Graphite",
-            Self::Blue => "Blue",
-            Self::Green => "Green",
-            Self::Red => "Red",
-            Self::Orange => "Orange",
-            Self::Teal => "Teal",
-            Self::Purple => "Purple",
-            Self::Pink => "Pink",
-        }
-    }
-
     fn key(self) -> &'static str {
         match self {
             Self::Graphite => "graphite",
@@ -91,19 +67,6 @@ impl AccentColor {
             Self::Teal => "teal",
             Self::Purple => "purple",
             Self::Pink => "pink",
-        }
-    }
-
-    pub(super) fn window_color(self) -> WindowColor {
-        match self {
-            Self::Graphite => WindowColor::System,
-            Self::Blue => WindowColor::Blue,
-            Self::Green => WindowColor::Green,
-            Self::Red => WindowColor::Red,
-            Self::Orange => WindowColor::Orange,
-            Self::Teal => WindowColor::Teal,
-            Self::Purple => WindowColor::Purple,
-            Self::Pink => WindowColor::Pink,
         }
     }
 
@@ -126,20 +89,45 @@ impl AccentColor {
 pub(super) fn palette(window: &Window, cx: &App) -> ThemeColors {
     let settings = Settings::get(cx);
     let appearance = Settings::appearance(window.appearance(), cx);
+    let preview = AppearancePreview::get(cx);
+    let active = settings.spaces.active();
+    let (color, colors) = preview
+        .tint
+        .filter(|(id, _, _)| *id == active.id)
+        .map(|(_, color, colors)| (color, colors))
+        .unwrap_or((active.color, space_colors(active)));
     let mut palette = ThemeColors::for_appearance(
         appearance,
         WindowStyle {
             transparency: settings.transparency,
-            color: settings.spaces.active().color,
+            color,
             gradient: settings.spaces.active().gradient,
+            tint: colors
+                .primary()
+                .or_else(|| Some(default_tint(window.appearance()))),
+            colors: Some(colors),
+            transparency_percent: Some(AppearancePreview::transparency(cx)),
         },
     );
-    let has_window_tint = [palette.window_tint, palette.window_tint_end]
+    // Live drags update colour surfaces without rasterizing a new SVG logo per frame.
+    let logo = ThemeColors::for_appearance(
+        appearance,
+        WindowStyle {
+            transparency: settings.transparency,
+            transparency_percent: settings.transparency_percent,
+            color: active.color,
+            tint: active.tint,
+            colors: active.colors,
+            gradient: active.gradient,
+        },
+    );
+    let has_window_tint = [logo.window_tint, logo.window_tint_end]
         .into_iter()
         .any(|color| rgb_to_hsla(rgba(color)).color.saturation > f32::EPSILON);
     if has_window_tint {
-        palette.logo_tint = Some((palette.window_tint, palette.window_tint_end));
+        palette.logo_tint = Some((logo.window_tint | 0xff, logo.window_tint_end | 0xff));
     }
+
     palette
 }
 
@@ -149,6 +137,9 @@ struct WindowStyle {
     transparency: Transparency,
     color: WindowColor,
     gradient: bool,
+    tint: Option<SpaceTint>,
+    colors: Option<SpaceColors>,
+    transparency_percent: Option<u8>,
 }
 
 #[derive(Clone, Copy)]
@@ -159,59 +150,9 @@ struct BaseColors {
     selected: Rgba,
 }
 
-/// A palette for a miniature theme preview in Appearance settings.
-pub(super) fn preview_palette(dark: bool, accent: AccentColor) -> ThemeColors {
-    ThemeColors::for_appearance(
-        if dark {
-            WindowAppearance::Dark
-        } else {
-            WindowAppearance::Light
-        },
-        WindowStyle {
-            transparency: Transparency::Off,
-            color: accent.window_color(),
-            gradient: false,
-        },
-    )
-}
-
-/// The Light/System/Dark preview palettes. System shows a light sidebar and a
-/// dark page to make the mixed appearance explicit.
-pub(super) fn theme_preview_palettes(
-    mode: ThemeMode,
-    accent: AccentColor,
-) -> (ThemeColors, ThemeColors) {
-    match mode {
-        ThemeMode::Light => {
-            let light = preview_palette(false, accent);
-            (light, light)
-        }
-        ThemeMode::Dark => {
-            let dark = preview_palette(true, accent);
-            (dark, dark)
-        }
-        ThemeMode::System => (
-            preview_palette(false, accent),
-            preview_palette(true, accent),
-        ),
-    }
-}
-
-/// How `color` looks in the swatch that offers it; the system grey is the
-/// page background.
-pub(super) fn window_color_swatch(color: WindowColor, palette: ThemeColors) -> u32 {
-    match window_color::hue(color) {
-        Some(hue) => {
-            let window = &crate::platform::theme_config::theme().window;
-            to_rgb_token(hsla_to_rgba(hsla(
-                hue,
-                window.swatch_saturation,
-                window.swatch_lightness,
-                1.0,
-            )))
-        }
-        None => palette.page_background,
-    }
+/// Presets and their swatches share the same resolved colour.
+pub(super) fn window_color_swatch(color: WindowColor) -> u32 {
+    tint_swatch(preset_tint(color))
 }
 
 /// Semantic colors used by the shell's controls and surfaces.
@@ -221,7 +162,10 @@ pub(super) struct ThemeColors {
     /// gradient; see [`ThemeColors::window_background`].
     pub window_tint: u32,
     pub window_tint_end: u32,
+    pub window_tint_middle: Option<u32>,
     pub page_background: u32,
+    /// Appearance tint over the native window, retaining configured transparency.
+    pub page_surface: u32,
     pub text_primary: u32,
     pub text_secondary: u32,
     pub selection: u32,
@@ -273,6 +217,9 @@ pub(super) struct ThemeColors {
 impl ThemeColors {
     /// The window's background: its tint, or a gradient between tints.
     pub(super) fn window_background(&self) -> Background {
+        if self.window_tint_middle.is_some() {
+            return gpui::transparent_black().into();
+        }
         if self.window_tint == self.window_tint_end {
             return rgba(self.window_tint).into();
         }
@@ -286,36 +233,85 @@ impl ThemeColors {
         )
     }
 
-    /// Returns cached role colors for an appearance and window style.
+    /// Spatial average of a solid, two-stop, or three-stop background for contrast.
+    pub(super) fn background_average(&self) -> Rgba {
+        let ends = mix_colors(rgba(self.window_tint), rgba(self.window_tint_end), 0.5);
+        self.window_tint_middle
+            .map(|middle| mix_colors(rgba(middle), ends, 0.5))
+            .unwrap_or(ends)
+    }
+
+    /// Native overlay used only when a third independently editable stop is present.
+    pub(super) fn gradient_overlay(&self, radius: f32) -> Option<impl gpui::IntoElement> {
+        use gpui::{IntoElement, Styled, canvas};
+        let middle = self.window_tint_middle?;
+        let colors = [self.window_tint, middle, self.window_tint_end];
+        let angle = crate::platform::theme_config::theme()
+            .window
+            .gradient_angle_degrees;
+        Some(
+            canvas(
+                |_, _, _| (),
+                move |bounds, _, window, _| {
+                    super::theme_gradient::paint(bounds, colors, angle, radius, window)
+                },
+            )
+            .absolute()
+            .inset_0()
+            .size_full()
+            .into_any_element(),
+        )
+    }
+
+    /// Keep only recent palettes: live colour drags must not grow an unbounded cache.
     fn for_appearance(appearance: WindowAppearance, style: WindowStyle) -> Self {
-        thread_local! {
-            static CACHE: RefCell<HashMap<(bool, WindowStyle), ThemeColors>> =
-                RefCell::new(HashMap::new());
-        }
-        let dark = crate::platform::is_dark_appearance(appearance);
+        type Cache = VecDeque<((bool, WindowStyle), ThemeColors)>;
+        thread_local! { static CACHE: RefCell<Cache> = const { RefCell::new(VecDeque::new()) }; }
+        let key = (crate::platform::is_dark_appearance(appearance), style);
         CACHE.with_borrow_mut(|cache| {
-            *cache.entry((dark, style)).or_insert_with(|| {
-                let theme = crate::platform::theme_config::theme();
-                let colors = if dark {
-                    &theme.palette.dark
-                } else {
-                    &theme.palette.light
-                };
-                let colors = BaseColors {
-                    background: color(&colors.background),
-                    text: color(&colors.text),
-                    container: color(&colors.container),
-                    selected: color(&colors.selected),
-                };
-                let error = color(if dark {
-                    &theme.colors.error.dark
-                } else {
-                    &theme.colors.error.light
-                });
-                let surfaces = theme.transparency.for_setting(style.transparency);
-                Self::from_colors(colors, error, surfaces, style, dark)
-            })
+            if let Some((_, palette)) = cache.iter().find(|(cached, _)| *cached == key) {
+                return *palette;
+            }
+            let palette = Self::resolve(appearance, style);
+            if cache.len() == 6 {
+                cache.pop_front();
+            }
+            cache.push_back((key, palette));
+            palette
         })
+    }
+
+    fn resolve(appearance: WindowAppearance, style: WindowStyle) -> Self {
+        let dark = crate::platform::is_dark_appearance(appearance);
+        let theme = crate::platform::theme_config::theme();
+        let colors = if dark {
+            &theme.palette.dark
+        } else {
+            &theme.palette.light
+        };
+        let colors = BaseColors {
+            background: color(&colors.background),
+            text: color(&colors.text),
+            container: color(&colors.container),
+            selected: color(&colors.selected),
+        };
+        let error = color(if dark {
+            &theme.colors.error.dark
+        } else {
+            &theme.colors.error.light
+        });
+        let surfaces = style
+            .transparency_percent
+            .map(|percent| theme.transparency.for_percent(percent));
+        Self::from_colors(
+            colors,
+            error,
+            surfaces
+                .as_ref()
+                .unwrap_or_else(|| theme.transparency.for_setting(style.transparency)),
+            style,
+            dark,
+        )
     }
 
     fn from_colors(
@@ -328,36 +324,50 @@ impl ThemeColors {
         let theme = crate::platform::theme_config::theme();
         let opacity = &theme.opacity;
         let text_secondary = mix_colors(colors.text, colors.background, opacity.text_secondary);
-        let (saturation, lightness) = if dark {
-            (
-                theme.window.dark_tint_saturation,
-                theme.window.dark_tint_lightness,
-            )
-        } else {
-            (
-                theme.window.light_tint_saturation,
-                theme.window.light_tint_lightness,
-            )
-        };
+        // Window tint is independent of page/menu appearance.
+        let resolved = style.tint.unwrap_or_else(|| preset_tint(style.color));
         let tint = |hue: f32| -> Rgba {
-            hsla_to_rgba(hsla(
+            let selected = hsla_to_rgba(hsla(
                 hue.rem_euclid(1.0),
-                saturation,
-                lightness,
-                surfaces.window,
-            ))
+                f32::from(resolved.saturation.min(100)) / 100.0,
+                f32::from(resolved.lightness.min(100)) / 100.0,
+                1.0,
+            ));
+            selected.opacity(surfaces.window)
         };
-        let (window_tint, window_tint_end) = match window_color::hue(style.color) {
-            None => {
-                let tint = colors.background.opacity(surfaces.window);
-                (tint, tint)
-            }
-            Some(hue) if style.gradient => (tint(hue), tint(hue + theme.window.gradient_turn)),
-            Some(hue) => (tint(hue), tint(hue)),
+        let hue = f32::from(resolved.hue % 360) / 360.0;
+        let chosen = style
+            .colors
+            .map(gradient_colors)
+            .filter(|colors| !colors.colors().is_empty());
+        let color_at = |color: SpaceTint| tint_background(color).opacity(surfaces.window);
+        let window_tint = chosen
+            .as_ref()
+            .map(|colors| color_at(colors.colors()[0]))
+            .unwrap_or_else(|| tint(hue));
+        let window_tint_middle = chosen
+            .as_ref()
+            .filter(|colors| colors.colors().len() == 3)
+            .map(|colors| to_rgba_token(color_at(colors.colors()[1])));
+        let window_tint_end = if let Some(colors) = &chosen {
+            color_at(
+                *colors
+                    .colors()
+                    .last()
+                    .expect("a space palette has at least one colour"),
+            )
+        } else if style.gradient {
+            tint(hue + theme.window.gradient_turn)
+        } else {
+            window_tint
         };
 
         let menu_border = to_rgba_token(colors.text.opacity(opacity.menu_border));
-        let accent = accent_color(AccentColor::from_window_color(style.color), dark);
+        let accent = style
+            .colors
+            .and_then(|colors| colors.primary())
+            .map(tint_background)
+            .unwrap_or_else(|| accent_color(AccentColor::from_window_color(style.color), dark));
         let accent_adjustment = color(if dark {
             &theme.colors.accent_hover_background.dark
         } else {
@@ -366,7 +376,9 @@ impl ThemeColors {
         Self {
             window_tint: to_rgba_token(window_tint),
             window_tint_end: to_rgba_token(window_tint_end),
+            window_tint_middle,
             page_background: to_rgb_token(colors.background),
+            page_surface: to_rgba_token(colors.background.opacity(surfaces.page)),
             text_primary: to_rgb_token(colors.text),
             text_secondary: to_rgb_token(text_secondary),
             selection: to_rgba_token(colors.selected),
@@ -406,11 +418,7 @@ impl ThemeColors {
                 1.0 - opacity.accent_hover_blend,
             )),
             soft_accent_border: to_rgba_token(accent.opacity(opacity.soft_accent_border)),
-            on_chosen: if dark {
-                to_rgb_token(color(&theme.colors.chosen_foreground.dark))
-            } else {
-                to_rgb_token(color(&theme.colors.chosen_foreground.light))
-            },
+            on_chosen: contrasting_text(accent),
             suggestion_address: to_rgb_token(accent),
             modal_backdrop: to_rgba_token(
                 color(if dark {
@@ -440,25 +448,6 @@ fn accent_color(accent: AccentColor, dark: bool) -> Rgba {
         .get(accent.key())
         .expect("every shell accent must have theme tokens");
     color(if dark { &accent.dark } else { &accent.light })
-}
-
-/// The softer accent tones displayed in the palette picker.
-pub(super) fn accent_swatch(accent: AccentColor) -> u32 {
-    let accents = &crate::platform::theme_config::theme().colors.accents;
-    let accent = accents
-        .get(accent.key())
-        .expect("every shell accent must have theme tokens");
-    to_rgb_token(color(&accent.swatch))
-}
-
-/// Dark ink on the palette's intentionally soft accent swatches.
-pub(super) fn accent_swatch_mark() -> u32 {
-    to_rgb_token(color(
-        &crate::platform::theme_config::theme()
-            .colors
-            .accent_swatch_mark
-            .value,
-    ))
 }
 
 fn color(value: &str) -> Rgba {
@@ -495,4 +484,280 @@ fn to_rgba_token(color: Rgba) -> u32 {
 
 fn to_channel(channel: f32) -> u32 {
     (channel.clamp(0.0, 1.0) * 255.0).round() as u32
+}
+
+/// The preset coordinates in the same field used for custom colours.
+pub(super) fn preset_tint(preset: WindowColor) -> SpaceTint {
+    let tokens = &crate::platform::theme_config::theme().window;
+    SpaceTint {
+        hue: (window_color::hue(preset).unwrap_or(0.0) * 360.0).round() as u16,
+        saturation: if preset == WindowColor::System {
+            0
+        } else {
+            (tokens.swatch_saturation * 100.0).round() as u8
+        },
+        lightness: (if preset == WindowColor::System {
+            tokens.light_tint_lightness
+        } else {
+            tokens.swatch_lightness
+        } * 100.0)
+            .round() as u8,
+    }
+}
+
+/// Put the primary at the leading stop, or in the centre of a three-colour gradient.
+pub(super) fn gradient_colors(colors: SpaceColors) -> SpaceColors {
+    let values = colors.colors();
+    let primary = colors.primary_index();
+    match values.len() {
+        2 => SpaceColors::from_colors(&[values[primary], values[1 - primary]]),
+        3 => SpaceColors::from_colors(&[
+            values[(primary + 1) % 3],
+            values[primary],
+            values[(primary + 2) % 3],
+        ]),
+        _ => colors,
+    }
+}
+
+/// Native appearance supplies the default shell colour, independently of page mode.
+pub(super) fn default_tint(appearance: WindowAppearance) -> SpaceTint {
+    let theme = crate::platform::theme_config::theme();
+    let background = if crate::platform::is_dark_appearance(appearance) {
+        &theme.palette.dark.background
+    } else {
+        &theme.palette.light.background
+    };
+    let hsl = rgb_to_hsla(color(background)).color;
+    SpaceTint {
+        hue: hsl.hue.into_positive_degrees().round() as u16 % 360,
+        saturation: (hsl.saturation * 100.0).round() as u8,
+        lightness: (hsl.lightness * 100.0).round() as u8,
+    }
+}
+
+/// Resolve old solid/gradient profiles into explicit, independently editable colours.
+pub(super) fn space_colors(space: &Space) -> SpaceColors {
+    if let Some(colors) = space.colors {
+        return colors;
+    }
+    if space.color == WindowColor::System && space.tint.is_none() && !space.gradient {
+        return SpaceColors::default();
+    }
+    let first = space.tint.unwrap_or_else(|| preset_tint(space.color));
+    if !space.gradient {
+        return SpaceColors::from_colors(&[first]);
+    }
+    let mut second = first;
+    second.hue = (f32::from(first.hue)
+        + crate::platform::theme_config::theme().window.gradient_turn * 360.0)
+        .round() as u16
+        % 360;
+    SpaceColors::from_colors(&[first, second])
+}
+
+/// A saved custom tint represented by a space's colour dot.
+pub(super) fn tint_swatch(tint: SpaceTint) -> u32 {
+    to_rgb_token(tint_background(tint))
+}
+
+/// Relative luminance chooses the more legible of black and white ink.
+pub(super) fn contrasting_text(background: Rgba) -> u32 {
+    let linear = |v: f32| {
+        if v <= 0.04045 {
+            v / 12.92
+        } else {
+            ((v + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    let luminance = 0.2126 * linear(background.color.red)
+        + 0.7152 * linear(background.color.green)
+        + 0.0722 * linear(background.color.blue);
+    let tokens = &crate::platform::theme_config::theme().picker;
+    if luminance > 0.179 {
+        to_rgb_token(color(&tokens.ink_dark))
+    } else {
+        to_rgb_token(color(&tokens.ink_light))
+    }
+}
+
+/// Internal pages retain the window material and choose ink for the composited tint.
+pub(super) fn page_palette(window: &Window, cx: &App) -> ThemeColors {
+    let mut result = palette(window, cx);
+    let surface = rgba(result.page_surface);
+    let background = mix_colors(surface, result.background_average(), surface.alpha);
+    let ink = contrasting_text(background);
+    let opacity = &crate::platform::theme_config::theme().opacity;
+    result.text_primary = ink;
+    result.text_secondary = to_rgb_token(mix_colors(rgb(ink), background, opacity.text_secondary));
+    result.surface = to_rgba_token(rgb(ink).opacity(opacity.surface_tint));
+    result.menu_surface = result.surface;
+    result.hover_surface = to_rgba_token(rgb(ink).opacity(opacity.hover));
+    result.surface_hover = to_rgba_token(rgb(ink).opacity(opacity.surface_hover));
+    result.selected_surface = to_rgba_token(rgb(ink).opacity(opacity.selected));
+    result.control_border = to_rgba_token(rgb(ink).opacity(opacity.menu_border));
+    result.menu_border = result.control_border;
+    result
+}
+
+/// Chrome follows its tint's contrast, independently of internal pages and menus.
+pub(super) fn chrome_palette(window: &Window, cx: &App) -> ThemeColors {
+    let mut result = palette(window, cx);
+    let start = result.background_average();
+    let ink = contrasting_text(start);
+    let dark = ink
+        == to_rgb_token(color(
+            &crate::platform::theme_config::theme().picker.ink_light,
+        ));
+    let settings = Settings::get(cx);
+    let chrome = ThemeColors::for_appearance(
+        if dark {
+            WindowAppearance::Dark
+        } else {
+            WindowAppearance::Light
+        },
+        WindowStyle {
+            transparency: settings.transparency,
+            color: settings.spaces.active().color,
+            gradient: settings.spaces.active().gradient,
+            tint: settings.spaces.active().tint,
+            colors: settings.spaces.active().colors,
+            transparency_percent: Some(AppearancePreview::transparency(cx)),
+        },
+    );
+    result.text_primary = ink;
+    result.text_secondary = to_rgb_token(mix_colors(
+        rgb(ink),
+        start,
+        crate::platform::theme_config::theme()
+            .opacity
+            .text_secondary,
+    ));
+    result.surface = chrome.surface;
+    result.hover_surface = chrome.hover_surface;
+    result.surface_hover = chrome.surface_hover;
+    result.selected_surface = chrome.selected_surface;
+    result.control_border = chrome.control_border;
+    result
+}
+
+/// The selected colour stays independent of transparency.
+pub(super) fn tint_background(tint: SpaceTint) -> Rgba {
+    hsla_to_rgba(hsla(
+        f32::from(tint.hue % 360) / 360.0,
+        f32::from(tint.saturation.min(100)) / 100.0,
+        f32::from(tint.lightness.min(100)) / 100.0,
+        1.0,
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn explicit_gradient_keeps_each_colour_and_collapses_back_to_a_solid() {
+        let a = SpaceTint {
+            hue: 210,
+            saturation: 60,
+            lightness: 40,
+        };
+        let b = SpaceTint {
+            hue: 150,
+            saturation: 70,
+            lightness: 50,
+        };
+        let c = SpaceTint {
+            hue: 270,
+            saturation: 55,
+            lightness: 60,
+        };
+        let mut space = Space::default();
+        space.set_colors(SpaceColors::from_colors(&[a, b, c]).with_primary(1));
+        let style = WindowStyle {
+            transparency: Transparency::Off,
+            transparency_percent: Some(0),
+            color: space.color,
+            tint: space.tint,
+            colors: space.colors,
+            gradient: true,
+        };
+        let palette = ThemeColors::for_appearance(WindowAppearance::Light, style);
+        assert_eq!(palette.window_tint >> 8, tint_swatch(c));
+        assert_eq!(palette.window_tint_middle.unwrap() >> 8, tint_swatch(b));
+        assert_eq!(palette.window_tint_end >> 8, tint_swatch(a));
+        let solid = ThemeColors::for_appearance(
+            WindowAppearance::Light,
+            WindowStyle {
+                colors: Some(SpaceColors::from_colors(&[b])),
+                ..style
+            },
+        );
+        assert!(solid.window_tint_middle.is_none());
+        assert_eq!(solid.window_tint, solid.window_tint_end);
+    }
+    #[test]
+    fn window_tint_is_independent_of_page_appearance() {
+        let style = WindowStyle {
+            transparency: Transparency::Off,
+            color: WindowColor::Blue,
+            gradient: true,
+            transparency_percent: None,
+            colors: None,
+            tint: Some(SpaceTint {
+                lightness: 40,
+                ..SpaceTint::default()
+            }),
+        };
+        let light = ThemeColors::for_appearance(WindowAppearance::Light, style);
+        let dark = ThemeColors::for_appearance(WindowAppearance::Dark, style);
+        assert_eq!(light.window_tint, dark.window_tint);
+        assert_eq!(light.window_tint_end, dark.window_tint_end);
+        assert_ne!(light.page_background, dark.page_background);
+        assert_ne!(light.menu_surface, dark.menu_surface);
+    }
+    #[gpui::test]
+    fn translucent_pages_use_tint_contrast_while_menus_follow_appearance(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let mut settings = photon_core::BrowserSettings {
+            theme: photon_core::ThemeMode::Dark,
+            transparency: Transparency::Clear,
+            ..Default::default()
+        };
+        let id = settings.spaces.active().id;
+        settings.spaces.get_mut(id).unwrap().tint = Some(SpaceTint {
+            saturation: 0,
+            lightness: 90,
+            ..Default::default()
+        });
+        cx.update(|cx| super::super::settings::load_settings(None, settings, None, cx));
+        let cx = cx.add_empty_window();
+        cx.update(|window, cx| {
+            let page = page_palette(window, cx);
+            let menu = palette(window, cx);
+            assert!(
+                rgba(page.page_surface).alpha < 1.0,
+                "pages must retain native transparency"
+            );
+            assert_eq!(
+                page.text_primary, 0x000000,
+                "pale translucent pages need dark ink even in dark appearance"
+            );
+            assert_eq!(
+                menu.text_primary, 0xffffff,
+                "dark menus keep their own foreground"
+            );
+            Settings::update(cx, |settings| settings.transparency = Transparency::Off);
+            let page = page_palette(window, cx);
+            assert!(rgba(page.page_surface).alpha < 1.0);
+            assert_eq!(page.text_primary, 0x000000);
+        });
+    }
+    #[test]
+    fn foreground_chooses_black_or_white_for_legibility() {
+        assert_eq!(contrasting_text(rgb(0xffffff)), 0x000000);
+        assert_eq!(contrasting_text(rgb(0x000000)), 0xffffff);
+        assert_eq!(contrasting_text(rgb(0x0044dd)), 0xffffff);
+        assert_eq!(contrasting_text(rgb(0xffee44)), 0x000000);
+    }
 }

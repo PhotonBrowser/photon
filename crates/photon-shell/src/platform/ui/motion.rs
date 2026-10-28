@@ -260,11 +260,14 @@ pub(super) struct Entrance {
     duration_override: Option<Duration>,
     delay: Duration,
     curve: Curve,
+    exit_curve: Option<Curve>,
     opacity_from: Option<f32>,
+    fade_in: bool,
     offset_from: Option<(f32, f32)>,
     blur_from: Option<f32>,
     grow: Option<(f32, f32)>,
     scale_from: Option<f32>,
+    scale_origin_left: Option<f32>,
 }
 
 impl Entrance {
@@ -274,11 +277,14 @@ impl Entrance {
             duration_override: None,
             delay: Duration::ZERO,
             curve: Curve::EaseOut,
+            exit_curve: None,
             opacity_from: None,
+            fade_in: true,
             offset_from: None,
             blur_from: None,
             grow: None,
             scale_from: None,
+            scale_origin_left: None,
         }
     }
 
@@ -287,8 +293,21 @@ impl Entrance {
         self
     }
 
+    pub const fn scale_from_left(mut self, scale: f32, width: f32) -> Self {
+        self.scale_from = Some(scale);
+        self.scale_origin_left = Some(width);
+        self
+    }
+
     pub const fn fade_from(mut self, opacity: f32) -> Self {
         self.opacity_from = Some(opacity);
+        self
+    }
+
+    /// Fades on exit while starting the entrance fully visible.
+    pub const fn fade_out_only(mut self) -> Self {
+        self.opacity_from = Some(0.0);
+        self.fade_in = false;
         self
     }
 
@@ -354,6 +373,11 @@ impl Entrance {
         self
     }
 
+    pub const fn exit_curve(mut self, curve: Curve) -> Self {
+        self.exit_curve = Some(curve);
+        self
+    }
+
     fn resolved_duration(self, config: &MotionConfig) -> Duration {
         if !config.allows_motion() {
             return Duration::ZERO;
@@ -382,6 +406,7 @@ impl Entrance {
         let strength = config.effect_strength.clamp(0.0, 3.0);
         let mut shown = Target::default();
         let mut hidden = Target::default();
+        let mut hidden_x = base_offset.0;
 
         if let Some(opacity) = self.opacity_from {
             shown = shown.opacity(1.0);
@@ -389,9 +414,8 @@ impl Entrance {
         }
         if let Some((x, y)) = self.offset_from {
             shown = shown.x(base_offset.0).y(base_offset.1);
-            hidden = hidden
-                .x(base_offset.0 + x * strength)
-                .y(base_offset.1 + y * strength);
+            hidden_x = base_offset.0 + x * strength;
+            hidden = hidden.x(hidden_x).y(base_offset.1 + y * strength);
         }
         if let Some((size, fraction)) = self.grow {
             let start = (1.0 - (1.0 - fraction) * strength).clamp(0.2, 1.0);
@@ -402,6 +426,11 @@ impl Entrance {
             let start = (1.0 - (1.0 - from) * strength).clamp(0.2, 1.0);
             shown = shown.scale(1.0);
             hidden = hidden.scale(start);
+            if let Some(width) = self.scale_origin_left {
+                shown = shown.x(base_offset.0);
+                hidden_x += (start - 1.0) * width * 0.5;
+                hidden = hidden.x(hidden_x);
+            }
         }
 
         (
@@ -416,6 +445,20 @@ impl Default for Entrance {
     fn default() -> Self {
         Self::new()
     }
+}
+
+pub(super) fn theme_picker_entrance(width: f32) -> Entrance {
+    let tokens = &crate::platform::theme_config::theme().motion.theme_picker;
+    Entrance::new()
+        .fade_out_only()
+        .scale_from_left(tokens.scale_from, width)
+        .curve(Curve::Spring(SpringConfig::new(
+            tokens.spring.stiffness,
+            tokens.spring.damping,
+            tokens.spring.mass,
+        )))
+        .exit_curve(Curve::EaseInOut)
+        .duration(Duration::from_millis(tokens.duration_ms))
 }
 
 /// Whether an item is appearing or leaving.
@@ -434,7 +477,7 @@ fn apply_entrance<E: Styled + gpui::IntoElement + 'static>(
     base_offset: (f32, f32),
 ) -> gpui::AnyElement {
     let (shown, hidden, blur) = entrance.targets(config, base_offset);
-    let (target, initial, delay, duration) = match transition {
+    let (target, mut initial, delay, duration) = match transition {
         Transition::Enter => (
             shown,
             hidden,
@@ -448,9 +491,16 @@ fn apply_entrance<E: Styled + gpui::IntoElement + 'static>(
             entrance.exit_duration(config),
         ),
     };
+    if transition == Transition::Enter && !entrance.fade_in {
+        initial = initial.opacity(1.0);
+    }
+    let curve = match transition {
+        Transition::Enter => entrance.curve,
+        Transition::Exit => entrance.exit_curve.unwrap_or(entrance.curve),
+    };
     let motion = Motion::new(target)
         .initial(initial)
-        .transition(entrance.curve.transition(duration))
+        .transition(curve.transition(duration))
         .delay(delay);
     let style_motion = blur.map(|blur| {
         let (target_blur, initial_blur) = match transition {
@@ -459,7 +509,7 @@ fn apply_entrance<E: Styled + gpui::IntoElement + 'static>(
         };
         StyleMotion::new(StyleTarget::default().value(StyleProperty::Blur, target_blur))
             .initial(StyleTarget::default().value(StyleProperty::Blur, initial_blur))
-            .transition(entrance.curve.transition(duration))
+            .transition(curve.transition(duration))
             .delay(delay)
     });
     let element = MotionElement::new(id, element, motion);
@@ -488,7 +538,7 @@ pub(super) trait AnimateIn: Styled + gpui::IntoElement + Sized + 'static {
         config: &MotionConfig,
         base_offset: (f32, f32),
     ) -> gpui::AnyElement {
-        apply_entrance(self, id, entrance, Transition::Enter, config, base_offset)
+        self.animate_with_offset(id, entrance, Transition::Enter, config, base_offset)
     }
 
     fn animate_out(
@@ -497,8 +547,7 @@ pub(super) trait AnimateIn: Styled + gpui::IntoElement + Sized + 'static {
         entrance: Entrance,
         config: &MotionConfig,
     ) -> gpui::AnyElement {
-        let id = ElementId::from((id.into(), "exit"));
-        apply_entrance(self, id, entrance, Transition::Exit, config, (0.0, 0.0))
+        self.animate_with_offset(id, entrance, Transition::Exit, config, (0.0, 0.0))
     }
 
     fn animate(
@@ -512,6 +561,35 @@ pub(super) trait AnimateIn: Styled + gpui::IntoElement + Sized + 'static {
             Transition::Enter => self.animate_in(id, entrance, config),
             Transition::Exit => self.animate_out(id, entrance, config),
         }
+    }
+
+    fn animate_with_offset(
+        self,
+        id: impl Into<ElementId>,
+        entrance: Entrance,
+        transition: Transition,
+        config: &MotionConfig,
+        base_offset: (f32, f32),
+    ) -> gpui::AnyElement {
+        let id: ElementId = id.into();
+        let id = if transition == Transition::Exit {
+            ElementId::from((id, "exit"))
+        } else {
+            id
+        };
+        apply_entrance(self, id, entrance, transition, config, base_offset)
+    }
+
+    /// Reuses the same motion ID on enter and exit so keyed child state keeps its identity.
+    fn animate_with_offset_stable_id(
+        self,
+        id: impl Into<ElementId>,
+        entrance: Entrance,
+        transition: Transition,
+        config: &MotionConfig,
+        base_offset: (f32, f32),
+    ) -> gpui::AnyElement {
+        apply_entrance(self, id, entrance, transition, config, base_offset)
     }
 }
 
@@ -695,6 +773,9 @@ pub(super) enum TweenCurve {
     Spring(SpringConfig),
 }
 
+pub(super) const THEME_PICKER_SPRING: TweenCurve =
+    TweenCurve::Spring(SpringConfig::new(360.0, 18.0, 1.0));
+
 pub(super) const SIDEBAR_RESIZE_SPRING: TweenCurve =
     TweenCurve::Spring(SpringConfig::new(520.0, 30.0, 1.0));
 
@@ -806,10 +887,6 @@ pub(super) mod distance {
 }
 
 /// Photon-specific control stretch tuning.
-pub(super) const CONTROL_THUMB_HELD_STRETCH_X: f32 = 1.2;
-pub(super) const SLIDER_EDGE_STRETCH_MAX: f32 = 0.3;
-pub(super) const SLIDER_EDGE_STRETCH_SPEED_THRESHOLD: f32 = 700.0;
-pub(super) const SLIDER_EDGE_STRETCH_SPEED_RANGE: f32 = 1_500.0;
 const ICON_BUTTON_PRESS_SCALE: f32 = 0.92;
 
 fn press_spring() -> Spring {
@@ -867,32 +944,6 @@ pub(super) fn icon_pressable<E: StatefulInteractiveElement + Styled + IntoElemen
     element: E,
 ) -> PressScaleElement<E> {
     press_scale(element, ICON_BUTTON_PRESS_SCALE, None)
-}
-
-pub(super) fn control_scale_transition<E: Styled + IntoElement + 'static>(
-    id: ElementId,
-    element: E,
-    offset: f32,
-    scale_x: f32,
-    tracking: bool,
-    config: &MotionConfig,
-) -> impl IntoElement {
-    let motion = Motion::new(Target::default().x(offset).scale(scale_x))
-        .transition(elastic_control_transition(tracking, config));
-    MotionElement::new(id, element, motion).map(|element: E, frame: Frame| {
-        let target = frame.target();
-        element
-            .left(gpui::px(target.x_px()))
-            .scale_xy(target.scale_factor().unwrap_or(1.0), 1.0)
-    })
-}
-
-fn elastic_control_transition(tracking: bool, config: &MotionConfig) -> gpui_motion::Transition {
-    if tracking || !config.allows_motion() {
-        gpui_motion::Transition::Instant
-    } else {
-        SIDEBAR_RESIZE_SPRING.transition(config.duration(Speed::Quick))
-    }
 }
 
 pub(super) fn control_thumb_transition<E: Styled + IntoElement + 'static>(

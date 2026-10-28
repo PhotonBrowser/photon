@@ -1,19 +1,21 @@
 //! A reusable static grain overlay for the translucent window background.
 
-use gpui::{ImageSource, ObjectFit, RenderImage, img, prelude::*};
+use gpui::{ImageSource, ObjectFit, RenderImage, img, prelude::*, px};
 use image::{Frame, RgbaImage};
 use std::sync::{Arc, OnceLock};
 
 const TEXTURE_SIZE: u32 = 1_024;
 const TEXTURE_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/background-noise.rgba"));
 
-pub(super) fn overlay(intensity: u8) -> impl IntoElement {
+/// Grain clipped to `radius`, so it follows the rounded surface it covers.
+pub(super) fn overlay(intensity: u8, radius: f32) -> impl IntoElement {
     let opacity = f32::from(intensity.min(photon_core::BACKGROUND_NOISE_INTENSITY_MAX))
         / f32::from(photon_core::BACKGROUND_NOISE_INTENSITY_MAX);
     img(ImageSource::Render(texture()))
         .absolute()
         .inset_0()
         .size_full()
+        .rounded(px(radius))
         .object_fit(ObjectFit::Cover)
         .opacity(
             opacity

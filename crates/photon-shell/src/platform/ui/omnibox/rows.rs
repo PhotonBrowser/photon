@@ -146,6 +146,7 @@ fn suggestion_row(
                 .flex_1()
                 .min_w_0()
                 .truncate()
+                .text_color(gpui::rgb(palette.text_primary))
                 .child(StyledText::new(label).with_highlights(highlights)),
         );
     if selected {

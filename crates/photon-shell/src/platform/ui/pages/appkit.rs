@@ -5,7 +5,7 @@ use gpui::{App, Context, Render, WeakEntity, Window, div, prelude::*, px, rgb};
 use crate::platform::macos::appkit::{AppKitButton, AppKitButtonStyle, AppKitTabBar};
 
 use super::super::layout::{h_stack, v_stack};
-use super::super::{metrics, theme::ThemeColors, theme::palette};
+use super::super::{metrics, theme::ThemeColors, theme::page_palette as palette};
 use super::layout::{group, heading, label, secondary_text};
 use super::{PageContext, PageDefinition, PageIcon};
 
@@ -168,7 +168,7 @@ impl Render for AppKitPage {
             "interactions"
         };
         v_stack()
-            .id("appkit-page")
+            .id("appkit-page").text_color(rgb(palette.text_primary))
             .size_full()
             .items_center()
             .p(px(metrics::INTERNAL_PAGE_INSET))

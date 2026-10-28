@@ -5,21 +5,20 @@ use gpui::{
 };
 use photon_core::DockRegion;
 
+use super::super::appearance_preview::AppearancePreview;
+use super::super::background_noise;
 use super::super::find_bar::FIND_BAR_MOTION;
 use super::super::motion::{AnimateIn, mix};
 use super::super::titlebar::window_drag_area;
 use super::super::workspace_layout::WorkspaceLayout;
 use super::super::{metrics, theme::palette};
 use super::BrowserWindow;
-use super::background_noise;
 
 impl Render for BrowserWindow {
     fn render(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) -> impl IntoElement {
         self.tab_container_bounds = None;
         self.favourites_bounds = None;
         let palette = palette(window, cx);
-        let background_noise_intensity =
-            super::super::settings::Settings::get(cx).background_noise_intensity;
         let animations = super::super::settings::Settings::motion(cx);
         self.sidebar.settle_if_motion_disabled(&animations);
         if !animations.allows_motion() {
@@ -115,11 +114,11 @@ impl Render for BrowserWindow {
             .track_focus(&self.root_focus)
             .size_full()
             .relative()
-            .bg(palette.window_background())
             .text_color(gpui::rgb(palette.text_primary))
-            .children(
-                (background_noise_intensity > 0)
-                    .then(|| background_noise::overlay(background_noise_intensity)),
+            .child(
+                self.backdrop
+                    .clone()
+                    .cached(StyleRefinement::default().absolute().inset_0()),
             )
             .child(page)
             .children(top_margin)
@@ -176,5 +175,20 @@ impl BrowserWindow {
             }
         }
         margins
+    }
+}
+
+/// Appearance-only repaint owner; live drags do not notify browser policy or sessions.
+pub(super) struct WindowBackdrop;
+impl Render for WindowBackdrop {
+    fn render(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) -> impl IntoElement {
+        let palette = palette(window, cx);
+        let noise = AppearancePreview::noise(cx);
+        div()
+            .size_full()
+            .relative()
+            .bg(palette.window_background())
+            .children(palette.gradient_overlay(0.0))
+            .children((noise > 0).then(|| background_noise::overlay(noise, 0.0)))
     }
 }

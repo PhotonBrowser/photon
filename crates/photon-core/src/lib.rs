@@ -40,7 +40,9 @@ pub use sidebar::{
     SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH, SidebarResize,
     SidebarSettings,
 };
-pub use spaces::{MAX_FAVOURITES, Space, SpaceId, Spaces};
+pub use spaces::{
+    MAX_FAVOURITES, MAX_SPACE_COLORS, Space, SpaceColors, SpaceId, SpaceTint, Spaces,
+};
 pub use state::{BrowserCommand, BrowserState, EngineEvent, normalize_url};
 pub use tab_sleep::{
     MemoryPressure, TabSleepMode, active_idle_timeout, idle_discard_delay, idle_timeout,

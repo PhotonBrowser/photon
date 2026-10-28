@@ -346,10 +346,10 @@ fn load_profile_state() -> LoadedProfileState {
 }
 
 /// Applies the settings that belong to the whole app, now and whenever they
-/// change: the window appearance and the pop-up policy.
+/// change. Page/menu appearance is resolved separately from native window tint.
 fn follow_settings(runtime: &Rc<EngineRuntime>, cx: &mut App) {
     let apply = |runtime: &EngineRuntime, cx: &mut App| {
-        cx.set_window_appearance(Settings::chosen_appearance(cx));
+        cx.set_window_appearance(None);
         runtime.set_popup_policy(Settings::get(cx).popup_policy);
         runtime.set_elastic_scroll(Settings::get(cx).elastic_scroll);
     };

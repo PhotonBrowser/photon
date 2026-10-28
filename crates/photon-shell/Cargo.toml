@@ -12,7 +12,11 @@ hot-reload = ["gpui/hot-patching"]
 [dependencies]
 photon-brand = { path = "../photon-brand" }
 gpui = { package = "gpui-ce", path = "../../vendor/gpui-ce/crates/gpui", default-features = false }
-gpui_platform = { package = "gpui_ce_platform", path = "../../vendor/gpui-ce/crates/gpui_platform" }
+gpui_platform = {
+    package = "gpui_ce_platform",
+    path = "../../vendor/gpui-ce/crates/gpui_platform",
+    features = ["wayland", "x11"],
+}
 gpui_elements = { package = "gpui_ce_elements", path = "../../vendor/gpui-ce/crates/gpui_elements" }
 photon-core = { path = "../photon-core" }
 gpui-motion = { package = "gpui-ce-motion", path = "../gpui-motion", features = ["gpui"] }

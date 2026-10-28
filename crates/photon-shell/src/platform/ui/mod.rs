@@ -1,6 +1,8 @@
 //! GPUI views and window composition.
 
 mod animated_icons;
+mod appearance_preview;
+mod background_noise;
 mod button;
 mod color_picker;
 mod command_palette;
@@ -14,6 +16,8 @@ mod js_dialog;
 mod kbd;
 mod layout;
 mod menu;
+mod theme_gradient;
+mod theme_picker;
 pub(super) use crate::platform::metrics;
 mod modal;
 mod motion;

@@ -294,9 +294,9 @@ impl Render for TaskManagerWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = palette(window, cx);
         v_stack()
-            .id("task-manager-window")
+            .id("task-manager-window").relative()
             .size_full()
-            .bg(palette.window_background())
+            .bg(palette.window_background()).children(palette.gradient_overlay(0.0))
             .text_color(rgb(palette.text_primary))
             .child(titlebar(
                 div()

@@ -20,7 +20,10 @@ use super::super::super::tabs::{TabDragAxis, TabDragMove, tab_list};
 use super::super::super::titlebar::window_drag_area;
 use super::super::super::tooltip::label_tooltip;
 use super::super::super::workspace_layout::{ComponentId, WorkspaceLayout};
-use super::super::super::{ClickHandler, metrics, theme::ThemeColors};
+use super::super::super::{
+    ClickHandler, metrics,
+    theme::{self, ThemeColors},
+};
 use super::super::BrowserWindow;
 
 impl BrowserWindow {
@@ -53,7 +56,7 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let palette = self.palette(window, cx);
+        let palette = theme::chrome_palette(window, cx);
         let layout = WorkspaceLayout::current(cx);
         let sidebar = &self.sidebar;
         let leading = region == DockRegion::Leading;
