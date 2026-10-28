@@ -15,9 +15,13 @@ mod view;
 
 use gpui::{App, Task};
 use photon_core::DockRegion;
+use std::time::Instant;
 
 use super::super::metrics;
-use super::super::motion::{MotionConfig, SIDEBAR_RESIZE_SPRING, Speed, Tween, mix};
+use super::super::motion::{
+    MotionConfig, SIDEBAR_LAYOUT_SPRING, SIDEBAR_RESIZE_SPRING, SIDEBAR_REVEAL_SPRING, Speed,
+    Tween, mix,
+};
 use super::super::settings::Settings;
 use super::super::workspace_layout::WorkspaceLayout;
 
@@ -60,6 +64,10 @@ pub(super) struct SidebarState {
     _save_width: Option<Task<()>>,
     /// The target window control layout, so it changes only when needed.
     window_controls: Option<WindowControls>,
+    /// The moment this frame shows. Every part of the window that follows
+    /// the sidebar samples its motion here, so the sidebar, the page and the
+    /// window controls move in step rather than a few microseconds apart.
+    frame: Instant,
 }
 
 impl SidebarState {
@@ -69,11 +77,11 @@ impl SidebarState {
             visible: true,
             collapsed,
             zen: false,
-            shown: Tween::at(1.0),
-            expanded: Tween::at(progress(!collapsed)),
-            tucked: Tween::at(0.0),
+            shown: Tween::at_with_curve(1.0, SIDEBAR_LAYOUT_SPRING),
+            expanded: Tween::at_with_curve(progress(!collapsed), SIDEBAR_LAYOUT_SPRING),
+            tucked: Tween::at_with_curve(0.0, SIDEBAR_LAYOUT_SPRING),
             revealed: false,
-            reveal: Tween::at(0.0),
+            reveal: Tween::at_with_curve(0.0, SIDEBAR_REVEAL_SPRING),
             pointer_on_edge: false,
             pointer_on_sidebar: false,
             _hide_check: None,
@@ -82,7 +90,13 @@ impl SidebarState {
             resize_dragging: false,
             _save_width: None,
             window_controls: None,
+            frame: Instant::now(),
         }
+    }
+
+    /// Starts a frame: its motion is sampled at this moment until the next.
+    pub(super) fn begin_frame(&mut self) {
+        self.frame = Instant::now();
     }
 
     /// How wide it is with its labels: as dragged, or as saved.
@@ -91,7 +105,7 @@ impl SidebarState {
             WorkspaceLayout::current(cx)
                 .sidebar_extent()
                 .unwrap_or_else(|| Settings::get(cx).sidebar.width()) as f32
-        }) + self.resize_overshoot.value()
+        }) + self.resize_overshoot.value_at(self.frame)
     }
 
     /// How wide it is beside the page, between icons and labels.
@@ -99,7 +113,7 @@ impl SidebarState {
         mix(
             metrics::SIDEBAR_COLLAPSED_WIDTH,
             self.width(cx),
-            self.expanded.value(),
+            self.expanded.value_at(self.frame),
         )
     }
 
@@ -119,7 +133,7 @@ impl SidebarState {
 
     /// How far it is shown beside the page, from 0 to 1.
     pub(super) fn shown(&self) -> f32 {
-        self.shown.value()
+        self.shown.value_at(self.frame)
     }
 
     /// The live panel offset, shared by the sidebar and its native controls.
@@ -133,25 +147,20 @@ impl SidebarState {
         (out - 1.0) * width
     }
 
-    /// How far it is expanded from icons to labels, from 0 to 1.
-    fn expanded(&self) -> f32 {
-        self.expanded.value()
-    }
-
     /// How far the bars around the page are shown, from 0 to 1: Zen mode
     /// tucks them away.
     pub(super) fn chrome_shown(&self) -> f32 {
-        1.0 - self.tucked.value()
+        1.0 - self.tucked.value_at(self.frame)
     }
 
     /// How far it is revealed over the page, from 0 to 1.
     fn revealed(&self) -> f32 {
-        self.reveal.value()
+        self.reveal.value_at(self.frame)
     }
 
     /// Whether it sits over the page, revealed or on its way to being kept.
     pub(super) fn over_page(&self) -> bool {
-        self.revealed || self.reveal.value() > 0.0
+        self.revealed || self.revealed() > 0.0
     }
 
     /// Whether it shows only icons now: collapsed beside the page. Revealed
@@ -170,7 +179,7 @@ impl SidebarState {
                 &self.resize_overshoot,
             ]
             .into_iter()
-            .any(Tween::is_running)
+            .any(|tween| tween.is_running_at(self.frame))
     }
 
     /// Finishes decorative tweens if the application or platform disables motion.
@@ -192,7 +201,7 @@ impl SidebarState {
     /// Once a revealed sidebar has been kept shown and the page has made
     /// room for it, it is no longer revealed.
     pub(super) fn settle(&mut self) {
-        if self.docked() && self.revealed && !self.shown.is_running() {
+        if self.docked() && self.revealed && !self.shown.is_running_at(self.frame) {
             self.revealed = false;
             self.reveal.jump_to(0.0);
         }

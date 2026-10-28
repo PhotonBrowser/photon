@@ -68,14 +68,13 @@ impl BrowserWindow {
         } else {
             sidebar.docked_width(cx)
         };
-        let (content_width, opacity) = if collapsed {
-            (metrics::SIDEBAR_COLLAPSED_WIDTH, 1.0 - sidebar.expanded())
-        } else if over_page {
-            (full_width, 1.0)
+        // The content keeps its resting width while the panel's changes, so
+        // the panel clips it rather than reflowing it every frame.
+        let content_width = if collapsed {
+            metrics::SIDEBAR_COLLAPSED_WIDTH
         } else {
-            (full_width, sidebar.expanded())
+            full_width
         };
-        let opacity = if sidebar.is_moving() { 1.0 } else { opacity };
         // Right-clicking its empty space opens the browser menu.
         let content = v_stack()
             .absolute()
@@ -84,7 +83,6 @@ impl BrowserWindow {
             .when(leading, |content| content.left_0())
             .when(!leading, |content| content.right_0())
             .w(px(content_width))
-            .opacity(opacity)
             .child(self.sidebar_navigation(region, full_width, palette, window, cx))
             .child(
                 div()

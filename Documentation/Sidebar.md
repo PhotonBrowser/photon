@@ -54,7 +54,9 @@ narrow collapses it to a 56-pixel column of icons: favourites, pinned and
 today's tabs as square tiles with "+" for a new tab, and the spaces above the
 browser menu. The address field and the favourites hint are left out. The
 window controls stack vertically at its top, above the sidebar button, which
-expands it again. Labels and icons crossfade while the width animates. The
+expands it again. The sidebar switches between labels and icons as the width
+starts to animate, and the panel clips them at their resting width rather than
+reflowing them every frame. The
 choice is saved in the profile, so new windows open the same way; hiding and
 showing the sidebar keeps it.
 
@@ -69,7 +71,14 @@ mode belongs to its window and is not saved.
 
 The window draws the sidebar as a layer over itself and keeps room for it
 beside the page, each following a `Tween` from
-[`motion.rs`](../crates/photon-shell/src/platform/ui/motion.rs).
+[`motion/`](../crates/photon-shell/src/platform/ui/motion/). Each frame
+samples every sidebar `Tween` at one moment, taken when the window starts
+drawing, so the sidebar, the page beside it and the native window controls
+move in step. Those frames redraw only the window and its chrome: they are not
+changes to the window's state, so the menus and dialogs over the window, the
+menu bar and the saved session are left alone. The sidebar moves on springs,
+so turning it back midway keeps its momentum: see "Motion" in
+[Theme.md](Theme.md).
 [`window/side_dock/`](../crates/photon-shell/src/platform/ui/window/side_dock/)
 keeps where the sidebar is, handles its edges, draws it, and places the
 macOS native window controls through GPUI-CE's `set_traffic_light_axis` and

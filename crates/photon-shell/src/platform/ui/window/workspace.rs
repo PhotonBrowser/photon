@@ -20,6 +20,7 @@ impl Render for BrowserWindow {
         self.favourites_bounds = None;
         let palette = palette(window, cx);
         let animations = super::super::settings::Settings::motion(cx);
+        self.sidebar.begin_frame();
         self.sidebar.settle_if_motion_disabled(&animations);
         if !animations.allows_motion() {
             self.tab_position_animations.clear();
@@ -38,7 +39,7 @@ impl Render for BrowserWindow {
         self.sidebar.settle();
         let moving = self.sidebar.is_moving();
         if moving {
-            window.request_animation_frame();
+            self.request_motion_frame(window, cx);
         }
         if let Some(webview) = self.active_webview() {
             webview.update(cx, |view, _| view.set_layout_animating(moving));
@@ -147,6 +148,21 @@ impl Render for BrowserWindow {
 }
 
 impl BrowserWindow {
+    /// Redraws the window next frame to move the sidebar on, without
+    /// treating the redraw as a change to the window's state, so the
+    /// overlays, menu bar and session are left alone.
+    fn request_motion_frame(&self, window: &mut Window, cx: &mut gpui::Context<Self>) {
+        let browser = cx.entity().downgrade();
+        window.on_next_frame(move |_, cx| {
+            browser
+                .update(cx, |this, cx| {
+                    this.motion_frame = true;
+                    cx.notify();
+                })
+                .ok();
+        });
+    }
+
     /// The page's margins inside the window: room for the bars around it
     /// and the sidebar beside it, with a small inset elsewhere. Zen mode
     /// tucks the bars away, leaving the inset in their place.

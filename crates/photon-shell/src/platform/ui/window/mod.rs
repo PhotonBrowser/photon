@@ -174,6 +174,9 @@ pub(in crate::platform) struct BrowserWindow {
     /// the title, menu bar and session. A page frame alone redraws the window
     /// without notifying it, and changes none of them.
     state_changed: bool,
+    /// Whether the pending notify only advances the sidebar's motion by a
+    /// frame, which moves the chrome and the page but changes no state.
+    motion_frame: bool,
     /// Holds focus when nothing in the window does, such as after a click
     /// on an empty page, so the browser's shortcuts still reach it.
     root_focus: FocusHandle,
@@ -560,10 +563,13 @@ fn open_browser_window(
             });
             let overlays = cx.new(|_| BrowserOverlays { browser });
             // Whatever re-renders the window's own state re-renders the chrome
-            // and the overlays too.
+            // and the overlays too. A motion frame only moves the chrome.
             let chrome_subscription = cx.observe_self(|this, cx| {
-                this.state_changed = true;
                 this.chrome.update(cx, |_, cx| cx.notify());
+                if std::mem::take(&mut this.motion_frame) {
+                    return;
+                }
+                this.state_changed = true;
                 this.overlays.update(cx, |_, cx| cx.notify());
             });
             let omnibox_subscription = cx.subscribe_in(
@@ -658,6 +664,7 @@ fn open_browser_window(
                 root_focus: cx.focus_handle(),
                 window_title: photon_brand::NAME.to_owned(),
                 state_changed: true,
+                motion_frame: false,
                 engine_notice: None,
                 notice_expiry: None,
                 notice_expiry_generation: 0,
