@@ -398,7 +398,7 @@ impl Render for Omnibox {
         let menu_palette = palette(window, cx);
         let palette = super::theme::chrome_palette(window, cx);
         let editing = self.is_editing(window, cx);
-        let workspace_layout = WorkspaceLayout::current(cx);
+        let workspace_layout = WorkspaceLayout::for_window(window, cx);
         let style = FieldStyle::for_layout(workspace_layout.omnibox_placement());
         let centered_sidebar = style.center_text && self.webview.is_some();
         let resting_offset = if centered_sidebar {

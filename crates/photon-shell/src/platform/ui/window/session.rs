@@ -208,7 +208,10 @@ impl BrowserWindow {
     /// The window's everyday tabs: not pinned ones or favourites', which
     /// their spaces reopen.
     fn session_state(&self, cx: &App) -> WindowSession {
-        let mut state = WindowSession::default();
+        let mut state = WindowSession {
+            space: Some(self.current_space(cx)),
+            ..WindowSession::default()
+        };
         for (index, tab) in self.tabs.iter().enumerate() {
             if tab.pin.is_some() || tab.favourite.is_some() {
                 continue;
@@ -233,6 +236,10 @@ impl BrowserWindow {
     /// shows the one that was in use.
     #[cfg(not(feature = "ui-only"))]
     fn restore_tabs(&mut self, saved: &WindowSession, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(space) = saved.space {
+            self.show_space_immediately(space, cx);
+        }
+        let current = self.current_space(cx);
         let first = self.tabs.len();
         let active_position = saved
             .active
@@ -281,7 +288,17 @@ impl BrowserWindow {
                     self.insert_webview_immediately(index, webview, None, false, window, cx);
                 }
             }
-            self.tabs[index].space = tab.space;
+            // Tabs whose space was deleted since join the window's own,
+            // rather than hiding in a space no longer shown.
+            self.tabs[index].space = if super::super::settings::Settings::get(cx)
+                .spaces
+                .get(tab.space)
+                .is_some()
+            {
+                tab.space
+            } else {
+                current
+            };
             if position == active_position {
                 active = Some(index);
             }

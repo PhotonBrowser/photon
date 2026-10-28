@@ -12,7 +12,7 @@ use super::super::settings::Settings;
 use super::super::tabs::{TabDragAxis, TabDragMove, tab_strip};
 use super::super::titlebar::titlebar;
 use super::super::toolbar::toolbar_row;
-use super::super::workspace_layout::{ComponentId, WorkspaceLayout};
+use super::super::workspace_layout::ComponentId;
 use super::super::{ClickHandler, metrics};
 use super::BrowserWindow;
 
@@ -27,7 +27,7 @@ impl BrowserWindow {
         // Measured again as the favourites draw, so a target that is no
         // longer shown stops catching dropped tabs.
         self.favourites_bounds = None;
-        let layout = WorkspaceLayout::current(cx);
+        let layout = self.layout(cx);
         let tucked = 1.0 - self.sidebar.chrome_shown();
         let mut root = div().size_full().relative();
         if tucked < 1.0 {
@@ -69,7 +69,7 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<Div> {
-        let layout = WorkspaceLayout::current(cx);
+        let layout = self.layout(cx);
         let has_tab_strip = layout
             .components(region)
             .any(|component| component.id == ComponentId::TabStrip);
@@ -97,7 +97,7 @@ impl BrowserWindow {
     /// Empty titlebar space that moves the window, above the sidebar when
     /// the tabs are there, or across the window.
     fn blank_titlebar(&self, window: &Window, cx: &mut Context<Self>) -> Div {
-        let layout = WorkspaceLayout::current(cx);
+        let layout = self.layout(cx);
         let area = div().h(px(metrics::TITLEBAR_HEIGHT)).flex_shrink_0();
         let content = if let Some(region) = layout
             .sidebar_region()

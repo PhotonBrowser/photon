@@ -13,7 +13,7 @@ use super::super::super::settings::Settings;
 use super::super::super::tabs::{
     DraggedTab, TabDragAxis, TabDragPayload, TabDragPreview, TabDrop, TabPrepaint,
 };
-use super::super::super::workspace_layout::WorkspaceLayout;
+use super::super::super::window_space::resolve_space;
 use super::super::BrowserWindow;
 use super::super::content::TabContent;
 use super::super::registry::BrowserWindowRegistry;
@@ -607,7 +607,7 @@ impl BrowserWindow {
         if self.favourites_bounds.is_some() {
             return None;
         }
-        let layout = WorkspaceLayout::current(cx);
+        let layout = self.layout(cx);
         let has_favourites_panel = layout.sidebar_region().is_some_and(|region| {
             layout.components(region).any(|component| {
                 component.id == super::super::super::workspace_layout::ComponentId::FavouritesPanel
@@ -619,7 +619,7 @@ impl BrowserWindow {
         {
             return None;
         }
-        let space = Settings::get(cx).spaces.active();
+        let space = resolve_space(self.current_space(cx), cx);
         if !space.favourites.is_empty() || !space.favourites_hint_dismissed {
             return None;
         }

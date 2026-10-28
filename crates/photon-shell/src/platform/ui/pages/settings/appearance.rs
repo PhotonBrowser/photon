@@ -17,7 +17,7 @@ use super::super::change;
 use super::super::layout::{label, secondary_text};
 
 pub(super) fn settings(
-    _window: &mut Window,
+    window: &mut Window,
     palette: ThemeColors,
     cx: &mut App,
     create_preset: ClickHandler,
@@ -52,8 +52,12 @@ pub(super) fn settings(
     })
     .collect();
 
-    let active_space = current.spaces.active();
-    let active_space_id = active_space.id;
+    // The space this window shows, which each window chooses for itself.
+    let active_space_id = super::super::super::window_space::window_space(window, cx).id;
+    let active_space = current
+        .spaces
+        .get(active_space_id)
+        .unwrap_or_else(|| current.spaces.active());
     let active_layout_override = active_space.layout_override.clone();
     let active_preset_override_id = active_space.preset_override_id.clone();
 

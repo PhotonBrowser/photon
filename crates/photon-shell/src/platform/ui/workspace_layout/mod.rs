@@ -3,9 +3,9 @@
 //! The core owns portable layout data. This module knows which placements and
 //! sizes the current shell can render and supplies safe built-in fallbacks.
 
-use gpui::App;
+use gpui::{App, Window};
 use photon_core::{
-    DockRegion, TabLayout, WorkspaceLayout as SavedWorkspaceLayout, WorkspaceSettings,
+    DockRegion, SpaceId, TabLayout, WorkspaceLayout as SavedWorkspaceLayout, WorkspaceSettings,
 };
 use std::rc::Rc;
 
@@ -33,13 +33,21 @@ pub(super) enum OmniboxPlacement {
 }
 
 impl WorkspaceLayout {
-    /// Resolves the active space's named preset or legacy layout, then the profile default.
-    pub(super) fn current(cx: &App) -> Rc<Self> {
-        Settings::layout(cx, Self::resolve)
+    /// Resolves the space's named preset or legacy layout, then the profile default.
+    pub(super) fn current(space: SpaceId, cx: &App) -> Rc<Self> {
+        Settings::layout(space, cx, Self::resolve)
     }
 
-    fn resolve(settings: &photon_core::BrowserSettings) -> Self {
-        let active_space = settings.spaces.active();
+    /// The layout in the space `window` shows.
+    pub(super) fn for_window(window: &Window, cx: &App) -> Rc<Self> {
+        Self::current(super::window_space::window_space(window, cx).id, cx)
+    }
+
+    fn resolve(settings: &photon_core::BrowserSettings, space: SpaceId) -> Self {
+        let active_space = settings
+            .spaces
+            .get(space)
+            .unwrap_or_else(|| settings.spaces.active());
         settings
             .workspace
             .presets

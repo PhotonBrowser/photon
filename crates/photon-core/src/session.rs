@@ -20,6 +20,9 @@ pub struct WindowSession {
     pub tabs: Vec<SessionTab>,
     /// The tab in use, as a position in `tabs`, when it is one of them.
     pub active: Option<usize>,
+    /// The space the window showed. Older sessions lack it, and their
+    /// windows open in the space new windows do.
+    pub space: Option<SpaceId>,
 }
 
 /// A tab's page and the space it belongs to.
@@ -53,5 +56,11 @@ mod tests {
             ..SessionTab::default()
         });
         assert!(!session.is_empty());
+    }
+
+    #[test]
+    fn windows_saved_before_spaces_were_remembered_have_none() {
+        let window: WindowSession = serde_json::from_str(r#"{"tabs":[],"active":null}"#).unwrap();
+        assert_eq!(window.space, None);
     }
 }

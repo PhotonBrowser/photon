@@ -36,6 +36,7 @@ mod tooltip;
 mod webview;
 mod window;
 mod window_controls;
+mod window_space;
 mod workspace_layout;
 mod workspace_preset_fields;
 

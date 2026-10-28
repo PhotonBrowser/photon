@@ -71,7 +71,7 @@ impl SettingsPage {
         let name_observer = cx.observe(&name, |_, _, cx| cx.notify());
         let saved_layout = preset.as_ref().map_or_else(
             || {
-                super::super::super::workspace_layout::WorkspaceLayout::current(cx)
+                super::super::super::workspace_layout::WorkspaceLayout::for_window(window, cx)
                     .saved()
                     .clone()
             },

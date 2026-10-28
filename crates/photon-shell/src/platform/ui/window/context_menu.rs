@@ -8,7 +8,6 @@ use gpui::{
 
 use super::super::menu::{menu_action_with_state, menu_heading, menu_separator, popover_surface};
 use super::super::motion::Transition;
-use super::super::settings::Settings;
 use super::super::{PhotonWebView, SelectDropdown, SelectItem, metrics, theme::ThemeColors};
 use super::BrowserWindow;
 use super::menu::{MenuCommand, command_item};
@@ -398,14 +397,14 @@ impl BrowserWindow {
                 MenuItem::separator(),
             ]);
         }
-        if super::super::workspace_layout::WorkspaceLayout::current(cx).has_sidebar() {
+        if self.layout(cx).has_sidebar() {
             let icons = self.sidebar.docked() && self.sidebar.collapsed();
             items.push(MenuItem::action("Sidebar as Icons", ToggleSidebarIcons).checked(icons));
         }
         items.extend([
             command_item(
                 "Edit Theme…",
-                MenuCommand::EditTheme(Settings::get(cx).spaces.active().id),
+                MenuCommand::EditTheme(self.current_space(cx)),
             ),
             MenuItem::separator(),
             MenuItem::action("Zen Mode", ToggleZenMode).checked(self.sidebar.zen()),

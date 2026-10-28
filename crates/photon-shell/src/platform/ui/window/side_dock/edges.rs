@@ -11,7 +11,6 @@ use super::super::super::controls::OwnsClicks;
 use super::super::super::metrics;
 use super::super::super::motion::Speed;
 use super::super::super::settings::Settings;
-use super::super::super::workspace_layout::WorkspaceLayout;
 use super::super::BrowserWindow;
 use crate::platform::app_update::update_app;
 
@@ -43,7 +42,7 @@ fn at_side<E: Styled>(element: E, region: DockRegion, inset: f32) -> E {
 impl BrowserWindow {
     /// The handle on the page-facing edge of the sidebar.
     pub(super) fn resize_handle(&self, region: DockRegion, cx: &App) -> AnyElement {
-        let layout = WorkspaceLayout::current(cx);
+        let layout = self.layout(cx);
         let handle = div()
             .id("sidebar-resize")
             .absolute()
@@ -69,7 +68,7 @@ impl BrowserWindow {
     ) {
         self.sidebar.resize_dragging = true;
         let x = event.event.position.x;
-        let edge = match WorkspaceLayout::current(cx).sidebar_region() {
+        let edge = match self.layout(cx).sidebar_region() {
             Some(DockRegion::Trailing) => window.viewport_size().width - x,
             _ => x,
         };
@@ -131,7 +130,7 @@ impl BrowserWindow {
     }
 
     fn save_sidebar_width_soon(&mut self, width: u32, cx: &mut Context<Self>) {
-        let space_id = Settings::get(cx).spaces.active().id;
+        let space_id = self.current_space(cx);
         self.sidebar._save_width = Some(cx.spawn(async move |this, cx| {
             cx.background_executor().timer(RESIZE_SAVE_DELAY).await;
             update_app(cx, |cx| {
@@ -171,7 +170,7 @@ impl BrowserWindow {
         region: DockRegion,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let layout = WorkspaceLayout::current(cx);
+        let layout = self.layout(cx);
         let chrome_shown = self.sidebar.chrome_shown();
         let edge = div()
             .id("reveal-sidebar")

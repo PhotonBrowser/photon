@@ -34,7 +34,7 @@ impl Render for BrowserWindow {
             &animations,
             cx,
         );
-        let layout = WorkspaceLayout::current(cx);
+        let layout = self.layout(cx);
         let sidebar_region = layout.sidebar_region();
         self.sidebar.settle();
         let moving = self.sidebar.is_moving();

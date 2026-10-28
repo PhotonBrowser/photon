@@ -8,9 +8,10 @@
 
 use gpui::{App, BorrowAppContext, Global, Task, WindowAppearance};
 use photon_core::SearchEngines;
-use photon_core::{BrowserSettings, ThemeMode};
+use photon_core::{BrowserSettings, SpaceId, ThemeMode};
 use photon_storage::{Profile, ProfileWriteTicket};
-use std::cell::OnceCell;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -52,9 +53,10 @@ pub(super) struct Settings {
     /// The latest config revision written by settings controls in Photon.
     ui_settings_revision: UiSettingsRevision,
     config_reload_notice: Option<ConfigReloadNotice>,
-    /// The workspace layout the settings resolve to, worked out on first
-    /// use after each change, as drawing asks for it many times a frame.
-    layout: OnceCell<Rc<WorkspaceLayout>>,
+    /// The workspace layout the settings resolve to in each space, worked
+    /// out on first use after each change, as drawing asks for it many
+    /// times a frame.
+    layout: RefCell<HashMap<SpaceId, Rc<WorkspaceLayout>>>,
 }
 
 impl Global for Settings {}
@@ -79,7 +81,7 @@ pub(in crate::platform) fn load_settings(
         _reload: reload,
         ui_settings_revision: ui_settings_revision.clone(),
         config_reload_notice: None,
-        layout: OnceCell::new(),
+        layout: RefCell::default(),
     });
     cx.on_app_quit(|cx| {
         let save = cx.update_global::<Settings, _>(|store, _| {
@@ -247,7 +249,7 @@ impl Settings {
             store.save = None;
             if store.settings != settings {
                 store.settings = settings;
-                store.layout = OnceCell::new();
+                store.layout = RefCell::default();
             }
             store.config_reload_notice = Some(ConfigReloadNotice::Reloaded(Instant::now()));
         });
@@ -304,7 +306,7 @@ impl Settings {
     pub(super) fn update(cx: &mut App, update: impl FnOnce(&mut BrowserSettings)) {
         cx.update_global::<Self, _>(|store, cx| {
             update(&mut store.settings);
-            store.layout = OnceCell::new();
+            store.layout = RefCell::default();
             store.save_soon(cx);
         });
     }
@@ -343,15 +345,19 @@ impl Settings {
         }));
     }
 
-    /// The workspace layout, resolved by `resolve` once per change.
+    /// The workspace layout in `space`, resolved by `resolve` once per
+    /// change.
     pub(super) fn layout(
+        space: SpaceId,
         cx: &App,
-        resolve: impl FnOnce(&BrowserSettings) -> WorkspaceLayout,
+        resolve: impl FnOnce(&BrowserSettings, SpaceId) -> WorkspaceLayout,
     ) -> Rc<WorkspaceLayout> {
         let store = cx.global::<Self>();
         store
             .layout
-            .get_or_init(|| Rc::new(resolve(&store.settings)))
+            .borrow_mut()
+            .entry(space)
+            .or_insert_with(|| Rc::new(resolve(&store.settings, space)))
             .clone()
     }
 

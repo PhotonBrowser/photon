@@ -18,15 +18,20 @@ use super::super::settings::Settings;
 use super::super::sidebar::SpaceDot;
 use super::super::space_editor::{SpaceEditor, SpaceEditorEvent};
 use super::super::theme::{ThemeColors, window_color_swatch};
+use super::super::window_space::{resolve_space, set_window_space};
 use super::super::workspace_layout::WorkspaceLayout;
 use super::BrowserWindow;
 use super::menu::{MenuCommand, command_item};
+use super::registry::BrowserWindowRegistry;
 
 /// How far two fingers move sideways across the sidebar to switch space.
 const SWIPE_DISTANCE: f32 = 80.0;
 
 /// The window's view of the spaces.
 pub(super) struct SpacesState {
+    /// The space this window shows. Each window has its own; the settings'
+    /// active space is only where new windows open.
+    current: SpaceId,
     /// The space the window last showed, to notice when it changes.
     shown: SpaceId,
     /// The edge the shown space came in from, and when, so it slides in
@@ -51,6 +56,7 @@ struct SpaceEditing {
 impl SpacesState {
     pub(super) fn new(shown: SpaceId) -> Self {
         Self {
+            current: shown,
             shown,
             switched: Cell::new(None),
             swipe: 0.0,
@@ -76,16 +82,43 @@ impl SpacesState {
 impl BrowserWindow {
     /// The space new tabs join, and whose tabs the sidebar shows.
     pub(super) fn current_space(&self, cx: &gpui::App) -> SpaceId {
-        Settings::get(cx).spaces.active().id
+        resolve_space(self.spaces.current, cx).id
+    }
+
+    /// The workspace layout in the window's space.
+    pub(super) fn layout(&self, cx: &gpui::App) -> std::rc::Rc<WorkspaceLayout> {
+        WorkspaceLayout::current(self.current_space(cx), cx)
+    }
+
+    /// Shows `id`, while it exists, without sliding to it, as when a window
+    /// reopens in the space it showed.
+    #[cfg_attr(feature = "ui-only", allow(dead_code))]
+    pub(super) fn show_space_immediately(&mut self, id: SpaceId, cx: &mut Context<Self>) {
+        if Settings::get(cx).spaces.get(id).is_some() {
+            self.spaces.shown = id;
+            self.set_current_space(id, cx);
+        }
+    }
+
+    /// Records `id` as the space this window shows.
+    fn set_current_space(&mut self, id: SpaceId, cx: &mut Context<Self>) {
+        self.spaces.current = id;
+        set_window_space(self.window_id, id, cx);
     }
 
     /// Whether the window shows one space at a time: in the sidebar. The tab
     /// strip shows every tab.
     pub(super) fn shows_spaces(&self, cx: &gpui::App) -> bool {
-        WorkspaceLayout::current(cx).shows_spaces()
+        self.layout(cx).shows_spaces()
     }
 
     pub(super) fn switch_space(&mut self, id: SpaceId, cx: &mut Context<Self>) {
+        if Settings::get(cx).spaces.get(id).is_none() {
+            return;
+        }
+        self.set_current_space(id, cx);
+        // New windows open in the space last chosen. Updating the settings
+        // also redraws every view in this window, which follows its space.
         Settings::update(cx, |settings| {
             settings.spaces.activate(id);
         });
@@ -93,17 +126,21 @@ impl BrowserWindow {
 
     /// Switches to the space `offset` places along, if there is one.
     pub(super) fn switch_space_by(&mut self, offset: isize, cx: &mut Context<Self>) {
-        if let Some(id) = Settings::get(cx).spaces.neighbour(offset) {
+        let current = self.current_space(cx);
+        if let Some(id) = Settings::get(cx).spaces.neighbour_of(current, offset) {
             self.switch_space(id, cx);
         }
     }
 
-    /// Follows the space shown, which any window may switch: slides the
-    /// sidebar in from the side it came from, and shows that space's most
-    /// recent tab, or a new tab page in a space with none.
+    /// Follows the space this window shows: falls back when it was deleted,
+    /// slides the sidebar in from the side it came from, and shows that
+    /// space's most recent tab, or a new tab page in a space with none.
     pub(super) fn follow_space(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let active = self.current_space(cx);
+        if active != self.spaces.current {
+            self.set_current_space(active, cx);
+        }
         let spaces = &Settings::get(cx).spaces;
-        let active = spaces.active().id;
         if self.theme_picker_space.is_some_and(|space| space != active) {
             self.theme_picker_space = None;
         }
@@ -178,8 +215,8 @@ impl BrowserWindow {
 
     /// The footer's dots, one per space.
     pub(super) fn space_dots(&self, palette: ThemeColors, cx: &mut Context<Self>) -> Vec<SpaceDot> {
+        let active = self.current_space(cx);
         let spaces = &Settings::get(cx).spaces;
-        let active = spaces.active().id;
         spaces
             .all()
             .iter()
@@ -280,6 +317,7 @@ impl BrowserWindow {
                 .map(|space| space.name.clone());
             let created_preset = new_preset.is_some();
             let mut saved = false;
+            let mut created = None;
             Settings::update(cx, |settings| {
                 let preset_id = new_preset
                     .clone()
@@ -309,7 +347,10 @@ impl BrowserWindow {
                             color,
                             colors.colors().len() > 1,
                         );
+                        // The new space opens in this window and the next
+                        // new windows, not in other open windows.
                         settings.spaces.activate(id);
+                        created = Some(id);
                         id
                     }
                 };
@@ -317,10 +358,14 @@ impl BrowserWindow {
                     space.set_colors(colors);
                 }
                 if let Some(transparency) = transparency {
-                    let active_has_colors =
-                        !super::super::theme::space_colors(settings.spaces.active())
-                            .colors()
-                            .is_empty();
+                    let active_has_colors = !super::super::theme::space_colors(
+                        settings
+                            .spaces
+                            .get(space_id)
+                            .unwrap_or_else(|| settings.spaces.active()),
+                    )
+                    .colors()
+                    .is_empty();
                     if !active_has_colors
                         || transparency
                             == super::super::appearance_preview::AppearancePreview::subtle_transparency()
@@ -341,6 +386,9 @@ impl BrowserWindow {
                 }
                 saved = true;
             });
+            if let Some(id) = created {
+                self.set_current_space(id, cx);
+            }
             if saved {
                 let renamed = previous_name
                     .as_deref()
@@ -379,6 +427,18 @@ impl BrowserWindow {
             .spaces
             .get(id)
             .map(|space| space.name.clone());
+        // Windows showing the space move to the one after it, or before it
+        // when it was last.
+        let fallback = {
+            let spaces = Settings::get(cx).spaces.all();
+            let index = spaces.iter().position(|space| space.id == id);
+            index.and_then(|index| {
+                spaces
+                    .get(index + 1)
+                    .or_else(|| index.checked_sub(1).and_then(|index| spaces.get(index)))
+                    .map(|space| space.id)
+            })
+        };
         let mut removed = false;
         Settings::update(cx, |settings| removed = settings.spaces.remove(id));
         if !removed {
@@ -391,6 +451,35 @@ impl BrowserWindow {
             ),
             cx,
         );
+        self.close_deleted_space_tabs(id, fallback, window, cx);
+        // Other windows lose their tabs in the space the same way.
+        let current = window.window_handle().window_id();
+        for handle in BrowserWindowRegistry::ordered_handles(cx) {
+            if handle.window_id() == current {
+                continue;
+            }
+            if let Some(other) = handle.downcast::<BrowserWindow>() {
+                let _ = other.update(cx, |browser, window, cx| {
+                    browser.close_deleted_space_tabs(id, fallback, window, cx);
+                });
+            }
+        }
+    }
+
+    /// Moves to `fallback` if the window showed `id`, which was deleted, and
+    /// closes the tabs left in it, keeping the window's last tab.
+    fn close_deleted_space_tabs(
+        &mut self,
+        id: SpaceId,
+        fallback: Option<SpaceId>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.spaces.current == id
+            && let Some(fallback) = fallback
+        {
+            self.set_current_space(fallback, cx);
+        }
         self.follow_space(window, cx);
         for index in (0..self.tabs.len()).rev() {
             if self.tabs[index].space == id && self.tabs.len() > 1 {

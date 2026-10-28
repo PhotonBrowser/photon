@@ -90,7 +90,7 @@ pub(super) fn palette(window: &Window, cx: &App) -> ThemeColors {
     let settings = Settings::get(cx);
     let appearance = Settings::appearance(window.appearance(), cx);
     let preview = AppearancePreview::get(cx);
-    let active = settings.spaces.active();
+    let active = super::window_space::window_space(window, cx);
     let (color, colors) = preview
         .tint
         .filter(|(id, _, _)| *id == active.id)
@@ -101,12 +101,12 @@ pub(super) fn palette(window: &Window, cx: &App) -> ThemeColors {
         WindowStyle {
             transparency: settings.transparency,
             color,
-            gradient: settings.spaces.active().gradient,
+            gradient: active.gradient,
             tint: colors
                 .primary()
                 .or_else(|| Some(default_tint(window.appearance()))),
             colors: Some(colors),
-            transparency_percent: Some(AppearancePreview::transparency(cx)),
+            transparency_percent: Some(AppearancePreview::transparency_in(active, cx)),
         },
     );
     // Live drags update colour surfaces without rasterizing a new SVG logo per frame.
@@ -633,6 +633,7 @@ pub(super) fn chrome_palette(window: &Window, cx: &App) -> ThemeColors {
             &crate::platform::theme_config::theme().picker.ink_light,
         ));
     let settings = Settings::get(cx);
+    let space = super::window_space::window_space(window, cx);
     let chrome = ThemeColors::for_appearance(
         if dark {
             WindowAppearance::Dark
@@ -641,11 +642,11 @@ pub(super) fn chrome_palette(window: &Window, cx: &App) -> ThemeColors {
         },
         WindowStyle {
             transparency: settings.transparency,
-            color: settings.spaces.active().color,
-            gradient: settings.spaces.active().gradient,
-            tint: settings.spaces.active().tint,
-            colors: settings.spaces.active().colors,
-            transparency_percent: Some(AppearancePreview::transparency(cx)),
+            color: space.color,
+            gradient: space.gradient,
+            tint: space.tint,
+            colors: space.colors,
+            transparency_percent: Some(AppearancePreview::transparency_in(space, cx)),
         },
     );
     result.text_primary = ink;

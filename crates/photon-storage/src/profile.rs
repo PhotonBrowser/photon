@@ -1209,6 +1209,7 @@ mod tests {
                     space: 1,
                 }],
                 active: Some(0),
+                space: None,
             }],
         };
         profile.0.save_session(&session).expect("saves");
@@ -1564,6 +1565,7 @@ mod tests {
                     space: 1,
                 }],
                 active: Some(0),
+                space: None,
             }],
         };
         let newer_session = Session {
@@ -1574,6 +1576,7 @@ mod tests {
                     space: 1,
                 }],
                 active: Some(0),
+                space: None,
             }],
         };
         let older_session_ticket = profile.begin_session_write();

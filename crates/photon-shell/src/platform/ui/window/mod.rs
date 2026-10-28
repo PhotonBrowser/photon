@@ -613,7 +613,7 @@ fn open_browser_window(
                 window_id: registry_window_id,
                 chrome,
                 overlays,
-                sidebar: SidebarState::new(cx),
+                sidebar: SidebarState::new(registry_window_id, cx),
                 spaces: SpacesState::new(Settings::get(cx).spaces.active().id),
                 theme_picker_space: None,
                 theme_picker_anchor: None,
@@ -698,9 +698,12 @@ fn open_browser_window(
                         BrowserWindow::forget_session(key, cx);
                         AlertCenter::remove_window(registry_window_id, cx);
                         BrowserWindowRegistry::unregister_window(registry_window_id, cx);
+                        super::window_space::forget_window_space(registry_window_id, cx);
                     })
                 },
             };
+            let space = browser.current_space(cx);
+            super::window_space::set_window_space(registry_window_id, space, cx);
             browser.bind_tab_reorder_groups(cx);
             match (initial_webview, startup_page) {
                 (Some(webview), _) => {

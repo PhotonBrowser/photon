@@ -4,7 +4,7 @@
 use gpui::{App, Context, Window};
 
 use super::super::super::settings::Settings;
-use super::super::super::workspace_layout::{OmniboxPlacement, WorkspaceLayout};
+use super::super::super::workspace_layout::OmniboxPlacement;
 use super::super::BrowserWindow;
 use crate::platform::window_settings;
 
@@ -13,7 +13,7 @@ impl BrowserWindow {
     /// revealed sidebar is kept open with its labels. The horizontal layout
     /// has none.
     pub(in super::super) fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
-        if !WorkspaceLayout::current(cx).has_sidebar() {
+        if !self.layout(cx).has_sidebar() {
             return;
         }
         if self.sidebar.over_page() {
@@ -38,7 +38,7 @@ impl BrowserWindow {
     /// Collapses the sidebar to icons, or expands it again. A hidden
     /// sidebar comes back as icons.
     pub(in super::super) fn toggle_sidebar_icons(&mut self, cx: &mut Context<Self>) {
-        if !WorkspaceLayout::current(cx).has_sidebar() {
+        if !self.layout(cx).has_sidebar() {
             return;
         }
         let collapsed = !(self.sidebar.docked() && self.sidebar.collapsed);
@@ -62,7 +62,7 @@ impl BrowserWindow {
     /// Shows the address field: leaves Zen mode, and expands the sidebar
     /// when the field lives there.
     pub(in super::super) fn show_address_field(&mut self, cx: &mut Context<Self>) {
-        let layout = WorkspaceLayout::current(cx);
+        let layout = self.layout(cx);
         if layout.has_sidebar() && layout.omnibox_placement() == OmniboxPlacement::Sidebar {
             self.keep_sidebar(false, cx);
         } else if self.sidebar.set_zen(false, cx) {
@@ -95,7 +95,7 @@ impl BrowserWindow {
     /// keeps its custom controls at the titlebar's trailing edge.
     pub(in super::super) fn place_window_controls(&mut self, window: &Window, cx: &App) {
         let animations = Settings::get(cx).animations;
-        let region = WorkspaceLayout::current(cx).sidebar_region();
+        let region = self.layout(cx).sidebar_region();
         let controls = self.sidebar.window_controls(region);
         let offset = if region == Some(photon_core::DockRegion::Leading) {
             self.sidebar.panel_offset(cx)

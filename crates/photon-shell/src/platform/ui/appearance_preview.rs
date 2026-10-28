@@ -27,8 +27,7 @@ impl AppearancePreview {
             Self::default().publish(cx);
         }
     }
-    fn has_colors(cx: &App) -> bool {
-        let active = Settings::get(cx).spaces.active();
+    fn has_colors(active: &photon_core::Space, cx: &App) -> bool {
         let colors = Self::get(cx)
             .tint
             .filter(|(id, _, _)| *id == active.id)
@@ -45,9 +44,16 @@ impl AppearancePreview {
             * 100.0)
             .round() as u8
     }
+    /// The window transparency in the space new windows open in.
+    #[cfg(test)]
     pub fn transparency(cx: &App) -> u8 {
+        Self::transparency_in(Settings::get(cx).spaces.active(), cx)
+    }
+    /// The window transparency in `space`, which follows the system's
+    /// subtle look while the space has no colours.
+    pub fn transparency_in(space: &photon_core::Space, cx: &App) -> u8 {
         let settings = Settings::get(cx);
-        if !Self::has_colors(cx) {
+        if !Self::has_colors(space, cx) {
             return ((1.0
                 - crate::platform::theme_config::theme()
                     .transparency

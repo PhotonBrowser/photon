@@ -7,7 +7,6 @@ use super::super::controls::OwnsClicks;
 use super::super::motion::{AnimateIn, theme_picker_entrance};
 use super::super::settings::Settings;
 use super::super::theme;
-use super::super::workspace_layout::WorkspaceLayout;
 use super::super::{metrics, theme_picker};
 use super::BrowserWindow;
 
@@ -122,7 +121,7 @@ impl BrowserWindow {
         let height = metrics::PICKER_POPUP_HEIGHT;
         let inset = metrics::PAGE_INSET;
         let gap = metrics::PAGE_INSET + metrics::PAGE_CHROME_GAP;
-        let layout = WorkspaceLayout::current(cx);
+        let layout = self.layout(cx);
         let region = layout.sidebar_region();
         let sidebar_width = if self.sidebar.over_page() || !self.sidebar.collapsed() {
             self.sidebar.width(cx)

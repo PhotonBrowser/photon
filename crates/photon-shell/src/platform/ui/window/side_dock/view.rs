@@ -19,7 +19,8 @@ use super::super::super::sidebar::{
 use super::super::super::tabs::{TabDragAxis, TabDragMove, tab_list};
 use super::super::super::titlebar::window_drag_area;
 use super::super::super::tooltip::label_tooltip;
-use super::super::super::workspace_layout::{ComponentId, WorkspaceLayout};
+use super::super::super::window_space::resolve_space;
+use super::super::super::workspace_layout::ComponentId;
 use super::super::super::{
     ClickHandler, metrics,
     theme::{self, ThemeColors},
@@ -57,7 +58,7 @@ impl BrowserWindow {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let palette = theme::chrome_palette(window, cx);
-        let layout = WorkspaceLayout::current(cx);
+        let layout = self.layout(cx);
         let sidebar = &self.sidebar;
         let leading = region == DockRegion::Leading;
         let over_page = sidebar.over_page();
@@ -144,7 +145,7 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
-        let layout = WorkspaceLayout::current(cx);
+        let layout = self.layout(cx);
         let leading = region == DockRegion::Leading;
         let fullscreen = window.is_fullscreen() || window.is_simple_fullscreen();
         let has_toggle = layout
@@ -232,7 +233,7 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let layout = WorkspaceLayout::current(cx);
+        let layout = self.layout(cx);
         let sections = layout
             .components(region)
             .filter_map(|component| match component.id {
@@ -268,7 +269,7 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        let space = Settings::get(cx).spaces.active();
+        let space = resolve_space(self.current_space(cx), cx);
         let (space_id, saved, hint_dismissed) = (
             space.id,
             space.favourites.clone(),

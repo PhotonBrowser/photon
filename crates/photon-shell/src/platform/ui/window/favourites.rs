@@ -28,7 +28,7 @@ impl BrowserWindow {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> Vec<FavouriteTile> {
-        let active_space = Settings::get(cx).spaces.active().id;
+        let active_space = self.current_space(cx);
         let active_favourite = self
             .active_tab
             .and_then(|index| self.tabs.get(index))
@@ -220,7 +220,7 @@ impl BrowserWindow {
     /// The menu for the favourite at `index`: close its tab while open, or
     /// remove it.
     fn favourite_menu_items(&self, index: usize, cx: &Context<Self>) -> Vec<MenuItem> {
-        let space = Settings::get(cx).spaces.active().id;
+        let space = self.current_space(cx);
         let url = Settings::get(cx)
             .spaces
             .get(space)

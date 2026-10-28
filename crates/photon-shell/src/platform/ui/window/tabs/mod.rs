@@ -12,7 +12,6 @@ use super::super::icons::LOADING_SPINNER_STEPS;
 use super::super::pages::{NEW_TAB, PageDefinition, find_page};
 use super::super::settings::Settings;
 use super::super::tabs::{ICON_ENTRANCE, TabDragAxis, TabIcon};
-use super::super::workspace_layout::WorkspaceLayout;
 use super::BrowserWindow;
 use super::content::{
     BrowserTab, TabContent, create_webview, create_webview_from_session, follow_appearance,
@@ -40,7 +39,7 @@ struct TabInsertionOptions {
 
 impl BrowserWindow {
     pub(super) fn tab_axis(&self, cx: &App) -> TabDragAxis {
-        if WorkspaceLayout::current(cx).saved().tab_layout() == photon_core::TabLayout::Vertical {
+        if self.layout(cx).saved().tab_layout() == photon_core::TabLayout::Vertical {
             TabDragAxis::Vertical
         } else {
             TabDragAxis::Horizontal
@@ -814,7 +813,7 @@ impl BrowserWindow {
     /// Zen mode has not tucked away, or in a sidebar that is shown or
     /// revealed. Showing them again redraws them at the current step.
     fn tabs_on_screen(&self, cx: &App) -> bool {
-        let layout = WorkspaceLayout::current(cx);
+        let layout = self.layout(cx);
         (layout.has_tab_strip() && self.sidebar.chrome_shown() > 0.0)
             || (layout.has_sidebar() && (self.sidebar.shown() > 0.0 || self.sidebar.over_page()))
     }

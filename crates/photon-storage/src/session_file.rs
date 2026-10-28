@@ -110,7 +110,15 @@ pub(crate) fn decode(bytes: &[u8]) -> super::ProfileLoadOutcome<Session> {
                 }
             },
         };
-        windows.push(photon_core::WindowSession { tabs, active });
+        // A damaged space only loses which space the window showed.
+        let space = fields
+            .get("space")
+            .and_then(|value| serde_json::from_value(value.clone()).ok());
+        windows.push(photon_core::WindowSession {
+            tabs,
+            active,
+            space,
+        });
     }
 
     let session = Session { windows };
@@ -319,6 +327,7 @@ mod tests {
             windows: vec![photon_core::WindowSession {
                 tabs: Vec::new(),
                 active: Some(0),
+                space: None,
             }],
         };
         assert!(encode(&session).is_err());

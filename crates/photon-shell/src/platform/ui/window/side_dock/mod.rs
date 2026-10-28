@@ -68,10 +68,12 @@ pub(super) struct SidebarState {
     /// the sidebar samples its motion here, so the sidebar, the page and the
     /// window controls move in step rather than a few microseconds apart.
     frame: Instant,
+    /// The window it is in, whose space chooses its layout.
+    window_id: u64,
 }
 
 impl SidebarState {
-    pub(super) fn new(cx: &App) -> Self {
+    pub(super) fn new(window_id: u64, cx: &App) -> Self {
         let collapsed = Settings::get(cx).sidebar.collapsed;
         Self {
             visible: true,
@@ -91,7 +93,14 @@ impl SidebarState {
             _save_width: None,
             window_controls: None,
             frame: Instant::now(),
+            window_id,
         }
+    }
+
+    /// The workspace layout in its window's space.
+    fn layout(&self, cx: &App) -> std::rc::Rc<WorkspaceLayout> {
+        let space = super::super::window_space::space_of(self.window_id, cx).id;
+        WorkspaceLayout::current(space, cx)
     }
 
     /// Starts a frame: its motion is sampled at this moment until the next.
@@ -102,7 +111,7 @@ impl SidebarState {
     /// How wide it is with its labels: as dragged, or as saved.
     pub(super) fn width(&self, cx: &App) -> f32 {
         self.dragged_width.unwrap_or_else(|| {
-            WorkspaceLayout::current(cx)
+            self.layout(cx)
                 .sidebar_extent()
                 .unwrap_or_else(|| Settings::get(cx).sidebar.width()) as f32
         }) + self.resize_overshoot.value_at(self.frame)

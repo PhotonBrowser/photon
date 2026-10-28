@@ -6,7 +6,6 @@ use photon_core::{BrowserCommand, Command, CommandAvailability, WindowSession};
 use super::super::super::engine::ZoomStep;
 use super::super::pages::SETTINGS;
 use super::super::settings::Settings;
-use super::super::workspace_layout::WorkspaceLayout;
 use super::BrowserWindow;
 
 impl BrowserWindow {
@@ -72,7 +71,7 @@ impl BrowserWindow {
 
     /// Capabilities used to validate registered commands for this window.
     pub(super) fn command_availability(&self, cx: &App) -> CommandAvailability {
-        let layout = WorkspaceLayout::current(cx);
+        let layout = self.layout(cx);
         let shows_spaces = layout.shows_spaces();
         let spaces = &Settings::get(cx).spaces;
         let active_webview = self.active_webview();
@@ -88,8 +87,10 @@ impl BrowserWindow {
             is_loading: page_state.is_some_and(|state| state.loading),
             has_sidebar: layout.has_sidebar(),
             shows_spaces,
-            has_next_space: shows_spaces && spaces.neighbour(1).is_some(),
-            has_previous_space: shows_spaces && spaces.neighbour(-1).is_some(),
+            has_next_space: shows_spaces
+                && spaces.neighbour_of(self.current_space(cx), 1).is_some(),
+            has_previous_space: shows_spaces
+                && spaces.neighbour_of(self.current_space(cx), -1).is_some(),
         }
     }
 }

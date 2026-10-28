@@ -253,10 +253,13 @@ impl Spaces {
 
     /// The space `offset` places from the one shown, stopping at the ends.
     pub fn neighbour(&self, offset: isize) -> Option<SpaceId> {
+        self.neighbour_of(self.active().id, offset)
+    }
+
+    /// The space `offset` places from `id`, stopping at the ends.
+    pub fn neighbour_of(&self, id: SpaceId, offset: isize) -> Option<SpaceId> {
         let spaces = self.all();
-        let index = spaces
-            .iter()
-            .position(|space| space.id == self.active().id)?;
+        let index = spaces.iter().position(|space| space.id == id)?;
         let next = index.checked_add_signed(offset)?;
         spaces.get(next).map(|space| space.id)
     }

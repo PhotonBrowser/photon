@@ -221,6 +221,14 @@ impl PickerState {
         )
     }
 
+    /// The space the picker changes, or the default when it changes none.
+    fn shown_space(space: Option<photon_core::SpaceId>, cx: &App) -> &photon_core::Space {
+        let spaces = &Settings::get(cx).spaces;
+        space
+            .and_then(|space| spaces.get(space))
+            .unwrap_or_else(|| spaces.active())
+    }
+
     fn new_for_space(
         color: WindowColor,
         colors: SpaceColors,
@@ -231,9 +239,9 @@ impl PickerState {
     ) -> Self {
         let owner = cx.entity_id();
         let release = cx.on_release(move |_, cx| AppearancePreview::clear(owner, cx));
-        let transparency = appearance
-            .transparency
-            .unwrap_or_else(|| AppearancePreview::transparency(cx));
+        let transparency = appearance.transparency.unwrap_or_else(|| {
+            AppearancePreview::transparency_in(Self::shown_space(space, cx), cx)
+        });
         let noise = appearance
             .noise
             .unwrap_or_else(|| Settings::get(cx).background_noise_intensity);
@@ -273,10 +281,9 @@ impl PickerState {
     }
     fn sync_appearance(&mut self, cx: &App) {
         if self.dragging.is_none() && !self.dirty_transparency {
-            self.transparency = self
-                .appearance
-                .transparency
-                .unwrap_or_else(|| AppearancePreview::transparency(cx));
+            self.transparency = self.appearance.transparency.unwrap_or_else(|| {
+                AppearancePreview::transparency_in(Self::shown_space(self.space, cx), cx)
+            });
             self.intensity_position = f32::from(100 - self.transparency) / 100.0;
         }
         if self.dragging.is_none() && !self.dirty_noise {
@@ -316,11 +323,8 @@ impl PickerState {
         AppearancePreview {
             owner: Some(cx.entity_id()),
             tint: self.space.and_then(|space| {
-                (self.dirty_tint && space == Settings::get(cx).spaces.active().id).then_some((
-                    space,
-                    self.color,
-                    self.colors(),
-                ))
+                self.dirty_tint
+                    .then_some((space, self.color, self.colors()))
             }),
             transparency: self.dirty_transparency.then_some(self.transparency),
             noise: self.dirty_noise.then_some(self.noise),
