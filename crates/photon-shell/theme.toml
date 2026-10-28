@@ -96,6 +96,18 @@ surface_hover = 0.09
 accent_hover_blend = 0.12
 soft_accent_border = 0.48
 
+# Theme picker popover motion; tune here without adding user facing settings.
+[motion.theme_picker]
+# The popover stays mounted for three quarters of this duration on close.
+duration_ms = 360
+scale_from = 0.92
+
+# Higher stiffness is quicker; lower damping relative to stiffness adds bounce.
+[motion.theme_picker.spring]
+stiffness = 1100.0
+damping = 32.0
+mass = 1.0
+
 [transparency.off]
 window = 1.0
 # Internal pages remain translucent over the window theme even with an opaque window.

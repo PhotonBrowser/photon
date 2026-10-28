@@ -4,19 +4,12 @@ use gpui::{AnyElement, Context, KeyDownEvent, MouseButton, Role, Window, div, pr
 use photon_core::{DockRegion, SpaceId};
 
 use super::super::controls::OwnsClicks;
-use super::super::motion::{AnimateIn, Edge, Entrance, Speed, distance};
+use super::super::motion::{AnimateIn, theme_picker_entrance};
 use super::super::settings::Settings;
 use super::super::theme;
 use super::super::workspace_layout::WorkspaceLayout;
 use super::super::{metrics, theme_picker};
 use super::BrowserWindow;
-
-fn picker_motion(edge: Edge) -> Entrance {
-    Entrance::new()
-        .fade_from(0.0)
-        .slide_from(edge, distance::SHIFT)
-        .speed(Speed::Quick)
-}
 
 impl BrowserWindow {
     pub(super) fn show_theme_picker(
@@ -58,12 +51,10 @@ impl BrowserWindow {
             self.theme_picker_space = None;
         }
         let animations = Settings::motion(cx);
-        let (space_id, transition) = self.theme_picker_presence.sync(
-            requested,
-            picker_motion(self.picker_popup_edge(cx)),
-            &animations,
-            cx,
-        )?;
+        let picker_motion = theme_picker_entrance(metrics::PICKER_WIDTH);
+        let (space_id, transition) =
+            self.theme_picker_presence
+                .sync(requested, picker_motion, &animations, cx)?;
         let space = Settings::get(cx).spaces.get(space_id)?.clone();
         let (left, top) = self.picker_popup_position(window, cx);
         let dialog_label = format!("Edit theme for {}", space.name);
@@ -88,9 +79,9 @@ impl BrowserWindow {
                     .owns_clicks()
                     .child(picker),
             )
-            .animate_with_offset(
+            .animate_with_offset_stable_id(
                 "window-theme-picker-panel-motion",
-                picker_motion(self.picker_popup_edge(cx)),
+                picker_motion,
                 transition,
                 &animations,
                 (left, top),
@@ -121,14 +112,6 @@ impl BrowserWindow {
                 }));
         }
         Some(overlay.into_any_element())
-    }
-
-    fn picker_popup_edge(&self, cx: &Context<Self>) -> Edge {
-        match WorkspaceLayout::current(cx).sidebar_region() {
-            Some(DockRegion::Leading) => Edge::Left,
-            Some(DockRegion::Trailing) => Edge::Right,
-            _ => Edge::Top,
-        }
     }
 
     fn picker_popup_position(&self, window: &Window, cx: &Context<Self>) -> (f32, f32) {

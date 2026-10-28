@@ -13,6 +13,7 @@ pub(crate) struct ThemeDefinition {
     pub(crate) transparency: TransparencyTokens,
     pub(crate) window: WindowTokens,
     pub(crate) radii: RadiusTokens,
+    pub(crate) motion: MotionTokens,
     pub(crate) picker: PickerTokens,
 }
 
@@ -152,6 +153,25 @@ pub(crate) struct RadiusTokens {
     pub(crate) sidebar_reveal: f32,
 }
 
+#[derive(Deserialize)]
+pub(crate) struct MotionTokens {
+    pub(crate) theme_picker: ThemePickerMotionTokens,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct ThemePickerMotionTokens {
+    pub(crate) duration_ms: u64,
+    pub(crate) scale_from: f32,
+    pub(crate) spring: SpringTokens,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct SpringTokens {
+    pub(crate) stiffness: f32,
+    pub(crate) damping: f32,
+    pub(crate) mass: f32,
+}
+
 pub(crate) fn theme() -> &'static ThemeDefinition {
     static THEME: OnceLock<ThemeDefinition> = OnceLock::new();
     THEME.get_or_init(|| {
@@ -228,6 +248,26 @@ fn validate_theme(theme: &ThemeDefinition) {
         assert!(
             value.is_finite() && (0.0..=1.0).contains(&value),
             "theme opacity token {name} must be between 0 and 1"
+        );
+    }
+
+    let picker_motion = &theme.motion.theme_picker;
+    assert!(
+        (1..=5_000).contains(&picker_motion.duration_ms),
+        "theme picker motion duration must be between 1 and 5000 ms"
+    );
+    assert!(
+        picker_motion.scale_from.is_finite() && (0.2..=1.0).contains(&picker_motion.scale_from),
+        "theme picker starting scale must be between 0.2 and 1.0"
+    );
+    for (name, value) in [
+        ("stiffness", picker_motion.spring.stiffness),
+        ("damping", picker_motion.spring.damping),
+        ("mass", picker_motion.spring.mass),
+    ] {
+        assert!(
+            value.is_finite() && value > 0.0,
+            "theme picker spring {name} must be positive and finite"
         );
     }
 

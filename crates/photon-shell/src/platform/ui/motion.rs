@@ -265,6 +265,7 @@ pub(super) struct Entrance {
     blur_from: Option<f32>,
     grow: Option<(f32, f32)>,
     scale_from: Option<f32>,
+    scale_origin_left: Option<f32>,
 }
 
 impl Entrance {
@@ -279,11 +280,18 @@ impl Entrance {
             blur_from: None,
             grow: None,
             scale_from: None,
+            scale_origin_left: None,
         }
     }
 
     pub const fn scale_from(mut self, scale: f32) -> Self {
         self.scale_from = Some(scale);
+        self
+    }
+
+    pub const fn scale_from_left(mut self, scale: f32, width: f32) -> Self {
+        self.scale_from = Some(scale);
+        self.scale_origin_left = Some(width);
         self
     }
 
@@ -382,6 +390,7 @@ impl Entrance {
         let strength = config.effect_strength.clamp(0.0, 3.0);
         let mut shown = Target::default();
         let mut hidden = Target::default();
+        let mut hidden_x = base_offset.0;
 
         if let Some(opacity) = self.opacity_from {
             shown = shown.opacity(1.0);
@@ -389,9 +398,8 @@ impl Entrance {
         }
         if let Some((x, y)) = self.offset_from {
             shown = shown.x(base_offset.0).y(base_offset.1);
-            hidden = hidden
-                .x(base_offset.0 + x * strength)
-                .y(base_offset.1 + y * strength);
+            hidden_x = base_offset.0 + x * strength;
+            hidden = hidden.x(hidden_x).y(base_offset.1 + y * strength);
         }
         if let Some((size, fraction)) = self.grow {
             let start = (1.0 - (1.0 - fraction) * strength).clamp(0.2, 1.0);
@@ -402,6 +410,11 @@ impl Entrance {
             let start = (1.0 - (1.0 - from) * strength).clamp(0.2, 1.0);
             shown = shown.scale(1.0);
             hidden = hidden.scale(start);
+            if let Some(width) = self.scale_origin_left {
+                shown = shown.x(base_offset.0);
+                hidden_x += (start - 1.0) * width * 0.5;
+                hidden = hidden.x(hidden_x);
+            }
         }
 
         (
@@ -416,6 +429,19 @@ impl Default for Entrance {
     fn default() -> Self {
         Self::new()
     }
+}
+
+pub(super) fn theme_picker_entrance(width: f32) -> Entrance {
+    let tokens = &crate::platform::theme_config::theme().motion.theme_picker;
+    Entrance::new()
+        .fade_from(0.0)
+        .scale_from_left(tokens.scale_from, width)
+        .curve(Curve::Spring(SpringConfig::new(
+            tokens.spring.stiffness,
+            tokens.spring.damping,
+            tokens.spring.mass,
+        )))
+        .duration(Duration::from_millis(tokens.duration_ms))
 }
 
 /// Whether an item is appearing or leaving.
@@ -527,6 +553,18 @@ pub(super) trait AnimateIn: Styled + gpui::IntoElement + Sized + 'static {
         } else {
             id
         };
+        apply_entrance(self, id, entrance, transition, config, base_offset)
+    }
+
+    /// Reuses the same motion ID on enter and exit so keyed child state keeps its identity.
+    fn animate_with_offset_stable_id(
+        self,
+        id: impl Into<ElementId>,
+        entrance: Entrance,
+        transition: Transition,
+        config: &MotionConfig,
+        base_offset: (f32, f32),
+    ) -> gpui::AnyElement {
         apply_entrance(self, id, entrance, transition, config, base_offset)
     }
 }
