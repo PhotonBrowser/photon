@@ -513,6 +513,7 @@ fn open_browser_window(
                 cx.observe_window_appearance(window, |this: &mut BrowserWindow, window, cx| {
                     this.update_page_color_schemes(window, cx);
                     this.preview_foreground = None;
+                    this.backdrop.update(cx, |_, cx| cx.notify());
                     cx.notify();
                 });
             let activation_subscription =

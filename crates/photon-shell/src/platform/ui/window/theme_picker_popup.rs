@@ -26,7 +26,7 @@ impl BrowserWindow {
         cx.notify();
     }
 
-    fn dismiss_theme_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn dismiss_theme_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.theme_picker_space.take().is_some() {
             if let Some(active_tab) = self.active_tab {
                 self.activate_tab(active_tab, true, window, cx);

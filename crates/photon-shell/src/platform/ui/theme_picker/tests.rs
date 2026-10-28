@@ -171,6 +171,48 @@ fn intensity_changes_alpha_in_realtime_without_whitening_the_colour(cx: &mut gpu
     });
 }
 
+#[gpui::test]
+fn staged_space_appearance_survives_picker_sync_and_flush(cx: &mut gpui::TestAppContext) {
+    let settings = photon_core::BrowserSettings {
+        transparency_percent: Some(82),
+        background_noise_intensity: 2,
+        ..Default::default()
+    };
+    let space = settings.spaces.active().id;
+    cx.update(|cx| super::super::settings::load_settings(None, settings, None, cx));
+
+    let appearance = PickerAppearance {
+        transparency: Some(37),
+        noise: Some(11),
+    };
+    let (picker, cx) = cx.add_window_view(|_, cx| {
+        PickerState::new_for_space(
+            WindowColor::Blue,
+            SpaceColors::from_colors(&[SpaceTint::default()]),
+            Some(space),
+            appearance,
+            Rc::new(|_, _, _, _, _| {}),
+            cx,
+        )
+    });
+
+    cx.update(|_, cx| {
+        picker.update(cx, |picker, cx| {
+            picker.sync_appearance(cx);
+            assert_eq!(picker.transparency, 37);
+            assert_eq!(picker.noise, 11);
+
+            picker.dirty_transparency = true;
+            picker.dirty_noise = true;
+            picker.flush(cx);
+            picker.sync_appearance(cx);
+
+            assert_eq!(picker.transparency, 37);
+            assert_eq!(picker.noise, 11);
+        });
+    });
+}
+
 #[test]
 fn field_round_trips_presets() {
     for color in WindowColor::ALL

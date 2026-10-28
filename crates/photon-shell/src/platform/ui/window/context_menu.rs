@@ -154,15 +154,15 @@ impl BrowserWindow {
     pub(super) fn with_browser_menu(&self, area: gpui::Div, cx: &mut Context<Self>) -> gpui::Div {
         area.on_mouse_down(
             MouseButton::Right,
-            cx.listener(|this, event: &MouseDownEvent, window, cx| {
+            cx.listener(|this, _: &MouseDownEvent, window, cx| {
                 cx.stop_propagation();
-                this.theme_picker_anchor = Some(event.position);
                 this.show_browser_menu(window, cx);
             }),
         )
     }
 
     pub(super) fn show_browser_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.theme_picker_anchor = Some(window.mouse_position());
         let items = self.browser_menu_items(cx);
         self.show_context_menu(window, items, cx);
     }

@@ -46,6 +46,12 @@ fn picker_control(ink: u32) -> gpui::Div {
 
 pub(super) type TintChange = Rc<dyn Fn(WindowColor, SpaceColors, Option<u8>, Option<u8>, &mut App)>;
 
+#[derive(Clone, Copy, Default)]
+pub(super) struct PickerAppearance {
+    pub transparency: Option<u8>,
+    pub noise: Option<u8>,
+}
+
 pub(super) fn change_space_theme(space_id: SpaceId) -> TintChange {
     Rc::new(move |color, colors, transparency, noise, cx| {
         Settings::update(cx, |settings| {
@@ -83,6 +89,7 @@ pub(super) struct ThemePicker {
     color: WindowColor,
     colors: SpaceColors,
     space: Option<photon_core::SpaceId>,
+    appearance: PickerAppearance,
     on_change: TintChange,
     floating: bool,
 }
@@ -99,12 +106,18 @@ pub(super) fn theme_picker(
         color,
         colors,
         space,
+        appearance: PickerAppearance::default(),
         on_change,
         floating: false,
     }
 }
 
 impl ThemePicker {
+    pub(super) fn with_staged_appearance(mut self, appearance: PickerAppearance) -> Self {
+        self.appearance = appearance;
+        self
+    }
+
     pub(super) fn into_floating(mut self) -> Self {
         self.floating = true;
         self
@@ -122,6 +135,7 @@ impl RenderOnce for ThemePicker {
                             self.color,
                             self.colors,
                             self.space,
+                            self.appearance,
                             self.on_change.clone(),
                             cx,
                         )
@@ -133,6 +147,7 @@ impl RenderOnce for ThemePicker {
         state.update(cx, |state, cx| {
             state.on_change = self.on_change;
             state.space = self.space;
+            state.appearance = self.appearance;
             state.floating = self.floating;
             if state.dragging.is_none() && !state.frame_pending {
                 if state.color != self.color || state.colors() != self.colors {
@@ -155,9 +170,7 @@ impl RenderOnce for ThemePicker {
                     state.arrange_followers(false, cx);
                     state.next_id = self.colors.colors().len() as u64;
                 }
-                state.noise = AppearancePreview::noise(cx);
-                state.transparency = AppearancePreview::transparency(cx);
-                state.intensity_position = f32::from(100 - state.transparency) / 100.0;
+                state.sync_appearance(cx);
             }
         });
         state
@@ -173,6 +186,7 @@ struct PickerState {
     grab: (f32, f32),
     drag_palette: Option<PaletteDrag>,
     space: Option<photon_core::SpaceId>,
+    appearance: PickerAppearance,
     noise: u8,
     transparency: u8,
     intensity_position: f32,
@@ -197,18 +211,32 @@ impl PickerState {
         cx: &mut Context<Self>,
     ) -> Self {
         let space = Some(Settings::get(cx).spaces.active().id);
-        Self::new_for_space(color, colors, space, on_change, cx)
+        Self::new_for_space(
+            color,
+            colors,
+            space,
+            PickerAppearance::default(),
+            on_change,
+            cx,
+        )
     }
 
     fn new_for_space(
         color: WindowColor,
         colors: SpaceColors,
         space: Option<photon_core::SpaceId>,
+        appearance: PickerAppearance,
         on_change: TintChange,
         cx: &mut Context<Self>,
     ) -> Self {
         let owner = cx.entity_id();
         let release = cx.on_release(move |_, cx| AppearancePreview::clear(owner, cx));
+        let transparency = appearance
+            .transparency
+            .unwrap_or_else(|| AppearancePreview::transparency(cx));
+        let noise = appearance
+            .noise
+            .unwrap_or_else(|| Settings::get(cx).background_noise_intensity);
         let mut state = Self {
             color,
             preset_page: PresetPage::default(),
@@ -225,9 +253,10 @@ impl PickerState {
             grab: (0.0, 0.0),
             drag_palette: None,
             space,
-            noise: Settings::get(cx).background_noise_intensity,
-            transparency: AppearancePreview::transparency(cx),
-            intensity_position: f32::from(100 - AppearancePreview::transparency(cx)) / 100.0,
+            appearance,
+            noise,
+            transparency,
+            intensity_position: f32::from(100 - transparency) / 100.0,
             on_change,
             floating: false,
             dragging: None,
@@ -241,6 +270,21 @@ impl PickerState {
         };
         state.arrange_followers(false, cx);
         state
+    }
+    fn sync_appearance(&mut self, cx: &App) {
+        if self.dragging.is_none() && !self.dirty_transparency {
+            self.transparency = self
+                .appearance
+                .transparency
+                .unwrap_or_else(|| AppearancePreview::transparency(cx));
+            self.intensity_position = f32::from(100 - self.transparency) / 100.0;
+        }
+        if self.dragging.is_none() && !self.dirty_noise {
+            self.noise = self
+                .appearance
+                .noise
+                .unwrap_or_else(|| Settings::get(cx).background_noise_intensity);
+        }
     }
     fn resolved(&self) -> SpaceTint {
         self.handles
@@ -578,13 +622,7 @@ impl PickerState {
 
 impl Render for PickerState {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if self.dragging.is_none() && !self.dirty_transparency {
-            self.transparency = AppearancePreview::transparency(cx);
-            self.intensity_position = f32::from(100 - self.transparency) / 100.0;
-        }
-        if self.dragging.is_none() && !self.dirty_noise {
-            self.noise = Settings::get(cx).background_noise_intensity;
-        }
+        self.sync_appearance(cx);
         let palette = theme::palette(window, cx);
         let colors = self.colors();
         let mut background_palette = palette;

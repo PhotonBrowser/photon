@@ -217,6 +217,10 @@ impl Render for SpaceEditor {
             self.color,
             self.colors,
             self.space_id,
+            super::theme_picker::PickerAppearance {
+                transparency: self.transparency,
+                noise: self.noise,
+            },
             Rc::new(move |color, colors, transparency, noise, cx| {
                 this.update(cx, |this, cx| {
                     this.color = color;
