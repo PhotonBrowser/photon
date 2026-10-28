@@ -145,7 +145,7 @@ pub(in super::super) const THEME_PICKER_SPRING: TweenCurve =
 /// away: critically damped, so the page beside it never overshoots, and
 /// carrying its momentum when it is turned back midway.
 pub(in super::super) const SIDEBAR_LAYOUT_SPRING: TweenCurve =
-    TweenCurve::Spring(SpringConfig::new(300.0, 34.6, 1.0));
+    TweenCurve::Spring(SpringConfig::new(520.0, 45.6, 1.0));
 
 /// The sidebar revealed over the page: quicker and slightly underdamped, so
 /// it lands with a hint of give, as in Arc.
