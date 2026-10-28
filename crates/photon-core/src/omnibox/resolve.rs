@@ -224,6 +224,10 @@ fn is_bare_host(text: &str) -> bool {
         return false;
     }
     let host = host_part(text);
+    // A bracketed IPv6 literal is an address; local ones were already claimed.
+    if text.starts_with('[') {
+        return host.parse::<Ipv6Addr>().is_ok();
+    }
     // A single label is a name, not an address, unless it is a loopback host,
     // which `is_local_host` already claimed.
     if !host.contains('.') || host.len() > 253 {
@@ -242,16 +246,16 @@ fn is_bare_host(text: &str) -> bool {
     if last.chars().all(|character| character.is_ascii_digit()) {
         // A numeric last label is an IP address, and only a real one counts:
         // `1.2.3.4.5` and `3.14` are searches.
-        return last.parse::<Ipv4Addr>().is_ok();
+        return host.parse::<Ipv4Addr>().is_ok();
     }
     // An internationalized top level domain is punycode, not a plain word.
     if last.starts_with("xn--") {
         return last.len() > 4;
     }
-    last.len() >= 2
-        && last
-            .chars()
-            .all(|character| character.is_ascii_alphabetic())
+    let plausible_tld =
+        last.chars().count() >= 2 && last.chars().all(|character| character.is_alphabetic());
+    // An internationalized host must survive IDNA conversion to open at all.
+    plausible_tld && (host.is_ascii() || url::Host::parse(host).is_ok())
 }
 
 fn is_host_label(label: &str) -> bool {
@@ -261,7 +265,7 @@ fn is_host_label(label: &str) -> bool {
         && !label.ends_with('-')
         && label
             .chars()
-            .all(|character| character.is_ascii_alphanumeric() || character == '-')
+            .all(|character| character.is_alphanumeric() || character == '-')
 }
 
 /// The host part of typed text: everything before a path, query or fragment,
@@ -340,6 +344,39 @@ mod tests {
         assert_eq!(url_of("192.168.1.10"), "http://192.168.1.10/");
         assert_eq!(url_of("10.0.0.5:8080"), "http://10.0.0.5:8080/");
         assert_eq!(kind_of("localhost:3000"), UrlKind::Local);
+    }
+
+    #[test]
+    fn opens_public_ip_addresses() {
+        assert_eq!(url_of("8.8.8.8"), "https://8.8.8.8/");
+        assert_eq!(
+            url_of("93.184.216.34:8080/x"),
+            "https://93.184.216.34:8080/x"
+        );
+    }
+
+    #[test]
+    fn opens_internationalized_domains_as_punycode() {
+        assert_eq!(url_of("münchen.de"), "https://xn--mnchen-3ya.de/");
+        assert_eq!(url_of("例え.jp"), "https://xn--r8jz45g.jp/");
+        assert_eq!(
+            url_of("bücher.example/path"),
+            "https://xn--bcher-kva.example/path"
+        );
+        assert_eq!(kind_of("münchen.de"), UrlKind::Inferred);
+        assert!(resolve("münchen").expect("resolves").is_search());
+        assert!(resolve("straße café").expect("resolves").is_search());
+    }
+
+    #[test]
+    fn opens_bracketed_public_ipv6_addresses() {
+        assert_eq!(url_of("[2001:db8::1]"), "https://[2001:db8::1]/");
+        assert_eq!(
+            url_of("[2001:db8::1]:8080/x"),
+            "https://[2001:db8::1]:8080/x"
+        );
+        assert_eq!(kind_of("[::1]"), UrlKind::Local);
+        assert!(resolve("[not an address]").expect("resolves").is_search());
     }
 
     #[test]

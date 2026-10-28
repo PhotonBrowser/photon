@@ -213,7 +213,10 @@ pub fn suggest_with_indexed<'a, 'b>(
     }
     rows.extend(past_searches(text, searches, engines));
     rows.extend(pages);
-    rows.dedup_by(|a, b| a.url == b.url);
+    // The same address can be suggested from several sources, not always
+    // side by side; the first, best placed, stays.
+    let mut seen = std::collections::HashSet::new();
+    rows.retain(|row| seen.insert(row.url.clone()));
     rows.truncate(MAX_ROWS);
     Suggestions { rows, completion }
 }
@@ -367,9 +370,25 @@ fn word_start_match_lower(lower: &str, term: &str) -> Option<Range<usize>> {
 }
 
 /// Lowercase text once for indexed matching, retaining only range-safe values.
+///
+/// Characters whose lowercase form has a different length, such as `İ`, keep
+/// their original form so byte ranges into the result match the text.
 pub fn normalized_match_text(text: &str) -> Option<String> {
     let lower = text.to_lowercase();
-    (lower.len() == text.len()).then_some(lower)
+    if lower.len() == text.len() {
+        return Some(lower);
+    }
+    Some(
+        text.chars()
+            .map(|character| {
+                let mut lower = character.to_lowercase();
+                match (lower.next(), lower.next()) {
+                    (Some(single), None) if single.len_utf8() == character.len_utf8() => single,
+                    _ => character,
+                }
+            })
+            .collect(),
+    )
 }
 
 /// Lowercase the displayed address once for indexed matching.
@@ -383,16 +402,22 @@ fn starts_with_ignoring_case(text: &str, prefix: &str) -> bool {
         && text[..prefix.len()].eq_ignore_ascii_case(prefix)
 }
 
-/// An address as people write it: without `https://`, `www.` or a lone
+/// An address as people write it: without `https://` or `http://`, `www.` or a lone
 /// trailing slash.
 pub fn display_address(url: &str) -> String {
     display_address_slice(url).to_owned()
 }
 
 fn display_address_slice(url: &str) -> &str {
-    let address = url.strip_prefix("https://").unwrap_or(url);
+    let address = without_web_scheme(url);
     let address = address.strip_prefix("www.").unwrap_or(address);
     address.strip_suffix('/').unwrap_or(address)
+}
+
+fn without_web_scheme(url: &str) -> &str {
+    url.strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))
+        .unwrap_or(url)
 }
 
 /// Just the site an address is on: its host without `www.`, and its port if
@@ -601,10 +626,7 @@ mod tests {
             display_address("https://example.com/docs"),
             "example.com/docs"
         );
-        assert_eq!(
-            display_address("http://localhost:8080/"),
-            "http://localhost:8080"
-        );
+        assert_eq!(display_address("http://localhost:8080/"), "localhost:8080");
     }
 
     #[test]
@@ -616,5 +638,50 @@ mod tests {
         assert_eq!(match_words("Find in Page", "age"), None);
         assert_eq!(match_words("Find in Page", "find tab"), None);
         assert_eq!(match_words("Anything", "  "), Some(Vec::new()));
+    }
+
+    #[test]
+    fn completes_plain_http_pages_like_secure_ones() {
+        let pages = [
+            VisitedPage {
+                url: "http://localhost:3000/",
+                title: "Dev server",
+                visit_count: 3,
+                last_visit: 2,
+            },
+            VisitedPage {
+                url: "http://www.example.com/",
+                title: "Example",
+                visit_count: 1,
+                last_visit: 1,
+            },
+        ];
+        let local = suggest("localh", &pages, &[]);
+        assert_eq!(local.completion.as_deref(), Some("localhost:3000"));
+        assert_eq!(local.rows[0].url, "http://localhost:3000/");
+        assert_eq!(local.rows[0].text, "localhost:3000");
+
+        let example = suggest("Exa", &pages, &[]);
+        assert_eq!(example.completion.as_deref(), Some("Example.com"));
+        assert_eq!(example.rows[0].url, "http://www.example.com/");
+
+        assert_eq!(display_address("http://www.example.com/a"), "example.com/a");
+    }
+
+    #[test]
+    fn matches_titles_whose_lowercase_changes_length() {
+        let pages = [VisitedPage {
+            url: "https://example.org/",
+            title: "İstanbul Guide",
+            visit_count: 1,
+            last_visit: 1,
+        }];
+        let suggestions = suggest("guide", &pages, &[]);
+        let SuggestionKind::Page { title_matches, .. } = &suggestions.rows[1].kind else {
+            panic!("the page should follow the search");
+        };
+        assert_eq!(title_matches.len(), 1);
+        assert_eq!(title_matches[0], 10..15);
+        assert_eq!(normalized_match_text("İX").as_deref(), Some("İx"));
     }
 }
