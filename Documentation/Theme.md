@@ -16,12 +16,12 @@ from the [settings](Profile.md), and never choose colors locally.
 | Role | Used for |
 | --- | --- |
 | `window_tint` | The window background over the desktop |
-| `surface` | Everything that sits on the window: the browser's own pages, the omnibox field, the active tab, buttons, text fields and segmented choices |
+| `page_background`, `page_surface` | Web content and Photon pages, with a surface tone distinct from the window |
+| `surface` | Chrome controls such as the omnibox field, active tab, buttons, text fields and segmented choices |
 | `hover_surface` | A row or control under the pointer |
 | `selected_surface` | The selected row, an open menu's button, a pressed or hovered button on `surface` |
 | `chosen`, `on_chosen` | What is chosen or on (a chosen option, a switch that is on, a checked box), and the text drawn on it. Also focus rings and text carets |
 | `menu_surface`, `menu_border` | Raised menus, popovers and dialogs, and the light hairline around raised surfaces and groups |
-| `raised_blur` | How much raised surfaces blur what is behind them |
 | `text_primary`, `text_secondary` | Text |
 | `suggestion_address` | Addresses in omnibox suggestions (a link blue) |
 | `selection`, `field_error_border`, `modal_backdrop` | Selected text, an unopenable address, the dim behind a modal |
@@ -40,10 +40,11 @@ optionally as a gradient into the neighbouring hue from the top left, chosen
 in Settings → Appearance or the space's dialog with the shared
 `color_picker`. Hue, tint saturation, and lightness values are in the
 `[window]` section of `theme.toml`; the same values tone swatches and light or
-dark window tints. Draw the
-window's background with `palette.window_background()`, which is the tint or
-the gradient; everything else on the window is a tint over it, so it takes
-the colour too. `window_color_swatch` gives the colour each swatch shows.
+dark window tints. The system tint uses the `window` color in each appearance's
+palette, while `page` sets the separate web content and Photon page color. This
+keeps solid themes distinct without requiring a gradient. Draw the window's
+background with `palette.window_background()`, which is the tint or the
+gradient; `window_color_swatch` gives the colour each swatch shows.
 
 ### Transparency
 
@@ -51,16 +52,19 @@ The transparency setting (off, subtle, clear) decides how much of the desktop
 shows through, and how much floating surfaces blur what is behind them, set
 in `[transparency]`:
 
-| Transparency | Window | Menus and dialogs | Blur behind them |
-| --- | --- | --- | --- |
-| Off | solid | solid | none |
-| Subtle (default) | 88% | 92% | 20 px |
-| Clear | 46% | 84% | 48 px |
+| Transparency | Window | Page | Menus and dialogs | Page/control blur | Raised-surface blur |
+| --- | --- | --- | --- | --- | --- |
+| Off | solid | 36% | solid | 8 px | none |
+| Subtle (default) | 88% | 30% | 92% | 16 px | 20 px |
+| Clear | 46% | 24% | 84% | 24 px | 48 px |
 
 `surface`, `hover_surface` and `selected_surface` are tints of the text color
 over the window, not layers of their own, so everything on the window is
 exactly as see-through as the window. Menus and dialogs float over pages, so
-they are more opaque and frost the page behind them to stay readable.
+they are more opaque and frost the page behind them to stay readable. The
+theme-controlled page/control blur also frosts the backdrop under translucent
+Photon pages, controls and shortcut icon wells while leaving their contents
+sharp.
 
 ## Dimensions and typography
 
@@ -86,10 +90,10 @@ shell's shadows. Use `element.elevated(Elevation::…)`, not shadow sizes:
 | `High` | Menus, popovers, the omnibox panel and modals |
 
 Floating surfaces take their background with `element.raised(palette)`
-rather than setting it themselves: the translucent `menu_surface`, blurring
-what is behind by `raised_blur`. Menus and popovers, the omnibox panel, the
-find bar, chips, dialogs, the revealed sidebar and a dragged
-tab all use it, so they frost alike and follow the transparency setting.
+rather than setting it themselves. Raised surfaces are fully opaque across
+all window transparency settings and do not blur the content behind them.
+Menus and popovers, the omnibox panel, the find bar, chips, dialogs, the
+revealed sidebar and a dragged tab all use the same surface role.
 
 ## Shared components
 

@@ -202,6 +202,9 @@ fn options_for_size(cx: &App, width: f32, height: f32) -> WindowOptions {
     let bounds = Bounds::centered(None, size(px(width), px(height)), cx);
     WindowOptions::new()
         .window_bounds(Some(WindowBounds::Windowed(bounds)))
+        // Keep visible chrome animations at display cadence even during brief
+        // native focus transitions; GPUI's 33 ms default reads as 30 fps.
+        .inactive_frame_interval(Some(std::time::Duration::from_micros(16_667)))
         .show(false)
         .titlebar(Some(
             TitlebarOptions::default()

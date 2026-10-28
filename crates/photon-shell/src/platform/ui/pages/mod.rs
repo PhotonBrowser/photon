@@ -158,6 +158,7 @@ impl gpui::Render for PageFrame {
             .rounded(px(metrics::page_radius()))
             .rounded_smoothing(metrics::page_smoothing())
             .bg(rgba(palette.page_surface))
+            .backdrop_blur(px(palette.surface_blur))
             .child(
                 self.body
                     .clone()

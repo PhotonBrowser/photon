@@ -145,6 +145,7 @@ struct WindowStyle {
 #[derive(Clone, Copy)]
 struct BaseColors {
     background: Rgba,
+    page: Rgba,
     text: Rgba,
     container: Rgba,
     selected: Rgba,
@@ -166,6 +167,8 @@ pub(super) struct ThemeColors {
     pub page_background: u32,
     /// Appearance tint over the native window, retaining configured transparency.
     pub page_surface: u32,
+    /// Backdrop blur for surfaces with theme-reduced opacity.
+    pub surface_blur: f32,
     pub text_primary: u32,
     pub text_secondary: u32,
     pub selection: u32,
@@ -174,9 +177,6 @@ pub(super) struct ThemeColors {
     /// A button that deletes or resets, under the pointer.
     pub error_hover_surface: u32,
     pub performance_palette: PerformancePalette,
-    /// How much raised surfaces blur what is behind them; see
-    /// [`Raised`](super::layout::Raised).
-    pub raised_blur: f32,
     pub menu_surface: u32,
     /// The shortcut icon well, lightly tinted so its page backdrop shows through.
     pub shortcut_icon_surface: u32,
@@ -291,6 +291,7 @@ impl ThemeColors {
         };
         let colors = BaseColors {
             background: color(&colors.background),
+            page: color(&colors.page),
             text: color(&colors.text),
             container: color(&colors.container),
             selected: color(&colors.selected),
@@ -377,8 +378,9 @@ impl ThemeColors {
             window_tint: to_rgba_token(window_tint),
             window_tint_end: to_rgba_token(window_tint_end),
             window_tint_middle,
-            page_background: to_rgb_token(colors.background),
-            page_surface: to_rgba_token(colors.background.opacity(surfaces.page)),
+            page_background: to_rgb_token(colors.page),
+            page_surface: to_rgba_token(colors.page.opacity(surfaces.page)),
+            surface_blur: surfaces.surface_blur,
             text_primary: to_rgb_token(colors.text),
             text_secondary: to_rgb_token(text_secondary),
             selection: to_rgba_token(colors.selected),
@@ -393,13 +395,11 @@ impl ThemeColors {
                 text: to_rgb_token(colors.text),
                 secondary_text: to_rgb_token(text_secondary),
             },
-            // Raised surfaces let the window's frosted background show through,
-            // but stay opaque enough to read over a busy page.
+            // Raised surfaces stay fully opaque, regardless of window transparency.
             menu_surface: to_rgba_token(colors.container.opacity(surfaces.raised)),
             shortcut_icon_surface: to_rgba_token(
                 colors.container.opacity(opacity.shortcut_icon_surface),
             ),
-            raised_blur: surfaces.raised_blur,
             // A light hairline that separates raised surfaces from what is under
             // them without a dark outline.
             menu_border,
@@ -523,12 +523,12 @@ pub(super) fn gradient_colors(colors: SpaceColors) -> SpaceColors {
 /// Native appearance supplies the default shell colour, independently of page mode.
 pub(super) fn default_tint(appearance: WindowAppearance) -> SpaceTint {
     let theme = crate::platform::theme_config::theme();
-    let background = if crate::platform::is_dark_appearance(appearance) {
-        &theme.palette.dark.background
+    let window = if crate::platform::is_dark_appearance(appearance) {
+        &theme.palette.dark.window
     } else {
-        &theme.palette.light.background
+        &theme.palette.light.window
     };
-    let hsl = rgb_to_hsla(color(background)).color;
+    let hsl = rgb_to_hsla(color(window)).color;
     SpaceTint {
         hue: hsl.hue.into_positive_degrees().round() as u16 % 360,
         saturation: (hsl.saturation * 100.0).round() as u8,
@@ -714,6 +714,22 @@ mod tests {
         assert_eq!(light.window_tint_end, dark.window_tint_end);
         assert_ne!(light.page_background, dark.page_background);
         assert_ne!(light.menu_surface, dark.menu_surface);
+    }
+    #[test]
+    fn solid_system_theme_separates_page_and_window_surfaces() {
+        let style = WindowStyle {
+            transparency: Transparency::Off,
+            color: WindowColor::System,
+            gradient: false,
+            tint: None,
+            colors: None,
+            transparency_percent: None,
+        };
+        for appearance in [WindowAppearance::Light, WindowAppearance::Dark] {
+            let palette = ThemeColors::for_appearance(appearance, style);
+            assert_ne!(palette.window_tint >> 8, palette.page_background);
+            assert!(rgba(palette.page_surface).alpha > 0.3);
+        }
     }
     #[gpui::test]
     fn translucent_pages_use_tint_contrast_while_menus_follow_appearance(

@@ -49,8 +49,8 @@ limits.
 
 Photon owns XPC presentation, frame ordering, generations, retirement, release
 forwarding, Engine thread affinity, browser input, and application startup.
-On macOS, `photon run` uses GPUI hot reloading through Dioxus by default. Pass
-`--no-hot-reload` to use a direct Cargo build.
+`photon run` builds and launches the optimized release app by default. On macOS,
+pass `--hot-reload` to opt into GPUI hot reloading through Dioxus for development.
 Hot-reload launches from the same development app bundle as the direct path,
 so the Dock icon, app identity, and browser link metadata are available there
 too. If a build fails or the patched app crashes, `photon run` restarts Dioxus

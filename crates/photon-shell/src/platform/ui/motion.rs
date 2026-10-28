@@ -880,7 +880,6 @@ impl<T: Clone + 'static> Presence<T> {
 
 /// Pixel distances selected for Photon's visual design.
 pub(super) mod distance {
-    pub const HINT: f32 = 4.0;
     pub const NUDGE: f32 = 8.0;
     pub const SHIFT: f32 = 12.0;
     pub const TRAVEL: f32 = 32.0;
@@ -1003,7 +1002,7 @@ pub(super) const fn fall() -> Entrance {
 pub(super) const fn popover() -> Entrance {
     Entrance::new()
         .fade_from(0.0)
-        .slide_from(Edge::Top, distance::HINT)
+        .scale_from(0.94)
         .speed(Speed::Quick)
 }
 

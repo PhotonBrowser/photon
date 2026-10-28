@@ -644,7 +644,11 @@ impl Render for PickerState {
             background_palette.window_tint_end = default;
             background_palette.window_tint_middle = None;
         }
-        let alpha = ((100 - self.transparency) as u32 * 255 + 50) / 100;
+        let alpha = if self.floating {
+            255
+        } else {
+            ((100 - self.transparency) as u32 * 255 + 50) / 100
+        };
         background_palette.window_tint = (background_palette.window_tint & !0xff) | alpha;
         background_palette.window_tint_end = (background_palette.window_tint_end & !0xff) | alpha;
         background_palette.window_tint_middle = background_palette

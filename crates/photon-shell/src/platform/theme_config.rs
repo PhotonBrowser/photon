@@ -26,6 +26,8 @@ pub(crate) struct Appearance<T> {
 #[derive(Deserialize)]
 pub(crate) struct BasePalette {
     pub(crate) background: String,
+    pub(crate) page: String,
+    pub(crate) window: String,
     pub(crate) text: String,
     pub(crate) container: String,
     pub(crate) selected: String,
@@ -87,8 +89,8 @@ pub(crate) struct TransparencyTokens {
 pub(crate) struct SurfaceOpacity {
     pub(crate) window: f32,
     pub(crate) page: f32,
+    pub(crate) surface_blur: f32,
     pub(crate) raised: f32,
-    pub(crate) raised_blur: f32,
 }
 
 impl TransparencyTokens {
@@ -117,8 +119,8 @@ impl TransparencyTokens {
         SurfaceOpacity {
             window: 1.0 - fraction,
             page: lerp(from.page, to.page),
+            surface_blur: lerp(from.surface_blur, to.surface_blur),
             raised: lerp(from.raised, to.raised),
-            raised_blur: lerp(from.raised_blur, to.raised_blur),
         }
     }
 }
@@ -190,10 +192,14 @@ fn validate_theme(theme: &ThemeDefinition) {
     let colors = &theme.colors;
     let mut values = vec![
         &theme.palette.light.background,
+        &theme.palette.light.page,
+        &theme.palette.light.window,
         &theme.palette.light.text,
         &theme.palette.light.container,
         &theme.palette.light.selected,
         &theme.palette.dark.background,
+        &theme.palette.dark.page,
+        &theme.palette.dark.window,
         &theme.palette.dark.text,
         &theme.palette.dark.container,
         &theme.palette.dark.selected,
@@ -248,6 +254,18 @@ fn validate_theme(theme: &ThemeDefinition) {
         assert!(
             value.is_finite() && (0.0..=1.0).contains(&value),
             "theme opacity token {name} must be between 0 and 1"
+        );
+    }
+
+    for (name, surfaces) in [
+        ("off", &theme.transparency.off),
+        ("subtle", &theme.transparency.subtle),
+        ("clear", &theme.transparency.clear),
+    ] {
+        let blur = surfaces.surface_blur;
+        assert!(
+            blur.is_finite() && (0.0..=100.0).contains(&blur),
+            "theme transparency {name} surface_blur must be between 0 and 100 px"
         );
     }
 

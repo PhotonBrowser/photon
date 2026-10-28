@@ -3,12 +3,16 @@
 
 [palette.light]
 background = "#ffffff"
+page = "#ffffff"
+window = "#e9ebf0"
 text = "#252525"
 container = "#f4f5f5"
 selected = "#aeaeae"
 
 [palette.dark]
 background = "#222222"
+page = "#292d36"
+window = "#171a23"
 text = "#ffffff"
 container = "#262626"
 selected = "#747474"
@@ -110,22 +114,23 @@ mass = 1.0
 
 [transparency.off]
 window = 1.0
-# Internal pages remain translucent over the window theme even with an opaque window.
-page = 0.18
+# Pages have their own surface color and retain enough opacity to read apart
+# from the surrounding window material.
+page = 0.36
+surface_blur = 8.0
 raised = 1.0
-raised_blur = 0.0
 
 [transparency.subtle]
 window = 0.88
-page = 0.12
-raised = 0.92
-raised_blur = 20.0
+page = 0.3
+surface_blur = 16.0
+raised = 1.0
 
 [transparency.clear]
 window = 0.46
-page = 0.06
-raised = 0.84
-raised_blur = 48.0
+page = 0.24
+surface_blur = 24.0
+raised = 1.0
 
 [window]
 gradient_angle_degrees = 135.0

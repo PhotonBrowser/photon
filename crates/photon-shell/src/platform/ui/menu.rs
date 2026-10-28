@@ -51,7 +51,7 @@ pub(super) fn popover_surface(
         .child(content)
         .animate(
             "browser-menu-motion",
-            MENU_MOTION,
+            MENU_MOTION.scale_from_left(0.94, width),
             transition,
             &Settings::motion(cx),
         )

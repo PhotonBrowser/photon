@@ -162,6 +162,7 @@ fn tile(
                 .justify_center()
                 .rounded_full()
                 .bg(rgba(palette.shortcut_icon_surface))
+                .backdrop_blur(px(palette.surface_blur))
                 .child(icon),
         )
         .child(

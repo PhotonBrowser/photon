@@ -69,7 +69,7 @@ impl BrowserWindow {
             sidebar.docked_width(cx)
         };
         let (content_width, opacity) = if collapsed {
-            (full_width, 1.0 - sidebar.expanded())
+            (metrics::SIDEBAR_COLLAPSED_WIDTH, 1.0 - sidebar.expanded())
         } else if over_page {
             (full_width, 1.0)
         } else {
@@ -417,11 +417,7 @@ impl BrowserWindow {
 }
 
 /// The floating raised surface under a sidebar revealed over the page.
-fn revealed_surface(mut palette: ThemeColors) -> Div {
-    // This surface floats over a live Engine page. Refiltering that page
-    // through a large backdrop blur on every page frame stalls animation and
-    // makes the rest of the browser feel choppy, so keep only the themed tint.
-    palette.raised_blur = 0.0;
+fn revealed_surface(palette: ThemeColors) -> Div {
     div()
         .absolute()
         .inset_0()

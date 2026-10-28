@@ -66,7 +66,7 @@ enum Command {
         /// Build and launch the shell without building, linking, or starting Photon Engine.
         #[arg(long)]
         ui: bool,
-        /// Hot-patch GPUI rendering code via Dioxus CLI (the default on macOS).
+        /// Hot-patch GPUI rendering code via Dioxus CLI (development build).
         #[arg(long, conflicts_with = "no_hot_reload")]
         hot_reload: bool,
         /// Use the direct launch path instead of GPUI hot reloading.
@@ -346,7 +346,7 @@ fn workspace_root() -> Result<PathBuf, String> {
 }
 
 fn should_use_hot_reload(explicit: bool, disabled: bool) -> bool {
-    explicit || (cfg!(target_os = "macos") && !disabled)
+    explicit && !disabled
 }
 
 fn print_help() -> Result<(), String> {
@@ -446,9 +446,10 @@ mod tests {
     }
 
     #[test]
-    fn run_uses_hot_reload_by_default_on_macos() {
+    fn run_uses_optimized_direct_build_by_default() {
         let cli = Cli::try_parse_from(["photon", "run"]).unwrap();
         let Some(Command::Run {
+            release,
             hot_reload,
             no_hot_reload,
             ..
@@ -457,10 +458,8 @@ mod tests {
             panic!("expected run command");
         };
 
-        assert_eq!(
-            should_use_hot_reload(hot_reload, no_hot_reload),
-            cfg!(target_os = "macos")
-        );
+        assert!(release);
+        assert!(!should_use_hot_reload(hot_reload, no_hot_reload));
     }
 
     #[test]
