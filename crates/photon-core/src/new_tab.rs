@@ -4,6 +4,10 @@ use serde::{Deserialize, Serialize};
 
 use super::history::HistoryEntry;
 
+/// How many sites can be pinned to the new tab page; profiles holding more
+/// are refused when saved.
+pub const MAX_NEW_TAB_PINS: usize = 12;
+
 /// The numbers of shortcuts the new tab page can show.
 pub const SHORTCUT_COUNTS: [usize; 5] = [4, 6, 8, 10, 12];
 /// How many shortcuts the new tab page shows unless chosen otherwise.
@@ -103,13 +107,19 @@ impl NewTabSettings {
         self.pinned.iter().any(|pin| pin.url == url)
     }
 
-    /// Pins a site, keeping it on the page whatever is visited.
-    pub fn pin(&mut self, shortcut: Shortcut) {
+    /// Pins a site, keeping it on the page whatever is visited. Returns
+    /// whether it is pinned, which it cannot be once the pins are full.
+    pub fn pin(&mut self, shortcut: Shortcut) -> bool {
+        if self.is_pinned(&shortcut.url) {
+            return true;
+        }
+        if self.pinned.len() >= MAX_NEW_TAB_PINS {
+            return false;
+        }
         let site = site_name(&shortcut.url);
         self.hidden.retain(|hidden| site_name(hidden) != site);
-        if !self.is_pinned(&shortcut.url) {
-            self.pinned.push(shortcut);
-        }
+        self.pinned.push(shortcut);
+        true
     }
 
     pub fn unpin(&mut self, url: &str) {
@@ -163,6 +173,23 @@ mod tests {
             .iter()
             .map(|shortcut| shortcut.url.as_str())
             .collect()
+    }
+
+    #[test]
+    fn pins_stop_at_the_limit() {
+        let mut settings = NewTabSettings::default();
+        for index in 0..MAX_NEW_TAB_PINS {
+            assert!(settings.pin(Shortcut {
+                title: String::new(),
+                url: format!("https://site{index}.example/"),
+            }));
+        }
+        let extra = Shortcut {
+            title: String::new(),
+            url: "https://extra.example/".to_owned(),
+        };
+        assert!(!settings.pin(extra));
+        assert_eq!(settings.pinned.len(), MAX_NEW_TAB_PINS);
     }
 
     #[test]

@@ -65,8 +65,13 @@ impl NewTabPage {
         } else {
             name
         };
-        Settings::update(cx, |settings| settings.new_tab.pin(Shortcut { title, url }));
-        if !already_pinned {
+        let mut pinned = false;
+        Settings::update(cx, |settings| {
+            pinned = settings.new_tab.pin(Shortcut { title, url });
+        });
+        if !pinned {
+            super::super::super::show_alert(cx, "Shortcuts are full");
+        } else if !already_pinned {
             super::super::super::show_alert(cx, "Shortcut added");
         }
         self.adding = None;

@@ -1,7 +1,8 @@
 //! A profile folder and what is kept in it.
 
 use photon_core::{
-    BrowserSettings, ClearBrowsingData, History, MAX_FAVOURITES, Session, WorkspaceSettings,
+    BrowserSettings, ClearBrowsingData, History, MAX_FAVOURITES, MAX_NEW_TAB_PINS, Session,
+    WorkspaceSettings,
 };
 use std::collections::HashSet;
 use std::collections::hash_map::DefaultHasher;
@@ -32,7 +33,6 @@ const MAX_WORKSPACE_PRESETS: usize = 32;
 const MAX_LAYOUT_COMPONENTS: usize = 64;
 const MAX_SPACES: usize = 128;
 const MAX_SPACE_PINS: usize = 256;
-const MAX_NEW_TAB_PINS: usize = 12;
 const MAX_NEW_TAB_HIDDEN: usize = 2_048;
 const MAX_LEGACY_FAVOURITES: usize = 256;
 static NEXT_DAMAGED_BACKUP: AtomicU64 = AtomicU64::new(0);
