@@ -108,12 +108,16 @@ soft_accent_border = 0.48
 [motion.theme_picker]
 # The popover stays mounted for three quarters of this duration on close.
 duration_ms = 240
-scale_from = 0.92
+scale_from = 0.6
+# The popover shrinks to this scale as it fades on close.
+scale_to = 0.2
+# Blur in px the popover's contents sharpen from, and soften to on close.
+blur_from = 8.0
 
 # Higher stiffness is quicker; lower damping relative to stiffness adds bounce.
 [motion.theme_picker.spring]
 stiffness = 1100.0
-damping = 32.0
+damping = 48.0
 mass = 1.0
 
 [transparency.off]

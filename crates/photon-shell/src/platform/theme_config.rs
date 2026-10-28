@@ -165,6 +165,8 @@ pub(crate) struct MotionTokens {
 pub(crate) struct ThemePickerMotionTokens {
     pub(crate) duration_ms: u64,
     pub(crate) scale_from: f32,
+    pub(crate) scale_to: f32,
+    pub(crate) blur_from: f32,
     pub(crate) spring: SpringTokens,
 }
 
@@ -280,6 +282,14 @@ fn validate_theme(theme: &ThemeDefinition) {
     assert!(
         picker_motion.scale_from.is_finite() && (0.2..=1.0).contains(&picker_motion.scale_from),
         "theme picker starting scale must be between 0.2 and 1.0"
+    );
+    assert!(
+        picker_motion.scale_to.is_finite() && (0.2..=1.0).contains(&picker_motion.scale_to),
+        "theme picker closing scale must be between 0.2 and 1.0"
+    );
+    assert!(
+        picker_motion.blur_from.is_finite() && picker_motion.blur_from >= 0.0,
+        "theme picker blur must be finite and non-negative"
     );
     for (name, value) in [
         ("stiffness", picker_motion.spring.stiffness),

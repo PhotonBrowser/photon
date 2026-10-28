@@ -92,6 +92,7 @@ pub(super) struct ThemePicker {
     appearance: PickerAppearance,
     on_change: TintChange,
     floating: bool,
+    over_glass: bool,
 }
 
 pub(super) fn theme_picker(
@@ -109,6 +110,7 @@ pub(super) fn theme_picker(
         appearance: PickerAppearance::default(),
         on_change,
         floating: false,
+        over_glass: false,
     }
 }
 
@@ -120,6 +122,12 @@ impl ThemePicker {
 
     pub(super) fn into_floating(mut self) -> Self {
         self.floating = true;
+        self
+    }
+
+    /// Leaves the panel's surface to native glass the caller draws beneath it.
+    pub(super) fn over_glass(mut self, over_glass: bool) -> Self {
+        self.over_glass = over_glass;
         self
     }
 }
@@ -149,6 +157,7 @@ impl RenderOnce for ThemePicker {
             state.space = self.space;
             state.appearance = self.appearance;
             state.floating = self.floating;
+            state.over_glass = self.over_glass;
             if state.dragging.is_none() && !state.frame_pending {
                 if state.color != self.color || state.colors() != self.colors {
                     state.color = self.color;
@@ -192,6 +201,7 @@ struct PickerState {
     intensity_position: f32,
     on_change: TintChange,
     floating: bool,
+    over_glass: bool,
     dragging: Option<Control>,
     frame_pending: bool,
     dirty_transparency: bool,
@@ -267,6 +277,7 @@ impl PickerState {
             intensity_position: f32::from(100 - transparency) / 100.0,
             on_change,
             floating: false,
+            over_glass: false,
             dragging: None,
             frame_pending: false,
             dirty_transparency: false,
@@ -648,7 +659,9 @@ impl Render for PickerState {
             background_palette.window_tint_end = default;
             background_palette.window_tint_middle = None;
         }
-        let alpha = if self.floating {
+        // Over glass the tint lies on the glass as on the window, at the
+        // theme's own transparency; a painted floating panel is opaque.
+        let alpha = if self.floating && !self.over_glass {
             255
         } else {
             ((100 - self.transparency) as u32 * 255 + 50) / 100
@@ -659,7 +672,12 @@ impl Render for PickerState {
             .window_tint_middle
             .map(|color| (color & !0xff) | alpha);
         let background = background_palette.background_average();
-        let ink = theme::contrasting_text(background);
+        // Over glass the ink follows the window appearance, not the theme.
+        let ink = if self.over_glass {
+            palette.text_primary
+        } else {
+            theme::contrasting_text(background)
+        };
         let mut picker_palette = palette;
         picker_palette.text_primary = ink;
         let motion = Settings::motion(cx);
@@ -1083,14 +1101,19 @@ impl Render for PickerState {
             .gap(px(metrics::PICKER_GAP))
             .rounded(px(panel_radius))
             .relative()
+            // The theme's tint, live as it is edited, over native glass too.
             .bg(background_palette.window_background())
             .children(background_palette.gradient_overlay(panel_radius))
+            // Native glass draws its own edge.
+            .when(!self.over_glass, |panel| {
+                panel
+                    .border_1()
+                    .border_color(rgb(ink).opacity(tokens().track))
+            })
             .children(
                 (self.noise > 0)
                     .then(|| super::background_noise::overlay(self.noise, panel_radius)),
-            )
-            .border_1()
-            .border_color(rgb(ink).opacity(tokens().track));
+            );
         panel = panel
             .child(field)
             .child(
@@ -1113,7 +1136,7 @@ impl Render for PickerState {
                     .child(transparency_slider)
                     .child(knob),
             );
-        if self.floating {
+        if self.floating && !self.over_glass {
             panel.elevated(Elevation::High)
         } else {
             panel

@@ -302,6 +302,7 @@ impl RenderOnce for ChoiceGroup {
                         palette.chosen
                     })
                     .flex_1()
+                    .min_w(px(0.0))
                     .items_center()
                     .justify_center()
                     .h(px(metrics::SEGMENT_HEIGHT))
@@ -328,6 +329,7 @@ impl RenderOnce for ChoiceGroup {
             });
         h_stack()
             .id(id)
+            .w_full()
             .role(Role::RadioGroup)
             .aria_label(label)
             .tab_group()

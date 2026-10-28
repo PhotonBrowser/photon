@@ -57,6 +57,30 @@ impl BrowserWindow {
         let space = Settings::get(cx).spaces.get(space_id)?.clone();
         let (left, top) = self.picker_popup_position(window, cx);
         let dialog_label = format!("Edit theme for {}", space.name);
+        #[cfg(target_os = "macos")]
+        let glass = self.theme_picker_glass.clone().map(|glass| {
+            glass
+                .corner_radius(px(metrics::theme_accent_panel_radius()))
+                // No tint beneath the glass: it refracts the page itself, and
+                // the picker paints the theme's tint over it.
+                .absolute()
+                .top_0()
+                .left_0()
+                .size_full()
+                // The native view follows only its own style, so it takes the
+                // panel's motion itself rather than inheriting a painted scale.
+                .animate_with_offset_stable_id(
+                    "window-theme-picker-glass-motion",
+                    picker_motion,
+                    transition,
+                    &animations,
+                    (0.0, 0.0),
+                )
+        });
+        #[cfg(target_os = "macos")]
+        let over_glass = glass.is_some();
+        #[cfg(not(target_os = "macos"))]
+        let over_glass = false;
         let picker = theme_picker::theme_picker(
             ("window-theme-picker", space_id),
             space.color,
@@ -64,12 +88,9 @@ impl BrowserWindow {
             Some(space_id),
             theme_picker::change_space_theme(space_id),
         )
-        .into_floating();
-        let panel = div()
-            .id("window-theme-picker-panel")
-            .absolute()
-            .left(px(left))
-            .top(px(top))
+        .into_floating()
+        .over_glass(over_glass);
+        let dialog = div()
             .child(
                 div()
                     .id("theme-picker-dialog")
@@ -83,8 +104,16 @@ impl BrowserWindow {
                 picker_motion,
                 transition,
                 &animations,
-                (left, top),
+                (0.0, 0.0),
             );
+        let panel = div()
+            .id("window-theme-picker-panel")
+            .absolute()
+            .left(px(left))
+            .top(px(top));
+        #[cfg(target_os = "macos")]
+        let panel = panel.children(glass);
+        let panel = panel.child(dialog);
         let mut overlay = div()
             .id("window-theme-picker-overlay")
             .absolute()
