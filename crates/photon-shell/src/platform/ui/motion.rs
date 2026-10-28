@@ -260,6 +260,7 @@ pub(super) struct Entrance {
     duration_override: Option<Duration>,
     delay: Duration,
     curve: Curve,
+    exit_curve: Option<Curve>,
     opacity_from: Option<f32>,
     opacity_curve: Option<Curve>,
     offset_from: Option<(f32, f32)>,
@@ -276,6 +277,7 @@ impl Entrance {
             duration_override: None,
             delay: Duration::ZERO,
             curve: Curve::EaseOut,
+            exit_curve: None,
             opacity_from: None,
             opacity_curve: None,
             offset_from: None,
@@ -370,6 +372,11 @@ impl Entrance {
         self
     }
 
+    pub const fn exit_curve(mut self, curve: Curve) -> Self {
+        self.exit_curve = Some(curve);
+        self
+    }
+
     fn resolved_duration(self, config: &MotionConfig) -> Duration {
         if !config.allows_motion() {
             return Duration::ZERO;
@@ -450,6 +457,7 @@ pub(super) fn theme_picker_entrance(width: f32) -> Entrance {
             tokens.spring.damping,
             tokens.spring.mass,
         )))
+        .exit_curve(Curve::EaseInOut)
         .duration(Duration::from_millis(tokens.duration_ms))
 }
 
@@ -483,9 +491,13 @@ fn apply_entrance<E: Styled + gpui::IntoElement + 'static>(
             entrance.exit_duration(config),
         ),
     };
+    let curve = match transition {
+        Transition::Enter => entrance.curve,
+        Transition::Exit => entrance.exit_curve.unwrap_or(entrance.curve),
+    };
     let motion = Motion::new(target)
         .initial(initial)
-        .transition(entrance.curve.transition(duration))
+        .transition(curve.transition(duration))
         .delay(delay);
     let motion = if let Some(curve) = entrance.opacity_curve {
         motion.transition_for(Property::Opacity, curve.transition(duration), delay)
@@ -499,7 +511,7 @@ fn apply_entrance<E: Styled + gpui::IntoElement + 'static>(
         };
         StyleMotion::new(StyleTarget::default().value(StyleProperty::Blur, target_blur))
             .initial(StyleTarget::default().value(StyleProperty::Blur, initial_blur))
-            .transition(entrance.curve.transition(duration))
+            .transition(curve.transition(duration))
             .delay(delay)
     });
     let element = MotionElement::new(id, element, motion);
