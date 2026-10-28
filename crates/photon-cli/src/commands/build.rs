@@ -69,15 +69,22 @@ fn wait_for_child(child: &mut Child) -> Result<ExitStatus, String> {
         if signal != 0 {
             #[cfg(unix)]
             {
-                // SAFETY: child was started in a fresh process group above.
-                unsafe { libc::kill(-(child.id() as libc::pid_t), libc::SIGTERM) };
-                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+                // Let the app run its normal quit hooks before stopping its
+                // engine helper processes. Killing the whole group here can
+                // make WebContent report a crash while the browser is still
+                // handling the shutdown.
+                // SAFETY: signals only the child this function owns.
+                unsafe { libc::kill(child.id() as libc::pid_t, libc::SIGTERM) };
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
                 loop {
                     if let Some(status) = child.try_wait().map_err(|error| error.to_string())? {
+                        // Stop any helper the app left behind.
+                        // SAFETY: the child was started in a fresh process group.
+                        unsafe { libc::kill(-(child.id() as libc::pid_t), libc::SIGKILL) };
                         return Ok(status);
                     }
                     if std::time::Instant::now() >= deadline {
-                        // SAFETY: same owned child process group as above.
+                        // SAFETY: the child was started in a fresh process group.
                         unsafe { libc::kill(-(child.id() as libc::pid_t), libc::SIGKILL) };
                         return child.wait().map_err(|error| error.to_string());
                     }

@@ -13,6 +13,8 @@ use photon_core::{BrowserSettings, Command, History, Session};
 #[cfg(all(target_os = "macos", not(feature = "ui-only")))]
 use std::cell::RefCell;
 use std::rc::Rc;
+#[cfg(unix)]
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 #[cfg(target_os = "macos")]
 use std::time::Instant;
@@ -35,6 +37,14 @@ use super::session::restore_session;
 use super::{BrowserWindow, BrowserWindowRegistry, open_browser_window};
 use photon_storage::Profile;
 
+#[cfg(unix)]
+static TERMINATION_REQUESTED: AtomicBool = AtomicBool::new(false);
+
+#[cfg(unix)]
+extern "C" fn record_termination_request(_: libc::c_int) {
+    TERMINATION_REQUESTED.store(true, Ordering::Relaxed);
+}
+
 struct LoadedProfileState {
     profile: Option<Profile>,
     settings: BrowserSettings,
@@ -44,6 +54,23 @@ struct LoadedProfileState {
 }
 
 pub fn run() {
+    #[cfg(unix)]
+    {
+        TERMINATION_REQUESTED.store(false, Ordering::Relaxed);
+        // Defer termination to GPUI so app-quit hooks can shut down the
+        // Engine and its helper processes in order.
+        // SAFETY: the handler only stores to an atomic, which is signal-safe.
+        unsafe {
+            libc::signal(
+                libc::SIGINT,
+                record_termination_request as *const () as libc::sighandler_t,
+            );
+            libc::signal(
+                libc::SIGTERM,
+                record_termination_request as *const () as libc::sighandler_t,
+            );
+        }
+    }
     #[cfg(unix)]
     let automation_launch = match AutomationLaunch::from_process_arguments() {
         Ok(launch) => launch,
@@ -83,6 +110,19 @@ pub fn run() {
     #[cfg(not(feature = "ui-only"))]
     let opened_urls = receive_opened_urls(&application);
     application.run(move |cx: &mut App| {
+        #[cfg(unix)]
+        cx.spawn(async move |cx| {
+            loop {
+                cx.background_executor()
+                    .timer(Duration::from_millis(50))
+                    .await;
+                if TERMINATION_REQUESTED.load(Ordering::Relaxed) {
+                    cx.update(|cx| cx.quit());
+                    break;
+                }
+            }
+        })
+        .detach();
         cx.set_global(BrowserWindowRegistry::default());
         // Keep the Engine runtime warm for its configured idle period after a
         // normal last-window close. Automation still exits with its last window.
