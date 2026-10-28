@@ -69,7 +69,7 @@ impl BrowserWindow {
             sidebar.docked_width(cx)
         };
         let (content_width, opacity) = if collapsed {
-            (metrics::SIDEBAR_COLLAPSED_WIDTH, 1.0 - sidebar.expanded())
+            (full_width, 1.0 - sidebar.expanded())
         } else if over_page {
             (full_width, 1.0)
         } else {
