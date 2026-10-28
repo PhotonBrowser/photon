@@ -466,13 +466,17 @@ impl RenderOnce for Switch {
                 track
                     .bg(rgb(palette.chosen))
                     .surface_fade()
-                    .hover_style(|style| style.bg(rgb(palette.chosen_hover)))
+                    .when(!disabled, |track| {
+                        track.hover_style(|style| style.bg(rgb(palette.chosen_hover)))
+                    })
             })
             .when(!visual_on, |track| {
                 track
                     .bg(rgba(palette.selected_surface))
                     .surface_fade()
-                    .hover_style(|style| style.bg(rgba(palette.hover_surface)))
+                    .when(!disabled, |track| {
+                        track.hover_style(|style| style.bg(rgba(palette.hover_surface)))
+                    })
             })
             .child(
                 div()

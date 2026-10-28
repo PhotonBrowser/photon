@@ -78,6 +78,8 @@ pub(super) struct Omnibox {
     /// The submitted text cannot be opened. Cleared by the next edit.
     invalid: bool,
     site_info_open: bool,
+    /// Keeps the site information popover drawn while it animates away.
+    site_info_presence: super::motion::Presence<()>,
     field_hovered: bool,
     address_text_offset: Tween,
     address_text_opacity: Tween,
@@ -185,6 +187,7 @@ impl Omnibox {
             current_url: String::new(),
             invalid: false,
             site_info_open: false,
+            site_info_presence: Default::default(),
             field_hovered: false,
             address_text_offset: Tween::at(0.0),
             address_text_opacity: Tween::at(1.0),

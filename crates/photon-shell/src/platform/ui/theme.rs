@@ -176,6 +176,8 @@ pub(super) struct ThemeColors {
     pub error: u32,
     /// A button that deletes or resets, under the pointer.
     pub error_hover_surface: u32,
+    /// A secure connection's status.
+    pub secure: u32,
     pub performance_palette: PerformancePalette,
     pub menu_surface: u32,
     /// The shortcut icon well, lightly tinted so its page backdrop shows through.
@@ -301,12 +303,18 @@ impl ThemeColors {
         } else {
             &theme.colors.error.light
         });
+        let secure = color(if dark {
+            &theme.colors.secure.dark
+        } else {
+            &theme.colors.secure.light
+        });
         let surfaces = style
             .transparency_percent
             .map(|percent| theme.transparency.for_percent(percent));
         Self::from_colors(
             colors,
             error,
+            secure,
             surfaces
                 .as_ref()
                 .unwrap_or_else(|| theme.transparency.for_setting(style.transparency)),
@@ -318,6 +326,7 @@ impl ThemeColors {
     fn from_colors(
         colors: BaseColors,
         error: Rgba,
+        secure: Rgba,
         surfaces: &crate::platform::theme_config::SurfaceOpacity,
         style: WindowStyle,
         dark: bool,
@@ -386,6 +395,7 @@ impl ThemeColors {
             selection: to_rgba_token(colors.selected),
             error: to_rgb_token(error),
             error_hover_surface: to_rgba_token(error.opacity(opacity.error_hover)),
+            secure: to_rgb_token(secure),
             performance_palette: PerformancePalette {
                 surface: to_rgba_token(
                     colors

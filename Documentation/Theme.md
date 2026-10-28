@@ -25,8 +25,9 @@ from the [settings](Profile.md), and never choose colors locally.
 | `text_primary`, `text_secondary` | Text |
 | `suggestion_address` | Addresses in omnibox suggestions (a link blue) |
 | `selection`, `field_error_border`, `modal_backdrop` | Selected text, an unopenable address, the dim behind a modal |
+| `secure` | A secure connection's status in the site information popover |
 
-The light and dark base palettes, accent colors, error colors, and the colors
+The light and dark base palettes, accent colors, error and secure colors, and the colors
 drawn on accents are in `theme.toml`. Named opacity tokens adjust derived
 roles such as surfaces, borders, secondary text, and hover states. Palettes are
 cached per appearance, transparency, and window color, so renders do not rebuild

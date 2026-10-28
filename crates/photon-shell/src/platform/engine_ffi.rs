@@ -405,6 +405,11 @@ pub(super) mod embedder {
         pub fn photon_view_go_back(view: *mut c_void);
         pub fn photon_view_go_forward(view: *mut c_void);
         pub fn photon_view_toggle_audio_mute(view: *mut c_void) -> bool;
+        pub fn photon_view_set_microphone_permission(
+            view: *mut c_void,
+            origin: *const c_char,
+            granted: bool,
+        );
         pub fn photon_view_shutdown(view: *mut c_void);
         pub fn photon_view_destroy(view: *mut c_void);
     }

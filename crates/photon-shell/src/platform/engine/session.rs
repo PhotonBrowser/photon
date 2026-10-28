@@ -612,6 +612,17 @@ impl EngineSession {
         unsafe { embedder::photon_view_set_visible(self.view, visible) }
     }
 
+    /// Allows or blocks the microphone for `origin`'s site; blocking ends
+    /// capture it has running.
+    pub(in crate::platform) fn set_microphone_permission(&mut self, origin: &str, granted: bool) {
+        let Ok(origin) = std::ffi::CString::new(origin) else {
+            return;
+        };
+        unsafe {
+            embedder::photon_view_set_microphone_permission(self.view, origin.as_ptr(), granted)
+        }
+    }
+
     pub(in crate::platform) fn toggle_audio_mute(&mut self) -> bool {
         unsafe { embedder::photon_view_toggle_audio_mute(self.view) }
     }

@@ -439,9 +439,32 @@ pub fn display_domain(url: &str) -> String {
     }
 }
 
+/// The site a web page belongs to, as `scheme://host[:port]`, which owns
+/// what the page is allowed to do. `None` for pages with no site of their own,
+/// such as `about:` and `data:` pages.
+pub fn site_origin(url: &str) -> Option<String> {
+    let origin = url::Url::parse(url).ok()?.origin();
+    origin.is_tuple().then(|| origin.ascii_serialization())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn site_origin_is_the_pages_scheme_host_and_port() {
+        assert_eq!(
+            site_origin("https://www.google.com/search?q=hi").as_deref(),
+            Some("https://www.google.com")
+        );
+        assert_eq!(
+            site_origin("http://localhost:8080/a#b").as_deref(),
+            Some("http://localhost:8080")
+        );
+        assert_eq!(site_origin("about:blank"), None);
+        assert_eq!(site_origin("data:text/plain,hi"), None);
+        assert_eq!(site_origin("not a url"), None);
+    }
 
     const PAGES: [VisitedPage; 3] = [
         VisitedPage {

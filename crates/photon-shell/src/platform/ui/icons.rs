@@ -136,6 +136,51 @@ pub(super) fn sliders_horizontal_icon(color: u32, size: f32) -> impl IntoElement
     icon(lucide!("sliders-horizontal"), color, size)
 }
 
+/// A padlock, closed for a secure connection and open otherwise.
+pub(super) fn lock_icon(color: u32, size: f32, secure: bool) -> impl IntoElement {
+    let data: &'static [u8] = if secure {
+        lucide!("lock")
+    } else {
+        lucide!("lock-open")
+    };
+    icon(data, color, size)
+}
+
+/// A camera crossed out.
+pub(super) fn camera_off_icon(color: u32, size: f32) -> impl IntoElement {
+    icon(lucide!("video-off"), color, size)
+}
+
+/// A microphone, crossed out unless `on`.
+pub(super) fn microphone_icon(color: u32, size: f32, on: bool) -> impl IntoElement {
+    let data: &'static [u8] = if on {
+        lucide!("mic")
+    } else {
+        lucide!("mic-off")
+    };
+    icon(data, color, size)
+}
+
+/// A small window inside a larger one, for picture in picture.
+pub(super) fn pop_out_icon(color: u32, size: f32) -> impl IntoElement {
+    icon(lucide!("picture-in-picture-2"), color, size)
+}
+
+/// A cookie, for site data.
+pub(super) fn cookie_icon(color: u32, size: f32) -> impl IntoElement {
+    icon(lucide!("cookie"), color, size)
+}
+
+/// A box with an arrow leaving it, for something that opens elsewhere.
+pub(super) fn external_icon(color: u32, size: f32) -> impl IntoElement {
+    icon(lucide!("square-arrow-out-up-right"), color, size)
+}
+
+/// An arrow pointing right, for a row that leads further.
+pub(super) fn chevron_right_icon(color: u32, size: f32) -> impl IntoElement {
+    icon(lucide!("chevron-right"), color, size)
+}
+
 /// A window with a panel down its left side, for showing or hiding the
 /// sidebar.
 pub(super) fn sidebar_icon(color: u32, size: f32) -> impl IntoElement {

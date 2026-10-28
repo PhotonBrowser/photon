@@ -483,6 +483,14 @@ extern "C" bool photon_view_toggle_audio_mute(void* view)
     return view && static_cast<ViewHandle*>(view)->view->toggle_audio_mute();
 }
 
+extern "C" void photon_view_set_microphone_permission(void* view,
+    char const* origin, bool granted)
+{
+    if (view && origin)
+        static_cast<ViewHandle*>(view)->view->set_microphone_permission(origin,
+            granted);
+}
+
 extern "C" void photon_view_set_focus(void* view, bool focused)
 {
     if (view)

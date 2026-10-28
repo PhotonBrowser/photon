@@ -36,6 +36,7 @@ pub(crate) struct BasePalette {
 #[derive(Deserialize)]
 pub(crate) struct ColorTokens {
     pub(crate) error: Appearance<String>,
+    pub(crate) secure: Appearance<String>,
     pub(crate) chosen_foreground: Appearance<String>,
     pub(crate) accent_hover_background: Appearance<String>,
     pub(crate) modal_backdrop: Appearance<String>,
@@ -205,6 +206,8 @@ fn validate_theme(theme: &ThemeDefinition) {
         &theme.palette.dark.selected,
         &colors.error.light,
         &colors.error.dark,
+        &colors.secure.light,
+        &colors.secure.dark,
         &colors.chosen_foreground.light,
         &colors.chosen_foreground.dark,
         &colors.accent_hover_background.light,

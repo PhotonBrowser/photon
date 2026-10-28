@@ -8,9 +8,10 @@ use std::rc::Rc;
 use super::super::button::toolbar_button;
 use super::super::controls::OwnsClicks;
 use super::super::controls::themed_text_input;
-use super::super::icons::{search_icon_sized, shield_icon, sliders_horizontal_icon};
+use super::super::icons::{search_icon_sized, sliders_horizontal_icon};
 use super::super::layout::{Elevated, Elevation, Raised};
 use super::super::layout::{h_stack, v_stack};
+use super::super::menu::MENU_MOTION;
 use super::super::motion::{AnimateIn, fade, popover, translated};
 use super::super::workspace_layout::WorkspaceLayout;
 use super::super::{metrics, theme::ThemeColors};
@@ -49,7 +50,7 @@ impl Omnibox {
         } else {
             input.overflow_x_scroll()
         };
-        let icon_color = if site_info_open && !style.trailing_site_info {
+        let icon_color = if site_info_open {
             palette.text_primary
         } else {
             palette.text_secondary
@@ -59,12 +60,15 @@ impl Omnibox {
             "Site information",
             0,
             true,
-            if style.trailing_site_info {
-                sliders_horizontal_icon(palette.text_secondary, metrics::OMNIBOX_ICON_SIZE)
-                    .into_any_element()
-            } else {
-                shield_icon(icon_color, metrics::OMNIBOX_ICON_SIZE).into_any_element()
-            },
+            sliders_horizontal_icon(
+                icon_color,
+                if style.trailing_site_info {
+                    metrics::TOOLBAR_ICON_SIZE
+                } else {
+                    metrics::OMNIBOX_ICON_SIZE
+                },
+            )
+            .into_any_element(),
             palette,
             Box::new(cx.listener(move |this, _, _, cx| {
                 this.site_info_open = !this.site_info_open;
@@ -73,7 +77,9 @@ impl Omnibox {
         )
         .aria_expanded(site_info_open);
         let site_info_button = if style.trailing_site_info {
-            site_info_button.rounded_r(px(metrics::sidebar_omnibox_button_radius()))
+            site_info_button
+                .size(px(metrics::SIDEBAR_OMNIBOX_BUTTON_SIZE))
+                .rounded(px(metrics::sidebar_omnibox_button_radius()))
         } else {
             site_info_button
         };
@@ -110,28 +116,20 @@ impl Omnibox {
             .h(px(style.height - 2.0 * metrics::OMNIBOX_BORDER_WIDTH));
 
         if centered_sidebar {
-            let content = h_stack()
-                .absolute()
-                .left(px(metrics::OMNIBOX_HORIZONTAL_PADDING))
-                .right(px(metrics::SIDEBAR_OMNIBOX_TEXT_INSET))
-                .top_0()
-                .bottom_0()
-                .items_center()
-                .child(input);
+            // The button sits as far from the end as from the top and bottom.
             let row = row
                 .relative()
-                .child(content)
-                .when(self.webview.is_some(), |row| {
-                    row.child(
-                        site_info_button
-                            .absolute()
-                            .right(px(metrics::SIDEBAR_OMNIBOX_BUTTON_INSET))
-                            .top(px((style.height
-                                - 2.0 * metrics::OMNIBOX_BORDER_WIDTH
-                                - metrics::TOOLBAR_BUTTON_SIZE)
-                                / 2.0)),
-                    )
-                });
+                .pl(px(metrics::OMNIBOX_HORIZONTAL_PADDING))
+                .pr(px(metrics::SIDEBAR_OMNIBOX_BUTTON_INSET))
+                .child(
+                    h_stack()
+                        .flex_1()
+                        .min_w_0()
+                        .h_full()
+                        .items_center()
+                        .child(input),
+                )
+                .child(site_info_button);
             if let Some(icon) = icon {
                 row.child(
                     gpui::div()
@@ -147,71 +145,140 @@ impl Omnibox {
                 row
             }
         } else if style.trailing_site_info {
-            row.px(px(metrics::OMNIBOX_HORIZONTAL_PADDING))
+            // The button sits as far from the end as from the top and bottom.
+            row.pl(px(metrics::OMNIBOX_HORIZONTAL_PADDING))
+                .pr(px(metrics::SIDEBAR_OMNIBOX_BUTTON_INSET))
                 .children(icon)
                 .child(input)
-                .when(self.webview.is_some(), |row| row.child(site_info_button))
+                .child(site_info_button)
         } else {
             row.px(px(metrics::OMNIBOX_HORIZONTAL_PADDING))
-                .when(self.webview.is_some(), |row| row.child(site_info_button))
+                .child(site_info_button)
                 .children(icon)
                 .child(input)
         }
     }
 
     pub(super) fn site_info_popover(
-        &self,
+        &mut self,
         palette: ThemeColors,
         style: FieldStyle,
         workspace_layout: &WorkspaceLayout,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let site = photon_core::display_domain(&self.page_url(cx));
-        let secure = self
-            .webview
-            .as_ref()
-            .and_then(|webview| webview.read(cx).state.connection_secure);
+        let motion = super::super::settings::Settings::motion(cx);
+        let transition = self
+            .site_info_presence
+            .sync(self.site_info_open.then_some(()), MENU_MOTION, &motion, cx)
+            .map(|((), transition)| transition);
+        // The site's details are read only while the popover is drawn, not on
+        // every caret blink of the field.
+        let content = transition.map(|transition| {
+            super::site_info::popover(
+                self.site_info(cx),
+                self.site_info_actions(cx),
+                metrics::SITE_INFO_WIDTH,
+                transition,
+                palette,
+                cx,
+            )
+            .into_any_element()
+        });
         let opens_toward_page =
             workspace_layout.sidebar_region() != Some(photon_core::DockRegion::Trailing);
-        let popover_width = if style.trailing_site_info {
+        // Like a context menu, the popover opens from the button, over the
+        // page rather than within the narrow sidebar.
+        let button_inset = metrics::SIDEBAR_OMNIBOX_BUTTON_INSET + metrics::OMNIBOX_BORDER_WIDTH;
+        let button_start = if style.trailing_site_info {
             let sidebar_width = workspace_layout
                 .sidebar_extent()
                 .unwrap_or_else(|| super::super::settings::Settings::get(cx).sidebar.width())
                 as f32;
-            metrics::SITE_INFO_WIDTH
-                .min(sidebar_width - metrics::SIDEBAR_PADDING)
-                .max(metrics::MENU_WIDTH)
+            sidebar_width
+                - 2.0 * metrics::SIDEBAR_PADDING
+                - button_inset
+                - metrics::SIDEBAR_OMNIBOX_BUTTON_SIZE
         } else {
-            metrics::SITE_INFO_WIDTH
+            metrics::OMNIBOX_HORIZONTAL_PADDING
         };
         deferred(
             gpui::div()
                 .absolute()
-                .when(style.trailing_site_info && opens_toward_page, |popover| {
-                    popover.left_0()
+                .when(opens_toward_page || !style.trailing_site_info, |popover| {
+                    popover.left(px(button_start))
                 })
                 .when(style.trailing_site_info && !opens_toward_page, |popover| {
-                    popover.right_0()
+                    popover.right(px(button_inset))
                 })
-                .when(!style.trailing_site_info, |popover| popover.left_0())
                 .top(px(style.height + metrics::MENU_ITEM_GAP))
+                // Only the open popover takes clicks; a leaving one lets them through.
                 .when(self.site_info_open, |popover| {
                     popover
                         .occlude()
-                        .on_mouse_down_out(cx.listener(|this, _, _, cx| {
-                            this.site_info_open = false;
-                            cx.notify();
+                        .on_mouse_down_out(cx.listener(|this, _, _, cx| this.close_site_info(cx)))
+                        .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, _, cx| {
+                            if event.keystroke.key == "escape" {
+                                cx.stop_propagation();
+                                this.close_site_info(cx);
+                            }
                         }))
-                        .child(super::site_info::popover(
-                            site,
-                            secure,
-                            popover_width,
-                            palette,
-                            cx,
-                        ))
-                }),
+                })
+                .children(content),
         )
         .priority(1)
+    }
+
+    fn close_site_info(&mut self, cx: &mut Context<Self>) {
+        if self.site_info_open {
+            self.site_info_open = false;
+            cx.notify();
+        }
+    }
+
+    fn site_info(&self, cx: &Context<Self>) -> super::site_info::SiteInfo {
+        let webview = self.webview.as_ref().map(|webview| webview.read(cx));
+        super::site_info::SiteInfo {
+            site: Some(photon_core::display_domain(&self.page_url(cx)))
+                .filter(|site| !site.is_empty())
+                .unwrap_or_else(|| "Photon".to_owned()),
+            connection_secure: webview.and_then(|webview| webview.state.connection_secure),
+            sound_on: webview.map(|webview| !webview.audio_muted),
+            microphone_on: webview.and_then(|webview| webview.microphone_allowed_here()),
+        }
+    }
+
+    fn site_info_actions(&self, cx: &mut Context<Self>) -> super::site_info::SiteInfoActions {
+        let this = cx.entity().downgrade();
+        let close = this.clone();
+        super::site_info::SiteInfoActions {
+            close: Box::new(move |_, _, cx| {
+                close.update(cx, |this, cx| this.close_site_info(cx)).ok();
+            }),
+            toggle_microphone: Box::new({
+                let this = this.clone();
+                move |_, _, cx| {
+                    this.update(cx, |this, cx| {
+                        if let Some(webview) = this.webview.clone() {
+                            webview.update(cx, |webview, cx| {
+                                let allowed = webview.microphone_allowed_here() == Some(true);
+                                webview.set_microphone_allowed_here(!allowed, cx);
+                            });
+                        }
+                        cx.notify();
+                    })
+                    .ok();
+                }
+            }),
+            toggle_sound: Box::new(move |_, _, cx| {
+                this.update(cx, |this, cx| {
+                    if let Some(webview) = this.webview.clone() {
+                        webview.update(cx, |webview, cx| webview.toggle_audio_mute(cx));
+                    }
+                    cx.notify();
+                })
+                .ok();
+            }),
+        }
     }
 
     /// The highlighted suggestion's icon while suggesting, otherwise a search icon.

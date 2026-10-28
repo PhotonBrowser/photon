@@ -13,5 +13,5 @@ pub use resolve::{
 pub use suggest::{
     IndexedVisitedPage, PastSearch, Suggestion, SuggestionKind, Suggestions, VisitedPage,
     display_address, display_domain, match_words, normalized_display_address,
-    normalized_match_text, suggest, suggest_with, suggest_with_indexed,
+    normalized_match_text, site_origin, suggest, suggest_with, suggest_with_indexed,
 };

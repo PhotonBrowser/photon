@@ -77,6 +77,8 @@ pub(in crate::platform) struct PhotonWebView {
     /// Whether the page is playing audio and whether its tab is muted.
     pub(in crate::platform) audio_playing: bool,
     pub(in crate::platform) audio_muted: bool,
+    /// The sites this tab has allowed to use the microphone.
+    microphone_allowed: std::collections::HashSet<String>,
     /// When the current load started.
     loading_since: Option<Instant>,
     /// Redraws the tab once the spinner delay passes, as the spinner's own
@@ -358,6 +360,7 @@ impl PhotonWebView {
             favicon: None,
             audio_playing: false,
             audio_muted: false,
+            microphone_allowed: std::collections::HashSet::new(),
             loading_since: None,
             spinner_reveal: None,
             dialogs: PageDialogs::default(),
@@ -507,6 +510,35 @@ impl PhotonWebView {
     /// surface, whose state the chrome ignores until someone navigates.
     pub(super) fn has_page(&self) -> bool {
         !self.state.url.is_empty() && self.state.url != "about:blank"
+    }
+
+    /// Records that the user allowed `origin` the microphone when it asked.
+    pub(in crate::platform) fn microphone_allowed(&mut self, origin: &str) {
+        if let Some(origin) = photon_core::site_origin(origin) {
+            self.microphone_allowed.insert(origin);
+        }
+    }
+
+    /// Whether the site showing now may use the microphone; `None` for a page
+    /// with no site of its own.
+    pub(super) fn microphone_allowed_here(&self) -> Option<bool> {
+        photon_core::site_origin(&self.state.url)
+            .map(|origin| self.microphone_allowed.contains(&origin))
+    }
+
+    /// Allows or blocks the microphone for the site showing now. Blocking ends
+    /// capture it has running, and it is not asked again until allowed.
+    pub(super) fn set_microphone_allowed_here(&mut self, allowed: bool, cx: &mut Context<Self>) {
+        let Some(origin) = photon_core::site_origin(&self.state.url) else {
+            return;
+        };
+        self.session.set_microphone_permission(&origin, allowed);
+        if allowed {
+            self.microphone_allowed.insert(origin);
+        } else {
+            self.microphone_allowed.remove(&origin);
+        }
+        self.state_changed(cx);
     }
 
     pub(super) fn omnibox_url(&self) -> String {

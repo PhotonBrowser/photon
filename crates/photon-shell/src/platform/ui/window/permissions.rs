@@ -85,7 +85,12 @@ impl BrowserWindow {
         if let Some(request) = self.permission_coordinator.resolve(entry.token) {
             entry
                 .webview
-                .update(cx, |view, _| {
+                .update(cx, |view, cx| {
+                    // A frame's grant is not the page's, so only the page's own shows.
+                    if granted && request.requesting_origin == request.top_level_origin {
+                        view.microphone_allowed(&request.requesting_origin);
+                        cx.notify();
+                    }
                     view.answer_permission_request(
                         request.engine_request_id,
                         &request.document_id,

@@ -205,6 +205,8 @@ void photon_view_stop_loading(void* view);
 void photon_view_go_back(void* view);
 void photon_view_go_forward(void* view);
 bool photon_view_toggle_audio_mute(void* view);
+void photon_view_set_microphone_permission(void* view, char const* origin,
+    bool granted);
 void photon_view_set_focus(void* view, bool focused);
 // Runs an item of the context menu most recently requested, by index.
 void photon_view_activate_context_menu_item(void* view, size_t index);
