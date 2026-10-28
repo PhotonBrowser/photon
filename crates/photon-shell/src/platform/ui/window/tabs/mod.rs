@@ -736,7 +736,7 @@ impl BrowserWindow {
             {
                 self.open_tab(window, cx);
             } else if self.empty_page.is_none() {
-                self.show_empty_new_tab_page(window, cx);
+                self.show_empty_new_tab_page(true, window, cx);
             }
             cx.notify();
             return;
