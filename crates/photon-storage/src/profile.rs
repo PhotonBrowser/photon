@@ -2,7 +2,7 @@
 
 use photon_core::{
     BrowserSettings, ClearBrowsingData, History, MAX_FAVOURITES, MAX_NEW_TAB_PINS, Session,
-    WorkspaceSettings,
+    Shortcut, Space, SpaceId, WorkspaceSettings,
 };
 use std::collections::HashSet;
 use std::collections::hash_map::DefaultHasher;
@@ -810,10 +810,8 @@ fn valid_settings_state(settings: &BrowserSettings) -> bool {
     {
         return false;
     }
-    let mut ids = HashSet::new();
     settings.spaces.all().iter().all(|space| {
-        ids.insert(space.id)
-            && space.name.len() <= 256
+        space.name.len() <= 256
             && space.pinned_tabs.len() <= MAX_SPACE_PINS
             && space.favourites.len() <= MAX_FAVOURITES
             && space
@@ -909,8 +907,9 @@ fn decode_toml_settings(mut document: toml::Value) -> (BrowserSettings, bool) {
             })
         });
     let parsed = document.clone().try_into::<BrowserSettings>();
-    let partially_unreadable = parsed.is_err();
+    let mut partially_unreadable = parsed.is_err();
     let mut settings = parsed.unwrap_or_else(|_| readable_toml_settings(document));
+    partially_unreadable |= settings.spaces.repair_duplicate_ids();
     settings.workspace = saved_workspace
         .and_then(|workspace| workspace.try_into::<WorkspaceSettings>().ok())
         .filter(WorkspaceSettings::is_valid)
@@ -922,9 +921,12 @@ fn decode_toml_settings(mut document: toml::Value) -> (BrowserSettings, bool) {
 /// Keeps readable settings and defaults only invalid fields when a newer
 /// build writes a value this build does not understand.
 fn readable_toml_settings(document: toml::Value) -> BrowserSettings {
-    let toml::Value::Table(fields) = document else {
+    let toml::Value::Table(mut fields) = document else {
         return BrowserSettings::default();
     };
+    if let Some(spaces) = fields.get_mut("spaces") {
+        keep_readable_spaces(spaces);
+    }
     let readable = fields
         .into_iter()
         .filter(|(key, value)| {
@@ -936,6 +938,47 @@ fn readable_toml_settings(document: toml::Value) -> BrowserSettings {
     toml::Value::Table(readable)
         .try_into::<BrowserSettings>()
         .unwrap_or_default()
+}
+
+/// Narrows unreadable data inside the spaces to the smallest part, so one
+/// bad shortcut or space does not cost every space, pinned tab and favourite.
+fn keep_readable_spaces(spaces: &mut toml::Value) {
+    let Some(fields) = spaces.as_table_mut() else {
+        return;
+    };
+    for key in ["active", "next_id"] {
+        if fields
+            .get(key)
+            .is_some_and(|value| value.clone().try_into::<SpaceId>().is_err())
+        {
+            fields.remove(key);
+        }
+    }
+    let Some(toml::Value::Array(list)) = fields.get_mut("spaces") else {
+        return;
+    };
+    for space in list.iter_mut() {
+        let Some(space) = space.as_table_mut() else {
+            continue;
+        };
+        for key in ["pinned_tabs", "favourites"] {
+            if let Some(toml::Value::Array(shortcuts)) = space.get_mut(key) {
+                shortcuts.retain_mut(readable_shortcut);
+            }
+        }
+    }
+    list.retain(|space| space.clone().try_into::<Space>().is_ok());
+}
+
+/// Whether `shortcut` reads, titling one saved without a title by its address.
+fn readable_shortcut(shortcut: &mut toml::Value) -> bool {
+    if let Some(fields) = shortcut.as_table_mut()
+        && !fields.contains_key("title")
+        && let Some(url) = fields.get("url").cloned()
+    {
+        fields.insert("title".to_owned(), url);
+    }
+    shortcut.clone().try_into::<Shortcut>().is_ok()
 }
 
 #[cfg(test)]
@@ -1839,5 +1882,80 @@ mod tests {
         assert!(history.pages().is_empty());
         assert_eq!(profile.0.load_history(), History::default());
         assert_eq!(profile.0.data_usage().favicons, 0);
+    }
+
+    #[test]
+    fn an_unknown_space_colour_keeps_every_space() {
+        let source = r#"
+[spaces]
+active = 2
+[[spaces.spaces]]
+id = 1
+name = "Home"
+[[spaces.spaces]]
+id = 2
+name = "Work"
+color = "mauve"
+favourites = [{ title = "Docs", url = "https://docs.example" }]
+"#;
+        let (settings, _) = decode_settings(source.as_bytes()).expect("settings decode");
+        let spaces = settings.spaces.all();
+        assert_eq!(spaces.len(), 2);
+        assert_eq!(settings.spaces.active().name, "Work");
+        assert_eq!(spaces[1].color, photon_core::WindowColor::System);
+        assert_eq!(spaces[1].favourites.len(), 1);
+    }
+
+    #[test]
+    fn unreadable_shortcuts_and_spaces_are_dropped_alone() {
+        let source = r#"
+[spaces]
+active = 3
+[[spaces.spaces]]
+id = 1
+name = "Home"
+pinned_tabs = [{ url = "https://untitled.example" }, { title = 4 }, { title = "Mail", url = "https://mail.example" }]
+[[spaces.spaces]]
+id = 2
+name = 7
+[[spaces.spaces]]
+id = 3
+name = "Work"
+"#;
+        let (settings, partially_unreadable) =
+            decode_settings(source.as_bytes()).expect("settings decode");
+        assert!(partially_unreadable);
+        let spaces = settings.spaces.all();
+        assert_eq!(
+            spaces.iter().map(|space| space.id).collect::<Vec<_>>(),
+            [1, 3]
+        );
+        assert_eq!(settings.spaces.active().name, "Work");
+        let pinned = &spaces[0].pinned_tabs;
+        assert_eq!(pinned.len(), 2);
+        assert_eq!(pinned[0].title, "https://untitled.example");
+        assert_eq!(pinned[1].title, "Mail");
+    }
+
+    #[test]
+    fn duplicate_space_ids_are_repaired_not_reset() {
+        let source = r#"
+theme = "dark"
+[spaces]
+active = 1
+[[spaces.spaces]]
+id = 1
+name = "Home"
+[[spaces.spaces]]
+id = 1
+name = "Work"
+"#;
+        let (settings, partially_unreadable) =
+            decode_settings(source.as_bytes()).expect("settings decode");
+        assert!(partially_unreadable);
+        let spaces = settings.spaces.all();
+        assert_eq!(spaces.len(), 2);
+        assert_ne!(spaces[0].id, spaces[1].id);
+        assert_eq!(settings.spaces.active().name, "Home");
     }
 }

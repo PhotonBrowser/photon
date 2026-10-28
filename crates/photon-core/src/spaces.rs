@@ -104,7 +104,9 @@ impl SpaceColors {
 pub struct Space {
     pub id: SpaceId,
     pub name: String,
-    /// The colour the window takes while the space is shown.
+    /// The colour the window takes while the space is shown. A colour from
+    /// another build reads as the system grey rather than losing the space.
+    #[serde(deserialize_with = "tolerant_color")]
     pub color: WindowColor,
     /// Fine-grained colour selected in the theme picker; absent for legacy presets.
     pub tint: Option<SpaceTint>,
@@ -197,6 +199,10 @@ fn default_name(number: usize) -> String {
 pub struct Spaces {
     spaces: Vec<Space>,
     active: SpaceId,
+    /// The id the next new space takes. Ids are never reused, so tabs left in
+    /// a deleted space cannot join a later one. Older profiles lack it, and
+    /// it never falls below one past the highest id in use.
+    next_id: SpaceId,
 }
 
 impl Default for Spaces {
@@ -204,6 +210,7 @@ impl Default for Spaces {
         Self {
             spaces: vec![Space::default()],
             active: Space::default().id,
+            next_id: Space::default().id + 1,
         }
     }
 }
@@ -258,7 +265,7 @@ impl Spaces {
     /// given, and returns it.
     pub fn add(&mut self, name: Option<String>, color: WindowColor, gradient: bool) -> SpaceId {
         self.ensure_one();
-        let id = self.spaces.iter().map(|space| space.id).max().unwrap_or(0) + 1;
+        let id = self.reserve_id();
         let name = name
             .filter(|name| !name.trim().is_empty())
             .unwrap_or_else(|| default_name(self.spaces.len() + 1));
@@ -334,6 +341,8 @@ impl Spaces {
         let Some(index) = self.spaces.iter().position(|space| space.id == id) else {
             return false;
         };
+        // Retire the id before it leaves the list, for profiles without one.
+        self.next_id = self.next_id.max(self.highest_id() + 1);
         self.spaces.remove(index);
         if self.active == id {
             self.active = self.spaces[index.min(self.spaces.len() - 1)].id;
@@ -380,6 +389,37 @@ impl Spaces {
         }
     }
 
+    /// Gives every space after the first with a repeated id a new one, so
+    /// damaged or hand-edited profiles keep all their spaces. Returns whether
+    /// any id changed.
+    pub fn repair_duplicate_ids(&mut self) -> bool {
+        let mut seen = std::collections::HashSet::new();
+        let mut repaired = false;
+        for index in 0..self.spaces.len() {
+            if !seen.insert(self.spaces[index].id) {
+                let id = self.reserve_id();
+                self.spaces[index].id = id;
+                seen.insert(id);
+                repaired = true;
+            }
+        }
+        if self.get(self.active).is_none() {
+            self.active = self.all()[0].id;
+        }
+        repaired
+    }
+
+    fn highest_id(&self) -> SpaceId {
+        self.spaces.iter().map(|space| space.id).max().unwrap_or(0)
+    }
+
+    /// Takes the next unused id.
+    fn reserve_id(&mut self) -> SpaceId {
+        let id = self.next_id.max(self.highest_id().saturating_add(1));
+        self.next_id = id.saturating_add(1);
+        id
+    }
+
     fn ensure_one(&mut self) {
         if self.spaces.is_empty() {
             self.spaces.push(Space::default());
@@ -401,6 +441,7 @@ mod tests {
         let spaces = Spaces {
             spaces: Vec::new(),
             active: 7,
+            next_id: 0,
         };
         assert_eq!(spaces.all().len(), 1);
         assert_eq!(spaces.active().name, "Space 1");
@@ -612,5 +653,42 @@ mod tests {
         assert_eq!(spaces.active().tint, None);
         assert_eq!(spaces.active().colors, None);
         assert_eq!(spaces.active().color, WindowColor::System);
+    }
+
+    #[test]
+    fn deleted_space_ids_are_never_reused() {
+        let mut spaces = Spaces::default();
+        let second = spaces.add(None, WindowColor::Blue, false);
+        assert!(spaces.remove(second));
+        let third = spaces.add(None, WindowColor::Blue, false);
+        assert!(third > second);
+
+        // A profile saved before ids were tracked still never reuses one.
+        let mut legacy: Spaces =
+            serde_json::from_str(r#"{"active":1,"spaces":[{"id":1},{"id":5}]}"#)
+                .expect("legacy spaces parse");
+        assert!(legacy.remove(5));
+        assert_eq!(legacy.add(None, WindowColor::Blue, false), 6);
+    }
+
+    #[test]
+    fn duplicate_ids_are_repaired_keeping_every_space() {
+        let mut spaces: Spaces = serde_json::from_str(
+            r#"{"active":2,"spaces":[{"id":2,"name":"A"},{"id":2,"name":"B"}]}"#,
+        )
+        .expect("spaces parse");
+        assert!(spaces.repair_duplicate_ids());
+        assert_eq!(spaces.all().len(), 2);
+        assert_eq!(spaces.all()[0].id, 2);
+        assert_eq!(spaces.all()[1].id, 3);
+        assert_eq!(spaces.active().name, "A");
+        assert_eq!(spaces.add(None, WindowColor::Blue, false), 4);
+    }
+
+    #[test]
+    fn unknown_colours_read_as_system() {
+        let space: Space = serde_json::from_str(r#"{"id":3,"color":"mauve"}"#).unwrap();
+        assert_eq!(space.id, 3);
+        assert_eq!(space.color, WindowColor::System);
     }
 }
