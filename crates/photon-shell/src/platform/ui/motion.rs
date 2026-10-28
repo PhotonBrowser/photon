@@ -7,7 +7,7 @@ use gpui::{
 };
 use gpui_motion::{
     Color, CustomEasing, Easing, Frame, Motion, MotionElement, MotionValue, PressScaleElement,
-    Spring, StyleMotion, StyleProperty, StyleTarget, Target,
+    Property, Spring, StyleMotion, StyleProperty, StyleTarget, Target,
 };
 use std::{
     sync::OnceLock,
@@ -261,6 +261,7 @@ pub(super) struct Entrance {
     delay: Duration,
     curve: Curve,
     opacity_from: Option<f32>,
+    opacity_curve: Option<Curve>,
     offset_from: Option<(f32, f32)>,
     blur_from: Option<f32>,
     grow: Option<(f32, f32)>,
@@ -276,6 +277,7 @@ impl Entrance {
             delay: Duration::ZERO,
             curve: Curve::EaseOut,
             opacity_from: None,
+            opacity_curve: None,
             offset_from: None,
             blur_from: None,
             grow: None,
@@ -297,6 +299,12 @@ impl Entrance {
 
     pub const fn fade_from(mut self, opacity: f32) -> Self {
         self.opacity_from = Some(opacity);
+        self
+    }
+
+    /// Gives opacity a separate, monotonic transition when the main motion overshoots.
+    pub const fn fade_curve(mut self, curve: Curve) -> Self {
+        self.opacity_curve = Some(curve);
         self
     }
 
@@ -435,6 +443,7 @@ pub(super) fn theme_picker_entrance(width: f32) -> Entrance {
     let tokens = &crate::platform::theme_config::theme().motion.theme_picker;
     Entrance::new()
         .fade_from(0.0)
+        .fade_curve(Curve::EaseInOut)
         .scale_from_left(tokens.scale_from, width)
         .curve(Curve::Spring(SpringConfig::new(
             tokens.spring.stiffness,
@@ -478,6 +487,11 @@ fn apply_entrance<E: Styled + gpui::IntoElement + 'static>(
         .initial(initial)
         .transition(entrance.curve.transition(duration))
         .delay(delay);
+    let motion = if let Some(curve) = entrance.opacity_curve {
+        motion.transition_for(Property::Opacity, curve.transition(duration), delay)
+    } else {
+        motion
+    };
     let style_motion = blur.map(|blur| {
         let (target_blur, initial_blur) = match transition {
             Transition::Enter => (0.0, blur),
