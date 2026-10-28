@@ -4,7 +4,7 @@ use gpui::{ImageSource, ObjectFit, RenderImage, img, prelude::*, px};
 use image::{Frame, RgbaImage};
 use std::sync::{Arc, OnceLock};
 
-const TEXTURE_SIZE: u32 = 1_024;
+const TEXTURE_SIZE: u32 = 880;
 const TEXTURE_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/background-noise.rgba"));
 
 /// Grain clipped to `radius`, so it follows the rounded surface it covers.
@@ -31,7 +31,7 @@ fn texture() -> Arc<RenderImage> {
     TEXTURE
         .get_or_init(|| {
             let pixels = RgbaImage::from_raw(TEXTURE_SIZE, TEXTURE_SIZE, TEXTURE_BYTES.to_vec())
-                .expect("precomputed background noise texture has the expected dimensions");
+                .expect("tiled background noise texture has the expected dimensions");
             Arc::new(RenderImage::new([Frame::new(pixels)]))
         })
         .clone()

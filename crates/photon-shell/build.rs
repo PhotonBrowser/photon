@@ -1,12 +1,11 @@
 use std::{env, path::PathBuf};
 
-const BACKGROUND_NOISE_SIZE: u32 = 1_024;
+const BACKGROUND_NOISE_SIZE: u32 = 880;
 
 fn main() {
     println!("cargo:rerun-if-env-changed=PHOTON_ENGINE_BUILD_DIR");
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=src/platform/ui/window/background_noise.rs");
-
+    println!("cargo:rerun-if-changed=assets/zen-grain-bg.png");
     let out = PathBuf::from(env::var_os("OUT_DIR").unwrap());
     generate_background_noise(&out);
 
@@ -112,21 +111,14 @@ fn main() {
 }
 
 fn generate_background_noise(out: &std::path::Path) {
-    let mut pixels =
-        Vec::with_capacity(BACKGROUND_NOISE_SIZE as usize * BACKGROUND_NOISE_SIZE as usize * 4);
-    for y in 0..BACKGROUND_NOISE_SIZE {
-        for x in 0..BACKGROUND_NOISE_SIZE {
-            let mut value = x
-                .wrapping_mul(0x9e37_79b9)
-                .wrapping_add(y.wrapping_mul(0x85eb_ca6b))
-                .wrapping_add(0xc2b2_ae35);
-            value ^= value >> 16;
-            value = value.wrapping_mul(0x7feb_352d);
-            value ^= value >> 15;
-            let grain = (value >> 24) as u8;
-            pixels.extend_from_slice(&[grain, grain, grain, u8::MAX]);
-        }
-    }
-    std::fs::write(out.join("background-noise.rgba"), pixels)
-        .expect("write precomputed background noise texture");
+    let tile = image::load_from_memory(include_bytes!("assets/zen-grain-bg.png"))
+        .expect("Zen grain texture is a valid PNG")
+        .to_rgba8();
+    let (tile_width, tile_height) = tile.dimensions();
+    let pixels =
+        image::ImageBuffer::from_fn(BACKGROUND_NOISE_SIZE, BACKGROUND_NOISE_SIZE, |x, y| {
+            *tile.get_pixel(x % tile_width, y % tile_height)
+        });
+    std::fs::write(out.join("background-noise.rgba"), pixels.into_raw())
+        .expect("write tiled background noise texture");
 }

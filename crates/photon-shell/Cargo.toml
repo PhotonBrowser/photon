@@ -45,11 +45,14 @@ metal = "0.33"
 objc = "0.2"
 objc2 = "0.6.4"
 objc2-app-kit = { version = "0.3.2", default-features = false, features = [
+  "NSApplication",
   "NSButton",
   "NSButtonCell",
   "NSCell",
   "NSControl",
+  "NSEvent",
   "NSGlassEffectView",
+  "NSGraphics",
   "NSImage",
   "NSSegmentedControl",
   "NSResponder",
@@ -79,6 +82,7 @@ libc = "0.2"
 
 [build-dependencies]
 cc = "1"
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 [dev-dependencies]
 gpui = { package = "gpui-ce", path = "../../vendor/gpui-ce/crates/gpui", default-features = false, features = ["test-support"] }
