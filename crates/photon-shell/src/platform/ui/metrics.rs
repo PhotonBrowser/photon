@@ -50,6 +50,8 @@ pub(super) const WINDOW_CONTROL_GROUP_WIDTH: f32 =
 
 pub(super) const MENU_WIDTH: f32 = 220.0;
 pub(super) const SITE_INFO_WIDTH: f32 = 240.0;
+/// The site information button's icon in the address field.
+pub(super) const SITE_INFO_BUTTON_ICON_SIZE: f32 = 16.0;
 /// A row in the site information popover, and its leading icon.
 pub(super) const SITE_INFO_ROW_HEIGHT: f32 = 28.0;
 pub(super) const SITE_INFO_ICON_SIZE: f32 = 14.0;

@@ -131,9 +131,17 @@ pub(super) fn shield_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("shield"), color, size)
 }
 
-/// Horizontal controls, for site information in the sidebar address field.
-pub(super) fn sliders_horizontal_icon(color: u32, size: f32) -> impl IntoElement {
-    icon(lucide!("sliders-horizontal"), color, size)
+/// Two controls in a rounded square, for the site information button in the
+/// address field. From Hugeicons' free stroke rounded set.
+pub(super) fn site_controls_icon(color: u32, size: f32) -> impl IntoElement {
+    icon(
+        include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/assets/icons/settings-05-stroke-rounded.svg"
+        )),
+        color,
+        size,
+    )
 }
 
 /// A padlock, closed for a secure connection and open otherwise.

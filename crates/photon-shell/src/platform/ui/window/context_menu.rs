@@ -65,8 +65,20 @@ impl BrowserWindow {
         let preferred = window.mouse_position();
         let width = metrics::MENU_WIDTH.min(f32::from(viewport.width));
         let height = menu_height(&entries).min(f32::from(viewport.height));
-        let x = f32::from(preferred.x).clamp(0.0, f32::from(viewport.width) - width);
-        let y = f32::from(preferred.y).clamp(0.0, f32::from(viewport.height) - height);
+        let viewport_width = f32::from(viewport.width);
+        let viewport_height = f32::from(viewport.height);
+        let pointer_x = f32::from(preferred.x);
+        let pointer_y = f32::from(preferred.y);
+        let x = pointer_x.clamp(0.0, viewport_width - width);
+        // Menus invoked near the bottom should open above the pointer, keeping
+        // the control that opened them visible instead of covering it.
+        let below = viewport_height - pointer_y;
+        let preferred_y = if height <= below || pointer_y < height {
+            pointer_y
+        } else {
+            pointer_y - height
+        };
+        let y = preferred_y.clamp(0.0, viewport_height - height);
         self.context_menu = Some(ContextMenuState {
             position: point(px(x), px(y)),
             items: entries,

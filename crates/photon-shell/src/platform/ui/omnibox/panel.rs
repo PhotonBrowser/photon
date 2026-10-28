@@ -8,7 +8,7 @@ use std::rc::Rc;
 use super::super::button::toolbar_button;
 use super::super::controls::OwnsClicks;
 use super::super::controls::themed_text_input;
-use super::super::icons::{search_icon_sized, sliders_horizontal_icon};
+use super::super::icons::{search_icon_sized, site_controls_icon};
 use super::super::layout::{Elevated, Elevation, Raised};
 use super::super::layout::{h_stack, v_stack};
 use super::super::menu::MENU_MOTION;
@@ -55,26 +55,27 @@ impl Omnibox {
         } else {
             palette.text_secondary
         };
+        // The icon is a rounded square of its own, so a hover surface around it
+        // would draw a box in a box: the icon brightens instead.
         let site_info_button = toolbar_button(
             "site-info-button",
             "Site information",
             0,
             true,
-            sliders_horizontal_icon(
-                icon_color,
-                if style.trailing_site_info {
-                    metrics::TOOLBAR_ICON_SIZE
-                } else {
-                    metrics::OMNIBOX_ICON_SIZE
-                },
-            )
-            .into_any_element(),
+            site_controls_icon(icon_color, metrics::SITE_INFO_BUTTON_ICON_SIZE)
+                .group_hover("site-info-button", |style| {
+                    style.text_color(rgb(palette.text_primary))
+                })
+                .into_any_element(),
             palette,
             Box::new(cx.listener(move |this, _, _, cx| {
                 this.site_info_open = !this.site_info_open;
                 cx.notify();
             })),
         )
+        .group("site-info-button")
+        .hover_style(|style| style)
+        .active_style(|style| style)
         .aria_expanded(site_info_open);
         let site_info_button = if style.trailing_site_info {
             site_info_button
