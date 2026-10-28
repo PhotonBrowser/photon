@@ -13,8 +13,6 @@ Use the `photon` CLI for setup, formatting, linting, building, and running Photo
 | `photon build` | Implemented but unverified; Engine build was not run in this audit | Partially implemented; Linux Engine build path exists, but full Engine build is not verified here or by CI |
 | `photon run` | Implemented but unverified; native run path was not launched in this audit | Partially implemented; portable run path exists, but end-to-end graphical runtime is not CI-verified |
 
-The CLI's macOS hot-reload path is macOS-only. Linux `photon run` uses the direct Cargo path; `photon run --ui` builds the shell without Engine and cannot open web pages.
-
 ## Common commands
 
 ```sh
@@ -36,8 +34,7 @@ photon run
 - `photon check` runs linting, compiles the Cargo workspace, and verifies architecture and dependency checkout rules.
 - `photon test` runs the Rust workspace tests.
 - `photon build` builds the Engine and the GPUI-CE application. It requires initialized Engine and GPUI-CE submodules and a full set of Ladybird build prerequisites; it can take a long time on the first run.
-- `photon run` builds and launches the native app in release mode by default. On macOS it uses the direct Cargo build, so the app gets optimized rendering. Use `--hot-reload` to opt into Dioxus development hot patching; it currently supports macOS only. Hot reloading reuses the existing Engine build without building Engine; run `photon build` first if that Engine build is missing or out of date. Use `--url URL` to choose the initial page. `--shutdown-after-seconds N` works on the direct path; `--verbose` prints output from the underlying build tools.
-- Hot reload launches the development shell through Dioxus CLI and patches GPUI rendering code without restarting the app. Photon installs Dioxus CLI 0.7.10 with Cargo on first use if it is missing or has an incompatible version. Use `--ui --hot-reload` to hot-patch the UI-only shell without requiring Photon Engine.
+- `photon run` builds and launches the native app in release mode by default. Use `--url URL` to choose the initial page. Use `--shutdown-after-seconds N` to quit after a fixed interval; `--verbose` prints output from the underlying build tools.
 - `photon run --ui` builds and launches the shared browser window with the New Tab page, without building, linking, or starting Photon Engine. Shell-owned pages remain available; web pages cannot be opened in this mode. The path is available on macOS, Linux, and Windows.
 - Browser context menus and page `<select>` controls use the shared GPUI menu surface and work without platform-native menu hooks. They inherit the semantic theme roles, menu metrics, and motion used by Photon popovers.
 - `photon clean` removes generated build trees and stops the checkout-specific presentation broker.
@@ -61,8 +58,6 @@ Zed uses clangd with the root `.clangd` configuration for Photon C++, Objective-
 The first Engine build configures Ladybird dependencies under `build/` and compiles Photon Engine helper processes plus LibPhotonEmbedder. Incremental builds use an Engine fingerprint to rebuild Ladybird only when Engine sources or configuration change. Rust app or GPUI-CE changes rebuild the application. Build products and downloaded tools stay under ignored build directories.
 
 On macOS, `photon run` starts the Photon-owned presentation broker before opening the native window. Set `PHOTON_WINDOW_BACKGROUND` to `opaque`, `blurred` (the default), or `liquid-glass` before launching to choose the window background. Liquid Glass uses AppKit's regular glass effect on macOS 26 and later and falls back to blurred material on earlier versions. Linux uses the shared GPUI browser shell and CPU-backed Engine frame path; its system integration and full runtime validation remain incomplete. Windows remains experimental: Ladybird supports WSL2 as its build route, while native Clang-CL builds are experimental.
-
-Hot reloading uses GPUI-CE's experimental Subsecond integration. Changes to GPUI render functions and direct workspace dependencies can be patched into the running process. Changes to indirect workspace dependencies, application startup, and unsupported code paths require a rebuild or restart. `--shutdown-after-seconds` is unavailable in hot-reload mode because Dioxus CLI keeps the development server running.
 
 Platform-specific behavior belongs under `crates/photon-shell/src/platform/<target>/`. Keep the GPUI views in `platform/ui/`, the shared Engine adapter in `platform/engine/`, and the Apple-only XPC/IOSurface presentation path in `platform/macos/`. Linux and Windows currently use the portable CPU frame adapter; future DMA-BUF or DXGI imports belong in their target renderers without changing shared WebView code.
 

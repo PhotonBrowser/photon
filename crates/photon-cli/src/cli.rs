@@ -66,12 +66,6 @@ enum Command {
         /// Build and launch the shell without building, linking, or starting Photon Engine.
         #[arg(long)]
         ui: bool,
-        /// Hot-patch GPUI rendering code via Dioxus CLI (development build).
-        #[arg(long, conflicts_with = "no_hot_reload")]
-        hot_reload: bool,
-        /// Use the direct launch path instead of GPUI hot reloading.
-        #[arg(long, conflicts_with = "hot_reload")]
-        no_hot_reload: bool,
         /// Navigate the PhotonWebView to this URL after launch.
         #[arg(long)]
         url: Option<String>,
@@ -225,24 +219,12 @@ pub fn run() -> Result<(), String> {
         Some(Command::Run {
             release,
             ui,
-            hot_reload,
-            no_hot_reload,
             url,
             shutdown_after_seconds,
         }) => {
             commands::build::warn_if_dependencies_are_behind(&root);
             if ui && url.is_some() {
                 return Err("--url cannot be used with --ui".into());
-            }
-            if should_use_hot_reload(hot_reload, no_hot_reload) {
-                return commands::build::run_hot_reload(
-                    &root,
-                    release,
-                    ui,
-                    verbose,
-                    url.as_deref(),
-                    shutdown_after_seconds,
-                );
             }
             if ui {
                 commands::build::run_ui(&root, release, verbose, shutdown_after_seconds)
@@ -345,10 +327,6 @@ fn workspace_root() -> Result<PathBuf, String> {
         .ok_or_else(|| "cannot locate Photon workspace".into())
 }
 
-fn should_use_hot_reload(explicit: bool, disabled: bool) -> bool {
-    explicit && !disabled
-}
-
 fn print_help() -> Result<(), String> {
     use clap::CommandFactory;
     Cli::command()
@@ -373,7 +351,7 @@ fn help_styles() -> clap::builder::Styles {
 
 #[cfg(test)]
 mod tests {
-    use super::{Cli, Command, Dependency, DepsCommand, should_use_hot_reload};
+    use super::{Cli, Command, Dependency, DepsCommand};
     use clap::Parser;
 
     #[test]
@@ -448,42 +426,10 @@ mod tests {
     #[test]
     fn run_uses_optimized_direct_build_by_default() {
         let cli = Cli::try_parse_from(["photon", "run"]).unwrap();
-        let Some(Command::Run {
-            release,
-            hot_reload,
-            no_hot_reload,
-            ..
-        }) = cli.command
-        else {
+        let Some(Command::Run { release, .. }) = cli.command else {
             panic!("expected run command");
         };
 
         assert!(release);
-        assert!(!should_use_hot_reload(hot_reload, no_hot_reload));
-    }
-
-    #[test]
-    fn run_can_explicitly_enable_or_disable_hot_reload() {
-        let enabled = Cli::try_parse_from(["photon", "run", "--hot-reload"]).unwrap();
-        let disabled = Cli::try_parse_from(["photon", "run", "--no-hot-reload"]).unwrap();
-        let Some(Command::Run {
-            hot_reload,
-            no_hot_reload,
-            ..
-        }) = enabled.command
-        else {
-            panic!("expected run command");
-        };
-        assert!(should_use_hot_reload(hot_reload, no_hot_reload));
-
-        let Some(Command::Run {
-            hot_reload,
-            no_hot_reload,
-            ..
-        }) = disabled.command
-        else {
-            panic!("expected run command");
-        };
-        assert!(!should_use_hot_reload(hot_reload, no_hot_reload));
     }
 }

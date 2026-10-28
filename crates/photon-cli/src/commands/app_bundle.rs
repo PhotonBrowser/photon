@@ -57,31 +57,6 @@ pub(super) fn ensure_ui(root: &Path, built: &Path) -> Result<PathBuf, String> {
     write_bundle(root, built, &bundle, ui_info_plist())
 }
 
-/// Prepares the app bundle that the hot-reload executable will enter when it
-/// starts. Dioxus owns and replaces the built executable, so the app copies
-/// each version into this bundle immediately before launching it.
-pub(super) fn prepare_hot_reload(
-    root: &Path,
-    ui_only: bool,
-    environment: &[(&str, String)],
-) -> Result<(PathBuf, PathBuf), String> {
-    stage("Prepare Photon hot-reload app bundle");
-    let bundle = if ui_only {
-        bundle_path()?
-            .with_file_name("UI-only")
-            .join(format!("{NAME}.app"))
-    } else {
-        bundle_path()?
-    };
-    let plist = if ui_only {
-        ui_info_plist()
-    } else {
-        info_plist(environment)
-    };
-    let executable = prepare_bundle(root, &bundle, plist)?;
-    Ok((bundle, executable))
-}
-
 fn write_bundle(
     root: &Path,
     built: &Path,

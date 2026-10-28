@@ -6,7 +6,6 @@ license.workspace = true
 
 [features]
 ui-only = ["photon-shell/ui-only"]
-hot-reload = ["photon-shell/hot-reload"]
 
 [[bin]]
 name = "Photon"

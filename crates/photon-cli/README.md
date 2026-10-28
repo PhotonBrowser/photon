@@ -18,7 +18,6 @@ Setup installs or refreshes `photon` and its `ph` alias in Cargo's bin directory
 photon setup
 photon doctor
 photon run --url https://ladybird.org
-photon run --no-hot-reload
 photon check
 photon test
 photon deps status
