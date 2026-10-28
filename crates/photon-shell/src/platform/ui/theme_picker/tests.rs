@@ -124,7 +124,7 @@ fn intensity_changes_alpha_in_realtime_without_whitening_the_colour(cx: &mut gpu
         PickerState::new(
             WindowColor::Blue,
             SpaceColors::from_colors(&[SpaceTint::default()]),
-            Rc::new(|_, _, _, _, _| {}),
+            super::change_space_theme(id),
             cx,
         )
     });
@@ -465,7 +465,12 @@ fn removing_the_last_colour_restores_the_default_and_subtle_transparency(
     settings.spaces.get_mut(id).unwrap().set_colors(colors);
     cx.update(|cx| super::super::settings::load_settings(None, settings, None, cx));
     let (picker, cx) = cx.add_window_view(|_, cx| {
-        PickerState::new(WindowColor::Purple, colors, Rc::new(save_colors), cx)
+        PickerState::new(
+            WindowColor::Purple,
+            colors,
+            super::change_space_theme(id),
+            cx,
+        )
     });
     let remove = cx.debug_bounds("Remove colour").unwrap().center();
     cx.simulate_click(remove, gpui::Modifiers::default());

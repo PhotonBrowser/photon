@@ -481,7 +481,7 @@ fn menu_content_max_height(viewport_height: Pixels) -> Pixels {
 #[cfg(test)]
 mod tests {
     use super::super::super::menu::menu_action_with_state;
-    use crate::platform::ui::theme::{AccentColor, preview_palette};
+    use crate::platform::ui::theme::palette;
     use gpui::{
         Context, FocusHandle, InteractiveElement, IntoElement, Modifiers, MouseDownEvent,
         ParentElement, Render, Role, Styled, Window, deferred, div, point, px,
@@ -500,11 +500,11 @@ mod tests {
     }
 
     impl Render for MenuClickTestView {
-        fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
             let clicked = self.clicked.clone();
             let dismissed = self.dismissed.clone();
             let action_received = self.action_received.clone();
-            let palette = preview_palette(false, AccentColor::Blue);
+            let palette = palette(window, cx);
             let row = menu_action_with_state(
                 "test-menu-row",
                 "Choose item",
@@ -546,6 +546,14 @@ mod tests {
 
     #[gpui::test]
     fn menu_rows_receive_clicks_without_dismissing_the_popover(cx: &mut gpui::TestAppContext) {
+        cx.update(|cx| {
+            super::super::super::settings::load_settings(
+                None,
+                photon_core::BrowserSettings::default(),
+                None,
+                cx,
+            );
+        });
         let clicked = Rc::new(Cell::new(0));
         let dismissed = Rc::new(Cell::new(0));
         let action_received = Rc::new(Cell::new(0));
