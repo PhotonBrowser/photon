@@ -7,7 +7,7 @@ use gpui::{
 };
 use gpui_motion::{
     Color, CustomEasing, Easing, Frame, Motion, MotionElement, MotionValue, PressScaleElement,
-    Property, Spring, StyleMotion, StyleProperty, StyleTarget, Target,
+    Spring, StyleMotion, StyleProperty, StyleTarget, Target,
 };
 use std::{
     sync::OnceLock,
@@ -262,7 +262,7 @@ pub(super) struct Entrance {
     curve: Curve,
     exit_curve: Option<Curve>,
     opacity_from: Option<f32>,
-    opacity_curve: Option<Curve>,
+    fade_in: bool,
     offset_from: Option<(f32, f32)>,
     blur_from: Option<f32>,
     grow: Option<(f32, f32)>,
@@ -279,7 +279,7 @@ impl Entrance {
             curve: Curve::EaseOut,
             exit_curve: None,
             opacity_from: None,
-            opacity_curve: None,
+            fade_in: true,
             offset_from: None,
             blur_from: None,
             grow: None,
@@ -304,9 +304,10 @@ impl Entrance {
         self
     }
 
-    /// Gives opacity a separate, monotonic transition when the main motion overshoots.
-    pub const fn fade_curve(mut self, curve: Curve) -> Self {
-        self.opacity_curve = Some(curve);
+    /// Fades on exit while starting the entrance fully visible.
+    pub const fn fade_out_only(mut self) -> Self {
+        self.opacity_from = Some(0.0);
+        self.fade_in = false;
         self
     }
 
@@ -449,8 +450,7 @@ impl Default for Entrance {
 pub(super) fn theme_picker_entrance(width: f32) -> Entrance {
     let tokens = &crate::platform::theme_config::theme().motion.theme_picker;
     Entrance::new()
-        .fade_from(0.0)
-        .fade_curve(Curve::EaseInOut)
+        .fade_out_only()
         .scale_from_left(tokens.scale_from, width)
         .curve(Curve::Spring(SpringConfig::new(
             tokens.spring.stiffness,
@@ -477,7 +477,7 @@ fn apply_entrance<E: Styled + gpui::IntoElement + 'static>(
     base_offset: (f32, f32),
 ) -> gpui::AnyElement {
     let (shown, hidden, blur) = entrance.targets(config, base_offset);
-    let (target, initial, delay, duration) = match transition {
+    let (target, mut initial, delay, duration) = match transition {
         Transition::Enter => (
             shown,
             hidden,
@@ -491,6 +491,9 @@ fn apply_entrance<E: Styled + gpui::IntoElement + 'static>(
             entrance.exit_duration(config),
         ),
     };
+    if transition == Transition::Enter && !entrance.fade_in {
+        initial = initial.opacity(1.0);
+    }
     let curve = match transition {
         Transition::Enter => entrance.curve,
         Transition::Exit => entrance.exit_curve.unwrap_or(entrance.curve),
@@ -499,11 +502,6 @@ fn apply_entrance<E: Styled + gpui::IntoElement + 'static>(
         .initial(initial)
         .transition(curve.transition(duration))
         .delay(delay);
-    let motion = if let Some(curve) = entrance.opacity_curve {
-        motion.transition_for(Property::Opacity, curve.transition(duration), delay)
-    } else {
-        motion
-    };
     let style_motion = blur.map(|blur| {
         let (target_blur, initial_blur) = match transition {
             Transition::Enter => (0.0, blur),

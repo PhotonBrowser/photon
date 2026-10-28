@@ -99,7 +99,7 @@ soft_accent_border = 0.48
 # Theme picker popover motion; tune here without adding user facing settings.
 [motion.theme_picker]
 # The popover stays mounted for three quarters of this duration on close.
-duration_ms = 360
+duration_ms = 240
 scale_from = 0.92
 
 # Higher stiffness is quicker; lower damping relative to stiffness adds bounce.
