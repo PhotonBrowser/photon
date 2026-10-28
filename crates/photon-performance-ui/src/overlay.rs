@@ -1,7 +1,7 @@
 //! GPUI presentation for performance diagnostics.
 
-use crate::{PerformanceDiagnostics, PresentationMode};
 use gpui::{Div, div, prelude::*, px, rgb, rgba};
+use photon_performance::{PerformanceDiagnostics, PresentationMode, format_bytes, format_rate};
 
 const OVERLAY_INSET: f32 = 12.0;
 const OVERLAY_GAP: f32 = 2.0;
@@ -149,24 +149,4 @@ fn presentation_mode_name(mode: PresentationMode) -> &'static str {
         PresentationMode::NativeMetal => "Metal",
         PresentationMode::CpuFallback => "CPU fallback",
     }
-}
-
-pub fn format_bytes(bytes: u64) -> String {
-    const KB: f64 = 1_000.0;
-    const MB: f64 = 1_000_000.0;
-    const GB: f64 = 1_000_000_000.0;
-    let bytes = bytes as f64;
-    if bytes >= GB {
-        format!("{:.1} GB", bytes / GB)
-    } else if bytes >= MB {
-        format!("{:.1} MB", bytes / MB)
-    } else if bytes >= KB {
-        format!("{:.0} KB", bytes / KB)
-    } else {
-        format!("{bytes:.0} B")
-    }
-}
-
-pub fn format_rate(bytes_per_second: u64) -> String {
-    format!("{}/s", format_bytes(bytes_per_second))
 }

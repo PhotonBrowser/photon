@@ -2,7 +2,7 @@
 
 # `photon-performance`
 
-Performance diagnostics for Photon views: thread-safe frame and engine statistics, bounded presentation timing history, process sampling, formatting, charts, and a GPUI overlay.
+Framework-independent performance data and diagnostics: thread-safe frame and engine statistics, bounded presentation timing history, process sampling, and formatting. GPUI charts and overlays live in [`photon-performance-ui`](../photon-performance-ui/README.md).
 
 ## Use
 

@@ -1,8 +1,7 @@
-//! Performance diagnostics model and GPUI overlay for Photon.
+//! Framework-independent performance diagnostics and data for Photon.
 
 mod accumulator;
-mod chart;
-mod overlay;
+mod formatting;
 mod process;
 
 pub use accumulator::{
@@ -10,6 +9,5 @@ pub use accumulator::{
     FrameTimingDiagnostics, PerformanceDiagnostics, PerformanceHistory, PerformanceMonitor,
     PerformanceSample, PerformanceTask, PresentationMode,
 };
-pub use chart::{ChartPoint, performance_chart};
-pub use overlay::{PerformancePalette, format_bytes, format_rate, performance_overlay};
+pub use formatting::{format_bytes, format_rate};
 pub use process::{ProcessDiagnostics, ProcessSampler};

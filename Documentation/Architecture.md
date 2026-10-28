@@ -1,80 +1,109 @@
-# Architecture
+# Photon architecture
 
-Photon is a Rust browser shell built with GPUI-CE and a Ladybird-derived
-Engine. The shell talks to the Engine through Photon's explicit embedder API.
-macOS is the primary development platform. Linux has a shell-only GPUI path and
-a portable Engine renderer; end-to-end Linux browser runtime validation is
-still outstanding. Windows Engine builds remain experimental. See
-[Building Photon](Building.md) for platform validation status.
+Photon is a desktop browser built from a Rust application and the Ladybird
+browser Engine. GPUI-CE draws Photon’s interface; the Engine loads and renders
+web pages. Photon connects the two through a small, explicit embedder API.
 
-## How the pieces fit
+This guide is for people who want to understand how Photon fits together or
+find the right place to make a change. For installation and build steps, see
+[Building Photon](Building.md).
+
+## The short version
 
 ```text
-photon-app
-└── photon-shell ── Photon Engine embedder API ── Engine (Ladybird)
-    ├── photon-core          browser rules and state
-    ├── photon-storage       profile, history, settings, and session files
-    ├── photon-performance   performance samples and diagnostics
-    ├── photon-sound         procedural UI feedback sounds
-    ├── photon-brand         shared brand assets
-    ├── gpui-motion          GPUI motion library
-    └── platform adapters   macOS, Linux, and Windows integration
-
-photon-ffi ── photon-core    browser-model C ABI for native clients
-photon-cli                  setup, checks, build, run, and dependency tools
-photon-presentation-broker ── photon-presentation-ipc  macOS presentation transport
+You use Photon
+     │
+     ▼
+Photon shell ───── Photon Engine API ───── Ladybird Engine
+  window and UI       page lifecycle          web platform
+     │
+     ├── photon-core       browser rules and state
+     ├── photon-storage    profile data on disk
+     └── platform adapters macOS, Linux, and Windows
 ```
 
-`photon-core` contains browser policy and serializable models. It has no GPUI,
-native window, or Engine dependencies. `photon-shell` owns the browser window,
-views, live tab coordination, and Engine sessions. `photon-storage` handles
-profile file I/O.
+The **shell** owns the browser window and coordinates tabs, views, and Engine
+sessions. **Core** owns browser rules that should work without a window. The
+**Engine** implements web standards and page behavior. Platform adapters
+connect the shared shell to operating-system features.
 
-`photon-sound` generates short, device-independent interaction samples. The
-shell's semantic feedback service chooses sound and haptic channels and owns
-desktop audio playback.
+## What happens when you open a page
 
-## Engine and platform boundaries
+1. The shell receives your address or search text.
+2. `photon-core` resolves it into a navigation request and updates browser
+   state.
+3. The shell sends the request through the Photon Engine API.
+4. The Engine loads the page and reports navigation, title, and presentation
+   updates back to the shell.
+5. The shell displays the page in its shared WebView and updates browser
+   controls.
 
-The shell calls the public C++ `Photon::Runtime` and `Photon::View` API from
+The shell handles coordination and presentation; the Engine handles web page
+behavior. Shared UI code must not depend on Ladybird implementation details or
+receive page pixel buffers.
+
+## Main parts
+
+| Part | What it does |
+| --- | --- |
+| `photon-app` | Starts the desktop application. |
+| `photon-shell` | Owns browser windows, shared GPUI views, tab coordination, Engine sessions, and platform adapters. |
+| `photon-core` | Owns browser state and rules, including navigation, address/search resolution, and tab-sleep policy. It has no UI or Engine dependency. |
+| `photon-storage` | Reads and writes profile data such as history, icons, settings, and website data. |
+| `Engine/` | Ladybird and Photon’s embedder API for creating and controlling web views. |
+| `native/embedder/` | Bridges the C++ embedder API to the private C ABI used by Rust. |
+| `photon-ffi` | Exposes selected browser-model operations through a separate C ABI; it does not start the Engine. |
+| `photon-cli` | Provides setup, build, run, and development commands. |
+
+Other focused packages provide branding, performance diagnostics, sound,
+motion, and macOS presentation transport. Performance sampling and data live
+in `photon-performance`; its GPUI charts and overlays live in
+`photon-performance-ui`. Their package READMEs describe those areas. Generic
+GPUI-CE code lives in the pinned `vendor/gpui-ce` dependency.
+
+## How Photon connects to the Engine
+
+Rust code in `photon-shell` calls the public C++ `Photon::Runtime` and
+`Photon::View` API in
 [`PhotonEmbedder.h`](../Engine/Libraries/LibPhotonEmbedder/include/LibPhotonEmbedder/PhotonEmbedder.h).
-[`PhotonEmbedderBridge.cpp`](../native/embedder/PhotonEmbedderBridge.cpp) adapts
-that API to a private C ABI consumed by Rust. The separate
-[`photon-ffi`](../crates/photon-ffi/include/photon_ffi.h) interface exposes
-lightweight browser-model functions; it does not start the Engine.
+[`PhotonEmbedderBridge.cpp`](../native/embedder/PhotonEmbedderBridge.cpp)
+adapts that API to a private C interface, which Rust calls through
+[`engine_ffi.rs`](../crates/photon-shell/src/platform/engine_ffi.rs).
 
-Keep Engine implementation details behind the embedder API. Do not pass
-Ladybird objects or page pixel buffers into shared UI code. Keep native window
-and system behavior in `crates/photon-shell/src/platform/<target>/`; keep
-shared views in `platform/ui/` and shared Engine calls in `platform/engine/`.
-Generic framework behavior belongs in the pinned `vendor/gpui-ce` submodule.
+This boundary keeps engine changes separate from normal browser UI work. Keep
+Ladybird classes and engine implementation details inside `Engine/` and the
+embedder integration. Keep shared views in
+`crates/photon-shell/src/platform/ui/`, shared Engine calls in
+`crates/photon-shell/src/platform/engine/`, and operating-system behavior in
+`crates/photon-shell/src/platform/<target>/`.
 
-| Platform | Current implementation |
+## Where to make a change
+
+| If you are changing… | Start here |
 | --- | --- |
-| macOS | AppKit integration and IOSurface/Metal presentation; primary development target |
-| Linux | Shared GPUI shell, custom in-window menus and `<select>` popovers, and CPU-backed page frames; the UI-only build skips Engine setup; full browser runtime remains unverified |
-| Windows | Shared shell and CPU-backed frames; native Engine build remains experimental |
-
-The Linux renderer uses the same opaque `PresentedSurface` consumed by the
-shared WebView. `platform/linux/renderer.rs` selects the portable CPU-frame
-handoff; the shared UI never sees Engine surfaces or page pixel buffers. A
-future DMA-BUF presenter can replace that target adapter behind the same
-boundary. Shell-only startup constructs no Engine runtime and opens Photon’s
-New Tab page so GPUI chrome and internal pages can be developed independently.
-
-## Where to start
-
-| Change | Location |
-| --- | --- |
-| Browser rules, navigation, or state | [`crates/photon-core`](../crates/photon-core/src/lib.rs) |
-| Profile and persisted data | [`crates/photon-storage`](../crates/photon-storage/src/lib.rs) |
-| Shared browser views and interactions | [`crates/photon-shell/src/platform/ui`](../crates/photon-shell/src/platform/ui/mod.rs) |
-| Engine sessions and callbacks | [`crates/photon-shell/src/platform/engine`](../crates/photon-shell/src/platform/engine/mod.rs) |
-| Native platform behavior | [`crates/photon-shell/src/platform`](../crates/photon-shell/src/platform/mod.rs) |
-| Engine bridge | [`native/embedder`](../native/embedder/PhotonEmbedderBridge.cpp) and [`engine_ffi.rs`](../crates/photon-shell/src/platform/engine_ffi.rs) |
-| Shared UI styling | [`theme.toml`](../crates/photon-shell/theme.toml), [`theme.rs`](../crates/photon-shell/src/platform/ui/theme.rs), and [`metrics.rs`](../crates/photon-shell/src/platform/ui/metrics.rs) |
+| Address handling, navigation rules, or browser state | [`photon-core`](../crates/photon-core/README.md) |
+| History, profile files, or persisted settings | [`photon-storage`](../crates/photon-storage/README.md) |
+| Shared browser interface or interactions | [`photon-shell` UI](../crates/photon-shell/src/platform/ui/mod.rs) |
+| Engine sessions and callbacks | [`photon-shell` Engine adapter](../crates/photon-shell/src/platform/engine/mod.rs) |
+| Native window or operating-system behavior | [`photon-shell` platform adapters](../crates/photon-shell/src/platform/mod.rs) |
+| Rust-to-Engine bridge | [`native/embedder`](../native/embedder/PhotonEmbedderBridge.cpp) and [`engine_ffi.rs`](../crates/photon-shell/src/platform/engine_ffi.rs) |
+| Theme colors, spacing, or typography | [Theme guide](Theme.md) |
 | Generic GPUI-CE behavior | [`vendor/gpui-ce`](../vendor/gpui-ce/README.md) |
 
-For dependency branches and pins, see [Upstream maintenance](Upstream.md). For
-browser UI details, see [PhotonWebView](WebView.md), [Photon pages](Pages.md),
-[profile and settings](Profile.md), and [theme tokens](Theme.md).
+## Platform support
+
+macOS is Photon’s primary development platform, with AppKit integration and
+IOSurface/Metal page presentation. Linux has a shared GPUI shell and a
+portable CPU-frame renderer; its shell-only mode can run without the Engine,
+while full browser runtime validation is still outstanding. Windows support is
+experimental, and native Engine builds are not yet established. See
+[Building Photon](Building.md) for current build and validation details.
+
+## Related guides
+
+- [Build and run Photon](Building.md)
+- [Browser views](WebView.md)
+- [Photon pages](Pages.md)
+- [Profiles and settings](Profile.md)
+- [Theme tokens](Theme.md)
+- [Maintain upstream dependencies](Upstream.md)

@@ -12,8 +12,8 @@
   page icons, data usage, and the Engine's website data folder. Keep it plain
   file access over core types, with no GPUI or Engine dependency, so settings
   and internal pages can use it directly.
-  `photon-performance` owns performance diagnostics, accumulation, formatting,
-  and its GPUI overlay.
+  `photon-performance` owns performance diagnostics, accumulation, sampling,
+  and formatting. `photon-performance-ui` owns GPUI charts and overlays.
 - `photon-ffi` is the Rust exported C ABI. Confine raw pointers and C string
   conversion to this crate.
 - `photon-shell` owns shared window-bound GPUI views, OS adapters, the Engine

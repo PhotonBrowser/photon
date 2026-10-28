@@ -8,7 +8,7 @@ use gpui::{
     linear_color_stop, linear_gradient, rgb, rgb_to_hsla, rgba,
 };
 use photon_core::{Space, SpaceColors, SpaceTint, Transparency, WindowColor};
-use photon_performance::PerformancePalette;
+use photon_performance_ui::PerformancePalette;
 
 use super::appearance_preview::AppearancePreview;
 use super::settings::Settings;

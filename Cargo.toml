@@ -8,6 +8,7 @@ members = [
     "crates/photon-brand",
     "crates/photon-shell",
     "crates/photon-performance",
+    "crates/photon-performance-ui",
     "crates/photon-presentation-broker",
     "crates/photon-presentation-ipc",
     "crates/photon-storage",

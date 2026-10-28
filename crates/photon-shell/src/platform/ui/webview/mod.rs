@@ -10,7 +10,8 @@ use gpui::{
 };
 use gpui_elements::editable_text::actions::{Copy, Cut, Paste, Redo, SelectAll, Undo};
 use photon_core::{BrowserCommand, BrowserState, EngineEvent, PageCrashes, PageDialogs};
-use photon_performance::{PerformanceDiagnostics, performance_overlay};
+use photon_performance::PerformanceDiagnostics;
+use photon_performance_ui::performance_overlay;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 

@@ -4,6 +4,26 @@
 
 <p align="center"><strong>A browser built on <a href="https://ladybird.org">Ladybird</a>.</strong></p>
 
+```mermaid
+flowchart LR
+    User[You] --> App[photon-app]
+    App --> Shell[photon-shell<br/>windows, tabs, and UI]
+    Shell --> Core[photon-core<br/>browser rules and state]
+    Shell --> Storage[photon-storage<br/>profile files]
+    Shell --> Embedder[Photon Engine API]
+    Embedder --> Engine[Ladybird Engine<br/>web pages]
+    Shell --> Platform[Platform adapters<br/>macOS · Linux · Windows]
+    Shell --> PerfUI[photon-performance-ui<br/>GPUI charts and overlays]
+    PerfUI --> Perf[photon-performance<br/>sampling and diagnostics]
+    FFI[photon-ffi<br/>C API] --> Core
+    CLI[photon-cli<br/>setup and developer commands]
+```
+
+The shell connects the browser interface to framework-independent browser
+rules, profile storage, and the Ladybird Engine. See the
+[architecture guide](Documentation/Architecture.md) for component boundaries
+and common change locations.
+
 <p align="center">
   <a href="#run-from-source">Run from source</a> ·
   <a href="Documentation/Architecture.md">Architecture</a> ·
@@ -52,7 +72,7 @@ Start with [contributor setup](CONTRIBUTOR_SETUP.md), then use the [build guide]
 <summary>Rust crate guides</summary>
 
 - [photon-app](crates/photon-app/README.md) · [photon-brand](crates/photon-brand/README.md) · [photon-cli](crates/photon-cli/README.md) · [photon-core](crates/photon-core/README.md)
-- [photon-ffi](crates/photon-ffi/README.md) · [photon-performance](crates/photon-performance/README.md)
+- [photon-ffi](crates/photon-ffi/README.md) · [photon-performance](crates/photon-performance/README.md) · [photon-performance-ui](crates/photon-performance-ui/README.md)
 - [photon-presentation-broker](crates/photon-presentation-broker/README.md) · [photon-presentation-ipc](crates/photon-presentation-ipc/README.md) · [photon-shell](crates/photon-shell/README.md)
 - [photon-storage](crates/photon-storage/README.md) · [gpui-motion](crates/gpui-motion/README.md)
 

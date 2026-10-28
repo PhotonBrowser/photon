@@ -20,6 +20,7 @@ gpui_elements = { package = "gpui_ce_elements", path = "../../vendor/gpui-ce/cra
 photon-core = { path = "../photon-core" }
 gpui-motion = { package = "gpui-ce-motion", path = "../gpui-motion", features = ["gpui"] }
 photon-performance = { path = "../photon-performance" }
+photon-performance-ui = { path = "../photon-performance-ui" }
 photon-storage = { path = "../photon-storage" }
 photon-sound = { path = "../photon-sound" }
 anyhow = "1"

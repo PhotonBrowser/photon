@@ -2,9 +2,10 @@
 
 use gpui::{Context, FontWeight, Render, Role, Task, Window, div, prelude::*, px, rgb, rgba};
 use photon_performance::{
-    ChartPoint, PerformanceHistory, PerformanceTask, ProcessDiagnostics, ProcessSampler,
-    format_bytes, format_rate, performance_chart,
+    PerformanceHistory, PerformanceTask, ProcessDiagnostics, ProcessSampler, format_bytes,
+    format_rate,
 };
+use photon_performance_ui::{ChartPoint, performance_chart};
 use std::{collections::VecDeque, time::Instant};
 
 use super::super::super::engine::PerformanceDashboardLease;
