@@ -7,6 +7,7 @@ mod commands;
 mod crashes;
 mod dialogs;
 mod history;
+mod history_days;
 mod internal_pages;
 mod new_tab;
 mod omnibox;
@@ -27,6 +28,7 @@ pub use commands::{
 pub use crashes::{CrashResponse, EngineService, PageCrashes};
 pub use dialogs::{DialogKind, DialogReply, DialogRequest, PageDialogs};
 pub use history::{HISTORY_MAX_PAGES, HISTORY_MAX_SEARCHES, History, HistoryEntry, SearchEntry};
+pub use history_days::{day_heading, local_day, time_of_day};
 pub use internal_pages::{internal_page_name, internal_page_url};
 pub use new_tab::{MAX_NEW_TAB_PINS, NewTabSettings, SHORTCUT_COUNTS, Shortcut, site_name};
 pub use omnibox::resolve as resolve_omnibox_input;

@@ -13,6 +13,7 @@ mod content;
 mod context_menu;
 mod favourites;
 mod find;
+mod fullscreen;
 mod keyboard_shortcuts;
 mod menu;
 #[cfg(not(feature = "ui-only"))]
@@ -136,6 +137,8 @@ pub(in crate::platform) struct BrowserWindow {
     _omnibox_subscription: Subscription,
     runtime: Rc<EngineRuntime>,
     find_bar_presence: Presence<Entity<FindBar>>,
+    /// The page shown fullscreen, filling the window without chrome.
+    page_fullscreen: Option<fullscreen::PageFullscreen>,
     /// A link previewed over the page.
     peek: PeekState,
     /// The keyboard shortcuts dialog, while open.
@@ -642,6 +645,7 @@ fn open_browser_window(
                 _omnibox_subscription: omnibox_subscription,
                 runtime,
                 find_bar_presence: Presence::default(),
+                page_fullscreen: None,
                 peek: PeekState::default(),
                 shortcuts_dialog: None,
                 context_menu: None,

@@ -149,6 +149,7 @@ pub fn run() {
                 ))]
                 start_engine_pump(&runtime, cx.to_async());
                 follow_settings(&runtime, cx);
+                super::super::downloads::follow_downloads(&runtime, cx);
                 #[cfg(not(feature = "ui-only"))]
                 announce_service_restarts(&runtime, cx);
 

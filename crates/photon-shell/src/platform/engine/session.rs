@@ -337,6 +337,8 @@ impl EngineSession {
             context_menu_callback: Some(on_engine_context_menu),
             open_in_new_tab_callback: Some(on_engine_open_in_new_tab),
             peek_callback: Some(on_engine_peek),
+            link_hover_callback: Some(on_engine_link_hover),
+            fullscreen_callback: Some(on_engine_fullscreen),
             select_dropdown_callback: Some(on_engine_select_dropdown),
             file_picker_callback: Some(on_engine_file_picker),
             permission_callback: Some(on_engine_permission_request),
@@ -607,6 +609,17 @@ impl EngineSession {
         const LIGHT: i32 = 2;
         let scheme = if dark { DARK } else { LIGHT };
         unsafe { embedder::photon_view_set_preferred_color_scheme(self.view, scheme) }
+    }
+
+    /// Reports whether the window now shows this page fullscreen.
+    pub(in crate::platform) fn set_fullscreen(&mut self, fullscreen: bool) {
+        unsafe { embedder::photon_view_set_fullscreen(self.view, fullscreen) }
+    }
+
+    /// Asks the page to leave element fullscreen; it answers through the
+    /// fullscreen callback.
+    pub(in crate::platform) fn exit_fullscreen(&mut self) {
+        unsafe { embedder::photon_view_exit_fullscreen(self.view) }
     }
 
     pub(in crate::platform) fn set_visible(&mut self, visible: bool) {

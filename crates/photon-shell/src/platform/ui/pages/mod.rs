@@ -12,6 +12,8 @@
 #[cfg(target_os = "macos")]
 mod appkit;
 mod controls;
+mod downloads;
+mod history;
 mod layout;
 mod new_tab;
 mod performance;
@@ -28,7 +30,9 @@ use std::rc::Rc;
 use super::super::engine::EngineRuntime;
 use super::settings::Settings;
 use super::{ClickHandler, metrics, theme::ThemeColors};
-pub(super) use registry::{NEW_TAB, PageDefinition, PageIcon, SETTINGS, find_page};
+pub(super) use registry::{
+    DOWNLOADS, HISTORY, NEW_TAB, PageDefinition, PageIcon, SETTINGS, find_page,
+};
 
 /// What a page asks its window to do.
 pub(super) enum PageEvent {

@@ -85,6 +85,10 @@ using PhotonPermissionCancelledCallback = void (*)(void*, uint64_t, char const*)
 // switch to it.
 using PhotonOpenInNewTabCallback = void (*)(void*, char const*, bool);
 using PhotonPeekCallback = void (*)(void*, char const*);
+// Called with the hovered link's URL, or an empty string when none is hovered.
+using PhotonLinkHoverCallback = void (*)(void*, char const*);
+// Called when the page enters (true) or leaves (false) element fullscreen.
+using PhotonFullscreenCallback = void (*)(void*, bool);
 struct PhotonNewWebViewRequest {
     bool popup;
     bool activate;
@@ -103,6 +107,23 @@ using PhotonNewWebViewCallback = void (*)(void*, void*, void*,
 // Called with the service (0 compositor, 1 network) and whether it has been
 // restarted (true) or has just stopped (false).
 using PhotonServiceCallback = void (*)(void*, int, bool);
+// A download's state. Status: 0 in progress, 1 paused, 2 completed,
+// 3 cancelled, 4 failed. Strings are valid only during the callback.
+struct PhotonDownload {
+    uint64_t id;
+    char const* url;
+    char const* path;
+    int status;
+    uint64_t received_bytes;
+    bool has_total_bytes;
+    uint64_t total_bytes;
+    bool has_bytes_per_second;
+    uint64_t bytes_per_second;
+    char const* error;
+    int64_t created_time_ms;
+};
+using PhotonDownloadChangedCallback = void (*)(void*, PhotonDownload const*);
+using PhotonDownloadRemovedCallback = void (*)(void*, uint64_t);
 using PhotonRegisteredProcessCallback = void (*)(void*, int32_t, char const*, bool, uint64_t, bool, int32_t, bool, uint64_t);
 using PhotonEngineProcessCallback = void (*)(void*, uint64_t, int32_t, char const*, char const*,
     bool, uint64_t, bool, double, bool, uint64_t, bool, uint64_t, bool, uint64_t, bool, uint64_t,
@@ -141,6 +162,8 @@ struct PhotonViewCallbacks {
     PhotonContextMenuCallback context_menu_callback;
     PhotonOpenInNewTabCallback open_in_new_tab_callback;
     PhotonPeekCallback peek_callback;
+    PhotonLinkHoverCallback link_hover_callback;
+    PhotonFullscreenCallback fullscreen_callback;
     PhotonSelectDropdownCallback select_dropdown_callback;
     PhotonFilePickerCallback file_picker_callback;
     PhotonPermissionCallback permission_callback;
@@ -225,6 +248,10 @@ void photon_view_notify_state(void* view);
 void photon_view_copy_window_handle(void* view, char* handle, size_t capacity);
 // 0 follows the engine default, 1 prefers dark, 2 prefers light.
 void photon_view_set_preferred_color_scheme(void* view, int color_scheme);
+// Reports whether the shell shows the page fullscreen.
+void photon_view_set_fullscreen(void* view, bool fullscreen);
+// Asks the page to leave element fullscreen.
+void photon_view_exit_fullscreen(void* view);
 // Answers the open dialog of `type`. For a prompt, null `text` means it was
 // cancelled; `accepted` answers a confirm.
 void photon_view_close_dialog(void* view, int type, bool accepted,
@@ -246,6 +273,12 @@ void photon_runtime_set_memory_pressure(void* runtime, bool pressured);
 void photon_runtime_set_elastic_scroll_enabled(void* runtime, bool enabled);
 void photon_runtime_set_service_callback(void* runtime, void* callback_data,
     PhotonServiceCallback callback);
+// Reports every download now and whenever one changes or is removed.
+void photon_runtime_set_download_callbacks(void* runtime, void* callback_data,
+    PhotonDownloadChangedCallback changed, PhotonDownloadRemovedCallback removed);
+// Action: 0 pause, 1 resume, 2 cancel.
+void photon_runtime_download_action(void* runtime, uint64_t id, int action);
+void photon_runtime_clear_inactive_downloads(void* runtime);
 void photon_runtime_list_registered_processes(void* runtime, void* callback_data,
     PhotonRegisteredProcessCallback callback);
 void photon_runtime_list_process_snapshots(void* runtime, void* callback_data,

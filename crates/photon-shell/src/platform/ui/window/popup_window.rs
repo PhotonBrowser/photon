@@ -77,6 +77,10 @@ pub(super) fn open_minimal_window(
                             }
                         }
                         // A site window has no menus or tabs of its own.
+                        WebViewEvent::FullscreenChanged(true) => {
+                            webview.update(cx, |view, _| view.exit_page_fullscreen());
+                        }
+                        WebViewEvent::FullscreenChanged(false) => {}
                         WebViewEvent::ContextMenuRequested
                         | WebViewEvent::SelectDropdownRequested
                         | WebViewEvent::OpenInNewTab { .. }

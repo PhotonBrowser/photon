@@ -53,7 +53,12 @@ impl Render for BrowserWindow {
         if window.focused(cx).is_none() {
             window.focus(&self.root_focus, cx);
         }
-        let margins = self.page_margins(&layout, cx);
+        let page_fullscreen = self.sync_page_fullscreen(window, cx);
+        let margins = if page_fullscreen {
+            Edges::default()
+        } else {
+            self.page_margins(&layout, cx)
+        };
         let page = div()
             .absolute()
             .inset_0()
@@ -88,25 +93,27 @@ impl Render for BrowserWindow {
             }));
 
         // With no bar above the page, its margin moves the window.
-        let top_margin = (layout.top_extent() * self.sidebar.chrome_shown() == 0.0).then(|| {
-            self.with_browser_menu(
-                window_drag_area(
-                    div()
-                        .absolute()
-                        .top_0()
-                        .left_0()
-                        .w_full()
-                        .h(px(margins.top)),
-                ),
-                cx,
-            )
-        });
+        let top_margin = (!page_fullscreen
+            && layout.top_extent() * self.sidebar.chrome_shown() == 0.0)
+            .then(|| {
+                self.with_browser_menu(
+                    window_drag_area(
+                        div()
+                            .absolute()
+                            .top_0()
+                            .left_0()
+                            .w_full()
+                            .h(px(margins.top)),
+                    ),
+                    cx,
+                )
+            });
         let chrome = self
             .chrome
             .clone()
             .cached(StyleRefinement::default().absolute().inset_0());
         let reveal_edge = sidebar_region
-            .filter(|_| !self.sidebar.docked())
+            .filter(|_| !page_fullscreen && !self.sidebar.docked())
             .map(|region| self.reveal_edge(region, cx));
         let root = div()
             .track_focus(&self.root_focus)
@@ -120,7 +127,7 @@ impl Render for BrowserWindow {
             )
             .child(page)
             .children(top_margin)
-            .child(chrome)
+            .children((!page_fullscreen).then_some(chrome))
             .children(reveal_edge)
             .on_drag_move(
                 cx.listener(|this, event, window, cx| this.drag_sidebar_edge(event, window, cx)),

@@ -30,6 +30,8 @@ pub enum Command {
     NextSpace,
     PreviousSpace,
     OpenSettings,
+    OpenHistory,
+    OpenDownloads,
     OpenTaskManager,
     ShowKeyboardShortcuts,
 }
@@ -209,6 +211,18 @@ const BUILT_IN_COMMANDS: &[CommandDefinition] = &[
         requirement: CommandRequirement::Always,
     },
     CommandDefinition {
+        command: Command::OpenHistory,
+        name: "History",
+        keywords: "visited pages past browsing",
+        requirement: CommandRequirement::Always,
+    },
+    CommandDefinition {
+        command: Command::OpenDownloads,
+        name: "Downloads",
+        keywords: "files saved",
+        requirement: CommandRequirement::Always,
+    },
+    CommandDefinition {
         command: Command::OpenTaskManager,
         name: "Task Manager",
         keywords: "processes cpu memory ram disk network performance",
@@ -354,6 +368,8 @@ mod tests {
             Command::NextSpace,
             Command::PreviousSpace,
             Command::OpenSettings,
+            Command::OpenHistory,
+            Command::OpenDownloads,
             Command::ShowKeyboardShortcuts,
         ] {
             assert!(commands.contains(&command), "{command:?} is not registered");

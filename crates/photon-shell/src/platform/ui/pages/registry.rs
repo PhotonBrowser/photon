@@ -6,7 +6,7 @@ use photon_core::internal_page_name;
 use super::PageContext;
 #[cfg(target_os = "macos")]
 use super::appkit;
-use super::{new_tab, performance, settings};
+use super::{downloads, history, new_tab, performance, settings};
 
 /// What the shell needs to know about one of its pages.
 pub(in super::super) struct PageDefinition {
@@ -34,6 +34,8 @@ pub(in super::super) enum PageIcon {
     Symbol(fn(u32, f32) -> AnyElement),
 }
 
+pub(in super::super) const DOWNLOADS: &PageDefinition = &downloads::PAGE;
+pub(in super::super) const HISTORY: &PageDefinition = &history::PAGE;
 pub(in super::super) const NEW_TAB: &PageDefinition = &new_tab::PAGE;
 pub(in super::super) const PERFORMANCE: &PageDefinition = &performance::PAGE;
 pub(in super::super) const SETTINGS: &PageDefinition = &settings::PAGE;
@@ -42,9 +44,9 @@ pub(in super::super) const APPKIT: &PageDefinition = &appkit::PAGE;
 
 /// Every page, found by name.
 #[cfg(target_os = "macos")]
-const PAGES: [&PageDefinition; 4] = [NEW_TAB, PERFORMANCE, SETTINGS, APPKIT];
+const PAGES: [&PageDefinition; 6] = [NEW_TAB, DOWNLOADS, HISTORY, PERFORMANCE, SETTINGS, APPKIT];
 #[cfg(not(target_os = "macos"))]
-const PAGES: [&PageDefinition; 3] = [NEW_TAB, PERFORMANCE, SETTINGS];
+const PAGES: [&PageDefinition; 5] = [NEW_TAB, DOWNLOADS, HISTORY, PERFORMANCE, SETTINGS];
 
 /// The page `url` names, if it is one of Photon's.
 pub(in super::super) fn find_page(url: &str) -> Option<&'static PageDefinition> {

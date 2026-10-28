@@ -100,6 +100,47 @@ impl History {
         }
     }
 
+    /// Adds pages imported from another browser, returning how many were
+    /// new. A page already here keeps the later visit and the larger visit
+    /// count, and gains a title if it had none. Only web pages are kept, and
+    /// the oldest are dropped past the limit.
+    pub fn import_pages(&mut self, imported: impl IntoIterator<Item = HistoryEntry>) -> usize {
+        let mut index: std::collections::HashMap<String, usize> = self
+            .pages
+            .iter()
+            .enumerate()
+            .map(|(position, entry)| (entry.url.clone(), position))
+            .collect();
+        let mut added = 0;
+        for entry in imported {
+            if !is_web_page(&entry.url) {
+                continue;
+            }
+            match index.get(&entry.url) {
+                Some(&position) => {
+                    let existing = &mut self.pages[position];
+                    existing.visit_count = existing.visit_count.max(entry.visit_count);
+                    if entry.last_visit > existing.last_visit {
+                        existing.last_visit = entry.last_visit;
+                    }
+                    if existing.title.is_empty() {
+                        existing.title = entry.title;
+                    }
+                }
+                None => {
+                    index.insert(entry.url.clone(), self.pages.len());
+                    self.pages.push(entry);
+                    added += 1;
+                }
+            }
+        }
+        if self.pages.len() > HISTORY_MAX_PAGES {
+            trim_oldest(&mut self.pages, HISTORY_MAX_PAGES, |entry| entry.last_visit);
+        }
+        self.rebuild_page_search_cache();
+        added
+    }
+
     /// Updates the title of a page already in the history, returning
     /// whether it changed.
     pub fn set_title(&mut self, url: &str, title: &str) -> bool {
@@ -353,6 +394,46 @@ mod tests {
         assert_eq!(history.searches().len(), 2);
         history.clear(&ClearBrowsingData::everything());
         assert!(history.pages().is_empty() && history.searches().is_empty());
+    }
+
+    #[test]
+    fn imports_pages_and_merges_ones_already_known() {
+        let mut history = History::default();
+        history.record_visit("https://known.example/", "", 50);
+        let imported = [
+            HistoryEntry {
+                url: "https://known.example/".into(),
+                title: "Known".into(),
+                visit_count: 7,
+                last_visit: 40,
+            },
+            HistoryEntry {
+                url: "https://new.example/".into(),
+                title: "New".into(),
+                visit_count: 2,
+                last_visit: 30,
+            },
+            HistoryEntry {
+                url: "chrome://settings".into(),
+                title: "Settings".into(),
+                visit_count: 1,
+                last_visit: 30,
+            },
+        ];
+        assert_eq!(history.import_pages(imported), 1);
+        assert_eq!(history.pages().len(), 2);
+        let known = &history.pages()[0];
+        assert_eq!(
+            (known.title.as_str(), known.visit_count, known.last_visit),
+            ("Known", 7, 50)
+        );
+        assert!(
+            history
+                .omnibox_suggestions("new")
+                .rows
+                .iter()
+                .any(|row| row.url == "https://new.example/")
+        );
     }
 
     #[test]

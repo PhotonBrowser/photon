@@ -56,6 +56,8 @@ Photon::ViewCallbacks make_view_callbacks(
     auto context_menu_callback = callbacks.context_menu_callback;
     auto open_in_new_tab_callback = callbacks.open_in_new_tab_callback;
     auto peek_callback = callbacks.peek_callback;
+    auto link_hover_callback = callbacks.link_hover_callback;
+    auto fullscreen_callback = callbacks.fullscreen_callback;
     auto select_dropdown_callback = callbacks.select_dropdown_callback;
     auto file_picker_callback = callbacks.file_picker_callback;
     auto permission_callback = callbacks.permission_callback;
@@ -246,6 +248,14 @@ Photon::ViewCallbacks make_view_callbacks(
     result.peek_requested = [=](std::string const& url) {
         if (peek_callback)
             peek_callback(callback_data, url.c_str());
+    };
+    result.link_hovered = [=](std::string const& url) {
+        if (link_hover_callback)
+            link_hover_callback(callback_data, url.c_str());
+    };
+    result.fullscreen_requested = [=](bool fullscreen) {
+        if (fullscreen_callback)
+            fullscreen_callback(callback_data, fullscreen);
     };
     result.find_result = [=](size_t current, std::optional<size_t> total) {
         if (find_result_callback)
@@ -630,6 +640,18 @@ extern "C" void photon_view_set_preferred_color_scheme(void* view,
     static_cast<ViewHandle*>(view)->view->set_preferred_color_scheme(scheme);
 }
 
+extern "C" void photon_view_set_fullscreen(void* view, bool fullscreen)
+{
+    if (view)
+        static_cast<ViewHandle*>(view)->view->set_fullscreen(fullscreen);
+}
+
+extern "C" void photon_view_exit_fullscreen(void* view)
+{
+    if (view)
+        static_cast<ViewHandle*>(view)->view->exit_fullscreen();
+}
+
 extern "C" void
 photon_runtime_set_system_reduced_motion_preference(void* runtime,
     bool reduce_motion)
@@ -694,6 +716,52 @@ extern "C" void photon_runtime_set_service_callback(void* runtime,
         [=](Photon::EngineService service, bool restarted) {
             callback(callback_data, static_cast<int>(service), restarted);
         });
+}
+
+extern "C" void photon_runtime_set_download_callbacks(void* runtime,
+    void* callback_data, PhotonDownloadChangedCallback changed,
+    PhotonDownloadRemovedCallback removed)
+{
+    if (!runtime || !changed || !removed)
+        return;
+    static_cast<RuntimeHandle*>(runtime)->runtime->set_download_callbacks(
+        [=](Photon::Download const& download) {
+            PhotonDownload state {
+                download.id,
+                download.url.c_str(),
+                download.path.c_str(),
+                static_cast<int>(download.status),
+                download.received_bytes,
+                download.total_bytes.has_value(),
+                download.total_bytes.value_or(0),
+                download.bytes_per_second.has_value(),
+                download.bytes_per_second.value_or(0),
+                download.error.c_str(),
+                download.created_time_ms,
+            };
+            changed(callback_data, &state);
+        },
+        [=](uint64_t id) { removed(callback_data, id); });
+}
+
+extern "C" void photon_runtime_download_action(void* runtime, uint64_t id,
+    int action)
+{
+    if (!runtime)
+        return;
+    auto& engine = *static_cast<RuntimeHandle*>(runtime)->runtime;
+    if (action == 0)
+        engine.pause_download(id);
+    else if (action == 1)
+        engine.resume_download(id);
+    else if (action == 2)
+        engine.cancel_download(id);
+}
+
+extern "C" void photon_runtime_clear_inactive_downloads(void* runtime)
+{
+    if (runtime)
+        static_cast<RuntimeHandle*>(runtime)->runtime->clear_inactive_downloads();
 }
 
 extern "C" void photon_runtime_list_registered_processes(void* runtime,

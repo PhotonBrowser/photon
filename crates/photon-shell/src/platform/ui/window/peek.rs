@@ -53,6 +53,11 @@ impl BrowserWindow {
                 WebViewEvent::ContextMenuRequested
                 | WebViewEvent::SelectDropdownRequested
                 | WebViewEvent::NewWebViewRequested(_) => {}
+                // A preview is too small to show a page fullscreen.
+                WebViewEvent::FullscreenChanged(true) => {
+                    webview.update(cx, |view, _| view.exit_page_fullscreen());
+                }
+                WebViewEvent::FullscreenChanged(false) => {}
             },
         );
         webview.update(cx, |view, _| view.set_page_visible(true));

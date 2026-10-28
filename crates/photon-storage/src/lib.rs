@@ -9,11 +9,13 @@
 mod atomic;
 mod favicons;
 mod history_file;
+mod import;
 mod migrations;
 mod profile;
 mod session_file;
 
 pub use favicons::FaviconPixels;
+pub use import::{ImportSource, import_sources, read_history};
 pub use profile::{DataUsage, Profile, ProfileWriteTicket};
 
 /// What Photon could recover from a saved profile file.

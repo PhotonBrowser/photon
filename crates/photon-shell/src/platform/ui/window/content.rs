@@ -320,6 +320,9 @@ impl BrowserWindow {
                     this.open_tab_beside(webview, url, *activate, window, cx);
                 }
                 WebViewEvent::Peek(url) => this.open_peek(url, window, cx),
+                WebViewEvent::FullscreenChanged(fullscreen) => {
+                    this.page_fullscreen_changed(webview, *fullscreen, window, cx);
+                }
                 WebViewEvent::NewWebViewRequested(id) => {
                     if let Some(request) = webview.update(cx, |view, _| view.take_new_web_view(*id))
                     {

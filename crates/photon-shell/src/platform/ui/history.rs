@@ -119,6 +119,11 @@ impl BrowsingHistory {
         cx.update_global(update)
     }
 
+    /// Every visited page, for the history page.
+    pub(super) fn pages(cx: &App) -> Arc<History> {
+        Self::suggestion_history(cx)
+    }
+
     /// A cheap snapshot for running an omnibox query away from the UI thread.
     pub(super) fn suggestion_history(cx: &App) -> Arc<History> {
         cx.try_global::<Self>().map_or_else(
@@ -279,6 +284,16 @@ impl BrowsingHistory {
             true
         });
         Self::prune_favicons(false, cx);
+    }
+
+    /// Adds pages imported from another browser, returning how many were new.
+    pub(super) fn import_pages(pages: Vec<HistoryEntry>, cx: &mut App) -> usize {
+        let mut added = 0;
+        Self::change(cx, |history| {
+            added = history.import_pages(pages);
+            true
+        });
+        added
     }
 
     /// Forgets a past search.

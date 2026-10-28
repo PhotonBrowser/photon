@@ -303,6 +303,24 @@ pub(super) unsafe extern "C" fn on_engine_open_in_new_tab(
         .update_webview(move |view, cx| view.open_in_new_tab(url, activate, cx));
 }
 
+pub(super) unsafe extern "C" fn on_engine_link_hover(context: *mut c_void, url: *const c_char) {
+    if context.is_null() || url.is_null() {
+        return;
+    }
+    let url = unsafe { CStr::from_ptr(url) }
+        .to_string_lossy()
+        .into_owned();
+    unsafe { &*(context.cast::<CallbackState>()) }
+        .update_webview(move |view, cx| view.set_hovered_link(url, cx));
+}
+
+pub(super) unsafe extern "C" fn on_engine_fullscreen(context: *mut c_void, fullscreen: bool) {
+    if !context.is_null() {
+        unsafe { &*(context.cast::<CallbackState>()) }
+            .update_webview(move |view, cx| view.page_fullscreen_requested(fullscreen, cx));
+    }
+}
+
 pub(super) unsafe extern "C" fn on_engine_peek(context: *mut c_void, url: *const c_char) {
     if context.is_null() || url.is_null() {
         return;

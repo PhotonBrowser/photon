@@ -66,6 +66,21 @@ pub(super) mod embedder {
         pub enabled: bool,
     }
 
+    #[repr(C)]
+    pub(crate) struct PhotonDownload {
+        pub id: u64,
+        pub url: *const c_char,
+        pub path: *const c_char,
+        pub status: i32,
+        pub received_bytes: u64,
+        pub has_total_bytes: bool,
+        pub total_bytes: u64,
+        pub has_bytes_per_second: bool,
+        pub bytes_per_second: u64,
+        pub error: *const c_char,
+        pub created_time_ms: i64,
+    }
+
     pub(crate) type SelectDropdownCallback =
         unsafe extern "C" fn(*mut c_void, f64, f64, f64, *const SelectItem, usize);
     #[cfg(not(feature = "ui-only"))]
@@ -148,6 +163,8 @@ pub(super) mod embedder {
         pub open_in_new_tab_callback:
             Option<unsafe extern "C" fn(*mut c_void, *const c_char, bool)>,
         pub peek_callback: Option<unsafe extern "C" fn(*mut c_void, *const c_char)>,
+        pub link_hover_callback: Option<unsafe extern "C" fn(*mut c_void, *const c_char)>,
+        pub fullscreen_callback: Option<unsafe extern "C" fn(*mut c_void, bool)>,
         pub select_dropdown_callback: Option<SelectDropdownCallback>,
         pub file_picker_callback: Option<unsafe extern "C" fn(*mut c_void, bool)>,
         pub permission_callback: Option<
@@ -265,6 +282,8 @@ pub(super) mod embedder {
             capacity: usize,
         );
         pub fn photon_view_set_preferred_color_scheme(view: *mut c_void, color_scheme: i32);
+        pub fn photon_view_set_fullscreen(view: *mut c_void, fullscreen: bool);
+        pub fn photon_view_exit_fullscreen(view: *mut c_void);
         pub fn photon_view_find_in_page(
             view: *mut c_void,
             query: *const c_char,
@@ -288,6 +307,17 @@ pub(super) mod embedder {
         );
         pub fn photon_runtime_set_memory_pressure(runtime: *mut c_void, pressured: bool);
         pub fn photon_runtime_set_elastic_scroll_enabled(runtime: *mut c_void, enabled: bool);
+        #[cfg(not(feature = "ui-only"))]
+        pub fn photon_runtime_set_download_callbacks(
+            runtime: *mut c_void,
+            callback_data: *mut c_void,
+            changed: Option<unsafe extern "C" fn(*mut c_void, *const PhotonDownload)>,
+            removed: Option<unsafe extern "C" fn(*mut c_void, u64)>,
+        );
+        #[cfg(not(feature = "ui-only"))]
+        pub fn photon_runtime_download_action(runtime: *mut c_void, id: u64, action: i32);
+        #[cfg(not(feature = "ui-only"))]
+        pub fn photon_runtime_clear_inactive_downloads(runtime: *mut c_void);
         #[cfg(not(feature = "ui-only"))]
         pub fn photon_runtime_set_service_callback(
             runtime: *mut c_void,

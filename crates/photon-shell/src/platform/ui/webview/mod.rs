@@ -33,8 +33,10 @@ mod dialogs;
 mod favicon;
 mod find;
 mod form_controls;
+mod fullscreen;
 mod history;
 mod history_swipe;
+mod link_status;
 mod permissions;
 mod zoom;
 
@@ -104,6 +106,10 @@ pub(in crate::platform) struct PhotonWebView {
     window: Option<AnyWindowHandle>,
     /// The color scheme last sent to Engine, `true` for dark.
     sent_dark_color_scheme: Option<bool>,
+    /// The link under the pointer, shown over the page.
+    hovered_link: Option<String>,
+    /// The page has an element in fullscreen.
+    page_fullscreen: bool,
     input: WebViewInput,
     history_swipe: history_swipe::HistorySwipe,
     pub(super) _quit_subscription: Option<Subscription>,
@@ -131,6 +137,8 @@ pub(in crate::platform) enum WebViewEvent {
     Peek(String),
     /// The page asked the shell to show a styled `<select>` popup.
     SelectDropdownRequested,
+    /// The page entered or left element fullscreen.
+    FullscreenChanged(bool),
 }
 
 impl EventEmitter<WebViewEvent> for PhotonWebView {}
@@ -201,6 +209,8 @@ impl PhotonWebView {
             return;
         }
         if state.url != self.state.url {
+            // The new page reports its own hover once the pointer moves.
+            self.hovered_link = None;
             if self.history_swipe.phase == history_swipe::HistorySwipePhase::Committing {
                 self.history_swipe_navigation_committed();
             } else if self.history_swipe.phase == history_swipe::HistorySwipePhase::Tracking {
@@ -401,6 +411,8 @@ impl PhotonWebView {
             last_viewport: None,
             requested: None,
             sent_dark_color_scheme: None,
+            hovered_link: None,
+            page_fullscreen: false,
             input: WebViewInput::default(),
             history_swipe: history_swipe::HistorySwipe::default(),
             _quit_subscription: None,
@@ -591,6 +603,12 @@ impl Render for PhotonWebView {
         let palette = palette(window, cx);
         // Shown where the page has not painted, as while it lays out at a new size.
         let page_background = self.page_background.unwrap_or(palette.page_background);
+        // A fullscreen page meets the screen's edges.
+        let radius = if self.page_fullscreen {
+            0.0
+        } else {
+            metrics::page_radius()
+        };
         let weak_this = cx.entity().downgrade();
         let weak_mouse_down = weak_this.clone();
         let weak_mouse_up = weak_this.clone();
@@ -619,7 +637,7 @@ impl Render for PhotonWebView {
                         window,
                         PagePlacement {
                             bounds: event.bounds,
-                            corner_radius: metrics::page_radius(),
+                            corner_radius: radius,
                             scale_factor,
                             background: page_background,
                         },
@@ -713,6 +731,10 @@ impl Render for PhotonWebView {
                 );
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                if this.fullscreen_key_down(event) {
+                    cx.stop_propagation();
+                    return;
+                }
                 let should_consume = this.input.key_down(&mut this.session, event);
                 // Consume commands after forwarding so editing keys such as Backspace
                 // are not replayed by the native text input system.
@@ -724,7 +746,7 @@ impl Render for PhotonWebView {
                 this.input.key_up(&mut this.session, event);
             }));
         webview = webview
-            .rounded(px(metrics::page_radius()))
+            .rounded(px(radius))
             .rounded_smoothing(metrics::page_smoothing())
             .overflow_hidden()
             .bg(gpui::rgb(page_background));
@@ -739,6 +761,9 @@ impl Render for PhotonWebView {
                 self.session
                     .record_navigation_surface_rendered(navigation_id);
             }
+        }
+        if let Some(status) = self.link_status(palette) {
+            webview = webview.child(status);
         }
         if let Some(indicator) = self.history_swipe_indicator(palette) {
             webview = webview.child(indicator);

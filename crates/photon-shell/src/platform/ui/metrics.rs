@@ -175,6 +175,25 @@ pub(super) const HISTORY_SWIPE_INDICATOR_SIZE: f32 = 42.0;
 pub(super) const HISTORY_SWIPE_INDICATOR_ICON_SIZE: f32 = 18.0;
 /// Gesture travel at which the edge arrow becomes fully visible.
 pub(super) const HISTORY_SWIPE_INDICATOR_REVEAL_DISTANCE: f32 = 20.0;
+/// The hovered link's address, shown over the page's bottom-left corner.
+pub(super) const LINK_STATUS_FONT_SIZE: f32 = 12.0;
+pub(super) const LINK_STATUS_HORIZONTAL_PADDING: f32 = 8.0;
+pub(super) const LINK_STATUS_VERTICAL_PADDING: f32 = 4.0;
+pub(super) const LINK_STATUS_INSET: f32 = 6.0;
+/// The label never covers more than this share of the page's width.
+pub(super) const LINK_STATUS_MAX_WIDTH_FRACTION: f32 = 0.6;
+/// A row on the downloads and history pages.
+pub(super) const LIST_ROW_GAP: f32 = 12.0;
+pub(super) const LIST_ROW_PADDING: f32 = 10.0;
+pub(super) const LIST_ROW_ICON_SIZE: f32 = 16.0;
+pub(super) const DOWNLOAD_PROGRESS_HEIGHT: f32 = 4.0;
+/// How many history entries the page lists before offering more.
+pub(super) const HISTORY_PAGE_BATCH: usize = 200;
+pub(super) const HISTORY_ROW_REMOVE_SIZE: f32 = 24.0;
+pub(super) const HISTORY_ROW_REMOVE_ICON_SIZE: f32 = 14.0;
+/// The address and time under and beside a history row's title.
+pub(super) const HISTORY_ROW_DETAIL_FONT_SIZE: f32 = 11.5;
+pub(super) const HISTORY_ROW_LINE_GAP: f32 = 2.0;
 pub(super) const INTERNAL_PAGE_INSET: f32 = 32.0;
 pub(super) const INTERNAL_PAGE_MAX_WIDTH: f32 = 620.0;
 pub(super) const INTERNAL_PAGE_SECTION_GAP: f32 = 28.0;

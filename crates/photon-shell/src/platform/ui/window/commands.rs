@@ -4,7 +4,7 @@ use gpui::{App, ClipboardItem, Context, Window};
 use photon_core::{BrowserCommand, Command, CommandAvailability, WindowSession};
 
 use super::super::super::engine::ZoomStep;
-use super::super::pages::SETTINGS;
+use super::super::pages::{DOWNLOADS, HISTORY, SETTINGS};
 use super::super::settings::Settings;
 use super::BrowserWindow;
 
@@ -48,6 +48,8 @@ impl BrowserWindow {
             Command::NextSpace => self.switch_space_by(1, cx),
             Command::PreviousSpace => self.switch_space_by(-1, cx),
             Command::OpenSettings => self.open_page_tab(SETTINGS, window, cx),
+            Command::OpenHistory => self.open_page_tab(HISTORY, window, cx),
+            Command::OpenDownloads => self.open_page_tab(DOWNLOADS, window, cx),
             Command::OpenTaskManager => {
                 let runtime = self.runtime.clone();
                 cx.defer(move |cx| super::task_manager::open_task_manager(runtime, cx));

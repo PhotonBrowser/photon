@@ -5,10 +5,11 @@
 
 use crate::platform::shortcuts::{
     CloseTab, FindInPage, FindNext, FindPrevious, GoBack, GoForward, HideApp, HideOtherApps,
-    MinimizeWindow, NewTab, NewWindow, NextSpace, OpenCommandPalette, OpenSettings,
-    OpenTaskManager, PreviousSpace, Quit, Reload, ReopenClosedTab, ResetZoom, SelectNextTab,
-    SelectPreviousTab, ShowAllApps, ShowKeyboardShortcuts, StopLoading, ToggleSidebar,
-    ToggleSidebarIcons, ToggleZenMode, ZoomIn, ZoomOut, ZoomWindow, shortcut_name_for_action,
+    MinimizeWindow, NewTab, NewWindow, NextSpace, OpenCommandPalette, OpenDownloads, OpenHistory,
+    OpenSettings, OpenTaskManager, PreviousSpace, Quit, Reload, ReopenClosedTab, ResetZoom,
+    SelectNextTab, SelectPreviousTab, ShowAllApps, ShowKeyboardShortcuts, StopLoading,
+    ToggleSidebar, ToggleSidebarIcons, ToggleZenMode, ZoomIn, ZoomOut, ZoomWindow,
+    shortcut_name_for_action,
 };
 use gpui::{App, Global, Menu, MenuItem, OsAction, SystemMenuType};
 use gpui_elements::editable_text::actions::{Copy, Cut, Paste, Redo, SelectAll, Undo};
@@ -76,6 +77,8 @@ fn menu_bar(state: MenuBarState) -> Vec<Menu> {
         MenuItem::action(label(&ZoomOut), ZoomOut),
         MenuItem::action(label(&ResetZoom), ResetZoom),
         MenuItem::separator(),
+        MenuItem::action(label(&OpenHistory), OpenHistory),
+        MenuItem::action(label(&OpenDownloads), OpenDownloads),
         MenuItem::action(label(&OpenTaskManager), OpenTaskManager),
         MenuItem::separator(),
         reload,
