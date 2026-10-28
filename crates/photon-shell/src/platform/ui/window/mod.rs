@@ -68,7 +68,8 @@ use super::tabs::{RevealedIcon, TabDragAxis, TabReorderGroups};
 use super::theme::{ThemeColors, palette};
 use crate::platform::permission_coordinator::PermissionCoordinator;
 use alerts::{AlertCenter, EngineNotice, NoticeExpiry};
-use content::{BrowserTab, TabContent, create_webview};
+use content::{BrowserTab, TabContent, create_webview, follow_appearance};
+use context_menu::{ContextMenuState, SelectDropdownState};
 use peek::PeekState;
 use permissions::PermissionPromptEntry;
 use popups::PendingPopup;
@@ -137,6 +138,12 @@ pub(in crate::platform) struct BrowserWindow {
     peek: PeekState,
     /// The keyboard shortcuts dialog, while open.
     shortcuts_dialog: Option<(Entity<ShortcutsDialog>, Subscription)>,
+    /// The context menu shown over this window, if any.
+    context_menu: Option<ContextMenuState>,
+    /// A page's open `<select>` popup, if any.
+    select_dropdown: Option<SelectDropdownState>,
+    /// Holds keyboard focus while a custom context menu is open.
+    context_menu_focus: FocusHandle,
     shortcuts_dialog_presence: Presence<Entity<ShortcutsDialog>>,
     /// The command palette, while open.
     command_palette: Option<Entity<CommandPalette>>,
@@ -361,6 +368,7 @@ impl BrowserWindow {
             window_settings::apply_background_style(window, background_style);
             self.window_background_style = background_style;
         }
+        self.update_page_color_schemes(window, cx);
         for webview in self.tabs.iter().filter_map(|tab| tab.content.webview()) {
             webview.update(cx, |_, cx| cx.notify());
         }
@@ -368,6 +376,18 @@ impl BrowserWindow {
         self.wake_tab_sleep_scheduler();
         self.animate_spinner(cx);
         cx.notify();
+    }
+
+    fn update_page_color_schemes(&mut self, window: &Window, cx: &mut App) {
+        let appearance = Settings::appearance(window.appearance(), cx);
+        for webview in self
+            .tabs
+            .iter()
+            .filter_map(|tab| tab.content.webview())
+            .chain(self.peek_webview())
+        {
+            webview.update(cx, |view, _| view.update_color_scheme(appearance));
+        }
     }
 
     fn window_changed(
@@ -392,7 +412,7 @@ impl BrowserWindow {
                     self.activate_tab(active_tab, false, window, cx);
                 }
             } else if let Some(webview) = self.active_webview() {
-                webview.update(cx, |view, _| view.session.set_visible(false));
+                webview.update(cx, |view, _| view.set_page_visible(false));
                 self.wake_tab_sleep_scheduler();
             } else {
                 self.wake_tab_sleep_scheduler();
@@ -460,6 +480,8 @@ impl BrowserWindow {
             .children(dialog)
             .children(self.popup_confirmation(palette, cx))
             .children(self.permission_prompt(palette, cx))
+            .children(self.select_dropdown_overlay(window, cx))
+            .children(self.context_menu_overlay(window, cx))
             .into_any_element()
     }
 }
@@ -488,7 +510,8 @@ fn open_browser_window(
         let omnibox = cx.new(|cx| Omnibox::new(window, cx));
         cx.new(move |cx: &mut Context<BrowserWindow>| {
             let appearance_subscription =
-                cx.observe_window_appearance(window, |this: &mut BrowserWindow, _, cx| {
+                cx.observe_window_appearance(window, |this: &mut BrowserWindow, window, cx| {
+                    this.update_page_color_schemes(window, cx);
                     this.preview_foreground = None;
                     cx.notify();
                 });
@@ -611,6 +634,9 @@ fn open_browser_window(
                 find_bar_presence: Presence::default(),
                 peek: PeekState::default(),
                 shortcuts_dialog: None,
+                context_menu: None,
+                select_dropdown: None,
+                context_menu_focus: cx.focus_handle(),
                 shortcuts_dialog_presence: Presence::default(),
                 command_palette: None,
                 command_palette_presence: Presence::default(),
@@ -667,6 +693,10 @@ fn open_browser_window(
             browser.bind_tab_reorder_groups(cx);
             match (initial_webview, startup_page) {
                 (Some(webview), _) => {
+                    // Initial startup URLs bypass the regular webview insertion
+                    // helper, so apply the page preference before first layout
+                    // starts the deferred navigation.
+                    follow_appearance(&webview, window, cx);
                     let content = TabContent::Web(webview);
                     browser.insert_content(0, content, true, window, cx);
                 }

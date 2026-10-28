@@ -2,6 +2,7 @@
 
 use gpui::{AnyElement, Context, Focusable, deferred, prelude::*, px, rgb, rgba};
 use gpui_elements::editable_text::text_input;
+use photon_core::DockRegion;
 use std::rc::Rc;
 
 use super::super::button::toolbar_button;
@@ -10,7 +11,7 @@ use super::super::controls::themed_text_input;
 use super::super::icons::{search_icon_sized, shield_icon, sliders_horizontal_icon};
 use super::super::layout::{Elevated, Elevation, Raised};
 use super::super::layout::{h_stack, v_stack};
-use super::super::motion::{AnimateIn, fade};
+use super::super::motion::{AnimateIn, Curve, Speed, fade, popover, translated};
 use super::super::workspace_layout::WorkspaceLayout;
 use super::super::{metrics, theme::ThemeColors};
 use super::rows::{SuggestionActions, icon_slot, suggestion_icon, suggestion_rows};
@@ -23,14 +24,16 @@ impl Omnibox {
         &self,
         palette: ThemeColors,
         editing: bool,
+        style: FieldStyle,
+        address_text_offset: f32,
+        address_text_opacity: f32,
         cx: &mut Context<Self>,
     ) -> gpui::Div {
         let input_focus = self.input.focus_handle(cx).tab_index(3).tab_stop(true);
-        let style = FieldStyle::current(cx);
+        let centered_sidebar = style.center_text && self.webview.is_some();
         let icon = (!style.trailing_site_info && (style.idle_icon || !self.suggestions.is_empty()))
             .then(|| self.field_icon(palette, cx));
         let site_info_open = self.site_info_open;
-        let centered_sidebar = style.center_text && self.webview.is_some();
         let input = themed_text_input(text_input("titlebar-omnibox-input"), palette)
             .state(self.input.downgrade())
             .track_focus(&input_focus)
@@ -40,7 +43,12 @@ impl Omnibox {
             .flex_1()
             .min_w_0()
             .whitespace_nowrap()
-            .overflow_x_scroll();
+            .when(centered_sidebar, |input| input.text_start());
+        let input = if centered_sidebar && !editing {
+            input.text_ellipsis()
+        } else {
+            input.overflow_x_scroll()
+        };
         let icon_color = if site_info_open && !style.trailing_site_info {
             palette.text_primary
         } else {
@@ -69,6 +77,42 @@ impl Omnibox {
         } else {
             site_info_button
         };
+        let motion = super::super::settings::Settings::motion(cx);
+        let text_color = if editing {
+            palette.text_primary
+        } else {
+            palette.text_secondary
+        };
+        let input = gpui_motion::MotionElement::new(
+            "omnibox-input-text-motion",
+            input,
+            gpui_motion::Motion::new(gpui_motion::Target::default().opacity(1.0)),
+        )
+        .style_motion(
+            gpui_motion::StyleMotion::new(gpui_motion::StyleTarget::default().color(
+                gpui_motion::ColorProperty::Text,
+                super::super::motion::motion_rgb_color(text_color),
+            ))
+            .transition(Curve::EaseOut.transition(motion.duration(Speed::Gentle))),
+        )
+        .into_any_element();
+        let input = if centered_sidebar {
+            h_stack()
+                .relative()
+                .flex_1()
+                .min_w_0()
+                .h_full()
+                .items_center()
+                .overflow_x_hidden()
+                .opacity(address_text_opacity)
+                .child(translated(
+                    input,
+                    gpui::point(px(address_text_offset), px(0.0)),
+                ))
+                .into_any_element()
+        } else {
+            input
+        };
         let row = h_stack()
             .items_center()
             .gap(px(metrics::OMNIBOX_GAP))
@@ -79,28 +123,12 @@ impl Omnibox {
         if centered_sidebar {
             let content = h_stack()
                 .absolute()
-                .left(px(if editing {
-                    metrics::OMNIBOX_HORIZONTAL_PADDING
-                } else {
-                    metrics::SIDEBAR_OMNIBOX_TEXT_INSET
-                }))
+                .left(px(metrics::OMNIBOX_HORIZONTAL_PADDING))
                 .right(px(metrics::SIDEBAR_OMNIBOX_TEXT_INSET))
                 .top_0()
                 .bottom_0()
-                .items_center();
-            let content = if editing {
-                content.child(input).into_any_element()
-            } else {
-                content
-                    .child(
-                        gpui::div()
-                            .w_full()
-                            .text_center()
-                            .truncate()
-                            .child(self.current_url.clone()),
-                    )
-                    .into_any_element()
-            };
+                .items_center()
+                .child(input);
             let row = row
                 .relative()
                 .child(content)
@@ -145,6 +173,8 @@ impl Omnibox {
     pub(super) fn site_info_popover(
         &self,
         palette: ThemeColors,
+        style: FieldStyle,
+        workspace_layout: &WorkspaceLayout,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let site = photon_core::display_domain(&self.page_url(cx));
@@ -152,8 +182,6 @@ impl Omnibox {
             .webview
             .as_ref()
             .and_then(|webview| webview.read(cx).state.connection_secure);
-        let style = FieldStyle::current(cx);
-        let workspace_layout = WorkspaceLayout::current(cx);
         let opens_toward_page =
             workspace_layout.sidebar_region() != Some(photon_core::DockRegion::Trailing);
         let popover_width = if style.trailing_site_info {
@@ -213,6 +241,10 @@ impl Omnibox {
     pub(super) fn open_panel(
         &self,
         palette: ThemeColors,
+        style: FieldStyle,
+        sidebar_region: Option<DockRegion>,
+        address_text_offset: f32,
+        address_text_opacity: f32,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let rows = suggestion_rows(
@@ -225,18 +257,17 @@ impl Omnibox {
         );
         // Line up with the closed field, whose border the panel replaces.
         let border = px(-metrics::OMNIBOX_BORDER_WIDTH);
+        let panel = v_stack().id("omnibox-panel").absolute().top(border);
+        // The sidebar is narrow, so grow suggestions toward the page.
+        let panel = match (style.trailing_site_info, sidebar_region) {
+            (true, Some(DockRegion::Trailing)) => panel.right(border).w_full(),
+            (true, _) => panel.left(border).w_full(),
+            (false, _) => panel.left(border).right(border),
+        }
+        .min_w(px(metrics::OMNIBOX_PANEL_MIN_WIDTH));
         deferred(
-            v_stack()
-                .id("omnibox-panel")
-                .absolute()
-                .top(border)
-                .left(border)
-                .right(border)
-                // A narrow field opens into a panel that reaches over the page.
-                .when(!FieldStyle::current(cx).trailing_site_info, |panel| {
-                    panel.min_w(px(metrics::OMNIBOX_PANEL_MIN_WIDTH))
-                })
-                .rounded_t(px(FieldStyle::current(cx).radius))
+            panel
+                .rounded_t(px(style.radius))
                 .rounded_b(px(metrics::omnibox_panel_bottom_radius()))
                 .border_1()
                 .border_color(rgba(palette.menu_border))
@@ -244,12 +275,24 @@ impl Omnibox {
                 .elevated(Elevation::High)
                 .occlude()
                 .owns_clicks()
-                .child(self.field_content(palette, true, cx))
+                .child(self.field_content(
+                    palette,
+                    true,
+                    style,
+                    address_text_offset,
+                    address_text_opacity,
+                    cx,
+                ))
                 .child(rows.animate_in(
                     "omnibox-suggestions-appear",
                     fade(),
                     &super::super::settings::Settings::motion(cx),
-                )),
+                ))
+                .animate_in(
+                    "omnibox-panel-appear",
+                    popover(),
+                    &super::super::settings::Settings::motion(cx),
+                ),
         )
         .priority(1)
     }

@@ -101,10 +101,24 @@ pub(crate) struct PageSurfacePalette {
     pub(crate) background: u32,
 }
 
-fn trace(args: std::fmt::Arguments<'_>) {
-    // Read once: traces run on every frame, including in GPU completion handlers.
+/// Where a page appears in its window, from the web view's GPUI layout. A
+/// platform that shows pages in native layers places them from this.
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) struct PagePlacement {
+    pub(crate) bounds: gpui::Bounds<gpui::Pixels>,
+    pub(crate) corner_radius: f32,
+    pub(crate) scale_factor: f32,
+    /// Shown until the page's first frame, as `0xRRGGBB`.
+    pub(crate) background: u32,
+}
+
+pub(crate) fn verbose_trace_enabled() -> bool {
     static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    if *ENABLED.get_or_init(|| std::env::var_os("PHOTON_VERBOSE").is_some()) {
+    *ENABLED.get_or_init(|| std::env::var_os("PHOTON_VERBOSE").is_some())
+}
+
+fn trace(args: std::fmt::Arguments<'_>) {
+    if verbose_trace_enabled() {
         eprintln!("[PhotonWebView/GPUI-CE] {args}");
     }
 }

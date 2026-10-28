@@ -1487,7 +1487,7 @@ impl BrowserWindow {
             .flatten();
         if let Some(webview) = self.tabs[index].content.webview() {
             webview.update(cx, |view, _| {
-                view.session.set_visible(false);
+                view.set_page_visible(false);
                 view.session.set_focus(false);
             });
         }
@@ -1557,7 +1557,7 @@ impl BrowserWindow {
                 {
                     previous.update(cx, |view, cx| {
                         view.reset_history_swipe(true);
-                        view.session.set_visible(false);
+                        view.set_page_visible(false);
                         view.session.set_focus(false);
                         cx.notify();
                     });
@@ -1583,7 +1583,9 @@ impl BrowserWindow {
         if let Some(webview) = webview.as_ref() {
             let window_visible = self.window_visible;
             webview.update(cx, |view, cx| {
-                view.session.set_visible(window_visible);
+                view.set_page_visible(window_visible);
+                // Prepaint places and shows the page's direct layer again.
+                cx.notify();
                 if focus_contents {
                     window.focus(&view.focus_handle, cx);
                 }
@@ -2073,7 +2075,7 @@ impl BrowserWindow {
         } else {
             if let Some(webview) = content.webview() {
                 webview.update(cx, |view, _| {
-                    view.session.set_visible(false);
+                    view.set_page_visible(false);
                     view.session.set_focus(false);
                 });
             }
@@ -2150,7 +2152,7 @@ impl BrowserWindow {
             let permission_view_id = webview.read(cx).session.permission_view_id();
             self.cancel_permissions_for_view(permission_view_id, window, cx);
             let favicon = webview.update(cx, |view, _| {
-                view.session.set_visible(false);
+                view.set_page_visible(false);
                 view.session.set_focus(false);
                 view.favicon.take()
             });

@@ -3,7 +3,7 @@
 //! once left unused for twelve hours.
 
 use gpui::{Context, Task, Window};
-use photon_core::{Shortcut, SpaceId, internal_page_url, should_archive};
+use photon_core::{BrowserState, Shortcut, SpaceId, internal_page_url, should_archive};
 use std::time::Duration;
 
 use crate::platform::app_update::update_app;
@@ -11,7 +11,7 @@ use crate::platform::app_update::update_app;
 use super::super::pages::find_page;
 use super::super::settings::Settings;
 use super::BrowserWindow;
-use super::content::{BrowserTab, TabContent, create_webview};
+use super::content::{BrowserTab, SleepingTab, TabContent};
 
 /// How often the window looks for tabs left unused.
 const ARCHIVE_CHECK_INTERVAL: Duration = Duration::from_secs(5 * 60);
@@ -161,11 +161,24 @@ impl BrowserWindow {
                         self.insert_tab_at(index, content, Some(pin), false, window, cx);
                     }
                     None => {
-                        let Some(webview) = create_webview(cx, self.runtime.clone(), &pin.url)
-                        else {
-                            continue;
-                        };
-                        self.insert_webview(index, webview, Some(pin), false, window, cx);
+                        // Pinned pages are restored in the background. Keep
+                        // their saved identity now and initialize the Engine
+                        // view only if the user selects one.
+                        self.insert_tab_at_immediately(
+                            index,
+                            TabContent::Sleeping(SleepingTab {
+                                state: BrowserState {
+                                    url: pin.url.clone(),
+                                    title: pin.title.clone(),
+                                    ..BrowserState::default()
+                                },
+                                favicon: None,
+                            }),
+                            Some(pin),
+                            false,
+                            window,
+                            cx,
+                        );
                     }
                 }
                 self.tabs[index].space = space;

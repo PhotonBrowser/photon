@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Photon Core Browser Test Suite</title>
+<style>
+:root { color-scheme: light dark; font: 16px/1.55 system-ui, sans-serif; }
+body { max-width: 960px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+h1,h2 { line-height: 1.2; }
+nav, .grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: .8rem; }
+a, .card { border: 1px solid #8886; border-radius: .75rem; padding: 1rem; }
+a { color: LinkText; }
+.card h3 { margin-top: 0; }
+code { overflow-wrap: anywhere; }
+.note { padding: .8rem 1rem; border-left: 4px solid #888; background: color-mix(in srgb, CanvasText 7%, Canvas); }
+</style>
+</head>
+<body>
+<h1>Photon core browser test suite</h1>
+<p>Use the same pages and actions in Photon and a reference browser (Safari, Firefox, or Chrome). Mark a case as pass/fail in your notes and record the browser version, OS, Photon build, and any console/error messages.</p>
+<p class="note"><strong>Start here:</strong> Open this <code>index.html</code> in both browsers. Use its links to move between pages. The files are self-contained and do not need a server. The storage case uses browser storage scoped to this local file origin; if the browser blocks it, serve this folder over localhost and repeat.</p>
+<nav>
+<a href="navigation.html"><strong>1. Navigation and history</strong><br>Links, anchors, redirects, reload, back/forward</a>
+<a href="input-forms.html"><strong>2. Input and forms</strong><br>Keyboard, selection, validation, submit, clipboard</a>
+<a href="storage.html"><strong>3. Cookies and storage</strong><br>Local/session storage, IndexedDB, cookies</a>
+<a href="rendering.html"><strong>4. Rendering and interaction</strong><br>CSS, fonts, images, SVG, scrolling, pointer, touch</a>
+<a href="scripts-network.html"><strong>5. JavaScript and network</strong><br>Timers, fetch, errors, downloads, permissions</a>
+</nav>
+<h2>Core functionality checklist</h2>
+<div class="grid">
+<section class="card"><h3>App and navigation</h3><ul><li>Launch, new tab, close tab, reopen closed tab</li><li>Address entry: explicit URL, bare domain, localhost, search query</li><li>Back/forward, reload, stop loading, redirect</li><li>Link target behavior, external links, popup/new window</li><li>Page title and favicon updates</li></ul></section>
+<section class="card"><h3>Page interaction</h3><ul><li>Text selection, copy/paste, keyboard shortcuts</li><li>Forms, validation, autofill behavior</li><li>Find in page, zoom, scrolling, focus</li><li>Images, audio/video, SVG, canvas, fonts</li><li>Context menu and mouse back/forward</li></ul></section>
+<section class="card"><h3>State and privacy</h3><ul><li>Cookies and site storage survive reload/restart</li><li>History, search suggestions, clear browsing data</li><li>Downloads, permission prompts, pop-up policy</li><li>Private/temporary profile behavior (if available)</li><li>Crash/recovery and session restore</li></ul></section>
+<section class="card"><h3>Stability and compatibility</h3><ul><li>Repeated tab creation, navigation, and close</li><li>Large/long page, many images, animated content</li><li>Resize window, switch tabs while loading</li><li>HTTPS, certificate errors, mixed content</li><li>Compare layout and interaction on same viewport</li></ul></section>
+</div>
+<p>Detailed steps and expected browser behavior are in <a href="README.md">README.md</a>.</p>
+</body>
+</html>

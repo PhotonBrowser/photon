@@ -34,8 +34,6 @@ struct NavigationTimeline {
     first_frame_ready: Option<Instant>,
     surface_installed: Option<Instant>,
     surface_rendered: Option<Instant>,
-    #[cfg(target_os = "macos")]
-    surface_gpu_complete: Option<Instant>,
 }
 
 impl NavigationTimingProfiler {
@@ -124,34 +122,16 @@ impl NavigationTimingProfiler {
             return;
         }
         timeline.surface_rendered = Some(now);
-        self.log_event(timeline, "first_gpui_render", now);
-    }
-
-    #[cfg(target_os = "macos")]
-    pub(in crate::platform) fn record_surface_gpu_complete(&self, navigation_id: u64) {
-        let now = Instant::now();
-        let mut current = self.current.lock().unwrap();
-        let Some(timeline) = current.as_mut() else {
-            return;
-        };
-        if timeline.id != navigation_id
-            || timeline.surface_rendered.is_none()
-            || timeline.surface_gpu_complete.is_some()
-        {
-            return;
-        }
-        timeline.surface_gpu_complete = Some(now);
-        self.log_event(timeline, "first_page_gpu_present_complete", now);
+        self.log_event(timeline, "first_page_render", now);
         eprintln!(
-            "[PhotonNavigationTiming] nav={} event=summary url={} start_to_commit_ms={} commit_to_engine_frame_ms={} engine_frame_to_surface_ms={} surface_to_gpui_render_ms={} gpui_render_to_gpu_present_complete_ms={} start_to_gpu_present_complete_ms={} load_finished_ms={}",
+            "[PhotonNavigationTiming] nav={} event=summary url={} start_to_commit_ms={} commit_to_engine_frame_ms={} engine_frame_to_surface_ms={} surface_to_render_ms={} start_to_render_ms={} load_finished_ms={}",
             timeline.id,
             timeline.url,
             elapsed_ms(timeline.started, timeline.committed),
             elapsed_ms(timeline.committed, timeline.first_frame_ready),
             elapsed_ms(timeline.first_frame_ready, timeline.surface_installed),
             elapsed_ms(timeline.surface_installed, timeline.surface_rendered),
-            elapsed_ms(timeline.surface_rendered, timeline.surface_gpu_complete),
-            elapsed_ms(timeline.started, timeline.surface_gpu_complete),
+            elapsed_ms(timeline.started, timeline.surface_rendered),
             elapsed_ms(timeline.started, timeline.load_finished),
         );
     }

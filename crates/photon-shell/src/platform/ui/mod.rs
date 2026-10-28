@@ -1,5 +1,6 @@
 //! GPUI views and window composition.
 
+mod animated_icons;
 mod appearance_preview;
 mod background_noise;
 mod button;
@@ -60,7 +61,7 @@ pub(in crate::platform) fn window_background_style(
 
 pub(in crate::platform) use webview::{
     CrashNotice, Favicon, FindResult, PageMenuItem, PhotonWebView, SelectDropdown, SelectItem,
-    WebViewEvent, install_form_controls,
+    WebViewEvent,
 };
 pub use window::run;
 pub use window::show_alert;

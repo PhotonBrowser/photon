@@ -20,7 +20,6 @@ use std::time::Instant;
 use super::super::super::app_update::update_app;
 use super::super::super::engine::EngineRuntime;
 use super::super::history::load_browsing_history;
-use super::super::install_form_controls;
 use super::super::settings::{Settings, load_settings};
 #[cfg(unix)]
 use super::automation::AutomationLaunch;
@@ -112,7 +111,6 @@ pub fn run() {
         crate::platform::motion_observer::follow(cx);
         quit_after_env_timeout(cx);
         crate::platform::app_menus::install_app_menus(cx);
-        install_form_controls(cx);
         let profile_state = cx
             .background_executor()
             .spawn(async move { load_profile_state() });

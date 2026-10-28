@@ -36,9 +36,12 @@ struct GlobalOptions {
 enum Command {
     /// Verify prerequisites, initialize dependencies, prepare tools, and install the CLI.
     Setup {
-        /// Install macOS build packages with Homebrew before setup.
+        /// Install system build packages before setup where supported.
         #[arg(long)]
         install_system_deps: bool,
+        /// Prepare the Rust and GPUI shell without initializing Photon Engine.
+        #[arg(long)]
+        ui_only: bool,
     },
     /// Install this checkout's Photon command in Cargo's bin directory.
     Install,
@@ -211,7 +214,8 @@ pub fn run() -> Result<(), String> {
         None => print_help(),
         Some(Command::Setup {
             install_system_deps,
-        }) => commands::setup::setup(&root, verbose, install_system_deps),
+            ui_only,
+        }) => commands::setup::setup(&root, verbose, install_system_deps, ui_only),
         Some(Command::Install) => commands::install::install(&root, verbose),
         Some(Command::Doctor) => commands::setup::doctor(&root),
         Some(Command::Ide { command }) => match command {
@@ -424,6 +428,19 @@ mod tests {
             cli.command,
             Some(Command::Setup {
                 install_system_deps: true,
+                ui_only: false,
+            })
+        ));
+    }
+
+    #[test]
+    fn setup_can_skip_engine_prerequisites_for_the_ui_shell() {
+        let cli = Cli::try_parse_from(["photon", "setup", "--ui-only"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Some(Command::Setup {
+                install_system_deps: false,
+                ui_only: true,
             })
         ));
     }

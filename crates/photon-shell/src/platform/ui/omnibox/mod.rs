@@ -11,8 +11,8 @@ mod rows;
 mod site_info;
 
 use gpui::{
-    Context, Entity, EventEmitter, Focusable, MouseButton, Render, Subscription, Window,
-    prelude::*, px, rgb, rgb_to_hsla, rgba,
+    Context, Entity, EventEmitter, Focusable, MouseButton, Render, Subscription, Task, Window,
+    prelude::*, px, rgb, rgba,
 };
 use gpui_elements::editable_text::{
     EditableTextState, StringStorage, TextChanged,
@@ -23,6 +23,7 @@ use photon_core::{OmniboxTarget, display_address, display_domain, resolve_with};
 
 use super::history::BrowsingHistory;
 use super::layout::h_stack;
+use super::motion::{Speed, Tween};
 use super::workspace_layout::{OmniboxPlacement, WorkspaceLayout};
 use super::{PhotonWebView, WebViewEvent};
 use super::{metrics, settings::Settings, theme::palette};
@@ -62,10 +63,6 @@ impl FieldStyle {
             },
         }
     }
-
-    fn current(cx: &gpui::App) -> Self {
-        Self::for_layout(WorkspaceLayout::current(cx).omnibox_placement())
-    }
 }
 
 pub(super) struct Omnibox {
@@ -80,9 +77,17 @@ pub(super) struct Omnibox {
     /// The submitted text cannot be opened. Cleared by the next edit.
     invalid: bool,
     site_info_open: bool,
+    field_hovered: bool,
+    address_text_offset: Tween,
+    address_text_opacity: Tween,
+    address_text_position_initialized: bool,
+    address_text_editing: bool,
     /// What the typed text could open. While there are any, the field opens
     /// into a panel listing them.
     suggestions: Vec<Suggestion>,
+    /// The current background history query, canceled when input changes.
+    suggestion_task: Option<Task<()>>,
+    suggestion_generation: u64,
     /// The suggestion Enter opens.
     selected: usize,
     /// The suggestion under the pointer.
@@ -176,7 +181,14 @@ impl Omnibox {
             current_url: String::new(),
             invalid: false,
             site_info_open: false,
+            field_hovered: false,
+            address_text_offset: Tween::at(0.0),
+            address_text_opacity: Tween::at(1.0),
+            address_text_position_initialized: false,
+            address_text_editing: false,
             suggestions: Vec::new(),
+            suggestion_task: None,
+            suggestion_generation: 0,
             selected: 0,
             hovered: None,
             typed: String::new(),
@@ -195,6 +207,55 @@ impl Omnibox {
     pub(super) fn focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         window.focus(&self.input.focus_handle(cx), cx);
         self.input.update(cx, |input, cx| input.select_document(cx));
+    }
+
+    fn address_text_motion(
+        &mut self,
+        centered_sidebar: bool,
+        editing: bool,
+        resting_offset: f32,
+        window: &mut Window,
+        cx: &gpui::App,
+    ) -> (f32, f32) {
+        if !centered_sidebar {
+            self.address_text_offset.jump_to(0.0);
+            self.address_text_opacity.jump_to(1.0);
+            self.address_text_position_initialized = false;
+            self.address_text_editing = false;
+            return (0.0, 1.0);
+        }
+
+        let motion = Settings::motion(cx);
+        let target = if editing { 0.0 } else { resting_offset };
+        if !self.address_text_position_initialized {
+            self.address_text_offset.jump_to(target);
+            self.address_text_position_initialized = true;
+        } else if self.address_text_editing != editing {
+            self.address_text_offset
+                .animate_to(target, Speed::Gentle, &motion);
+            self.address_text_opacity
+                .jump_to(metrics::OMNIBOX_TEXT_TRANSITION_OPACITY);
+            self.address_text_opacity
+                .animate_to(1.0, Speed::Gentle, &motion);
+        } else if self.address_text_offset.target() != target {
+            self.address_text_offset.jump_to(target);
+        }
+        self.address_text_editing = editing;
+
+        let now = std::time::Instant::now();
+        let offset = self.address_text_offset.value_with_config(now, &motion);
+        let opacity = self.address_text_opacity.value_with_config(now, &motion);
+        if self
+            .address_text_offset
+            .is_running_with_config(now, &motion)
+            || self
+                .address_text_opacity
+                .is_running_with_config(now, &motion)
+        {
+            window.request_animation_frame();
+        }
+
+        (offset, opacity)
     }
 
     /// Shows the active tab's address: its web view's, followed as it
@@ -331,7 +392,39 @@ impl Render for Omnibox {
         let menu_palette = palette(window, cx);
         let palette = super::theme::chrome_palette(window, cx);
         let editing = self.is_editing(window, cx);
-        let style = FieldStyle::current(cx);
+        let workspace_layout = WorkspaceLayout::current(cx);
+        let style = FieldStyle::for_layout(workspace_layout.omnibox_placement());
+        let centered_sidebar = style.center_text && self.webview.is_some();
+        let resting_offset = if centered_sidebar {
+            let sidebar_width = workspace_layout
+                .sidebar_extent()
+                .unwrap_or_else(|| Settings::get(cx).sidebar.width())
+                as f32;
+            let field_width = sidebar_width - 2.0 * metrics::SIDEBAR_PADDING;
+            let text_width = window
+                .text_system()
+                .layout_line(
+                    self.current_url.as_str(),
+                    px(style.font_size),
+                    &[gpui::TextRun {
+                        len: self.current_url.len(),
+                        ..Default::default()
+                    }],
+                )
+                .width;
+            (field_width / 2.0 - f32::from(text_width) / 2.0 - metrics::OMNIBOX_HORIZONTAL_PADDING)
+                .max(0.0)
+        } else {
+            0.0
+        };
+        let (address_text_offset, address_text_opacity) =
+            self.address_text_motion(centered_sidebar, editing, resting_offset, window, cx);
+        let motion = Settings::motion(cx);
+        let surface = if editing || self.field_hovered {
+            palette.surface_hover
+        } else {
+            palette.surface
+        };
         let field_box = h_stack()
             .id("titlebar-omnibox")
             .relative()
@@ -341,14 +434,6 @@ impl Render for Omnibox {
             .h(px(style.height))
             .rounded(px(style.radius))
             .bg(rgba(palette.surface))
-            .border_1()
-            .border_color(if self.invalid {
-                rgb_to_hsla(rgba(palette.field_error_border))
-            } else if editing {
-                rgb_to_hsla(rgba(palette.chosen))
-            } else {
-                gpui::transparent_black()
-            })
             .text_size(px(style.font_size))
             .text_color(rgb(palette.text_primary))
             // Clicks on the field's padding or icon edit the address rather than
@@ -360,6 +445,12 @@ impl Render for Omnibox {
                     window.focus(&this.input.focus_handle(cx), cx);
                 }),
             )
+            .on_hover(cx.listener(|this, hovered, _, cx| {
+                if this.field_hovered != *hovered {
+                    this.field_hovered = *hovered;
+                    cx.notify();
+                }
+            }))
             // Nor does a right-click reach the sidebar's browser menu.
             .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
             .capture_action(cx.listener(Self::submit))
@@ -367,14 +458,41 @@ impl Render for Omnibox {
         let mut field_box = self.handle_editing_keys(field_box, cx);
         // The open panel draws the field's content itself, in the same place.
         field_box = if editing && !self.suggestions.is_empty() {
-            field_box.child(self.open_panel(menu_palette, cx))
+            field_box.child(self.open_panel(
+                menu_palette,
+                style,
+                workspace_layout.sidebar_region(),
+                address_text_offset,
+                address_text_opacity,
+                cx,
+            ))
         } else {
-            field_box.child(self.field_content(palette, editing, cx))
+            field_box.child(self.field_content(
+                palette,
+                editing,
+                style,
+                address_text_offset,
+                address_text_opacity,
+                cx,
+            ))
         };
-        field_box = field_box.child(self.site_info_popover(menu_palette, cx));
+        field_box =
+            field_box.child(self.site_info_popover(menu_palette, style, &workspace_layout, cx));
         if self.invalid {
             field_box = field_box.aria_description(INVALID_ADDRESS_DESCRIPTION);
         }
-        field_box
+        gpui_motion::MotionElement::new(
+            "omnibox-field-surface-motion",
+            field_box,
+            gpui_motion::Motion::new(gpui_motion::Target::default().opacity(1.0)),
+        )
+        .style_motion(
+            gpui_motion::StyleMotion::new(gpui_motion::StyleTarget::default().color(
+                gpui_motion::ColorProperty::Background,
+                super::motion::motion_rgba_color(surface),
+            ))
+            .transition(super::motion::Curve::EaseOut.transition(motion.duration(Speed::Quick))),
+        )
+        .into_any_element()
     }
 }

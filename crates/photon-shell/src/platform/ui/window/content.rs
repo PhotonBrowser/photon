@@ -209,7 +209,7 @@ impl BrowserWindow {
         };
         if let Some(webview) = self.active_webview() {
             webview.update(cx, |view, _| {
-                view.session.set_visible(false);
+                view.set_page_visible(false);
                 view.session.set_focus(false);
             });
         }
@@ -304,6 +304,18 @@ impl BrowserWindow {
                     this.open_page_menu(window, cx);
                 }
                 WebViewEvent::ContextMenuRequested => {}
+                WebViewEvent::SelectDropdownRequested
+                    if this.active_webview().as_ref() == Some(webview) =>
+                {
+                    let dropdown =
+                        webview.update(cx, |view, _| view.take_select_dropdown_request());
+                    if let Some(dropdown) = dropdown {
+                        this.show_select_dropdown(webview.clone(), dropdown, window, cx);
+                    }
+                }
+                WebViewEvent::SelectDropdownRequested => {
+                    webview.update(cx, |view, _| view.session.select_dropdown_closed(None));
+                }
                 WebViewEvent::OpenInNewTab { url, activate } => {
                     this.open_tab_beside(webview, url, *activate, window, cx);
                 }
@@ -343,7 +355,7 @@ pub(super) fn create_webview(
 }
 
 /// Wraps an Engine session in a web view, wired to redraw on Engine frames
-/// and to drain GPU work before the app quits.
+/// and to release its frames before the app quits.
 pub(super) fn create_webview_from_session(
     cx: &mut App,
     runtime: Rc<EngineRuntime>,
@@ -351,11 +363,9 @@ pub(super) fn create_webview_from_session(
 ) -> Entity<PhotonWebView> {
     let webview = cx.new(|cx| {
         let mut webview = PhotonWebView::from_session(cx, session);
-        let gpu_activity = webview.session.gpu_activity.clone();
         webview._quit_subscription = Some(cx.on_app_quit(
             move |view: &mut PhotonWebView, _cx: &mut Context<'_, PhotonWebView>| {
                 view.prepare_shutdown();
-                gpu_activity.wait_until_idle();
                 view.session.finish_shutdown();
                 async {}
             },

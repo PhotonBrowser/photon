@@ -6,7 +6,8 @@ Use the `photon` CLI for setup, formatting, linting, building, and running Photo
 
 | Command | macOS | Linux |
 | --- | --- | --- |
-| `photon setup` | Implemented but unverified | Implemented but unverified; package installation is manual |
+| `photon setup` | Implemented but unverified | Full setup is implemented but unverified; Linux system packages are manual |
+| `photon setup --ui-only` | Implemented; Engine setup is skipped | Initializes GPUI and prepares the shell without Engine or Ladybird build prerequisites |
 | `photon check` | Verified working in the current macOS checkout | Verified working by Ubuntu 24.04 CI |
 | `photon test` | Verified working in the current macOS checkout | Verified working by Ubuntu 24.04 CI |
 | `photon build` | Implemented but unverified; Engine build was not run in this audit | Partially implemented; Linux Engine build path exists, but full Engine build is not verified here or by CI |
@@ -28,6 +29,7 @@ photon run
 ```
 
 - `photon setup` checks required tools, initializes missing pinned dependencies, prepares Rust formatting/lint tools and clang-format 22, and installs or refreshes the `photon` command in Cargo's bin directory. On macOS, add `--install-system-deps` to install the required Homebrew packages. On Linux, install packages from Ladybird's guide first. Setup preserves initialized dependency branches and does not advance root pins. The pinned clang-format 22.1.8 stays under the ignored `build/tools/` directory.
+- `photon setup --ui-only` initializes the pinned GPUI-CE checkout and installs the CLI while skipping the Engine submodule, C++ compiler, Python, CMake, Ninja, and clang-format setup. It supports `photon run --ui`; it does not prepare `photon build`, full `photon check`, or web-page loading. The mode preserves any existing Engine checkout.
 - `photon doctor` reports tool versions, Rust components, dependency revisions, and build directories. `photon setup` is the strict prerequisite check.
 - `photon format` formats Rust and Photon-owned native code, including the Engine embedder with its matching style version.
 - `photon lint` checks Rust formatting, runs Clippy with warnings treated as errors, and checks Photon and Engine embedder C++ formatting.
@@ -37,6 +39,7 @@ photon run
 - `photon run` builds and launches the native app. Direct app builds use Cargo. On macOS, `photon run` uses Dioxus hot reloading by default; pass `--no-hot-reload` for a direct build. Hot reloading reuses the existing Engine build without building Engine; run `photon build` first if that Engine build is missing or out of date. It currently supports macOS only. Use `--url URL` to choose the initial page. `--shutdown-after-seconds N` works on the direct path; `--verbose` prints output from the underlying build tools.
 - Hot reload launches the debug shell through Dioxus CLI and patches GPUI rendering code without restarting the app. Photon installs Dioxus CLI 0.7.10 with Cargo on first use if it is missing or has an incompatible version. Use `--hot-reload` to enable it explicitly, or `--ui` to hot-patch the UI-only shell without requiring Photon Engine.
 - `photon run --ui` builds and launches the shared browser window with the New Tab page, without building, linking, or starting Photon Engine. Shell-owned pages remain available; web pages cannot be opened in this mode. The path is available on macOS, Linux, and Windows.
+- Browser context menus and page `<select>` controls use the shared GPUI menu surface and work without platform-native menu hooks. They inherit the semantic theme roles, menu metrics, and motion used by Photon popovers.
 - `photon clean` removes generated build trees and stops the checkout-specific presentation broker.
 
 ## Troubleshooting

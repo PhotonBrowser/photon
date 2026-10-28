@@ -68,6 +68,7 @@ pub(super) mod embedder {
 
     pub(crate) type SelectDropdownCallback =
         unsafe extern "C" fn(*mut c_void, f64, f64, f64, *const SelectItem, usize);
+    #[cfg(not(feature = "ui-only"))]
     pub(crate) type EngineProcessCallback = unsafe extern "C" fn(
         *mut c_void,
         u64,
@@ -354,6 +355,7 @@ pub(super) mod embedder {
             backing: u64,
             generation: u64,
             frame: u64,
+            consumer_gpu_work_complete: bool,
         );
         #[cfg(target_os = "macos")]
         pub fn photon_view_set_native_metal_presentation(view: *mut c_void, enabled: bool) -> bool;

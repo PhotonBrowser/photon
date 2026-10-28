@@ -169,7 +169,6 @@ pub(super) struct ThemeColors {
     pub text_primary: u32,
     pub text_secondary: u32,
     pub selection: u32,
-    pub field_error_border: u32,
     /// Error messages, and the label of a button that deletes or resets.
     pub error: u32,
     /// A button that deletes or resets, under the pointer.
@@ -383,7 +382,6 @@ impl ThemeColors {
             text_primary: to_rgb_token(colors.text),
             text_secondary: to_rgb_token(text_secondary),
             selection: to_rgba_token(colors.selected),
-            field_error_border: to_rgba_token(error),
             error: to_rgb_token(error),
             error_hover_surface: to_rgba_token(error.opacity(opacity.error_hover)),
             performance_palette: PerformancePalette {

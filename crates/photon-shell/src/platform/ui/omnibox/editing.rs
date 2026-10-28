@@ -37,15 +37,38 @@ impl Omnibox {
     /// completing it inline when `complete`. Without a completion the field
     /// and its caret are left as they are.
     fn suggest(&mut self, complete: bool, cx: &mut Context<Self>) {
-        let engines = Settings::search_engines(cx);
-        let suggestions = BrowsingHistory::suggestions(&self.typed, &engines, cx);
-        self.suggestions = suggestions.rows;
-        self.completion = suggestions.completion.filter(|_| complete);
+        self.suggestion_generation = self.suggestion_generation.wrapping_add(1);
+        let generation = self.suggestion_generation;
+        self.suggestion_task = None;
+        self.suggestions.clear();
+        self.completion = None;
         self.selected = 0;
         self.hovered = None;
-        if let Some(completion) = self.completion.clone() {
-            self.fill(&completion, self.typed.len(), cx);
-        }
+
+        let typed = self.typed.clone();
+        let query_text = typed.clone();
+        let engines = Settings::search_engines(cx);
+        let history = BrowsingHistory::suggestion_history(cx);
+        self.suggestion_task = Some(cx.spawn(async move |this, cx| {
+            let suggestions = cx
+                .background_executor()
+                .spawn(async move { history.omnibox_suggestions_with(&query_text, &engines) })
+                .await;
+
+            let _ = this.update(cx, |this, cx| {
+                if this.suggestion_generation != generation || this.typed != typed {
+                    return;
+                }
+                this.suggestions = suggestions.rows;
+                this.completion = suggestions.completion.filter(|_| complete);
+                if let Some(completion) = this.completion.clone() {
+                    let selection_start = this.typed.len();
+                    this.fill(&completion, selection_start, cx);
+                }
+                cx.notify();
+            });
+        }));
+        cx.notify();
     }
 
     /// Puts `text` in the field without it counting as an edit, selecting
@@ -79,6 +102,8 @@ impl Omnibox {
     }
 
     pub(super) fn close_suggestions(&mut self, cx: &mut Context<Self>) {
+        self.suggestion_generation = self.suggestion_generation.wrapping_add(1);
+        self.suggestion_task = None;
         self.typed.clear();
         self.completion = None;
         self.selected = 0;
@@ -180,8 +205,9 @@ impl Omnibox {
             SuggestionKind::Address | SuggestionKind::Search { .. } => return,
         }
         // The field may show the removed row; return to the typed text.
+        let typed = self.typed.clone();
         self.suggest(true, cx);
-        self.select(0, cx);
+        self.fill(&typed, typed.len(), cx);
     }
 
     /// Follows the pointer over the rows. Leaving one row and entering the

@@ -14,7 +14,8 @@ use photon_performance::{PerformanceDiagnostics, performance_overlay};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use crate::platform::renderer::PresentedSurface;
+use crate::platform::PagePlacement;
+use crate::platform::renderer::{PagePresenter, PresentedSurface};
 use std::time::{Duration, Instant};
 
 use super::super::trace;
@@ -36,23 +37,20 @@ pub(in crate::platform) use context_menu::{PageMenu, PageMenuItem};
 pub(in crate::platform) use crashes::CrashNotice;
 pub(in crate::platform) use favicon::Favicon;
 pub(in crate::platform) use find::FindResult;
-pub(in crate::platform) use form_controls::{SelectDropdown, SelectItem, install_form_controls};
+pub(in crate::platform) use form_controls::{SelectDropdown, SelectItem};
 
 static MOUSE_MOVE_TRACE_COUNT: AtomicUsize = AtomicUsize::new(0);
 
-/// How often the page is laid out again while the window's layout
-/// animates, as when the sidebar slides; the drawn frame stretches between.
-const ANIMATING_RESIZE_INTERVAL: Duration = Duration::from_millis(100);
-
 pub(in crate::platform) struct PhotonWebView {
     pub(super) external: Option<PresentedSurface>,
+    presenter: PagePresenter,
     navigation_surface_pending_render: Option<u64>,
     pub(in crate::platform) state: BrowserState,
     pub(in crate::platform) diagnostics: PerformanceDiagnostics,
     pub(in crate::platform) performance_overlay_enabled: bool,
     #[cfg(unix)]
     performance_diagnostics_session_active: bool,
-    /// What the tab's crash chip says, if anything.
+    /// How this tab presents its last crash and recovery.
     pub(in crate::platform) crash_notice: Option<CrashNotice>,
     crashes: PageCrashes,
     /// The page's zoom level as a factor, 1.0 being 100%.
@@ -65,6 +63,8 @@ pub(in crate::platform) struct PhotonWebView {
     recorded: history::Recorded,
     /// The context menu the page last asked for.
     pub(in crate::platform) context_menu: Option<PageMenu>,
+    /// The `<select>` menu waiting for the browser window to present it.
+    select_dropdown_request: Option<SelectDropdown>,
     /// The latest result of a find-in-page search.
     pub(in crate::platform) find_result: Option<FindResult>,
     /// The page's icon, shown in its tab while the page is not loading.
@@ -79,9 +79,7 @@ pub(in crate::platform) struct PhotonWebView {
     pub(super) session: EngineSession,
     pub(super) focus_handle: FocusHandle,
     pub(super) last_viewport: Option<(i32, i32, u32)>,
-    /// When the Engine was last given a new viewport.
-    last_resize: Option<Instant>,
-    /// Whether the window's layout is animating around the page.
+    /// Whether the window's layout is moving the page around or changing its size.
     layout_animating: bool,
     /// The window the page was last drawn in, where its menus open.
     window: Option<AnyWindowHandle>,
@@ -112,6 +110,8 @@ pub(in crate::platform) enum WebViewEvent {
     },
     /// A link was shift-clicked, to show in a preview over the page.
     Peek(String),
+    /// The page asked the shell to show a styled `<select>` popup.
+    SelectDropdownRequested,
 }
 
 impl EventEmitter<WebViewEvent> for PhotonWebView {}
@@ -153,7 +153,17 @@ impl PhotonWebView {
                 .record_navigation_surface_installed(navigation_id);
             self.navigation_surface_pending_render = Some(navigation_id);
         }
-        cx.notify();
+        let Some(presented) = self.external.as_mut() else {
+            return;
+        };
+        if self.presenter.show(presented, &self.session.presentation) {
+            if let Some(navigation_id) = self.navigation_surface_pending_render.take() {
+                self.session
+                    .record_navigation_surface_rendered(navigation_id);
+            }
+        } else {
+            cx.notify();
+        }
     }
 
     /// Re-renders the view and tells the chrome its page state changed.
@@ -241,6 +251,7 @@ impl PhotonWebView {
         if self.session.shutdown_started {
             return;
         }
+        self.presenter.detach();
         self.session
             .begin_shutdown_with_surface(self.external.take());
     }
@@ -276,21 +287,15 @@ impl PhotonWebView {
         if self.last_viewport == Some(viewport) || width <= 0 || height <= 0 {
             return;
         }
-        // While the layout animates, lay the page out a few times rather
-        // than every frame; the size once it settles always goes through.
+        // Resizing an Engine viewport is synchronous and can stall the UI.
+        // Keep the current surface while the shell animates its bounds; the
+        // native page layer scales it, then the settled bounds are sent once.
         let same_scale = self
             .last_viewport
             .is_some_and(|(_, _, last_scale)| last_scale == viewport.2);
-        if self.layout_animating
-            && same_scale
-            && self
-                .last_resize
-                .is_some_and(|last| last.elapsed() < ANIMATING_RESIZE_INTERVAL)
-        {
+        if self.layout_animating && same_scale {
             return;
         }
-        self.last_resize = Some(Instant::now());
-
         self.session.resize(width, height, f64::from(scale));
         trace(format_args!(
             "viewport logical={width}x{height} dpr={scale:.2} physical={}x{}",
@@ -307,6 +312,7 @@ impl PhotonWebView {
     pub(super) fn from_session(cx: &mut Context<Self>, session: EngineSession) -> Self {
         Self {
             external: None,
+            presenter: PagePresenter::new(),
             navigation_surface_pending_render: None,
             state: BrowserState::default(),
             diagnostics: PerformanceDiagnostics::default(),
@@ -317,6 +323,7 @@ impl PhotonWebView {
             crashes: PageCrashes::default(),
             recorded: history::Recorded::default(),
             context_menu: None,
+            select_dropdown_request: None,
             find_result: None,
             zoom_level: 1.0,
             page_unresponsive: false,
@@ -327,7 +334,6 @@ impl PhotonWebView {
             loading_since: None,
             dialogs: PageDialogs::default(),
             window: None,
-            last_resize: None,
             layout_animating: false,
             session,
             focus_handle: cx.focus_handle(),
@@ -375,7 +381,11 @@ impl PhotonWebView {
                     cx.notify();
                 }
             }),
-            cx.observe_window_appearance(window, |_, _, cx| cx.notify()),
+            cx.observe_window_appearance(window, |this, window, cx| {
+                let appearance = Settings::appearance(window.appearance(), cx);
+                this.update_color_scheme(appearance);
+                cx.notify();
+            }),
         ];
         self.sync_engine_focus(window);
     }
@@ -450,7 +460,10 @@ impl PhotonWebView {
             let reply = self.dialogs.navigation_started();
             self.send_dialog_reply(reply, cx);
         }
-        if self.crash_notice == Some(CrashNotice::KeepsCrashing) {
+        if matches!(
+            self.crash_notice.as_ref(),
+            Some(CrashNotice::KeepsCrashing { .. })
+        ) {
             if command == BrowserCommand::Reload {
                 self.crashes.reload_requested();
                 self.crash_notice = Some(CrashNotice::Reloading);
@@ -471,6 +484,14 @@ impl PhotonWebView {
     pub(super) fn omnibox_url(&self) -> String {
         self.state.url.clone()
     }
+
+    pub(in crate::platform) fn viewport_origin(&self) -> (f32, f32) {
+        self.input.viewport_origin()
+    }
+
+    pub(in crate::platform) fn take_select_dropdown_request(&mut self) -> Option<SelectDropdown> {
+        self.select_dropdown_request.take()
+    }
 }
 
 impl Render for PhotonWebView {
@@ -487,7 +508,7 @@ impl Render for PhotonWebView {
             .id("photon-webview-viewport")
             .cursor(self.page_cursor)
             .on_prepaint(
-                cx.listener(|this, event: &gpui::InteractivityPrepaint, window, cx| {
+                cx.listener(move |this, event: &gpui::InteractivityPrepaint, window, cx| {
                     // Resize from the laid-out WebView bounds, not the native window
                     // bounds minus assumed titlebar/padding values. During live resize,
                     // those assumptions can differ by a frame and offset the page.
@@ -496,10 +517,20 @@ impl Render for PhotonWebView {
                         f32::from(event.bounds.origin.x),
                         f32::from(event.bounds.origin.y),
                     );
+                    let scale_factor = window.scale_factor();
                     this.update_viewport(
                         f32::from(event.bounds.size.width),
                         f32::from(event.bounds.size.height),
-                        window.scale_factor(),
+                        scale_factor,
+                    );
+                    this.presenter.place(
+                        window,
+                        PagePlacement {
+                            bounds: event.bounds,
+                            corner_radius: metrics::page_radius(),
+                            scale_factor,
+                            background: palette.page_background,
+                        },
                     );
                     // Follow the window across displays so Engine paces to the
                     // one it is on rather than a 60 Hz default.
@@ -606,13 +637,12 @@ impl Render for PhotonWebView {
             .overflow_hidden()
             .bg(gpui::rgb(palette.page_background));
         {
-            let page_surface = crate::platform::renderer::page_surface(
+            webview = webview.child(crate::platform::renderer::page_surface(
                 self.external.as_ref(),
                 crate::platform::PageSurfacePalette {
                     background: palette.page_background,
                 },
-            );
-            webview = webview.child(page_surface);
+            ));
             if let Some(navigation_id) = self.navigation_surface_pending_render.take() {
                 self.session
                     .record_navigation_surface_rendered(navigation_id);
@@ -627,6 +657,20 @@ impl Render for PhotonWebView {
                 palette.performance_palette,
             ));
         }
+        if let Some(overlay) = self.crash_overlay(palette, cx) {
+            webview = webview.child(overlay);
+        }
         webview
+    }
+}
+
+impl PhotonWebView {
+    /// Shows or hides the page: Engine pauses rendering while hidden, and a
+    /// native page layer hides so it cannot show through what replaces it.
+    pub(in crate::platform) fn set_page_visible(&mut self, visible: bool) {
+        self.session.set_visible(visible);
+        if !visible {
+            self.presenter.hide();
+        }
     }
 }

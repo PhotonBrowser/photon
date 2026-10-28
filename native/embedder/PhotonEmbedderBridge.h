@@ -188,7 +188,7 @@ void photon_view_set_display_metadata(void* view, uint64_t display_id,
     double refresh_rate);
 #if defined(__APPLE__)
 void photon_view_release_native_frame(void* view, uint64_t backing_id,
-    uint64_t generation, uint64_t frame_id);
+    uint64_t generation, uint64_t frame_id, bool consumer_gpu_work_complete);
 bool photon_view_set_native_metal_presentation(void* view, bool enabled);
 #endif
 void photon_view_navigate(void* view, char const* url);

@@ -1,4 +1,4 @@
-//! What the browser's native menus do to a particular tab, favourite or
+//! What the browser's context menus do to a particular tab, favourite or
 //! space. A menu item carries its command in a [`RunMenuCommand`] action,
 //! which the window runs when the item is chosen.
 

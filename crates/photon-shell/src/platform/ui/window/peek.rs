@@ -50,10 +50,12 @@ impl BrowserWindow {
                     this.sync_dialog(window, cx);
                     cx.notify();
                 }
-                WebViewEvent::ContextMenuRequested | WebViewEvent::NewWebViewRequested(_) => {}
+                WebViewEvent::ContextMenuRequested
+                | WebViewEvent::SelectDropdownRequested
+                | WebViewEvent::NewWebViewRequested(_) => {}
             },
         );
-        webview.update(cx, |view, _| view.session.set_visible(true));
+        webview.update(cx, |view, _| view.set_page_visible(true));
         let focus = webview.read(cx).focus_handle.clone();
         window.focus(&focus, cx);
         self.peek.open = Some(Peek {
@@ -72,7 +74,7 @@ impl BrowserWindow {
     pub(super) fn close_peek(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(peek) = self.peek.open.take() {
             peek.webview.update(cx, |view, _| {
-                view.session.set_visible(false);
+                view.set_page_visible(false);
                 view.session.set_focus(false);
             });
             if let Some(active_tab) = self.active_tab {

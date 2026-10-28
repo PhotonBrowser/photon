@@ -1,9 +1,13 @@
 //! Photon presets and accessibility policy over the reusable motion engine.
 
-use gpui::{ElementId, FocusHandle, IntoElement, SpringConfig, StatefulInteractiveElement, Styled};
+use gpui::{
+    A11ySubtreeBuilder, App, Bounds, Element, ElementId, FocusHandle, GlobalElementId,
+    InspectorElementId, IntoElement, LayoutId, Pixels, Point, SpringConfig,
+    StatefulInteractiveElement, Styled, Window, rgba,
+};
 use gpui_motion::{
-    CustomEasing, Easing, Frame, Motion, MotionElement, MotionValue, PressScaleElement, Spring,
-    StyleMotion, StyleProperty, StyleTarget, Target,
+    Color, CustomEasing, Easing, Frame, Motion, MotionElement, MotionValue, PressScaleElement,
+    Spring, StyleMotion, StyleProperty, StyleTarget, Target,
 };
 use std::{
     sync::OnceLock,
@@ -11,6 +15,117 @@ use std::{
 };
 
 pub(super) use gpui_motion::{Axis as ReorderAxis, ReorderGroup};
+
+/// Moves an element's painted and interactive bounds without changing layout.
+pub(super) fn translated<E: IntoElement>(
+    element: E,
+    offset: Point<Pixels>,
+) -> TranslatedElement<E::Element> {
+    TranslatedElement {
+        element: element.into_element(),
+        offset,
+    }
+}
+
+/// Applies a frame-local offset after layout, including to descendant hitboxes.
+pub(super) struct TranslatedElement<E> {
+    element: E,
+    offset: Point<Pixels>,
+}
+
+impl<E: Element> Element for TranslatedElement<E> {
+    type RequestLayoutState = E::RequestLayoutState;
+    type PrepaintState = E::PrepaintState;
+
+    fn id(&self) -> Option<ElementId> {
+        self.element.id()
+    }
+
+    fn source_location(&self) -> Option<&'static std::panic::Location<'static>> {
+        self.element.source_location()
+    }
+
+    fn request_layout(
+        &mut self,
+        id: Option<&GlobalElementId>,
+        inspector_id: Option<&InspectorElementId>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> (LayoutId, Self::RequestLayoutState) {
+        self.element.request_layout(id, inspector_id, window, cx)
+    }
+
+    fn prepaint(
+        &mut self,
+        id: Option<&GlobalElementId>,
+        inspector_id: Option<&InspectorElementId>,
+        bounds: Bounds<Pixels>,
+        request_layout: &mut Self::RequestLayoutState,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Self::PrepaintState {
+        let offset = self.offset;
+        window.with_element_offset(offset, |window| {
+            self.element.prepaint(
+                id,
+                inspector_id,
+                bounds + offset,
+                request_layout,
+                window,
+                cx,
+            )
+        })
+    }
+
+    fn paint(
+        &mut self,
+        id: Option<&GlobalElementId>,
+        inspector_id: Option<&InspectorElementId>,
+        bounds: Bounds<Pixels>,
+        request_layout: &mut Self::RequestLayoutState,
+        prepaint: &mut Self::PrepaintState,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        self.element.paint(
+            id,
+            inspector_id,
+            bounds + self.offset,
+            request_layout,
+            prepaint,
+            window,
+            cx,
+        );
+    }
+
+    fn a11y_role(&self) -> Option<gpui::accesskit::Role> {
+        self.element.a11y_role()
+    }
+
+    fn is_a11y_hidden(&self) -> bool {
+        self.element.is_a11y_hidden()
+    }
+
+    fn write_a11y_info(&self, node: &mut gpui::accesskit::Node) {
+        self.element.write_a11y_info(node);
+    }
+
+    fn a11y_synthetic_children(
+        &mut self,
+        prepaint: &mut Self::PrepaintState,
+        builder: &mut A11ySubtreeBuilder,
+    ) {
+        self.element.a11y_synthetic_children(prepaint, builder);
+    }
+}
+
+impl<E: Element> IntoElement for TranslatedElement<E> {
+    type Element = Self;
+
+    fn into_element(self) -> Self::Element {
+        self
+    }
+}
 
 fn custom_ease_out() -> Easing {
     static EASING: OnceLock<CustomEasing> = OnceLock::new();
@@ -93,7 +208,7 @@ impl Curve {
     pub const SNAPPY: Self = Self::Spring(SpringConfig::new(420.0, 32.0, 1.0));
     pub const BOUNCY: Self = Self::Spring(SpringConfig::new(300.0, 14.0, 1.0));
 
-    fn transition(self, duration: Duration) -> gpui_motion::Transition {
+    pub(super) fn transition(self, duration: Duration) -> gpui_motion::Transition {
         if duration.is_zero() {
             return gpui_motion::Transition::Instant;
         }
@@ -112,6 +227,22 @@ impl Curve {
             ),
         }
     }
+}
+
+/// Converts an opaque RGB theme token into the motion engine's linear-light color.
+pub(super) fn motion_rgb_color(token: u32) -> Color {
+    Color::rgb(token)
+}
+
+/// Converts an RGBA theme token into the motion engine's linear-light color.
+pub(super) fn motion_rgba_color(token: u32) -> Color {
+    let color = rgba(token);
+    Color::rgba(
+        f64::from(color.color.red),
+        f64::from(color.color.green),
+        f64::from(color.color.blue),
+        f64::from(color.alpha),
+    )
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -704,6 +835,13 @@ pub(super) fn button_jiggle_spring() -> Spring {
     Spring::new(1_600.0, 80.0, 1.0).expect("Photon button jiggle spring parameters are positive")
 }
 
+/// The default spring for icons that move on hover, taken from
+/// heroicons-animated's cog: it settles in under a second, overshooting its
+/// target slightly.
+pub(super) fn hover_icon_spring() -> Spring {
+    Spring::new(50.0, 10.0, 1.0).expect("Photon hover icon spring parameters are positive")
+}
+
 fn press_scale<E: StatefulInteractiveElement + Styled + IntoElement + 'static>(
     mut element: E,
     scale: f32,
@@ -819,4 +957,63 @@ pub(super) const fn pop(size: f32) -> Entrance {
         .grow_from(size, 0.35)
         .curve(Curve::Overshoot)
         .speed(Speed::Standard)
+}
+
+#[cfg(test)]
+mod translated_element_tests {
+    use super::translated;
+    use gpui::{
+        InteractiveElement, Modifiers, MouseButton, ParentElement, ScaledPixels, Styled, div,
+        point, px, size,
+    };
+    use std::{cell::Cell, rc::Rc};
+
+    #[gpui::test]
+    fn translated_elements_move_paint_and_hit_testing_without_layout_offsets(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let cx = cx.add_empty_window();
+        let presses = Rc::new(Cell::new(0));
+        let recorded_presses = presses.clone();
+
+        cx.draw(
+            point(px(0.), px(0.)),
+            size(px(100.), px(100.)),
+            move |_, _| {
+                div().size_full().relative().child(translated(
+                    div()
+                        .id("translated-motion-test")
+                        .absolute()
+                        .left(px(10.))
+                        .top(px(10.))
+                        .size(px(20.))
+                        .bg(gpui::blue())
+                        .on_mouse_down(MouseButton::Left, move |_, _, _| {
+                            recorded_presses.set(recorded_presses.get() + 1);
+                        }),
+                    point(px(30.), px(5.)),
+                ))
+            },
+        );
+
+        let scale = cx.update(|window, _| window.scale_factor());
+        let quads = cx.update(|window, _| window.painted_quads());
+        let expected_origin = point(ScaledPixels(40. * scale), ScaledPixels(15. * scale));
+        let expected_size = size(ScaledPixels(20. * scale), ScaledPixels(20. * scale));
+        assert!(
+            quads.iter().any(|quad| {
+                quad.bounds.origin == expected_origin && quad.bounds.size == expected_size
+            }),
+            "the translated element's painted quad should use its visual position"
+        );
+
+        cx.simulate_click(point(px(15.), px(15.)), Modifiers::none());
+        assert_eq!(
+            presses.get(),
+            0,
+            "the original layout position must not hit"
+        );
+        cx.simulate_click(point(px(45.), px(20.)), Modifiers::none());
+        assert_eq!(presses.get(), 1, "the translated visual position must hit");
+    }
 }

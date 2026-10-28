@@ -33,6 +33,8 @@ pub(super) struct PageDetails {
 }
 
 pub(super) struct CallbackState {
+    /// Lets a frame's GPU-completion wakeup reach this state.
+    pub(super) self_ref: Weak<CallbackState>,
     pub(super) task_id: u64,
     pub(super) presentation: Arc<PresentationRuntime>,
     #[cfg(target_os = "macos")]
@@ -54,6 +56,19 @@ impl CallbackState {
     pub(super) fn set_ui_wake(&self, wake: UiWake) {
         *self.ui_wake.lock().unwrap() = Some(wake);
         self.request_redraw();
+    }
+
+    /// Presents the newest page frame once its producer's GPU work is done.
+    pub(super) fn request_redraw_when_frame_finished(&self) {
+        let callbacks = self.self_ref.clone();
+        let waiting = self.presentation.notify_when_latest_finished(move || {
+            if let Some(callbacks) = callbacks.upgrade() {
+                callbacks.request_redraw();
+            }
+        });
+        if !waiting {
+            self.request_redraw();
+        }
     }
 
     pub(super) fn request_redraw(&self) {
@@ -82,7 +97,9 @@ impl CallbackState {
                                 && view.diagnostics != diagnostics
                             {
                                 view.diagnostics = diagnostics;
-                                cx.notify();
+                                if view.performance_overlay_enabled {
+                                    cx.notify();
+                                }
                             }
                         })
                     })
@@ -174,8 +191,8 @@ impl CallbackState {
         self.update_webview(move |view, cx| view.request_dialog(request, cx));
     }
 
-    pub(super) fn handle_engine_crash(&self) {
-        self.update_webview(|view, cx| view.handle_engine_crash(cx));
+    pub(super) fn handle_engine_crash(&self, failed_url: Option<String>) {
+        self.update_webview(move |view, cx| view.handle_engine_crash(failed_url, cx));
     }
 
     pub(super) fn set_find_result(&self, result: FindResult) {
@@ -331,6 +348,7 @@ pub(super) fn deliver_pending_releases(callbacks: &CallbackState) {
                 release.key.backing,
                 release.key.generation,
                 release.key.frame,
+                release.consumer_gpu_work_complete,
             );
         }
         trace(format_args!(

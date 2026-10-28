@@ -216,7 +216,10 @@ impl PerformanceAccumulator {
     }
 
     fn record_frame(&mut self) {
-        let now = Instant::now();
+        self.record_frame_at(Instant::now());
+    }
+
+    fn record_frame_at(&mut self, now: Instant) {
         if let Some(previous) = self.last_frame_at {
             let interval_ms = now.duration_since(previous).as_secs_f64() * 1000.0;
             self.snapshot.last_frame_interval_ms = Some(interval_ms);
@@ -228,13 +231,16 @@ impl PerformanceAccumulator {
                 self.frame_gaps.pop_front();
             }
             if interval_ms <= 10_000.0 {
+                while self
+                    .frame_gaps
+                    .back()
+                    .is_some_and(|(_, gap)| *gap <= interval_ms)
+                {
+                    self.frame_gaps.pop_back();
+                }
                 self.frame_gaps.push_back((now, interval_ms));
             }
-            self.snapshot.longest_frame_gap_ms = self
-                .frame_gaps
-                .iter()
-                .map(|(_, gap)| *gap)
-                .max_by(f64::total_cmp);
+            self.snapshot.longest_frame_gap_ms = self.frame_gaps.front().map(|(_, gap)| *gap);
         }
         self.last_frame_at = Some(now);
         if let Some(input_at) = self.last_input_at.take() {
@@ -599,6 +605,22 @@ mod tests {
         assert_eq!(samples.len(), 2);
         assert_eq!(samples[0].elapsed_seconds, 30.0);
         assert_eq!(samples[1].cpu_percent, Some(3.0));
+    }
+
+    #[test]
+    fn frame_gap_max_tracks_the_rolling_window_without_scanning_it() {
+        let start = Instant::now();
+        let mut accumulator = PerformanceAccumulator::default();
+        accumulator.record_frame_at(start);
+        accumulator.record_frame_at(start + Duration::from_millis(16));
+        accumulator.record_frame_at(start + Duration::from_millis(45));
+        assert_eq!(accumulator.snapshot.longest_frame_gap_ms, Some(29.0));
+
+        accumulator.record_frame_at(start + Duration::from_millis(10_010));
+        assert_eq!(accumulator.snapshot.longest_frame_gap_ms, Some(9_965.0));
+
+        accumulator.record_frame_at(start + Duration::from_millis(20_012));
+        assert_eq!(accumulator.snapshot.longest_frame_gap_ms, None);
     }
 
     #[test]

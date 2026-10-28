@@ -101,7 +101,13 @@ A long page with text, gradients, shadows and SVG images scrolled continuously b
 | WebContent rendering update (p50) | 0.5 ms | 0.4 ms |
 | GPUI-CE draw (p50) | 0.7 ms | 0.8 ms |
 
-Each scroll frame re-rasterizes the whole viewport, so GPU time scales with pixels. A full 4K window (8.3 MP) extrapolates to about 7.7 ms p50 and 12 ms p90, over the 8.3 ms budget of 120 Hz. Caching rasterized scroll content instead of repainting the viewport each frame would address it.
+In these runs each scroll frame re-rasterized the whole viewport, so GPU time scaled with pixels. A full 4K window (8.3 MP) extrapolated to about 7.7 ms p50 and 12 ms p90, over the 8.3 ms budget of 120 Hz.
+
+**Current tree note (2026-10-26):** Engine now has conditional viewport scroll blitting in `ContextPresenter`: eligible static display lists reuse a stable raster for both whole-pixel and fractional viewport offsets, then repaint the exposed strip. Fractional shifts use linear GPU sampling from a temporary copy, so frames do not repeatedly resample one another. Static nested display lists qualify when their resources are immutable; animated or live nested content still takes the full repaint path. The measurements above predate that path, so the 4K estimate needs to be measured again before treating it as current.
+
+**Photon Metal stall found (2026-10-26):** A one-second sample of the running Photon Compositor caught its main thread in `-[MTLCommandBuffer waitUntilCompleted]` for 209 of 693 samples (30%). The stack led through `ContextPresenter::paint_current_display_list` to the partial-damage scratch surface flush. Photon uses this path for published GPU frames with partial damage, including scroll frames; the regular frame submission was already asynchronous, but this intermediate flush waited for GPU completion before copying the scratch image into the published backing. The corresponding Ladybird Compositor sample showed frame work without this GPU-completion wait. The scratch surface is now submitted asynchronously before snapshotting; its destination work is submitted afterward to the same ordered Metal queue, preserving the dependency without blocking the compositor thread. A fresh scroll capture after restarting Photon is still needed to measure the improvement.
+
+For a live scroll run, start Photon with `PHOTON_FRAME_PROFILE=1`. The five-second `Photon compositor profile` report includes `scroll blit` counts. `used_fractional_offset` means a fractional GPU shift reused a stable cached raster; `used` means an integer-aligned shift reused it. The other counters identify why reuse was skipped.
 
 ## 8. Blank launch — not reproduced
 
@@ -186,7 +192,7 @@ Pitfalls for this measurement: repeated test loads of GitHub got its error page,
 - [x] ~~Create pipeline states ahead of first use~~: Skia's Metal precompile already starts each pipeline's creation asynchronously and leaves it in Apple's cache; sampled on a warmed YouTube visit, creating a pipeline at first use took 1–2 ms (section 11)
 - [x] Cache the menus and dialogs over the window like the chrome, so a page frame rebuilds only the root, the page frame and the page (section 11)
 - [ ] Send the video and SVG fixes upstream to Ladybird: branches are on `TheoSlater/ladybird`; opening PRs from the CLI was refused by GitHub, so open them from the web
-- [ ] Cache rasterized scroll content so 4K scrolling fits the 120 Hz GPU budget
+- [ ] Measure 120 Hz scrolling at 4K with the current viewport scroll-blit path
 - [x] Profile scrolling (section 7)
 - [x] Chase the intermittent blank launch (not reproduced, section 8)
 - [ ] Profile the slow Skia flushes on first paint of heavy pages (section 9)

@@ -4,10 +4,10 @@
 
 use gpui::{App, MouseButton, Orientation, Role, Window, div, prelude::*, px, rgb, rgba};
 
+use super::super::animated_icons::{animated_icon, plus, settings_cog};
 use super::super::button::{menu_button, toolbar_button};
 use super::super::controls::{FocusRing, RovingAxis, RovingFocus};
 use super::super::controls::{OwnsClicks, Pressable};
-use super::super::icons::{add_icon, settings_icon};
 use super::super::layout::{h_stack, v_stack};
 use super::super::tooltip::label_tooltip;
 use super::super::{ClickHandler, MouseDownHandler, metrics, theme::ThemeColors};
@@ -47,7 +47,7 @@ pub(in super::super) fn footer(
             cx,
         )
     });
-    let menu = menu_button("sidebar-menu", 2, palette, actions.menu)
+    let menu = menu_button("sidebar-menu", 2, palette, actions.menu, window, cx)
         .tooltip(label_tooltip("Open browser menu", palette));
     if collapsed {
         let spacing = metrics::SidebarSpacing::new(collapsed);
@@ -80,7 +80,15 @@ pub(in super::super) fn footer(
             "Settings",
             0,
             true,
-            settings_icon(palette.text_secondary, metrics::TOOLBAR_ICON_SIZE),
+            animated_icon(
+                "sidebar-settings",
+                settings_cog(),
+                palette.text_secondary,
+                metrics::TOOLBAR_ICON_SIZE,
+                window,
+                cx,
+            )
+            .size_full(),
             palette,
             actions.settings,
         ))
@@ -100,7 +108,15 @@ pub(in super::super) fn footer(
                     "New space",
                     1,
                     true,
-                    add_icon(palette.text_secondary, metrics::TOOLBAR_ICON_SIZE),
+                    animated_icon(
+                        "sidebar-new-space",
+                        plus(),
+                        palette.text_secondary,
+                        metrics::TOOLBAR_ICON_SIZE,
+                        window,
+                        cx,
+                    )
+                    .size_full(),
                     palette,
                     actions.new_space,
                 )),

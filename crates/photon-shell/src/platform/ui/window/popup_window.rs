@@ -54,7 +54,7 @@ pub(super) fn open_minimal_window(
         window.set_window_title(photon_brand::NAME);
         follow_appearance(&webview, window, cx);
         webview.update(cx, |view, cx| {
-            view.session.set_visible(true);
+            view.set_page_visible(true);
             if request.activate {
                 window.focus(&view.focus_handle, cx);
             }
@@ -78,6 +78,7 @@ pub(super) fn open_minimal_window(
                         }
                         // A site window has no menus or tabs of its own.
                         WebViewEvent::ContextMenuRequested
+                        | WebViewEvent::SelectDropdownRequested
                         | WebViewEvent::OpenInNewTab { .. }
                         | WebViewEvent::Peek(_) => {}
                     }
@@ -97,7 +98,11 @@ pub(super) fn open_minimal_window(
                     |this, window, cx| {
                         let animations = Settings::get(cx).animations;
                         window_settings::configure_native_controls(window, &animations);
-                        this.webview.update(cx, |_, cx| cx.notify());
+                        this.webview.update(cx, |view, cx| {
+                            let appearance = Settings::appearance(window.appearance(), cx);
+                            view.update_color_scheme(appearance);
+                            cx.notify();
+                        });
                         cx.notify();
                     },
                 ),

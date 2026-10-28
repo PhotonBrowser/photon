@@ -15,7 +15,7 @@ fn main() {
         .flag("-fblocks")
         .compile("photon_presentation_xpc");
 
-    for framework in ["Foundation", "Metal", "CoreFoundation"] {
+    for framework in ["Foundation", "Metal", "CoreFoundation", "IOSurface"] {
         println!("cargo:rustc-link-lib=framework={framework}");
     }
 }

@@ -2,9 +2,10 @@
 
 Photon is a Rust browser shell built with GPUI-CE and a Ladybird-derived
 Engine. The shell talks to the Engine through Photon's explicit embedder API.
-macOS is the primary development platform; Linux is experimental, and Windows
-Engine builds remain experimental. See [Building Photon](Building.md) for
-platform validation status.
+macOS is the primary development platform. Linux has a shell-only GPUI path and
+a portable Engine renderer; end-to-end Linux browser runtime validation is
+still outstanding. Windows Engine builds remain experimental. See
+[Building Photon](Building.md) for platform validation status.
 
 ## How the pieces fit
 
@@ -46,8 +47,15 @@ Generic framework behavior belongs in the pinned `vendor/gpui-ce` submodule.
 | Platform | Current implementation |
 | --- | --- |
 | macOS | AppKit integration and IOSurface/Metal presentation; primary development target |
-| Linux | Shared shell with CPU-backed page frames; Ubuntu 24.04 workspace checks and tests pass in CI, but full Engine build and browser runtime remain unverified |
+| Linux | Shared GPUI shell, custom in-window menus and `<select>` popovers, and CPU-backed page frames; the UI-only build skips Engine setup; full browser runtime remains unverified |
 | Windows | Shared shell and CPU-backed frames; native Engine build remains experimental |
+
+The Linux renderer uses the same opaque `PresentedSurface` consumed by the
+shared WebView. `platform/linux/renderer.rs` selects the portable CPU-frame
+handoff; the shared UI never sees Engine surfaces or page pixel buffers. A
+future DMA-BUF presenter can replace that target adapter behind the same
+boundary. Shell-only startup constructs no Engine runtime and opens Photon’s
+New Tab page so GPUI chrome and internal pages can be developed independently.
 
 ## Where to start
 

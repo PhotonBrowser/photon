@@ -9,7 +9,15 @@ use crate::support::{
     require_tool_version, run_tool,
 };
 
-pub(crate) fn setup(root: &Path, verbose: bool, install_system_deps: bool) -> Result<(), String> {
+pub(crate) fn setup(
+    root: &Path,
+    verbose: bool,
+    install_system_deps: bool,
+    ui_only: bool,
+) -> Result<(), String> {
+    if ui_only && install_system_deps {
+        return Err("`--install-system-deps` cannot be combined with `--ui-only`".into());
+    }
     let config = SetupConfig::load(root)?;
     for tool in ["git", "cargo", "rustc", "rustup"] {
         require_tool(tool)?;
@@ -17,17 +25,22 @@ pub(crate) fn setup(root: &Path, verbose: bool, install_system_deps: bool) -> Re
     if install_system_deps {
         crate::commands::system_deps::install(root, verbose)?;
     }
-    require_tool("python3")?;
-    run_tool("python3", &["-m", "pip", "--version"], root)
-        .map_err(|_| "Python pip is missing; install pip for Python 3 before setup".to_owned())?;
-    if compiler_version(root).is_none() {
-        return Err(
-            "a C++ compiler is missing; install Clang or your platform's C++ build tools".into(),
-        );
+    if !ui_only {
+        require_tool("python3")?;
+        run_tool("python3", &["-m", "pip", "--version"], root).map_err(|_| {
+            "Python pip is missing; install pip for Python 3 before setup".to_owned()
+        })?;
+        if compiler_version(root).is_none() {
+            return Err(
+                "a C++ compiler is missing; install Clang or your platform's C++ build tools"
+                    .into(),
+            );
+        }
+        for (tool, minimum) in [("cmake", (3, 30)), ("ninja", (1, 10))] {
+            require_tool_version(tool, minimum, root)?;
+        }
     }
-    for (tool, minimum) in [("cmake", (3, 30)), ("ninja", (1, 10)), ("rustc", (1, 85))] {
-        require_tool_version(tool, minimum, root)?;
-    }
+    require_tool_version("rustc", (1, 85), root)?;
     for component in ["fmt", "clippy"] {
         run_tool("cargo", &[component, "--version"], root).map_err(|_| {
             format!(
@@ -40,7 +53,11 @@ pub(crate) fn setup(root: &Path, verbose: bool, install_system_deps: bool) -> Re
         })?;
     }
 
-    for submodule in &config.submodules {
+    for submodule in config
+        .submodules
+        .iter()
+        .filter(|submodule| !ui_only || submodule.path != "Engine")
+    {
         let path = submodule.path.as_str();
         let mut sync_args = vec!["submodule", "sync"];
         if submodule.recursive {
@@ -62,12 +79,16 @@ pub(crate) fn setup(root: &Path, verbose: bool, install_system_deps: bool) -> Re
         args.extend(["--", path]);
         command("git", &args, root, verbose)?;
     }
-    if !root.join("Engine/CMakeLists.txt").is_file() {
+    if !ui_only && !root.join("Engine/CMakeLists.txt").is_file() {
         return Err(
             "Engine submodule is missing; run git submodule update --init --recursive".into(),
         );
     }
-    for repository in &config.repositories {
+    for repository in config
+        .repositories
+        .iter()
+        .filter(|repository| !ui_only || repository.path != "Engine")
+    {
         let path = root.join(&repository.path);
         if !path.join(".git").exists() {
             if repository.path == "." {
@@ -131,27 +152,39 @@ pub(crate) fn setup(root: &Path, verbose: bool, install_system_deps: bool) -> Re
             unset_branch_upstream(&path, branch, verbose)?;
         }
     }
-    crate::commands::engine::edit(root, verbose)?;
+    if !ui_only {
+        crate::commands::engine::edit(root, verbose)?;
+    }
     crate::commands::gpui::edit(root, verbose)?;
-    for path in ["build/engine-debug", "build/app-debug", "build/bin"] {
-        std::fs::create_dir_all(root.join(path)).map_err(|e| e.to_string())?;
+    if !ui_only {
+        for path in ["build/engine-debug", "build/app-debug", "build/bin"] {
+            std::fs::create_dir_all(root.join(path)).map_err(|e| e.to_string())?;
+        }
     }
     crate::commands::ide::setup(root, verbose)?;
-    clang_format(root, CLANG_FORMAT_VERSION)?;
-    crate::commands::install::install(root, verbose)?;
-    println!("Setup ready. Existing dependency worktrees were preserved.");
-    println!("Rust formatting, Clippy, and native formatting tools are ready.");
-    if install_system_deps {
-        println!("macOS build packages are ready.");
-    } else {
-        println!("Install OS packages separately; see CONTRIBUTOR_SETUP.md.");
+    if !ui_only {
+        clang_format(root, CLANG_FORMAT_VERSION)?;
     }
-    let clang_format_major = CLANG_FORMAT_VERSION
-        .split('.')
-        .next()
-        .unwrap_or(CLANG_FORMAT_VERSION);
-    println!("clang-format {clang_format_major} is ready for format and lint commands.");
-    println!("The first engine build prepares Ladybird's pinned dependencies under build/.");
+    crate::commands::install::install(root, verbose)?;
+    if ui_only {
+        println!("UI-only setup ready. Existing dependency worktrees were preserved.");
+        println!("Run `photon run --ui` to build and launch the GPUI shell.");
+        println!("Photon Engine was not initialized; web pages require the full setup.");
+    } else {
+        println!("Setup ready. Existing dependency worktrees were preserved.");
+        println!("Rust formatting, Clippy, and native formatting tools are ready.");
+        if install_system_deps {
+            println!("macOS build packages are ready.");
+        } else {
+            println!("Install OS packages separately; see CONTRIBUTOR_SETUP.md.");
+        }
+        let clang_format_major = CLANG_FORMAT_VERSION
+            .split('.')
+            .next()
+            .unwrap_or(CLANG_FORMAT_VERSION);
+        println!("clang-format {clang_format_major} is ready for format and lint commands.");
+        println!("The first engine build prepares Ladybird's pinned dependencies under build/.");
+    }
     Ok(())
 }
 

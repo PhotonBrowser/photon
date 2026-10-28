@@ -4,6 +4,7 @@
 use gpui::{AnyElement, Context, Div, Window, div, prelude::*, px};
 use photon_core::{Command, DockRegion};
 
+use super::super::animated_icons::{animated_icon, reload_arrow};
 use super::super::button::{menu_button, toolbar_button};
 use super::super::icons::{back_icon, close_icon, forward_icon, reload_icon};
 use super::super::layout::{h_stack, v_stack};
@@ -62,7 +63,7 @@ impl BrowserWindow {
         &self,
         region: DockRegion,
         titlebar: Option<Div>,
-        window: &Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<Div> {
         let layout = WorkspaceLayout::current(cx);
@@ -119,7 +120,7 @@ impl BrowserWindow {
         &self,
         component: ComponentId,
         region: DockRegion,
-        window: &Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         if component == ComponentId::TabStrip {
@@ -160,34 +161,57 @@ impl BrowserWindow {
         let palette = super::super::theme::chrome_palette(window, cx);
         let (color, size) = (palette.text_secondary, metrics::TOOLBAR_ICON_SIZE);
         match component {
-            ComponentId::BackButton => toolbar_button(
-                "toolbar-back",
-                "Go back",
-                0,
-                self.navigation_state(cx).can_go_back,
-                back_icon(color, size),
-                palette,
-                Box::new(cx.listener(|this, _, window, cx| {
-                    this.execute_command(Command::GoBack, window, cx);
-                })),
-            )
-            .into_any_element(),
-            ComponentId::ForwardButton => toolbar_button(
-                "toolbar-forward",
-                "Go forward",
-                1,
-                self.navigation_state(cx).can_go_forward,
-                forward_icon(color, size),
-                palette,
-                Box::new(cx.listener(|this, _, window, cx| {
-                    this.execute_command(Command::GoForward, window, cx);
-                })),
-            )
-            .into_any_element(),
+            ComponentId::BackButton => {
+                let enabled = self.navigation_state(cx).can_go_back;
+                let icon = back_icon(color, size).into_any_element();
+                toolbar_button(
+                    "toolbar-back",
+                    "Go back",
+                    0,
+                    enabled,
+                    icon,
+                    palette,
+                    Box::new(cx.listener(|this, _, window, cx| {
+                        this.execute_command(Command::GoBack, window, cx);
+                    })),
+                )
+                .into_any_element()
+            }
+            ComponentId::ForwardButton => {
+                let enabled = self.navigation_state(cx).can_go_forward;
+                let icon = forward_icon(color, size).into_any_element();
+                toolbar_button(
+                    "toolbar-forward",
+                    "Go forward",
+                    1,
+                    enabled,
+                    icon,
+                    palette,
+                    Box::new(cx.listener(|this, _, window, cx| {
+                        this.execute_command(Command::GoForward, window, cx);
+                    })),
+                )
+                .into_any_element()
+            }
             ComponentId::ReloadButton => {
                 let state = self.navigation_state(cx);
+                let enabled = state.can_reload || state.loading;
                 let (label, icon) = if state.loading {
                     ("Stop loading", close_icon(color, size).into_any_element())
+                } else if enabled {
+                    (
+                        "Reload page",
+                        animated_icon(
+                            "toolbar-reload-icon",
+                            reload_arrow(),
+                            color,
+                            size,
+                            window,
+                            cx,
+                        )
+                        .size_full()
+                        .into_any_element(),
+                    )
                 } else {
                     ("Reload page", reload_icon(color, size).into_any_element())
                 };
@@ -195,7 +219,7 @@ impl BrowserWindow {
                     "toolbar-reload",
                     label,
                     2,
-                    state.can_reload || state.loading,
+                    enabled,
                     icon,
                     palette,
                     Box::new(cx.listener(move |this, _, window, cx| {
@@ -222,9 +246,13 @@ impl BrowserWindow {
                     cx.stop_propagation();
                     this.show_browser_menu(window, cx);
                 })),
+                window,
+                cx,
             )
             .into_any_element(),
-            ComponentId::SidebarToggle => self.sidebar_toggle(size, palette, cx).into_any_element(),
+            ComponentId::SidebarToggle => self
+                .sidebar_toggle(size, palette, window, cx)
+                .into_any_element(),
             ComponentId::TabStrip
             | ComponentId::FavouritesPanel
             | ComponentId::VerticalTabs

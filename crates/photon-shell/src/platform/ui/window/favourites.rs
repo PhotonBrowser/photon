@@ -12,7 +12,6 @@ use super::super::settings::Settings;
 use super::super::sidebar::FavouriteTile;
 use super::super::{metrics, theme::ThemeColors};
 use super::BrowserWindow;
-use super::context_menu::show_window_context_menu;
 use super::menu::{MenuCommand, command_item};
 use super::pinned::pin_for;
 
@@ -64,7 +63,7 @@ impl BrowserWindow {
                         move |this, _: &MouseDownEvent, window, cx| {
                             cx.stop_propagation();
                             let items = this.favourite_menu_items(index, cx);
-                            show_window_context_menu(window, items, cx);
+                            this.show_context_menu(window, items, cx);
                         },
                     )),
                 }
