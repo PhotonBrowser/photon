@@ -100,6 +100,9 @@ impl BrowserWindow {
     pub(super) fn follow_space(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let spaces = &Settings::get(cx).spaces;
         let active = spaces.active().id;
+        if self.theme_picker_space.is_some_and(|space| space != active) {
+            self.theme_picker_space = None;
+        }
         if self.spaces.shown == active {
             return;
         }

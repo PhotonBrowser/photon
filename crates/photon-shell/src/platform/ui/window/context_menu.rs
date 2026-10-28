@@ -10,8 +10,10 @@ use gpui::{
     App, Context, Div, Menu, MenuItem, MouseButton, MouseDownEvent, Window, point, prelude::*, px,
 };
 
+use super::super::settings::Settings;
 use super::super::workspace_layout::WorkspaceLayout;
 use super::BrowserWindow;
+use super::menu::{MenuCommand, command_item};
 
 /// Opens a native menu anchored to this window's pointer position. Keeping an
 /// A view anchor keeps the popup associated with this browser window instead
@@ -33,8 +35,9 @@ impl BrowserWindow {
     pub(super) fn with_browser_menu(&self, area: Div, cx: &mut Context<Self>) -> Div {
         area.on_mouse_down(
             MouseButton::Right,
-            cx.listener(|this, _: &MouseDownEvent, window, cx| {
+            cx.listener(|this, event: &MouseDownEvent, window, cx| {
                 cx.stop_propagation();
+                this.theme_picker_anchor = Some(event.position);
                 this.show_browser_menu(window, cx);
             }),
         )
@@ -71,6 +74,11 @@ impl BrowserWindow {
             items.push(MenuItem::action("Sidebar as Icons", ToggleSidebarIcons).checked(icons));
         }
         items.extend([
+            command_item(
+                "Edit Theme…",
+                MenuCommand::EditTheme(Settings::get(cx).spaces.active().id),
+            ),
+            MenuItem::separator(),
             MenuItem::action("Zen Mode", ToggleZenMode).checked(self.sidebar.zen()),
             MenuItem::separator(),
             MenuItem::action("Keyboard Shortcuts", ShowKeyboardShortcuts),

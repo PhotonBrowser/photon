@@ -357,7 +357,7 @@ pub(super) trait AnimateIn: Styled + gpui::IntoElement + Sized + 'static {
         config: &MotionConfig,
         base_offset: (f32, f32),
     ) -> gpui::AnyElement {
-        apply_entrance(self, id, entrance, Transition::Enter, config, base_offset)
+        self.animate_with_offset(id, entrance, Transition::Enter, config, base_offset)
     }
 
     fn animate_out(
@@ -366,8 +366,7 @@ pub(super) trait AnimateIn: Styled + gpui::IntoElement + Sized + 'static {
         entrance: Entrance,
         config: &MotionConfig,
     ) -> gpui::AnyElement {
-        let id = ElementId::from((id.into(), "exit"));
-        apply_entrance(self, id, entrance, Transition::Exit, config, (0.0, 0.0))
+        self.animate_with_offset(id, entrance, Transition::Exit, config, (0.0, 0.0))
     }
 
     fn animate(
@@ -381,6 +380,23 @@ pub(super) trait AnimateIn: Styled + gpui::IntoElement + Sized + 'static {
             Transition::Enter => self.animate_in(id, entrance, config),
             Transition::Exit => self.animate_out(id, entrance, config),
         }
+    }
+
+    fn animate_with_offset(
+        self,
+        id: impl Into<ElementId>,
+        entrance: Entrance,
+        transition: Transition,
+        config: &MotionConfig,
+        base_offset: (f32, f32),
+    ) -> gpui::AnyElement {
+        let id = ElementId::from(id.into());
+        let id = if transition == Transition::Exit {
+            ElementId::from((id, "exit"))
+        } else {
+            id
+        };
+        apply_entrance(self, id, entrance, transition, config, base_offset)
     }
 }
 

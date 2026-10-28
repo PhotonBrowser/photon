@@ -33,6 +33,7 @@ mod tab_menu;
 mod tab_summary;
 mod tabs;
 mod task_manager;
+mod theme_picker_popup;
 mod title;
 mod workspace;
 mod zoom;
@@ -42,7 +43,7 @@ use gpui::{
     AnyElement, AnyWindowHandle, App, Bounds, Context, Entity, FocusHandle, Pixels, Point, Render,
     ScrollHandle, Subscription, Task, WeakEntity, Window, WindowHandle, div, prelude::*,
 };
-use photon_core::{BrowserCommand, TabSleepMode, WindowBackgroundStyle};
+use photon_core::{BrowserCommand, SpaceId, TabSleepMode, WindowBackgroundStyle};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::rc::Rc;
@@ -100,6 +101,10 @@ pub(in crate::platform) struct BrowserWindow {
     sidebar: SidebarState,
     /// The space shown, switching between spaces, and the space dialog.
     spaces: SpacesState,
+    /// The active-space theme popover and the point its context menu came from.
+    theme_picker_space: Option<SpaceId>,
+    theme_picker_anchor: Option<Point<Pixels>>,
+    theme_picker_presence: Presence<SpaceId>,
     tab_focus_handles: Vec<FocusHandle>,
     /// Closes today's tabs left unused, when the setting asks.
     _archive_task: Task<()>,
@@ -447,6 +452,7 @@ impl BrowserWindow {
         div()
             .size_full()
             .children(self.peek_overlay(palette, cx))
+            .children(self.theme_picker_popup_overlay(window, cx))
             .children(self.space_editor_overlay(palette, cx))
             .children(self.shortcuts_dialog_overlay(palette, cx))
             .children(self.command_palette_overlay(window, cx))
@@ -577,6 +583,9 @@ fn open_browser_window(
                 overlays,
                 sidebar: SidebarState::new(cx),
                 spaces: SpacesState::new(Settings::get(cx).spaces.active().id),
+                theme_picker_space: None,
+                theme_picker_anchor: None,
+                theme_picker_presence: Presence::default(),
                 tab_focus_handles: Vec::new(),
                 _archive_task: BrowserWindow::archive_unused_tabs_regularly(window, cx),
                 tab_sleep_waker,

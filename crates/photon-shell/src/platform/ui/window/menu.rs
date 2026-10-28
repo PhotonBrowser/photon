@@ -20,6 +20,7 @@ pub(super) enum MenuCommand {
     CloseOtherTabs(usize),
     CloseTabsToRight(usize),
     EditSpace(SpaceId),
+    EditTheme(SpaceId),
     DeleteSpace(SpaceId),
 }
 
@@ -52,6 +53,7 @@ impl BrowserWindow {
             MenuCommand::CloseOtherTabs(tab) => self.close_other_tabs(tab, window, cx),
             MenuCommand::CloseTabsToRight(tab) => self.close_tabs_to_right(tab, window, cx),
             MenuCommand::EditSpace(space) => self.edit_space(Some(space), window, cx),
+            MenuCommand::EditTheme(space) => self.show_theme_picker(space, window, cx),
             MenuCommand::DeleteSpace(space) => self.delete_space(space, window, cx),
         }
     }

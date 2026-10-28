@@ -431,6 +431,8 @@ pub(super) const PEEK_CONTROL_GAP: f32 = 6.0;
 pub(super) const PICKER_WIDTH: f32 = 344.0;
 pub(super) const PICKER_PADDING: f32 = 12.0;
 pub(super) const PICKER_GAP: f32 = 16.0;
+pub(super) const PICKER_POPUP_HEIGHT: f32 =
+    PICKER_WIDTH + PICKER_GAP * 2.0 + PICKER_SWATCH_SIZE + PICKER_FOOTER_HEIGHT;
 pub(super) const PICKER_MODE_SIZE: f32 = 28.0;
 pub(super) const PICKER_ICON_SIZE: f32 = 16.0;
 pub(super) const PICKER_HANDLE_RADIUS: f32 = 17.0;

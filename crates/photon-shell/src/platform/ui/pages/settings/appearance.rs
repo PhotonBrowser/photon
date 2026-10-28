@@ -262,28 +262,7 @@ pub(super) fn settings(
         active_space.color,
         super::super::super::theme::space_colors(active_space),
         Some(active_space_id),
-        Rc::new(move |color, colors, transparency, noise, cx| {
-            Settings::update(cx, |settings| {
-                if let Some(space) = settings.spaces.get_mut(active_space_id) {
-                    space.color = color;
-                    space.set_colors(colors);
-                }
-                if let Some(transparency) = transparency {
-                    if colors.colors().is_empty()
-                        || transparency
-                            == super::super::super::appearance_preview::AppearancePreview::subtle_transparency()
-                    {
-                        settings.transparency = photon_core::Transparency::Subtle;
-                        settings.transparency_percent = None;
-                    } else {
-                        settings.transparency_percent = Some(transparency);
-                    }
-                }
-                if let Some(noise) = noise {
-                    settings.background_noise_intensity = noise;
-                }
-            })
-        }),
+        super::super::super::theme_picker::change_space_theme(active_space_id),
     );
 
     let appearance_details = v_stack()

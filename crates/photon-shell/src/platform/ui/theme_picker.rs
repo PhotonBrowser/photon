@@ -18,13 +18,13 @@ use gpui::{
     MouseButton, Pixels, Point, Render, Role, Subscription, Window, canvas, div, prelude::*, px,
     rgb, svg,
 };
-use photon_core::{SpaceColors, SpaceTint, ThemeMode, WindowColor};
+use photon_core::{SpaceColors, SpaceId, SpaceTint, ThemeMode, WindowColor};
 use std::{rc::Rc, time::Instant};
 
 use super::{
     appearance_preview::AppearancePreview,
     controls::{FocusRing, OwnsClicks, Pressable, RovingAxis, RovingFocus, toggled},
-    layout::{h_stack, v_stack},
+    layout::{Elevated, Elevation, h_stack, v_stack},
     metrics,
     motion::{Speed, Tween},
     settings::Settings,
@@ -46,6 +46,30 @@ fn picker_control(ink: u32) -> gpui::Div {
 
 pub(super) type TintChange = Rc<dyn Fn(WindowColor, SpaceColors, Option<u8>, Option<u8>, &mut App)>;
 
+pub(super) fn change_space_theme(space_id: SpaceId) -> TintChange {
+    Rc::new(move |color, colors, transparency, noise, cx| {
+        Settings::update(cx, |settings| {
+            if let Some(space) = settings.spaces.get_mut(space_id) {
+                space.color = color;
+                space.set_colors(colors);
+            }
+            if let Some(transparency) = transparency {
+                if colors.colors().is_empty()
+                    || transparency == AppearancePreview::subtle_transparency()
+                {
+                    settings.transparency = photon_core::Transparency::Subtle;
+                    settings.transparency_percent = None;
+                } else {
+                    settings.transparency_percent = Some(transparency);
+                }
+            }
+            if let Some(noise) = noise {
+                settings.background_noise_intensity = noise;
+            }
+        })
+    })
+}
+
 #[derive(Clone, Copy, PartialEq)]
 enum Control {
     Field,
@@ -60,6 +84,7 @@ pub(super) struct ThemePicker {
     colors: SpaceColors,
     space: Option<photon_core::SpaceId>,
     on_change: TintChange,
+    floating: bool,
 }
 
 pub(super) fn theme_picker(
@@ -75,6 +100,14 @@ pub(super) fn theme_picker(
         colors,
         space,
         on_change,
+        floating: false,
+    }
+}
+
+impl ThemePicker {
+    pub(super) fn as_floating(mut self) -> Self {
+        self.floating = true;
+        self
     }
 }
 
@@ -100,6 +133,7 @@ impl RenderOnce for ThemePicker {
         state.update(cx, |state, cx| {
             state.on_change = self.on_change;
             state.space = self.space;
+            state.floating = self.floating;
             if state.dragging.is_none() && !state.frame_pending {
                 if state.color != self.color || state.colors() != self.colors {
                     state.color = self.color;
@@ -143,6 +177,7 @@ struct PickerState {
     transparency: u8,
     intensity_position: f32,
     on_change: TintChange,
+    floating: bool,
     dragging: Option<Control>,
     frame_pending: bool,
     dirty_transparency: bool,
@@ -194,6 +229,7 @@ impl PickerState {
             transparency: AppearancePreview::transparency(cx),
             intensity_position: f32::from(100 - AppearancePreview::transparency(cx)) / 100.0,
             on_change,
+            floating: false,
             dragging: None,
             frame_pending: false,
             dirty_transparency: false,
@@ -994,7 +1030,7 @@ impl Render for PickerState {
                 )
                 .size_full(),
             );
-        v_stack()
+        let mut panel = v_stack()
             .w_full()
             .max_w(px(metrics::PICKER_WIDTH))
             .p(px(metrics::PICKER_PADDING))
@@ -1008,7 +1044,8 @@ impl Render for PickerState {
                     .then(|| super::background_noise::overlay(self.noise, panel_radius)),
             )
             .border_1()
-            .border_color(rgb(ink).opacity(tokens().track))
+            .border_color(rgb(ink).opacity(tokens().track));
+        panel = panel
             .child(field)
             .child(
                 h_stack()
@@ -1029,6 +1066,11 @@ impl Render for PickerState {
                     .gap(px(metrics::PICKER_GAP))
                     .child(transparency_slider)
                     .child(knob),
-            )
+            );
+        if self.floating {
+            panel.elevated(Elevation::High)
+        } else {
+            panel
+        }
     }
 }
