@@ -687,7 +687,7 @@ impl BrowserWindow {
                 view.favicon.take()
             });
             if let Some(favicon) = favicon {
-                cx.drop_image(favicon.image, Some(window));
+                favicon.release(Some(window), cx);
             }
         }
         self.revealed_icons.borrow_mut().remove(&removed.id);

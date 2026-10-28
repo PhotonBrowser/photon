@@ -43,6 +43,19 @@ impl Favicon {
     pub(in crate::platform) fn pixels(&self) -> &FaviconPixels {
         &self.pixels
     }
+
+    /// Frees the icon's texture once nothing else shows it. The history keeps
+    /// icons for the omnibox, favourites and other tabs, which share the
+    /// image, so it is freed only by its last holder.
+    pub(in crate::platform) fn release(
+        self,
+        window: Option<&mut gpui::Window>,
+        cx: &mut gpui::App,
+    ) {
+        if Arc::strong_count(&self.image) == 1 {
+            cx.drop_image(self.image, window);
+        }
+    }
 }
 
 impl PhotonWebView {
@@ -56,7 +69,7 @@ impl PhotonWebView {
             return;
         }
         if let Some(replaced) = std::mem::replace(&mut self.favicon, favicon) {
-            cx.drop_image(replaced.image, None);
+            replaced.release(None, cx);
         }
         self.state_changed(cx);
     }
