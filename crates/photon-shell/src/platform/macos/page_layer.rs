@@ -177,7 +177,10 @@ impl PageLayer {
                 f64::from(bounds.size.height.as_f32()),
             ),
         );
-        let frame = parent_layer.convertRect_fromLayer(host_page_bounds, Some(&host_layer));
+        let frame = snap_to_pixels(
+            parent_layer.convertRect_fromLayer(host_page_bounds, Some(&host_layer)),
+            f64::from(placement.scale_factor),
+        );
         let flipped = parent_layer.isGeometryFlipped();
         if attached && !layer.isHidden() && self.placed.get() == Some((placement, frame, flipped)) {
             return;
@@ -236,6 +239,22 @@ impl Drop for PageLayer {
     fn drop(&mut self) {
         self.layer.removeFromSuperlayer();
     }
+}
+
+/// Aligns the frame's edges to device pixels, as GPUI aligns the cutout's,
+/// so no sliver of what lies behind shows along the page's edges.
+fn snap_to_pixels(frame: NSRect, scale: f64) -> NSRect {
+    if scale <= 0.0 {
+        return frame;
+    }
+    let snap = |value: f64| (value * scale).round() / scale;
+    let (left, top) = (snap(frame.origin.x), snap(frame.origin.y));
+    let right = snap(frame.origin.x + frame.size.width);
+    let bottom = snap(frame.origin.y + frame.size.height);
+    NSRect::new(
+        NSPoint::new(left, top),
+        NSSize::new(right - left, bottom - top),
+    )
 }
 
 /// Pins frames to the page's visual top-left at their own size, as WebKit
