@@ -15,6 +15,7 @@ path = "src/ph.rs"
 
 [dependencies]
 photon-brand = { path = "../photon-brand" }
+libc = "0.2"
 clap = { version = "4.6.7", features = ["derive", "wrap_help"] }
 indicatif = "0.18.6"
 owo-colors = { version = "4.4.0", features = ["supports-colors"] }

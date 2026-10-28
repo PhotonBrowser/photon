@@ -1,6 +1,7 @@
 use owo_colors::{OwoColorize, Stream};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
+use std::sync::atomic::{AtomicI32, Ordering};
 use std::time::Instant;
 use std::{
     collections::hash_map::DefaultHasher,
@@ -21,6 +22,76 @@ const HELPER_PROCESS_TARGETS: &[&str] = &[
     "VideoDecoderServer",
     "AudioServer",
 ];
+
+#[cfg(unix)]
+static TERMINATION_SIGNAL: AtomicI32 = AtomicI32::new(0);
+
+#[cfg(unix)]
+extern "C" fn record_termination_signal(signal: libc::c_int) {
+    TERMINATION_SIGNAL.store(signal, Ordering::Relaxed);
+}
+
+fn wait_for_application(mut command: Command, launch_error: &str) -> Result<ExitStatus, String> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+
+        TERMINATION_SIGNAL.store(0, Ordering::Relaxed);
+        // Keep the app and its helpers in a group the launcher can stop as a unit.
+        command.process_group(0);
+        // SAFETY: the handler only writes to a lock-free atomic, which is safe
+        // to access from a signal handler.
+        unsafe {
+            libc::signal(
+                libc::SIGINT,
+                record_termination_signal as *const () as libc::sighandler_t,
+            );
+            libc::signal(
+                libc::SIGTERM,
+                record_termination_signal as *const () as libc::sighandler_t,
+            );
+        }
+    }
+
+    let mut child = command
+        .spawn()
+        .map_err(|error| format!("{launch_error}: {error}"))?;
+    wait_for_child(&mut child)
+}
+
+fn wait_for_child(child: &mut Child) -> Result<ExitStatus, String> {
+    loop {
+        #[cfg(unix)]
+        let signal = TERMINATION_SIGNAL.load(Ordering::Relaxed);
+        #[cfg(not(unix))]
+        let signal = 0;
+
+        if signal != 0 {
+            #[cfg(unix)]
+            {
+                // SAFETY: child was started in a fresh process group above.
+                unsafe { libc::kill(-(child.id() as libc::pid_t), libc::SIGTERM) };
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+                loop {
+                    if let Some(status) = child.try_wait().map_err(|error| error.to_string())? {
+                        return Ok(status);
+                    }
+                    if std::time::Instant::now() >= deadline {
+                        // SAFETY: same owned child process group as above.
+                        unsafe { libc::kill(-(child.id() as libc::pid_t), libc::SIGKILL) };
+                        return child.wait().map_err(|error| error.to_string());
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(25));
+                }
+            }
+        }
+
+        if let Some(status) = child.try_wait().map_err(|error| error.to_string())? {
+            return Ok(status);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
 
 pub(crate) fn warn_if_dependencies_are_behind(root: &Path) {
     let dependencies = [
@@ -533,9 +604,7 @@ fn run_direct_portable(
     if let Some(seconds) = shutdown_after_seconds {
         process.env("PHOTON_SHUTDOWN_AFTER_SECONDS", seconds.to_string());
     }
-    let status = process
-        .status()
-        .map_err(|error| format!("cannot start direct Photon application: {error}"))?;
+    let status = wait_for_application(process, "cannot start direct Photon application")?;
     if status.success() {
         Ok(())
     } else {
@@ -603,9 +672,7 @@ fn run_direct_macos(
     if let Some(seconds) = shutdown_after_seconds {
         process.env("PHOTON_SHUTDOWN_AFTER_SECONDS", seconds.to_string());
     }
-    let status = process
-        .status()
-        .map_err(|error| format!("cannot start direct GPUI-CE application: {error}"))?;
+    let status = wait_for_application(process, "cannot start direct GPUI-CE application")?;
     if status.success() {
         Ok(())
     } else {
@@ -663,9 +730,7 @@ fn run_ui_portable(
     if let Some(seconds) = shutdown_after_seconds {
         process.env("PHOTON_SHUTDOWN_AFTER_SECONDS", seconds.to_string());
     }
-    let status = process
-        .status()
-        .map_err(|error| format!("cannot start UI-only Photon shell: {error}"))?;
+    let status = wait_for_application(process, "cannot start UI-only Photon shell")?;
     if status.success() {
         Ok(())
     } else {
@@ -720,9 +785,7 @@ fn run_ui_macos(
     if let Some(seconds) = shutdown_after_seconds {
         process.env("PHOTON_SHUTDOWN_AFTER_SECONDS", seconds.to_string());
     }
-    let status = process
-        .status()
-        .map_err(|error| format!("cannot start UI-only Photon shell: {error}"))?;
+    let status = wait_for_application(process, "cannot start UI-only Photon shell")?;
     if status.success() {
         Ok(())
     } else {
