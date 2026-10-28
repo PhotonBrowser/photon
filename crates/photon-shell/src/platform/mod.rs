@@ -50,7 +50,8 @@ pub(crate) use linux::{
 };
 #[cfg(target_os = "macos")]
 pub use macos::appkit::{
-    AppKitButton, AppKitButtonStyle, AppKitTabBar, AppKitView, AppKitViewElement,
+    AppKitButton, AppKitButtonStyle, AppKitGlassBackdrop, AppKitTabBar, AppKitView,
+    AppKitViewElement, GlassWindowTint,
 };
 #[cfg(target_os = "macos")]
 pub(crate) use macos::{

@@ -125,7 +125,7 @@ surface_blur = 8.0
 raised = 1.0
 
 [transparency.subtle]
-window = 0.88
+window = 0.72
 page = 0.3
 surface_blur = 16.0
 raised = 1.0

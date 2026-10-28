@@ -81,6 +81,10 @@ pub(super) struct Omnibox {
     /// Keeps the site information popover drawn while it animates away.
     site_info_presence: super::motion::Presence<()>,
     field_hovered: bool,
+    /// Native interactive Liquid Glass behind the field, on macOS 26+. The
+    /// field paints its own surface where this is absent.
+    #[cfg(target_os = "macos")]
+    glass: Option<crate::platform::AppKitGlassBackdrop>,
     address_text_offset: Tween,
     address_text_opacity: Tween,
     address_text_position_initialized: bool,
@@ -189,6 +193,8 @@ impl Omnibox {
             site_info_open: false,
             site_info_presence: Default::default(),
             field_hovered: false,
+            #[cfg(target_os = "macos")]
+            glass: crate::platform::AppKitGlassBackdrop::new(),
             address_text_offset: Tween::at(0.0),
             address_text_opacity: Tween::at(1.0),
             address_text_position_initialized: false,
@@ -429,10 +435,44 @@ impl Render for Omnibox {
         let (address_text_offset, address_text_opacity) =
             self.address_text_motion(centered_sidebar, editing, resting_offset, window, cx);
         let motion = Settings::motion(cx);
-        let surface = if editing || self.field_hovered {
+        #[cfg(target_os = "macos")]
+        let native_glass = self.glass.clone().map(|glass| {
+            glass
+                .corner_radius(px(style.radius))
+                .window_tint(crate::platform::GlassWindowTint {
+                    stops: [
+                        Some(menu_palette.window_tint),
+                        menu_palette.window_tint_middle,
+                        Some(menu_palette.window_tint_end),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .collect(),
+                    angle_degrees: crate::platform::theme_config::theme()
+                        .window
+                        .gradient_angle_degrees,
+                })
+                .absolute()
+                .inset_0()
+        });
+        #[cfg(target_os = "macos")]
+        let has_native_glass = native_glass.is_some();
+        #[cfg(not(target_os = "macos"))]
+        let has_native_glass = false;
+        let interaction_surface = if editing || self.field_hovered {
             palette.surface_hover
+        } else if has_native_glass {
+            // At rest the native glass alone is the field's surface.
+            0x0000_0000
         } else {
             palette.surface
+        };
+        // The glass clears the field's own background beneath it, so with
+        // glass the hover and editing tint is a layer drawn over the glass.
+        let surface = if has_native_glass {
+            0x0000_0000
+        } else {
+            interaction_surface
         };
         let field_box = h_stack()
             .id("titlebar-omnibox")
@@ -442,7 +482,7 @@ impl Render for Omnibox {
             .min_w_0()
             .h(px(style.height))
             .rounded(px(style.radius))
-            .bg(rgba(palette.surface))
+            .bg(rgba(surface))
             .text_size(px(style.font_size))
             .text_color(rgb(palette.text_primary))
             // Clicks on the field's padding or icon edit the address rather than
@@ -464,6 +504,31 @@ impl Render for Omnibox {
             .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
             .capture_action(cx.listener(Self::submit))
             .capture_action(cx.listener(Self::cancel));
+        #[cfg(target_os = "macos")]
+        let field_box = field_box
+            .children(native_glass)
+            .when(has_native_glass, |field_box| {
+                field_box.child(
+                    gpui_motion::MotionElement::new(
+                        "omnibox-glass-tint-motion",
+                        gpui::div()
+                            .absolute()
+                            .inset_0()
+                            .rounded(px(style.radius))
+                            .bg(rgba(interaction_surface)),
+                        gpui_motion::Motion::new(gpui_motion::Target::default().opacity(1.0)),
+                    )
+                    .style_motion(
+                        gpui_motion::StyleMotion::new(gpui_motion::StyleTarget::default().color(
+                            gpui_motion::ColorProperty::Background,
+                            super::motion::motion_rgba_color(interaction_surface),
+                        ))
+                        .transition(
+                            super::motion::Curve::EaseOut.transition(motion.duration(Speed::Quick)),
+                        ),
+                    ),
+                )
+            });
         let mut field_box = self.handle_editing_keys(field_box, cx);
         // The open panel draws the field's content itself, in the same place.
         field_box = if editing && !self.suggestions.is_empty() {
