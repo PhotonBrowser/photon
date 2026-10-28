@@ -40,6 +40,7 @@ pub(super) fn popover(
     palette: ThemeColors,
     cx: &gpui::App,
 ) -> impl IntoElement {
+    let motion = super::super::settings::Settings::motion(cx);
     let SiteInfoActions {
         close,
         toggle_sound,
@@ -107,9 +108,11 @@ pub(super) fn popover(
         .child(switch_row(
             "site-info-microphone",
             microphone_icon(
+                "site-info-microphone-icon",
                 palette.text_secondary,
                 metrics::SITE_INFO_ICON_SIZE,
                 info.microphone_on == Some(true),
+                &motion,
             )
             .into_any_element(),
             "Microphone",
@@ -120,9 +123,11 @@ pub(super) fn popover(
         .child(switch_row(
             "site-info-sound",
             audio_icon(
+                "site-info-sound-icon",
                 palette.text_secondary,
                 metrics::SITE_INFO_ICON_SIZE,
                 !sound_on,
+                &motion,
             )
             .into_any_element(),
             "Sound",

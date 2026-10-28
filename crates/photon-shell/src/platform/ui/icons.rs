@@ -159,14 +159,23 @@ pub(super) fn camera_off_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("video-off"), color, size)
 }
 
-/// A microphone, crossed out unless `on`.
-pub(super) fn microphone_icon(color: u32, size: f32, on: bool) -> impl IntoElement {
-    let data: &'static [u8] = if on {
-        lucide!("mic")
-    } else {
-        lucide!("mic-off")
-    };
-    icon(data, color, size)
+/// A microphone, crossed out unless `on`, animating as it turns on and off.
+/// `id` must be unique in the window.
+pub(super) fn microphone_icon(
+    id: impl Into<gpui::SharedString>,
+    color: u32,
+    size: f32,
+    on: bool,
+    config: &super::motion::MotionConfig,
+) -> impl IntoElement {
+    super::animated_icons::toggle_icon(
+        id,
+        [lucide!("mic"), lucide!("mic-off")],
+        on,
+        color,
+        size,
+        config,
+    )
 }
 
 /// A small window inside a larger one, for picture in picture.
@@ -278,14 +287,23 @@ pub(super) fn restore_window_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("copy"), color, size)
 }
 
-/// A speaker, crossed out when `muted`.
-pub(super) fn audio_icon(color: u32, size: f32, muted: bool) -> impl IntoElement {
-    let data: &'static [u8] = if muted {
-        lucide!("volume-x")
-    } else {
-        lucide!("volume-2")
-    };
-    icon(data, color, size)
+/// A speaker, crossed out when `muted`, animating as sound turns on and off.
+/// `id` must be unique in the window.
+pub(super) fn audio_icon(
+    id: impl Into<gpui::SharedString>,
+    color: u32,
+    size: f32,
+    muted: bool,
+    config: &super::motion::MotionConfig,
+) -> impl IntoElement {
+    super::animated_icons::toggle_icon(
+        id,
+        [lucide!("volume-2"), lucide!("volume-x")],
+        !muted,
+        color,
+        size,
+        config,
+    )
 }
 
 pub(super) fn globe_icon(color: u32, size: f32) -> gpui::Svg {

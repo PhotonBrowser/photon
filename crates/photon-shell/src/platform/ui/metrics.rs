@@ -26,6 +26,9 @@ pub(super) const TAB_ICON_SIZE: f32 = 12.0;
 pub(super) const TAB_FAVICON_SIZE: f32 = 16.0;
 pub(super) const TAB_AUDIO_BUTTON_SIZE: f32 = 24.0;
 pub(super) const TAB_AUDIO_ICON_SIZE: f32 = TAB_FAVICON_SIZE;
+/// How far the audio button's hover surface reaches past its icon, which
+/// sits where the favicon would.
+pub(super) const TAB_AUDIO_BUTTON_OUTSET: f32 = (TAB_AUDIO_BUTTON_SIZE - TAB_AUDIO_ICON_SIZE) / 2.0;
 pub(super) const TAB_FONT_SIZE: f32 = 12.0;
 /// The narrowest unpinned tab that fits its icon, close control, gaps, and
 /// horizontal padding without clipping when the strip is crowded.

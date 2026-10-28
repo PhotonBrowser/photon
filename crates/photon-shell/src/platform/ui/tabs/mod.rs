@@ -416,6 +416,7 @@ impl TabParts {
                 icon_color,
                 !suppress_tooltips,
                 palette,
+                &animations,
             ),
             TabIcon::Logo => sized_icon(
                 img(photon_logo(palette.logo_tint)).object_fit(ObjectFit::Contain),
@@ -599,7 +600,9 @@ fn audio_control_button(
     icon_color: u32,
     show_tooltip: bool,
     palette: ThemeColors,
+    animations: &super::motion::MotionConfig,
 ) -> AnyElement {
+    let icon_id = format!("{id}-icon");
     let label = if muted {
         format!("Unmute {tab_label}")
     } else {
@@ -613,11 +616,15 @@ fn audio_control_button(
         .tab_index(focus_index)
         .tab_stop(true)
         .focus_ring(palette)
+        .flex()
         .flex_shrink_0()
         .relative()
         .items_center()
         .justify_center()
         .size(px(metrics::TAB_AUDIO_BUTTON_SIZE))
+        // The button's hover surface outgrows the icon, but the icon sits
+        // exactly where a favicon would, so the title doesn't move.
+        .m(px(-metrics::TAB_AUDIO_BUTTON_OUTSET))
         .rounded(px(metrics::control_radius()))
         .text_color(rgb(icon_color))
         .surface_fade()
@@ -627,7 +634,13 @@ fn audio_control_button(
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .on_click(on_click)
         .when(show_tooltip, |button| button.tooltip(tooltip))
-        .child(audio_icon(icon_color, metrics::TAB_AUDIO_ICON_SIZE, muted))
+        .child(audio_icon(
+            icon_id,
+            icon_color,
+            metrics::TAB_AUDIO_ICON_SIZE,
+            muted,
+            animations,
+        ))
         .into_any_element()
 }
 

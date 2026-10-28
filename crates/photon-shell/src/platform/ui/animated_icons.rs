@@ -14,12 +14,12 @@
 //! spring. Animating single parts, changing opacity and keyframe sequences are
 //! not supported.
 
-use gpui::{App, Div, ElementId, Stateful, Window, div, prelude::*, px};
+use gpui::{App, Div, ElementId, SharedString, Stateful, Window, div, prelude::*, px};
 use gpui_motion::{Spring, SvgFrame, SvgMotion, SvgMotionState, SvgTarget, Transition};
 use std::time::{Duration, Instant};
 
 use super::icons::{heroicon, icon, lucide};
-use super::motion::{MotionConfig, hover_icon_spring};
+use super::motion::{Curve, MotionConfig, Speed, hover_icon_spring};
 use super::settings::Settings;
 
 /// An icon and the motion it takes while hovered. It rests until hovered,
@@ -100,6 +100,51 @@ pub(super) fn animated_icon(
         })
         .child(icon(animated.data, color, size).with_transformation(frame.transformation()))
 }
+
+/// Two glyphs for one setting, given as `[on, off]`, crossfading with a
+/// small pop when `on` changes: the outgoing glyph shrinks away as the
+/// incoming one grows into place. `id` names the retained motion, so it must
+/// be unique in the window.
+pub(super) fn toggle_icon(
+    id: impl Into<SharedString>,
+    [on_data, off_data]: [&'static [u8]; 2],
+    on: bool,
+    color: u32,
+    size: f32,
+    config: &MotionConfig,
+) -> Div {
+    let id = id.into();
+    let transition = Curve::EaseOut.transition(config.duration(Speed::Quick));
+    let glyph = |name: &str, data: &'static [u8], shown: bool| {
+        let target = if shown {
+            gpui_motion::Target::default().opacity(1.0).scale(1.0)
+        } else {
+            gpui_motion::Target::default()
+                .opacity(0.0)
+                .scale(TOGGLE_ICON_HIDDEN_SCALE)
+        };
+        gpui_motion::MotionElement::new(
+            ElementId::Name(format!("{id}-{name}").into()),
+            div()
+                .absolute()
+                .inset_0()
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(icon(data, color, size)),
+            gpui_motion::Motion::new(target).transition(transition),
+        )
+    };
+    div()
+        .relative()
+        .size(px(size))
+        .flex_none()
+        .child(glyph("off", off_data, !on))
+        .child(glyph("on", on_data, on))
+}
+
+/// How small a toggle icon's glyph gets as it fades out.
+const TOGGLE_ICON_HIDDEN_SCALE: f32 = 0.6;
 
 /// Whether the icon is hovered, and where its motion has got to, kept between
 /// frames by its element.
