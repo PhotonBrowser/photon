@@ -4,26 +4,6 @@
 
 <p align="center"><strong>A browser built on <a href="https://ladybird.org">Ladybird</a>.</strong></p>
 
-```mermaid
-flowchart LR
-    User[You] --> App[photon-app]
-    App --> Shell[photon-shell<br/>windows, tabs, and UI]
-    Shell --> Core[photon-core<br/>browser rules and state]
-    Shell --> Storage[photon-storage<br/>profile files]
-    Shell --> Embedder[Photon Engine API]
-    Embedder --> Engine[Ladybird Engine<br/>web pages]
-    Shell --> Platform[Platform adapters<br/>macOS · Linux · Windows]
-    Shell --> PerfUI[photon-performance-ui<br/>GPUI charts and overlays]
-    PerfUI --> Perf[photon-performance<br/>sampling and diagnostics]
-    FFI[photon-ffi<br/>C API] --> Core
-    CLI[photon-cli<br/>setup and developer commands]
-```
-
-The shell connects the browser interface to framework-independent browser
-rules, profile storage, and the Ladybird Engine. See the
-[architecture guide](Documentation/Architecture.md) for component boundaries
-and common change locations.
-
 <p align="center">
   <a href="#run-from-source">Run from source</a> ·
   <a href="Documentation/Architecture.md">Architecture</a> ·
@@ -67,6 +47,26 @@ the full Engine setup.
 ## Develop Photon
 
 Start with [contributor setup](CONTRIBUTOR_SETUP.md), then use the [build guide](Documentation/Building.md) and [architecture guide](Documentation/Architecture.md). See [contribution guidance](CONTRIBUTING.md) for pull requests and the [roadmap](Documentation/Roadmap.md) for planned work.
+
+```mermaid
+flowchart LR
+    User[You] --> App[photon-app]
+    App --> Shell[photon-shell<br/>windows, tabs, and UI]
+    Shell --> Core[photon-core<br/>browser rules and state]
+    Shell --> Storage[photon-storage<br/>profile files]
+    Shell --> Embedder[Photon Engine API]
+    Embedder --> Engine[Ladybird Engine<br/>web pages]
+    Shell --> Platform[Platform adapters<br/>macOS · Linux · Windows]
+    Shell --> PerfUI[photon-performance-ui<br/>GPUI charts and overlays]
+    PerfUI --> Perf[photon-performance<br/>sampling and diagnostics]
+    FFI[photon-ffi<br/>C API] --> Core
+    CLI[photon-cli<br/>setup and developer commands]
+```
+
+The shell connects the browser interface to framework-independent browser
+rules, profile storage, and the Ladybird Engine. See the
+[architecture guide](Documentation/Architecture.md) for component boundaries
+and common change locations.
 
 <details>
 <summary>Rust crate guides</summary>
