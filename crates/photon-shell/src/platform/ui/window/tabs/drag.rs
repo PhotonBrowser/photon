@@ -8,6 +8,7 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
+use super::super::super::pages::NEW_TAB;
 use super::super::super::settings::Settings;
 use super::super::super::tabs::{
     DraggedTab, TabDragAxis, TabDragPayload, TabDragPreview, TabDrop, TabPrepaint,
@@ -1546,8 +1547,12 @@ impl BrowserWindow {
                 window.remove_window();
             }
             return;
-        } else if was_active && let Some(next) = self.active_tab {
-            self.activate_tab(next, true, window, cx);
+        } else if was_active {
+            match self.active_tab {
+                Some(next) => self.activate_tab(next, true, window, cx),
+                // The space has no other tab, as when closing its last one.
+                None => self.insert_page(self.new_tab_index(cx), NEW_TAB, window, cx),
+            }
         }
         self.wake_tab_sleep_scheduler();
         cx.notify();

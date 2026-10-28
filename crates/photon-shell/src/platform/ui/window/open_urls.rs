@@ -4,7 +4,7 @@
 
 use futures::StreamExt;
 use futures::channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
-use gpui::{App, Application};
+use gpui::{App, Application, WindowHandle};
 use std::rc::Rc;
 
 use super::super::super::app_update::update_app;
@@ -51,7 +51,7 @@ fn open_urls(urls: &[String], runtime: &Rc<EngineRuntime>, cx: &mut App) {
         });
     let (window, rest) = match frontmost {
         Some(window) => (window, urls),
-        None => match open_browser_window(runtime.clone(), Some(first.clone()), false, false, cx) {
+        None => match open_fresh_window(runtime, first, cx) {
             Ok(window) => (window, rest),
             Err(error) => {
                 trace(format_args!("open url: {error:#}"));
@@ -80,4 +80,15 @@ fn open_urls(urls: &[String], runtime: &Rc<EngineRuntime>, cx: &mut App) {
             window.activate();
         })
         .ok();
+}
+
+/// Opens a window for `url` while none is open, in place of the windows kept
+/// from before, which would otherwise be restored beside it next launch.
+fn open_fresh_window(
+    runtime: &Rc<EngineRuntime>,
+    url: &str,
+    cx: &mut App,
+) -> anyhow::Result<WindowHandle<BrowserWindow>> {
+    super::session::forget_closed_windows(cx);
+    open_browser_window(runtime.clone(), Some(url.to_owned()), false, false, cx)
 }

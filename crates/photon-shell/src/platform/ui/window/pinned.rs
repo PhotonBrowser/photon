@@ -50,7 +50,7 @@ impl BrowserWindow {
         };
         let to = match pin {
             Some(_) => self.pinned_count(),
-            None => self.pinned_count() - 1,
+            None => self.pinned_count().saturating_sub(1),
         };
         let pinned = pin.is_some();
         let previous = std::mem::replace(&mut self.tabs[index].pin, pin);

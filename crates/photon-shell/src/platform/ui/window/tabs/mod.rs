@@ -619,7 +619,9 @@ impl BrowserWindow {
 
     pub(super) fn reopen_closed_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(closed) = self.closed_tabs.pop() {
-            self.insert_tab(closed.index, Some(&closed.url), window, cx);
+            // Reopened unpinned, so never among the pinned tabs.
+            let index = closed.index.clamp(self.pinned_count(), self.tabs.len());
+            self.insert_tab(index, Some(&closed.url), window, cx);
         }
     }
 
@@ -702,6 +704,11 @@ impl BrowserWindow {
         self.remember_closed(index, &removed.content, cx);
 
         let was_active = self.active_tab == Some(index);
+        if was_active {
+            // The bar searches this tab's page, so ends with it, and lets
+            // the page go.
+            self.close_find_bar(false, window, cx);
+        }
         let next = was_active
             .then(|| self.tab_after_closing(index, cx))
             .flatten();

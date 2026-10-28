@@ -146,12 +146,25 @@ pub(super) fn restore_session(
     opened
 }
 
+/// Forgets the windows kept after the last one closed, when a new window
+/// opens instead of them, so they are not restored beside it next launch.
+pub(super) fn forget_closed_windows(cx: &mut App) {
+    if cx.has_global::<BrowsingSession>() {
+        cx.update_global::<BrowsingSession, _>(|session, _| session.windows.clear());
+    }
+}
+
 /// Reopens the current in-memory session when the user returns to an app that
 /// stayed alive after its last window closed.
 #[cfg(not(feature = "ui-only"))]
 #[cfg(target_os = "macos")]
 pub(super) fn reopen_session(runtime: &Rc<EngineRuntime>, cx: &mut App) {
-    let saved = cx.update_global::<BrowsingSession, _>(|session, _| session.session());
+    let saved = cx.update_global::<BrowsingSession, _>(|session, _| {
+        let saved = session.session();
+        // The restored windows record themselves again under new keys.
+        session.windows.clear();
+        saved
+    });
     if !restore_session(&saved, runtime, cx) {
         let _ = open_browser_window(runtime.clone(), None, true, false, cx);
     }
