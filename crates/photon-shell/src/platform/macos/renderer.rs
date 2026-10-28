@@ -76,11 +76,17 @@ pub(in crate::platform) fn replace_surface(
 }
 
 /// Builds the GPUI cutout through which Core Animation displays the page,
-/// leaving later GPUI drawing above it.
+/// leaving later GPUI drawing above it. Until the page presents its first
+/// frame there is no hole: a layer attached this frame may reach the screen a
+/// frame after GPUI's, and the hole would show what lies beneath for that
+/// frame. GPUI paints the page's background there meanwhile.
 pub(in crate::platform) fn page_surface(
-    _: Option<&PresentedSurface>,
+    presented: Option<&PresentedSurface>,
     _: PageSurfacePalette,
 ) -> AnyElement {
+    if presented.is_none() {
+        return gpui::Empty.into_any_element();
+    }
     gpui::canvas(
         |_, _, _| {},
         |bounds, _, window, _| {

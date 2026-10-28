@@ -10,13 +10,14 @@ use super::super::button::icon_button;
 use super::super::controls::OwnsClicks;
 use super::super::icons::{close_icon, open_in_tab_icon};
 use super::super::layout::{Elevated, Elevation, Raised, h_stack, v_stack};
-use super::super::motion::{AnimateIn, Entrance, Presence, fade, rise};
+use super::super::motion::{AnimateIn, Entrance, Presence, fade, glide};
 use super::super::{PhotonWebView, WebViewEvent, metrics, theme::ThemeColors};
 use super::BrowserWindow;
 use super::content::{create_webview, follow_appearance};
 
-/// How the preview rises in, and leaves the same way.
-const PEEK_MOTION: Entrance = rise();
+/// How the preview rises in. The page is drawn natively, so it moves but
+/// never fades or scales; on close it leaves at once with the backdrop.
+const PEEK_MOTION: Entrance = glide();
 
 /// The page shown in the preview, and the window following it.
 pub(super) struct Peek {
@@ -112,6 +113,20 @@ impl BrowserWindow {
             .presence
             .sync(shown, PEEK_MOTION, &animations, cx)?;
         let open = self.peek.open.is_some();
+        let backdrop = div()
+            .id("peek")
+            .absolute()
+            .inset_0()
+            .bg(rgba(palette.peek_backdrop));
+        if !open {
+            // Only the backdrop fades out: drawing the closed page again would
+            // show its native layer, which cannot fade with it.
+            return Some(
+                backdrop
+                    .animate("peek-backdrop", fade(), transition, &animations)
+                    .into_any_element(),
+            );
+        }
         // The buttons sit on a raised pill, to read over any page.
         let buttons = h_stack()
             .p(px(metrics::MENU_PADDING))
@@ -156,31 +171,23 @@ impl BrowserWindow {
             .child(controls)
             .child(card)
             .animate("peek-panel", PEEK_MOTION, transition, &animations);
-        let mut overlay = div()
-            .id("peek")
-            .absolute()
-            .inset_0()
+        let overlay = backdrop
             .px(relative(metrics::PEEK_INSET_FRACTION))
             .py(relative(metrics::PEEK_INSET_FRACTION / 2.0))
-            .bg(rgba(palette.peek_backdrop))
-            .child(panel);
-        // A closing preview no longer holds the pointer or keys.
-        if open {
-            overlay = overlay
-                .occlude()
-                .on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(|this, _, window, cx| {
-                        this.close_peek(window, cx);
-                    }),
-                )
-                .capture_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                    if event.keystroke.key == "escape" && !event.keystroke.modifiers.modified() {
-                        cx.stop_propagation();
-                        this.close_peek(window, cx);
-                    }
-                }));
-        }
+            .child(panel)
+            .occlude()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, window, cx| {
+                    this.close_peek(window, cx);
+                }),
+            )
+            .capture_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                if event.keystroke.key == "escape" && !event.keystroke.modifiers.modified() {
+                    cx.stop_propagation();
+                    this.close_peek(window, cx);
+                }
+            }));
         Some(
             overlay
                 .animate("peek-backdrop", fade(), transition, &animations)

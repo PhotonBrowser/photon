@@ -166,19 +166,38 @@ impl PageLayer {
             .superlayer()
             .is_some_and(|parent| std::ptr::eq(&*parent, &*parent_layer));
 
+        // Convert through AppKit's views, which honour each view's flipping,
+        // as the glass backdrop does; a layer's backing view shares its
+        // coordinate space. Converting between the layers mirrors the page
+        // vertically once GPUI's view has a layer-backed superview.
         let bounds = placement.bounds;
+        let host_bounds = host.bounds();
+        let (width, height) = (
+            f64::from(bounds.size.width.as_f32()),
+            f64::from(bounds.size.height.as_f32()),
+        );
+        let top = f64::from(bounds.origin.y.as_f32());
+        let y = if host.isFlipped() {
+            host_bounds.origin.y + top
+        } else {
+            host_bounds.origin.y + host_bounds.size.height - top - height
+        };
         let host_page_bounds = NSRect::new(
             NSPoint::new(
-                f64::from(bounds.origin.x.as_f32()),
-                f64::from(bounds.origin.y.as_f32()),
+                host_bounds.origin.x + f64::from(bounds.origin.x.as_f32()),
+                y,
             ),
-            NSSize::new(
-                f64::from(bounds.size.width.as_f32()),
-                f64::from(bounds.size.height.as_f32()),
-            ),
+            NSSize::new(width, height),
         );
+        // SAFETY: AppKit view hierarchy access runs on the main thread.
+        let parent_view = has_sibling_layer
+            .then(|| unsafe { host.superview() })
+            .flatten();
         let frame = snap_to_pixels(
-            parent_layer.convertRect_fromLayer(host_page_bounds, Some(&host_layer)),
+            match parent_view {
+                Some(parent_view) => host.convertRect_toView(host_page_bounds, Some(&parent_view)),
+                None => host_page_bounds,
+            },
             f64::from(placement.scale_factor),
         );
         let flipped = parent_layer.isGeometryFlipped();

@@ -374,11 +374,12 @@ pub(in super::super) const fn toast() -> Entrance {
         .speed(Speed::Gentle)
 }
 
-pub(in super::super) const fn rise() -> Entrance {
+/// Rises into place without fading or scaling, for content drawn natively
+/// beneath GPUI, which can follow a move but not a fade, and which a
+/// changing size would make lay out again on every frame.
+pub(in super::super) const fn glide() -> Entrance {
     Entrance::new()
-        .fade_from(0.0)
         .slide_from(Edge::Bottom, distance::SHIFT)
-        .scale_from(0.98)
         .curve(Curve::SMOOTH)
 }
 
