@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Click Generator</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="app-header">
+        <h1>Click Generator</h1>
+        <p class="tagline">
+          Procedural click &amp; haptic sound generator powered by the Web Audio API. Runs entirely
+          in your browser — nothing is uploaded.
+        </p>
+      </header>
+      <section id="presets" class="presets"></section>
+      <main class="workspace">
+        <section class="pane editor-pane">
+          <h2>Click code</h2>
+          <textarea
+            id="code"
+            spellcheck="false"
+            autocomplete="off"
+            autocapitalize="off"
+          ></textarea>
+          <div id="error" class="error" hidden></div>
+          <p class="hint">
+            Define <code>function click(intensity, step, count, sampleRate)</code> returning a
+            <code>Float32Array</code> of samples. Helpers in scope:
+            <code>noise()</code>, <code>sine(freq, t)</code>, <code>expDecay(i, k)</code>,
+            <code>bandpass(data, freq, q, sampleRate)</code>.
+          </p>
+        </section>
+        <section class="pane controls-pane">
+          <h2>Pattern</h2>
+          <div id="pattern"></div>
+          <h2>Preview</h2>
+          <canvas id="waveform" height="120"></canvas>
+          <div class="transport">
+            <button id="play" type="button">Play</button>
+            <button id="stop" type="button" disabled>Stop</button>
+          </div>
+          <h2>Export</h2>
+          <div class="export-row">
+            <label>
+              Sample rate
+              <select id="sample-rate">
+                <option value="22050">22050</option>
+                <option value="44100" selected>44100</option>
+                <option value="48000">48000</option>
+              </select>
+            </label>
+            <button id="generate" type="button">Generate WAV</button>
+            <a id="download" class="download" hidden>Download</a>
+          </div>
+          <div id="export-info" class="export-info"></div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

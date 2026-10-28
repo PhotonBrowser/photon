@@ -168,6 +168,8 @@ pub struct BrowserSettings {
     pub engine_idle_timeout_seconds: u16,
     /// Whether page scrolling can stretch past the viewport edge on macOS.
     pub elastic_scroll: bool,
+    /// Whether Photon plays subtle sounds for semantic UI feedback.
+    pub interaction_sounds: bool,
     /// Timing and effect strengths for shell animations.
     pub animations: AnimationSettings,
 }
@@ -262,6 +264,7 @@ impl Default for BrowserSettings {
             restore_session: true,
             engine_idle_timeout_seconds: 60,
             elastic_scroll: false,
+            interaction_sounds: false,
             animations: AnimationSettings::default(),
         }
     }

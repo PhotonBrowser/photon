@@ -48,6 +48,10 @@ pub(super) type MouseUpHandler =
 pub(super) type KeyDownHandler =
     Box<dyn Fn(&gpui::KeyDownEvent, &mut gpui::Window, &mut gpui::App)>;
 
+pub(in crate::platform) fn interaction_sounds_enabled(cx: &gpui::App) -> bool {
+    settings::Settings::get(cx).interaction_sounds
+}
+
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 pub(in crate::platform) fn window_background_style(
     cx: &gpui::App,

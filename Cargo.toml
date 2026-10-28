@@ -11,6 +11,7 @@ members = [
     "crates/photon-presentation-broker",
     "crates/photon-presentation-ipc",
     "crates/photon-storage",
+    "crates/photon-sound",
 ]
 exclude = [
     "Engine/Libraries/LibJS/Flap",
