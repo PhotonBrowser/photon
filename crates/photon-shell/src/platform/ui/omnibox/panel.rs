@@ -1,6 +1,6 @@
 //! The field's content, and the panel it opens into while typing.
 
-use gpui::{AnyElement, Context, Focusable, deferred, prelude::*, px, rgb, rgba};
+use gpui::{AnyElement, Context, Focusable, deferred, div, prelude::*, px, rgb, rgba};
 use gpui_elements::editable_text::text_input;
 use photon_core::DockRegion;
 use std::rc::Rc;
@@ -62,11 +62,14 @@ impl Omnibox {
             "Site information",
             0,
             true,
-            site_controls_icon(icon_color, metrics::SITE_INFO_BUTTON_ICON_SIZE)
-                .group_hover("site-info-button", |style| {
+            div()
+                .group_hover_style("site-info-button", |style| {
                     style.text_color(rgb(palette.text_primary))
                 })
-                .into_any_element(),
+                .child(site_controls_icon(
+                    icon_color,
+                    metrics::SITE_INFO_BUTTON_ICON_SIZE,
+                )),
             palette,
             Box::new(cx.listener(move |this, _, _, cx| {
                 this.site_info_open = !this.site_info_open;
