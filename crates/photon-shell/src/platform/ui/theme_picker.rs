@@ -105,7 +105,7 @@ pub(super) fn theme_picker(
 }
 
 impl ThemePicker {
-    pub(super) fn as_floating(mut self) -> Self {
+    pub(super) fn into_floating(mut self) -> Self {
         self.floating = true;
         self
     }

@@ -521,7 +521,7 @@ pub(super) trait AnimateIn: Styled + gpui::IntoElement + Sized + 'static {
         config: &MotionConfig,
         base_offset: (f32, f32),
     ) -> gpui::AnyElement {
-        let id = ElementId::from(id.into());
+        let id: ElementId = id.into();
         let id = if transition == Transition::Exit {
             ElementId::from((id, "exit"))
         } else {

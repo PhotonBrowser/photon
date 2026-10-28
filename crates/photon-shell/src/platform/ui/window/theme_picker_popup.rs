@@ -74,7 +74,7 @@ impl BrowserWindow {
             Some(space_id),
             theme_picker::change_space_theme(space_id),
         )
-        .as_floating();
+        .into_floating();
         let panel = div()
             .id("window-theme-picker-panel")
             .absolute()
