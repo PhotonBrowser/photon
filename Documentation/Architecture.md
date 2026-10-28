@@ -15,6 +15,7 @@ photon-app
     ├── photon-core          browser rules and state
     ├── photon-storage       profile, history, settings, and session files
     ├── photon-performance   performance samples and diagnostics
+    ├── photon-sound         procedural UI feedback sounds
     ├── photon-brand         shared brand assets
     ├── gpui-motion          GPUI motion library
     └── platform adapters   macOS, Linux, and Windows integration
@@ -28,6 +29,10 @@ photon-presentation-broker ── photon-presentation-ipc  macOS presentation tr
 native window, or Engine dependencies. `photon-shell` owns the browser window,
 views, live tab coordination, and Engine sessions. `photon-storage` handles
 profile file I/O.
+
+`photon-sound` generates short, device-independent interaction samples. The
+shell's semantic feedback service chooses sound and haptic channels and owns
+desktop audio playback.
 
 ## Engine and platform boundaries
 

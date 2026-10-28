@@ -27,6 +27,24 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
         .child(restore_session(palette, cx))
         .child(engine_idle_timeout(palette, cx))
         .child(elastic_scroll(palette, cx))
+        .child(interaction_sounds(palette, cx))
+}
+
+fn interaction_sounds(palette: ThemeColors, cx: &App) -> impl IntoElement {
+    let enabled = Settings::get(cx).interaction_sounds;
+    v_stack()
+        .gap(px(metrics::MENU_ITEM_GAP))
+        .child(group(palette).child(switch_row(
+            "settings-interaction-sounds",
+            "Interaction sounds",
+            enabled,
+            palette,
+            change(move |settings| settings.interaction_sounds = !enabled),
+        )))
+        .child(secondary_text(
+            "Play a subtle sound with Photon’s interface feedback.",
+            palette,
+        ))
 }
 
 fn engine_idle_timeout(palette: ThemeColors, cx: &App) -> impl IntoElement {
