@@ -141,7 +141,9 @@ impl NewTabPage {
             content,
             transition,
             palette,
-            cx,
         )
+        // Frosted, as native glass cannot show the GPUI page beneath it.
+        .enabled(true)
+        .frosted(palette)
     }
 }
