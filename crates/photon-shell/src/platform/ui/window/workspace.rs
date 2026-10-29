@@ -1,7 +1,8 @@
 //! Composes the browser chrome, active page, and window-wide overlays.
 
 use gpui::{
-    App, Edges, MouseButton, MouseUpEvent, Render, StyleRefinement, Window, div, prelude::*, px,
+    App, Edges, MouseButton, MouseUpEvent, Render, Size, StyleRefinement, Window, div, prelude::*,
+    px,
 };
 use photon_core::DockRegion;
 use std::time::Instant;
@@ -14,6 +15,7 @@ use super::super::titlebar::window_drag_area;
 use super::super::workspace_layout::WorkspaceLayout;
 use super::super::{metrics, theme::palette};
 use super::BrowserWindow;
+use super::side_dock::SidebarState;
 
 impl Render for BrowserWindow {
     fn render(&mut self, window: &mut Window, cx: &mut gpui::Context<Self>) -> impl IntoElement {
@@ -58,7 +60,7 @@ impl Render for BrowserWindow {
         let margins = if page_fullscreen {
             Edges::default()
         } else {
-            self.page_margins(&layout, cx)
+            page_margins(&self.sidebar, &layout, cx)
         };
         let page_opacity = self
             .page_transition
@@ -71,9 +73,26 @@ impl Render for BrowserWindow {
                 self.page_transition = None;
             }
         }
+        // While the sidebar or Zen mode moves the page's edges, Engine keeps
+        // the page laid out at the larger of now and rest, clipped to where
+        // it is drawn, rather than laying it out again every frame.
+        let layout_growth = if page_fullscreen || !self.sidebar.is_tweening() {
+            Size::default()
+        } else {
+            let rest = self
+                .sidebar
+                .at_rest(|sidebar| page_margins(sidebar, &layout, cx));
+            Size {
+                width: (margins.left + margins.right - rest.left - rest.right).max(0.0),
+                height: (margins.top + margins.bottom - rest.top - rest.bottom).max(0.0),
+            }
+        };
         let active_webview = self.active_webview();
         if let Some(webview) = active_webview.as_ref() {
-            webview.update(cx, |view, _| view.set_page_opacity(page_opacity));
+            webview.update(cx, |view, _| {
+                view.set_page_opacity(page_opacity);
+                view.set_layout_growth(layout_growth);
+            });
         }
         let active_view = self.active_view(palette, cx);
         let active_view = if active_webview.is_some() {
@@ -192,36 +211,36 @@ impl BrowserWindow {
                 .ok();
         });
     }
+}
 
-    /// The page's margins inside the window: room for the bars around it
-    /// and the sidebar beside it, with a small inset elsewhere. Zen mode
-    /// tucks the bars away, leaving the inset in their place.
-    fn page_margins(&self, layout: &WorkspaceLayout, cx: &App) -> Edges<f32> {
-        let chrome_shown = self.sidebar.chrome_shown();
-        let inset = metrics::PAGE_INSET;
-        let top_extent = layout.top_extent();
-        let top = if top_extent > 0.0 {
-            mix(inset, top_extent + metrics::PAGE_CHROME_GAP, chrome_shown)
-        } else {
-            inset
-        };
-        let mut margins = Edges {
-            top,
-            right: inset,
-            bottom: layout.bottom_extent() * chrome_shown + inset,
-            left: inset,
-        };
-        if let Some(region) = layout.sidebar_region() {
-            // The sidebar brings its own padding, so the page meets it.
-            let shown = self.sidebar.shown();
-            let side = self.sidebar.docked_width(cx) * shown + mix(inset, 0.0, shown);
-            match region {
-                DockRegion::Trailing => margins.right = side,
-                _ => margins.left = side,
-            }
+/// The page's margins inside the window: room for the bars around it
+/// and the sidebar beside it, with a small inset elsewhere. Zen mode
+/// tucks the bars away, leaving the inset in their place.
+fn page_margins(sidebar: &SidebarState, layout: &WorkspaceLayout, cx: &App) -> Edges<f32> {
+    let chrome_shown = sidebar.chrome_shown();
+    let inset = metrics::PAGE_INSET;
+    let top_extent = layout.top_extent();
+    let top = if top_extent > 0.0 {
+        mix(inset, top_extent + metrics::PAGE_CHROME_GAP, chrome_shown)
+    } else {
+        inset
+    };
+    let mut margins = Edges {
+        top,
+        right: inset,
+        bottom: layout.bottom_extent() * chrome_shown + inset,
+        left: inset,
+    };
+    if let Some(region) = layout.sidebar_region() {
+        // The sidebar brings its own padding, so the page meets it.
+        let shown = sidebar.shown();
+        let side = sidebar.docked_width(cx) * shown + mix(inset, 0.0, shown);
+        match region {
+            DockRegion::Trailing => margins.right = side,
+            _ => margins.left = side,
         }
-        margins
     }
+    margins
 }
 
 /// Appearance-only repaint owner; live drags do not notify browser policy or sessions.

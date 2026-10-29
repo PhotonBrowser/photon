@@ -82,14 +82,17 @@ impl BrowserWindow {
         // lays out while the card is still growing, before its first frame.
         let page = peek_page_size(peek_frame(window));
         let scale = window.scale_factor();
-        webview.update(cx, |view, _| {
+        webview.update(cx, |view, cx| {
             view.set_page_visible(true);
             view.set_layout_size(Some(page));
-            view.adopt_viewport(Some((
-                f32::from(page.width).round() as i32,
-                f32::from(page.height).round() as i32,
-                scale.to_bits(),
-            )));
+            view.adopt_viewport(
+                Some((
+                    f32::from(page.width).round() as i32,
+                    f32::from(page.height).round() as i32,
+                    scale.to_bits(),
+                )),
+                cx,
+            );
         });
         let focus = webview.read(cx).focus_handle.clone();
         window.focus(&focus, cx);

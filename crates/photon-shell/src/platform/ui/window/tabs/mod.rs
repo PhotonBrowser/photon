@@ -456,7 +456,7 @@ impl BrowserWindow {
             .active_webview()
             .and_then(|webview| webview.read(cx).last_viewport);
         follow_appearance(&webview, window, cx);
-        webview.update(cx, |view, _| view.adopt_viewport(viewport));
+        webview.update(cx, |view, cx| view.adopt_viewport(viewport, cx));
         let content = TabContent::Web(webview);
         match pin {
             Some(pin) => {

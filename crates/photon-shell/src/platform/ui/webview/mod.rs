@@ -21,9 +21,8 @@ use std::time::{Duration, Instant};
 
 use super::super::trace;
 
-/// How long a resize may await its frame before another is sent anyway, as
-/// when the page is too busy to present.
-const RESIZE_FRAME_TIMEOUT: Duration = Duration::from_millis(100);
+/// How long the viewport must stay still before Engine lays it out again.
+const RESIZE_SETTLE_DELAY: Duration = Duration::from_millis(120);
 
 #[cfg(unix)]
 mod automation;
@@ -96,10 +95,10 @@ pub(in crate::platform) struct PhotonWebView {
     pub(super) session: EngineSession,
     pub(super) focus_handle: FocusHandle,
     pub(super) last_viewport: Option<(i32, i32, u32)>,
-    /// When the last resize was sent, until the page presents a frame.
-    resize_awaiting_frame: Option<Instant>,
-    /// The latest size held back while a resize awaits its frame.
+    /// The latest size waiting for a continuous resize to settle.
     deferred_viewport: Option<(f32, f32, f32)>,
+    /// Sends the latest viewport once a continuous resize settles.
+    resize_settle_task: Option<Task<()>>,
     /// The page's own background colour as 0xRRGGBB, once Engine reports it.
     page_background: Option<u32>,
     /// The window the page was last drawn in, where its menus open.
@@ -115,6 +114,9 @@ pub(in crate::platform) struct PhotonWebView {
     layout_size: Option<gpui::Size<gpui::Pixels>>,
     /// How opaque the page is drawn, as while a preview fades.
     page_opacity: f32,
+    /// How much larger than its bounds the page stays laid out while the
+    /// chrome around it moves, so Engine lays it out once, not every frame.
+    layout_growth: gpui::Size<f32>,
     input: WebViewInput,
     history_swipe: history_swipe::HistorySwipe,
     pub(super) _quit_subscription: Option<Subscription>,
@@ -173,11 +175,8 @@ impl PhotonWebView {
         let Some(presented) = self.session.take_presented_surface() else {
             return;
         };
-        // The page has laid out since the last resize; send one held back.
-        self.resize_awaiting_frame = None;
-        if let Some((width, height, scale)) = self.deferred_viewport.take() {
-            self.update_viewport(width, height, scale);
-        }
+        // Keep the laid-out frame while the viewport is still changing. The
+        // settle timer sends only the final dimensions after the resize ends.
         let navigation_id = presented.navigation_id;
         let (generation, frame_id) = presented.timing_identity();
         self.session.record_surface_install(generation, frame_id);
@@ -332,40 +331,54 @@ impl PhotonWebView {
 
     /// Takes another tab's page size, so a tab opened in the background
     /// lays out and starts loading before it is first shown.
-    pub(super) fn adopt_viewport(&mut self, viewport: Option<(i32, i32, u32)>) {
+    pub(super) fn adopt_viewport(
+        &mut self,
+        viewport: Option<(i32, i32, u32)>,
+        cx: &mut Context<Self>,
+    ) {
         if let Some((width, height, scale)) = viewport {
-            self.update_viewport(width as f32, height as f32, f32::from_bits(scale));
+            self.update_viewport(width as f32, height as f32, f32::from_bits(scale), cx);
         }
     }
 
-    fn update_viewport(&mut self, width: f32, height: f32, scale: f32) {
+    fn update_viewport(&mut self, width: f32, height: f32, scale: f32, cx: &mut Context<Self>) {
         let width = width.round() as i32;
         let height = height.round() as i32;
         let viewport = (width, height, scale.to_bits());
         if self.last_viewport == Some(viewport) || width <= 0 || height <= 0 {
-            // Back at the size Engine has; a held-back size is stale.
             if self.last_viewport == Some(viewport) {
                 self.deferred_viewport = None;
+                self.resize_settle_task = None;
             }
             return;
         }
-        let same_scale = self
+
+        let is_initial_viewport = self.last_viewport.is_none();
+        let scale_changed = self
             .last_viewport
-            .is_some_and(|(_, _, last_scale)| last_scale == viewport.2);
-        // Engine lays out each size it is sent, so sizes sent faster than it
-        // presents only queue work. While a resize awaits its frame, hold the
-        // latest size back; the frame sends it. The layer keeps the last
-        // frame at its size meanwhile, over the page's background colour.
-        if same_scale
-            && self
-                .resize_awaiting_frame
-                .is_some_and(|sent| sent.elapsed() < RESIZE_FRAME_TIMEOUT)
-        {
+            .is_some_and(|(_, _, last_scale)| last_scale != viewport.2);
+        if !is_initial_viewport && !scale_changed {
             self.deferred_viewport = Some((width as f32, height as f32, scale));
+            self.resize_settle_task = Some(cx.spawn(async move |view, cx| {
+                cx.background_executor().timer(RESIZE_SETTLE_DELAY).await;
+                let _ = view.update(cx, |view, _| {
+                    view.resize_settle_task = None;
+                    if let Some((width, height, scale)) = view.deferred_viewport.take() {
+                        view.send_viewport(width, height, scale);
+                    }
+                });
+            }));
             return;
         }
         self.deferred_viewport = None;
-        self.resize_awaiting_frame = Some(Instant::now());
+        self.resize_settle_task = None;
+        self.send_viewport(width as f32, height as f32, scale);
+    }
+
+    fn send_viewport(&mut self, width: f32, height: f32, scale: f32) {
+        let width = width.round() as i32;
+        let height = height.round() as i32;
+        let viewport = (width, height, scale.to_bits());
         self.session.resize(width, height, f64::from(scale));
         trace(format_args!(
             "viewport logical={width}x{height} dpr={scale:.2} physical={}x{}",
@@ -408,8 +421,8 @@ impl PhotonWebView {
             spinner_reveal: None,
             dialogs: PageDialogs::default(),
             window: None,
-            resize_awaiting_frame: None,
             deferred_viewport: None,
+            resize_settle_task: None,
             page_background: None,
             session,
             focus_handle: cx.focus_handle(),
@@ -420,6 +433,7 @@ impl PhotonWebView {
             page_fullscreen: false,
             layout_size: None,
             page_opacity: 1.0,
+            layout_growth: gpui::Size::default(),
             input: WebViewInput::default(),
             history_swipe: history_swipe::HistorySwipe::default(),
             _quit_subscription: None,
@@ -635,11 +649,15 @@ impl Render for PhotonWebView {
                         f32::from(event.bounds.origin.y),
                     );
                     let scale_factor = window.scale_factor();
-                    let layout_size = this.layout_size.unwrap_or(event.bounds.size);
+                    let layout_size = this.layout_size.unwrap_or_else(|| gpui::Size {
+                        width: event.bounds.size.width + px(this.layout_growth.width),
+                        height: event.bounds.size.height + px(this.layout_growth.height),
+                    });
                     this.update_viewport(
                         f32::from(layout_size.width),
                         f32::from(layout_size.height),
                         scale_factor,
+                        cx,
                     );
                     this.presenter.place(
                         window,
@@ -799,6 +817,12 @@ impl PhotonWebView {
     /// page lay out again. `None` lays it out at its drawn size again.
     pub(in crate::platform) fn set_layout_size(&mut self, size: Option<gpui::Size<gpui::Pixels>>) {
         self.layout_size = size;
+    }
+
+    /// Keeps the page laid out `growth` larger than where it is drawn, and
+    /// clipped there, while the chrome moves its edges.
+    pub(in crate::platform) fn set_layout_growth(&mut self, growth: gpui::Size<f32>) {
+        self.layout_growth = growth;
     }
 
     /// Fades the page's native layer, which GPUI's opacity cannot reach.

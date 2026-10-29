@@ -68,6 +68,8 @@ pub(super) struct SidebarState {
     /// the sidebar samples its motion here, so the sidebar, the page and the
     /// window controls move in step rather than a few microseconds apart.
     frame: Instant,
+    /// Whether motion is sampled at its targets, as in `at_rest`.
+    at_rest: bool,
     /// The window it is in, whose space chooses its layout.
     window_id: u64,
 }
@@ -93,6 +95,7 @@ impl SidebarState {
             _save_width: None,
             window_controls: None,
             frame: Instant::now(),
+            at_rest: false,
             window_id,
         }
     }
@@ -114,7 +117,7 @@ impl SidebarState {
             self.layout(cx)
                 .sidebar_extent()
                 .unwrap_or_else(|| Settings::get(cx).sidebar.width()) as f32
-        }) + self.resize_overshoot.value_at(self.frame)
+        }) + self.sample(&self.resize_overshoot)
     }
 
     /// How wide it is beside the page, between icons and labels.
@@ -122,7 +125,7 @@ impl SidebarState {
         mix(
             metrics::SIDEBAR_COLLAPSED_WIDTH,
             self.width(cx),
-            self.expanded.value_at(self.frame),
+            self.sample(&self.expanded),
         )
     }
 
@@ -142,7 +145,7 @@ impl SidebarState {
 
     /// How far it is shown beside the page, from 0 to 1.
     pub(super) fn shown(&self) -> f32 {
-        self.shown.value_at(self.frame)
+        self.sample(&self.shown)
     }
 
     /// The live panel offset, shared by the sidebar and its native controls.
@@ -159,12 +162,12 @@ impl SidebarState {
     /// How far the bars around the page are shown, from 0 to 1: Zen mode
     /// tucks them away.
     pub(super) fn chrome_shown(&self) -> f32 {
-        1.0 - self.tucked.value_at(self.frame)
+        1.0 - self.sample(&self.tucked)
     }
 
     /// How far it is revealed over the page, from 0 to 1.
     fn revealed(&self) -> f32 {
-        self.reveal.value_at(self.frame)
+        self.sample(&self.reveal)
     }
 
     /// Whether it sits over the page, revealed or on its way to being kept.
@@ -179,16 +182,38 @@ impl SidebarState {
     }
 
     pub(super) fn is_moving(&self) -> bool {
-        self.resize_dragging
-            || [
-                &self.shown,
-                &self.expanded,
-                &self.tucked,
-                &self.reveal,
-                &self.resize_overshoot,
-            ]
-            .into_iter()
-            .any(|tween| tween.is_running_at(self.frame))
+        self.resize_dragging || self.is_tweening()
+    }
+
+    /// Whether it is moving on its own, rather than following a dragged edge.
+    pub(super) fn is_tweening(&self) -> bool {
+        [
+            &self.shown,
+            &self.expanded,
+            &self.tucked,
+            &self.reveal,
+            &self.resize_overshoot,
+        ]
+        .into_iter()
+        .any(|tween| tween.is_running_at(self.frame))
+    }
+
+    /// Runs `sample` with every tween at rest, as it will be once its motion
+    /// ends, then returns to this frame.
+    pub(super) fn at_rest<R>(&mut self, sample: impl FnOnce(&Self) -> R) -> R {
+        self.at_rest = true;
+        let rest = sample(self);
+        self.at_rest = false;
+        rest
+    }
+
+    /// A tween's value this frame, or its target while sampling at rest.
+    fn sample(&self, tween: &Tween) -> f32 {
+        if self.at_rest {
+            tween.target()
+        } else {
+            tween.value_at(self.frame)
+        }
     }
 
     /// Finishes decorative tweens if the application or platform disables motion.
