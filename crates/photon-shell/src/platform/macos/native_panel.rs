@@ -23,7 +23,12 @@ pub(crate) fn options(
             size,
         ))),
         titlebar: None,
-        kind: WindowKind::AnchoredPopup(PopupOptions::new(parent, anchor).gravity(gravity)),
+        // No arrow: AppKit draws it from material the content cannot tint.
+        kind: WindowKind::AnchoredPopup(
+            PopupOptions::new(parent, anchor)
+                .gravity(gravity)
+                .arrow(false),
+        ),
         focus: true,
         show: true,
         is_movable: false,
