@@ -355,9 +355,68 @@ thread_local! {
     static PAGE_HOSTS: RefCell<Vec<(usize, Retained<NSView>)>> = const { RefCell::new(Vec::new()) };
 }
 
-/// Whether `view` is a window's page host.
-pub(super) fn is_page_host(view: &NSView) -> bool {
-    PAGE_HOSTS.with_borrow(|hosts| hosts.iter().any(|(_, host)| std::ptr::eq(&**host, view)))
+/// Layer depths among the views beneath GPUI's, which keeps its own depth of
+/// zero and draws over them all: pages lie at their host's depth, and glass
+/// in hosts above or beneath them as GPUI painted it.
+const PAGE_HOST_DEPTH: f64 = -1.0;
+const GLASS_ABOVE_PAGES_DEPTH: f64 = 0.0;
+const GLASS_BENEATH_PAGES_DEPTH: f64 = -2.0;
+
+thread_local! {
+    /// Each window's glass hosts, by the GPUI view they lie beneath and
+    /// whether they lie beneath its pages.
+    static GLASS_HOSTS: RefCell<Vec<(usize, bool, Retained<NSView>)>> =
+        const { RefCell::new(Vec::new()) };
+}
+
+/// The view that holds a window's glass, above or beneath its pages, directly
+/// beneath GPUI's view `host` in `parent`. Glass never lies in `parent`
+/// itself: with a Liquid Glass window that is the window glass's content, and
+/// adding, removing or hiding a view there redraws the whole window's glass,
+/// which flickered whenever a menu, control or the sidebar came and went.
+pub(super) fn glass_host_view(
+    host: &NSView,
+    parent: &NSView,
+    beneath_pages: bool,
+) -> Retained<NSView> {
+    let key = std::ptr::from_ref(host) as usize;
+    GLASS_HOSTS.with_borrow_mut(|hosts| {
+        // A closed window's hosts go with it; its address may be reused.
+        hosts.retain(|(_, _, view)| unsafe { view.superview() }.is_some());
+        let existing = hosts.iter().find(|(host_key, beneath, view)| {
+            *host_key == key
+                && *beneath == beneath_pages
+                && unsafe { view.superview() }
+                    .is_some_and(|current| std::ptr::eq(&*current, parent))
+        });
+        let view = match existing {
+            Some((.., view)) => view.clone(),
+            None => {
+                let mtm = MainThreadMarker::new()
+                    .expect("glass hosts are created on the AppKit main thread");
+                let view = NSView::initWithFrame(mtm.alloc(), host.frame());
+                view.setWantsLayer(true);
+                if let Some(layer) = view.layer() {
+                    layer.setZPosition(if beneath_pages {
+                        GLASS_BENEATH_PAGES_DEPTH
+                    } else {
+                        GLASS_ABOVE_PAGES_DEPTH
+                    });
+                }
+                parent.addSubview_positioned_relativeTo(
+                    &view,
+                    NSWindowOrderingMode::Below,
+                    Some(host),
+                );
+                hosts.push((key, beneath_pages, view.clone()));
+                view
+            }
+        };
+        if view.frame() != host.frame() {
+            view.setFrame(host.frame());
+        }
+        view
+    })
 }
 
 /// The layer-hosting view that holds a window's pages, directly beneath
@@ -379,7 +438,9 @@ fn page_host_view(host: &NSView, parent: &NSView) -> Retained<NSView> {
                     .expect("page hosts are created on the AppKit main thread");
                 let view = NSView::initWithFrame(mtm.alloc(), host.frame());
                 // A layer-hosting view: AppKit leaves its layer tree to us.
-                view.setLayer(Some(&CALayer::layer()));
+                let layer = CALayer::layer();
+                layer.setZPosition(PAGE_HOST_DEPTH);
+                view.setLayer(Some(&layer));
                 view.setWantsLayer(true);
                 parent.addSubview_positioned_relativeTo(
                     &view,
