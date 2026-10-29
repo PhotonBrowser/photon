@@ -21,7 +21,6 @@ use gpui_elements::editable_text::{
 };
 use photon_core::{History, Suggestion};
 use photon_core::{OmniboxTarget, display_address, display_domain, resolve_with};
-use std::sync::Arc;
 
 use super::history::BrowsingHistory;
 use super::motion::{Speed, Tween};
@@ -101,7 +100,7 @@ pub(super) struct Omnibox {
     suggestion_generation: u64,
     /// The history the suggestions were made from. Icon loads update the
     /// history global without changing it, and must not suggest again.
-    suggested_from: Option<Arc<History>>,
+    suggested_from: Option<std::sync::Weak<History>>,
     /// The suggestion Enter opens.
     selected: usize,
     /// The suggestion under the pointer.

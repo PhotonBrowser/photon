@@ -41,7 +41,7 @@ impl Omnibox {
         let unchanged = self
             .suggested_from
             .as_ref()
-            .is_some_and(|from| Arc::ptr_eq(from, &history));
+            .is_some_and(|from| std::ptr::eq(from.as_ptr(), Arc::as_ptr(&history)));
         if unchanged || self.typed.is_empty() {
             return;
         }
@@ -63,7 +63,7 @@ impl Omnibox {
         let query_text = typed.clone();
         let engines = Settings::search_engines(cx);
         let history = BrowsingHistory::suggestion_history(cx);
-        self.suggested_from = Some(history.clone());
+        self.suggested_from = Some(Arc::downgrade(&history));
         self.suggestion_task = Some(cx.spawn(async move |this, cx| {
             let suggestions = cx
                 .background_executor()

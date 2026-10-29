@@ -6,8 +6,10 @@ use gpui::{
     Window, div, img, prelude::*, px, rgb, rgba,
 };
 use gpui_elements::editable_text::{EditableTextState, StringStorage, text_input};
+use photon_core::History;
 use photon_core::{HistoryEntry, day_heading, local_day, time_of_day};
 use photon_storage::{ImportSource, import_sources, read_history};
+use std::sync::{Arc, Weak};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::super::button::{ButtonKind, ButtonSize, button};
@@ -38,12 +40,35 @@ pub(in super::super) struct HistoryPage {
     import_sources: Vec<ImportSource>,
     /// The browser being imported from.
     importing: Option<String>,
+    /// The matching entries, newest first, kept until the history or the
+    /// search changes rather than worked out again every frame.
+    listing: Option<Listing>,
     _history: Subscription,
     _search: Subscription,
 }
 
+/// Indices into the history's pages that match a search, newest first.
+struct Listing {
+    history: Weak<History>,
+    query: String,
+    indices: Vec<usize>,
+}
+
 impl HistoryPage {
     fn new(context: PageContext, cx: &mut Context<Self>) -> Self {
+        // Finding other browsers' profiles reads the disk.
+        cx.spawn(async move |this, cx| {
+            let sources = cx
+                .background_executor()
+                .spawn(async { import_sources() })
+                .await;
+            this.update(cx, |this, cx| {
+                this.import_sources = sources;
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
         let search = cx.new(|cx| EditableTextState::new(StringStorage::default(), cx));
         Self {
             context,
@@ -53,8 +78,9 @@ impl HistoryPage {
             }),
             search,
             shown: metrics::HISTORY_PAGE_BATCH,
-            import_sources: import_sources(),
+            import_sources: Vec::new(),
             importing: None,
+            listing: None,
             // Follow visits, removals and icons arriving.
             _history: cx.observe_global::<BrowsingHistory>(|_, cx| cx.notify()),
         }
@@ -141,6 +167,32 @@ impl HistoryPage {
                         .children(buttons),
                 ),
         )
+    }
+}
+
+impl HistoryPage {
+    /// The entries matching `query`, newest first, worked out again only
+    /// when the history or the query has changed.
+    fn listing(&mut self, history: &Arc<History>, query: String) -> &[usize] {
+        let current = self.listing.as_ref().is_some_and(|listing| {
+            std::ptr::eq(listing.history.as_ptr(), Arc::as_ptr(history)) && listing.query == query
+        });
+        if !current {
+            let words: Vec<String> = query.split_whitespace().map(str::to_owned).collect();
+            let pages = history.pages();
+            let mut indices: Vec<usize> = (0..pages.len())
+                .filter(|&index| matches(&pages[index], &words))
+                .collect();
+            indices.sort_by_key(|&index| std::cmp::Reverse(pages[index].last_visit));
+            self.listing = Some(Listing {
+                history: Arc::downgrade(history),
+                query,
+                indices,
+            });
+        }
+        self.listing
+            .as_ref()
+            .map_or(&[], |listing| listing.indices.as_slice())
     }
 }
 
@@ -282,15 +334,16 @@ impl Render for HistoryPage {
         let palette = palette(window, cx);
         let history = BrowsingHistory::pages(cx);
         let query = self.search.read(cx).as_str().to_lowercase();
-        let words: Vec<String> = query.split_whitespace().map(str::to_owned).collect();
-        let mut entries: Vec<&HistoryEntry> = history
-            .pages()
+        let searching = !query.trim().is_empty();
+        let shown = self.shown;
+        let listing = self.listing(&history, query);
+        let total = listing.len();
+        let pages = history.pages();
+        let entries: Vec<&HistoryEntry> = listing
             .iter()
-            .filter(|entry| matches(entry, &words))
+            .take(shown)
+            .map(|&index| &pages[index])
             .collect();
-        entries.sort_by_key(|entry| std::cmp::Reverse(entry.last_visit));
-        let total = entries.len();
-        entries.truncate(self.shown);
 
         let offset = utc_offset();
         let now = SystemTime::now()
@@ -310,7 +363,7 @@ impl Render for HistoryPage {
 
         let mut list = v_stack().gap(px(metrics::INTERNAL_PAGE_SECTION_GAP / 2.0));
         if entries.is_empty() {
-            let message = if words.is_empty() {
+            let message = if !searching {
                 "Pages you visit will appear here."
             } else {
                 "No pages match your search."
