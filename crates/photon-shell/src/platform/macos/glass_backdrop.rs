@@ -216,7 +216,9 @@ impl Element for AppKitGlassBackdrop {
             ),
         );
         let inner = self.inner.clone();
-        let radius = self.corner_radius * scale.width.min(scale.height);
+        // Its corners stay as they are while it scales, so animating it
+        // does not reshape the glass every frame.
+        let radius = self.corner_radius;
         let tint = self.window_tint.clone();
         let backing = self.backing;
         let z_index = self.z_index;
@@ -252,7 +254,7 @@ impl Element for AppKitGlassBackdrop {
         id: Option<&GlobalElementId>,
         _inspector_id: Option<&InspectorElementId>,
         _bounds: Bounds<Pixels>,
-        style: &mut Self::RequestLayoutState,
+        _style: &mut Self::RequestLayoutState,
         (bounds, placed): &mut Self::PrepaintState,
         window: &mut Window,
         _cx: &mut App,
@@ -281,8 +283,8 @@ impl Element for AppKitGlassBackdrop {
         // Clear whatever GPUI painted here before, such as the window tint,
         // so the glass shows through as itself. The element's later children
         // still draw over it.
-        if !self.inner.container.isHidden() {
-            let radius = self.corner_radius * style.scale.width.min(style.scale.height);
+        if !is_collapsed(&self.inner.container) {
+            let radius = self.corner_radius;
             window.paint_cutout(*bounds, radius.into(), 0.0);
         }
         if !self.interactive {
@@ -403,11 +405,28 @@ impl GlassAttachment {
         if self.parent.is_some() && self.applied.as_ref() == Some(&applied) {
             return;
         }
-        let parent = page_layer::glass_host_view(host, &window_content, self.beneath_pages);
+        // The host only changes with the window, so moving glass skips it.
+        let host_changed = self
+            .applied
+            .as_ref()
+            .is_none_or(|last| last.host_bounds != applied.host_bounds);
+        let parent = match self.parent {
+            Some(parent) if !host_changed => {
+                // SAFETY: the parent is attached and accessed on the main thread.
+                unsafe { Retained::retain(parent.as_ptr()) }
+                    .expect("an attached glass host is non-null")
+            }
+            _ => page_layer::glass_host_view(host, &window_content, self.parent_beneath_pages),
+        };
         let container = &self.inner.container;
-        let tint_changed = self.applied.as_ref().is_none_or(|last| {
-            last.tint != applied.tint || last.bounds != bounds || last.viewport != viewport
-        });
+        let gradient_changed = self
+            .applied
+            .as_ref()
+            .is_none_or(|last| last.tint != applied.tint || last.viewport != viewport);
+        let moved = self
+            .applied
+            .as_ref()
+            .is_none_or(|last| last.bounds != bounds);
         let backing_changed = self
             .applied
             .as_ref()
@@ -443,11 +462,20 @@ impl GlassAttachment {
                 bounds.size.height.as_f32() as f64,
             ),
         );
-        container.setFrame(host.convertRect_toView(frame, Some(&parent)));
+        // Glass is never hidden: showing a hidden glass view plays AppKit's
+        // appearance, which draws nothing at first. Glass that should not
+        // show collapses to nothing instead.
+        let shown =
+            visible && bounds.size.width > Pixels::ZERO && bounds.size.height > Pixels::ZERO;
+        if shown {
+            container.setFrame(host.convertRect_toView(frame, Some(&parent)));
+        } else {
+            collapse(container);
+        }
+        if container.isHidden() {
+            container.setHidden(false);
+        }
         container.setAlphaValue(alpha as f64);
-        container.setHidden(
-            !visible || bounds.size.width == Pixels::ZERO || bounds.size.height == Pixels::ZERO,
-        );
         let glass = &self.inner.glass;
         glass.setFrame(container.bounds());
         if radius_changed {
@@ -465,8 +493,11 @@ impl GlassAttachment {
             let backing = backing.map(cg_color);
             layer.setBackgroundColor(backing.as_deref());
         }
-        if tint_changed {
-            self.place_tint(bounds, viewport, container.isFlipped(), tint);
+        if moved || gradient_changed {
+            self.place_tint(bounds, viewport, container.isFlipped());
+        }
+        if gradient_changed {
+            self.paint_tint(viewport, container.isFlipped(), tint);
         }
     }
 
@@ -497,13 +528,7 @@ impl GlassAttachment {
 
     /// Lays the window-sized tint gradient under the field so the slice the
     /// field covers matches what GPUI paints around it.
-    fn place_tint(
-        &self,
-        bounds: Bounds<Pixels>,
-        viewport: Size<Pixels>,
-        flipped: bool,
-        tint: &GlassWindowTint,
-    ) {
+    fn place_tint(&self, bounds: Bounds<Pixels>, viewport: Size<Pixels>, flipped: bool) {
         let layer = &self.inner.tint;
         let (width, height) = (
             viewport.width.as_f32() as f64,
@@ -518,7 +543,16 @@ impl GlassAttachment {
             NSPoint::new(-left, if flipped { -top } else { -bottom }),
             NSSize::new(width, height),
         ));
+    }
 
+    /// Colours the window-sized tint gradient, only when its colours or the
+    /// window change.
+    fn paint_tint(&self, viewport: Size<Pixels>, flipped: bool, tint: &GlassWindowTint) {
+        let layer = &self.inner.tint;
+        let (width, height) = (
+            viewport.width.as_f32() as f64,
+            viewport.height.as_f32() as f64,
+        );
         let colors: Vec<_> = match tint.stops.as_slice() {
             [] => vec![cg_color(0), cg_color(0)],
             [solid] => vec![cg_color(*solid), cg_color(*solid)],
@@ -591,15 +625,26 @@ fn disable_layer_actions(layer: &CAGradientLayer) {
 }
 
 impl Drop for GlassAttachment {
-    /// A frame that does not draw the element drops its attachment. Hide the
-    /// glass rather than remove it: inserting a glass view again makes AppKit
-    /// materialize it afresh, flashing the glass and the tint beneath it
-    /// whenever the field comes back, as when the sidebar reopens.
+    /// A frame that does not draw the element drops its attachment. Collapse
+    /// the glass rather than remove or hide it: inserting or showing a glass
+    /// view again makes AppKit materialize it afresh, which draws nothing at
+    /// first, as when a panel or the sidebar comes back.
     fn drop(&mut self) {
         if self.parent.is_some() && self.inner.owner.get() == self.token {
-            self.inner.container.setHidden(true);
+            collapse(&self.inner.container);
         }
     }
+}
+
+/// Shrinks glass to nothing where it is, in place of hiding it.
+fn collapse(container: &NSView) {
+    let origin = container.frame().origin;
+    container.setFrame(NSRect::new(origin, NSSize::ZERO));
+}
+
+fn is_collapsed(container: &NSView) -> bool {
+    let size = container.frame().size;
+    size.width == 0.0 || size.height == 0.0
 }
 
 impl Drop for AppKitGlassBackdropInner {
