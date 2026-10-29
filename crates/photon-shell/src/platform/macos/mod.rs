@@ -4,11 +4,13 @@ pub(crate) mod app_menus;
 pub(crate) mod appkit;
 pub(crate) mod default_browser;
 pub(crate) mod display;
+pub(crate) mod glass_backdrop;
 pub(crate) mod idle;
 pub(crate) mod motion_observer;
 mod page_layer;
 pub(crate) mod presentation;
 pub(crate) mod renderer;
+pub(crate) mod site_info_popover;
 pub(crate) mod window_observer;
 pub(crate) mod window_settings;
 
