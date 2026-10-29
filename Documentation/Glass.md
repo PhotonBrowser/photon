@@ -80,7 +80,7 @@ menus are native.
 ## Change the order
 
 Glass always lies beneath GPUI's own drawing. Overlapping glass is drawn in
-`z_index` order, highest on top, whatever order GPUI drew it in. Use the named
+`z_index` order, highest on top, set when the glass first appears. Use the named
 layers in `glass::layer`, and add a layer there rather than a number at the
 call site:
 
@@ -94,14 +94,14 @@ automatically.
 
 ## How it works on macOS
 
-Glass lies directly in the window's content view, beneath GPUI's view and
-beside the host that holds the pages, where it draws while it animates. Adding,
-hiding or removing a view there redraws the whole window's glass, which
-flickers, so each glass view is inserted once and never hidden or removed while
-its window lives: glass that should not show waits out of sight instead. Its
-order among the pages and other glass is a layer depth (`glass_depth` in
-[`macos/page_layer.rs`](../crates/photon-shell/src/platform/macos/page_layer.rs)),
-never a move among the views. The native view and its placement live in
+Glass lies directly in the window's content view, just beneath GPUI's view,
+where it draws while it animates. Its order is its place among those views,
+as AppKit draws them: glass of a higher `z_index` is inserted above glass of
+a lower one, and glass moves beneath the pages' host only while a page drawn
+after it covers it. Adding, hiding or removing a view there redraws the whole
+window's glass, which flickers, so each glass view is inserted once and never
+hidden or removed while its window lives: glass that should not show waits out
+of sight instead. The native view and its placement live in
 `AppKitGlassBackdrop` in
 [`macos/glass_backdrop.rs`](../crates/photon-shell/src/platform/macos/glass_backdrop.rs).
 

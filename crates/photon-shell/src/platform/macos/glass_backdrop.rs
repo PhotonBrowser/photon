@@ -274,7 +274,7 @@ impl Element for AppKitGlassBackdrop {
                 if let Some(beneath_pages) =
                     page_layer::page_placed_over(host, *bounds, attachment.placed, *placed)
                 {
-                    attachment.order(beneath_pages);
+                    attachment.order(host, beneath_pages);
                 }
                 attachment.placed = *placed;
                 ((), attachment)
@@ -384,6 +384,13 @@ impl GlassAttachment {
             z_index,
         } = placement;
         self.inner.owner.set(self.token);
+        // Known before the glass is first inserted, which orders it by this.
+        if self.parent.is_none() || self.z_index != z_index {
+            self.z_index = z_index;
+            GLASS_Z_INDICES.with_borrow_mut(|indices| {
+                indices.insert(Retained::as_ptr(&self.inner.container) as usize, z_index);
+            });
+        }
         // SAFETY: AppKit view hierarchy access runs on the main thread.
         let Some(window_content) = (unsafe { host.superview() }) else {
             self.detach();
@@ -435,11 +442,7 @@ impl GlassAttachment {
             // the whole window's glass, so glass is never hidden or removed
             // again while its window lives, and orders by depth alone.
             container.removeFromSuperview();
-            parent.addSubview_positioned_relativeTo(
-                container,
-                NSWindowOrderingMode::Below,
-                Some(host),
-            );
+            self.insert(host, &parent);
         }
         self.parent = Some(NonNull::from(&*parent));
 
@@ -480,8 +483,7 @@ impl GlassAttachment {
             }
             glass.setCornerRadius(radius.as_f32() as f64);
         }
-        self.z_index = z_index;
-        self.apply_depth();
+
         if backing_changed && let Some(layer) = container.layer() {
             let backing = backing.map(cg_color);
             layer.setBackgroundColor(backing.as_deref());
@@ -499,21 +501,51 @@ impl GlassAttachment {
     /// the chrome, and in the host above them otherwise, as the chrome over a
     /// page or a popover is. Moving glass makes AppKit materialize it afresh,
     /// so this happens only when that order changes.
-    fn order(&mut self, beneath_pages: bool) {
+    fn order(&mut self, host: &NSView, beneath_pages: bool) {
+        if self.beneath_pages == beneath_pages {
+            return;
+        }
         self.beneath_pages = beneath_pages;
-        self.apply_depth();
-    }
-
-    /// Sets the glass's layer depth from its place among the pages and its
-    /// z-index. Depth orders it without moving it among the views.
-    fn apply_depth(&self) {
-        let Some(layer) = self.inner.container.layer() else {
+        // SAFETY: AppKit view hierarchy access runs on the main thread.
+        let Some(parent) = (unsafe { self.inner.container.superview() }) else {
             return;
         };
-        let depth = page_layer::glass_depth(self.beneath_pages, self.z_index);
-        if layer.zPosition() != depth {
-            layer.setZPosition(depth);
+        // Rare, as a page drawn over the chrome comes and goes: moving glass
+        // makes AppKit draw it afresh.
+        self.inner.container.removeFromSuperview();
+        self.insert(host, &parent);
+    }
+
+    /// Places the glass among `parent`'s views by subview order, as AppKit
+    /// draws them: beneath the pages when one covers it, and otherwise
+    /// beneath GPUI's view `host`, above glass of a lower z-index.
+    fn insert(&self, host: &NSView, parent: &NSView) {
+        let container = &*self.inner.container;
+        if self.beneath_pages
+            && let Some(pages) = page_layer::page_host_for(host)
+        {
+            parent.addSubview_positioned_relativeTo(
+                container,
+                NSWindowOrderingMode::Below,
+                Some(&pages),
+            );
+            return;
         }
+        let higher = GLASS_Z_INDICES.with_borrow(|indices| {
+            let subviews = parent.subviews();
+            (0..subviews.count())
+                .map(|index| subviews.objectAtIndex(index))
+                .find(|view| {
+                    indices
+                        .get(&(Retained::as_ptr(view) as usize))
+                        .is_some_and(|&z_index| z_index > self.z_index)
+                })
+        });
+        parent.addSubview_positioned_relativeTo(
+            container,
+            NSWindowOrderingMode::Below,
+            Some(higher.as_deref().unwrap_or(host)),
+        );
     }
 
     /// Lays the window-sized tint gradient under the field so the slice the
@@ -626,6 +658,13 @@ impl Drop for GlassAttachment {
     }
 }
 
+thread_local! {
+    /// Each glass view's z-index, by its container, to order new glass among
+    /// the glass already in a window.
+    static GLASS_Z_INDICES: std::cell::RefCell<std::collections::HashMap<usize, i32>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
 /// Where collapsed glass waits, far outside any window.
 const COLLAPSED_ORIGIN: f64 = -100_000.0;
 
@@ -646,6 +685,9 @@ fn is_collapsed(container: &NSView) -> bool {
 
 impl Drop for AppKitGlassBackdropInner {
     fn drop(&mut self) {
+        GLASS_Z_INDICES.with_borrow_mut(|indices| {
+            indices.remove(&(Retained::as_ptr(&self.container) as usize));
+        });
         self.container.removeFromSuperview();
     }
 }

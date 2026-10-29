@@ -355,24 +355,15 @@ thread_local! {
     static PAGE_HOSTS: RefCell<Vec<(usize, Retained<NSView>)>> = const { RefCell::new(Vec::new()) };
 }
 
-/// Layer depths among the views beneath GPUI's, which keeps its own depth of
-/// zero and draws over them all: pages lie at their host's depth, and glass
-/// above or beneath them as GPUI painted it, ordered among itself by z-index.
-const PAGE_HOST_DEPTH: f64 = -1.0;
-const GLASS_ABOVE_PAGES_DEPTH: f64 = -0.5;
-const GLASS_BENEATH_PAGES_DEPTH: f64 = -2.0;
-/// The depth between glass z-index layers, small enough to keep every layer
-/// between the pages and GPUI's view.
-const GLASS_LAYER_DEPTH: f64 = 0.01;
-
-/// Where glass lies among the views beneath GPUI's.
-pub(super) fn glass_depth(beneath_pages: bool, z_index: i32) -> f64 {
-    let base = if beneath_pages {
-        GLASS_BENEATH_PAGES_DEPTH
-    } else {
-        GLASS_ABOVE_PAGES_DEPTH
-    };
-    base + f64::from(z_index) * GLASS_LAYER_DEPTH
+/// The page host beneath GPUI's view `host`, once a page has made one.
+pub(super) fn page_host_for(host: &NSView) -> Option<Retained<NSView>> {
+    let key = std::ptr::from_ref(host) as usize;
+    PAGE_HOSTS.with_borrow(|hosts| {
+        hosts
+            .iter()
+            .find(|(host_key, _)| *host_key == key)
+            .map(|(_, view)| view.clone())
+    })
 }
 
 /// The layer-hosting view that holds a window's pages, directly beneath
@@ -394,9 +385,7 @@ fn page_host_view(host: &NSView, parent: &NSView) -> Retained<NSView> {
                     .expect("page hosts are created on the AppKit main thread");
                 let view = NSView::initWithFrame(mtm.alloc(), host.frame());
                 // A layer-hosting view: AppKit leaves its layer tree to us.
-                let layer = CALayer::layer();
-                layer.setZPosition(PAGE_HOST_DEPTH);
-                view.setLayer(Some(&layer));
+                view.setLayer(Some(&CALayer::layer()));
                 view.setWantsLayer(true);
                 parent.addSubview_positioned_relativeTo(
                     &view,
