@@ -234,6 +234,15 @@ impl BrowserWindow {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let layout = self.layout(cx);
+        // Shown over the page, the field's glass rests on the revealed
+        // surface rather than refracting the page through it.
+        let floating_surface = self
+            .sidebar
+            .over_page()
+            .then(|| theme::with_opacity(palette.menu_surface, 1.0 - self.sidebar.shown()));
+        self.omnibox.update(cx, |omnibox, _| {
+            omnibox.set_floating_surface(floating_surface)
+        });
         let sections = layout
             .components(region)
             .filter_map(|component| match component.id {

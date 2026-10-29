@@ -10,6 +10,7 @@ mod panel;
 mod rows;
 mod site_info;
 
+use super::glass::{glass, glass_available, layer};
 use gpui::{
     Context, Entity, EventEmitter, Focusable, MouseButton, Render, Subscription, Task, Window,
     prelude::*, px, rgb, rgba,
@@ -23,7 +24,6 @@ use photon_core::{OmniboxTarget, display_address, display_domain, resolve_with};
 use std::sync::Arc;
 
 use super::history::BrowsingHistory;
-use super::layout::h_stack;
 use super::motion::{Speed, Tween};
 use super::workspace_layout::{OmniboxPlacement, WorkspaceLayout};
 use super::{PhotonWebView, WebViewEvent};
@@ -78,13 +78,17 @@ pub(super) struct Omnibox {
     /// The submitted text cannot be opened. Cleared by the next edit.
     invalid: bool,
     site_info_open: bool,
+    /// The GPUI popover shows the connection's page rather than the site's.
+    site_info_security: bool,
     /// Keeps the site information popover drawn while it animates away.
     site_info_presence: super::motion::Presence<()>,
     field_hovered: bool,
-    /// Native interactive Liquid Glass behind the field, on macOS 26+. The
-    /// field paints its own surface where this is absent.
+    /// The surface beneath the field while it floats over the page, as in
+    /// the sidebar shown over it, so its glass does not show the page.
+    floating_surface: Option<u32>,
+    /// The native site information popover; GPUI draws it where this is absent.
     #[cfg(target_os = "macos")]
-    glass: Option<crate::platform::AppKitGlassBackdrop>,
+    site_info_native: Option<crate::platform::AppKitSiteInfoPopover>,
     address_text_offset: Tween,
     address_text_opacity: Tween,
     address_text_position_initialized: bool,
@@ -191,10 +195,26 @@ impl Omnibox {
             current_url: String::new(),
             invalid: false,
             site_info_open: false,
+            site_info_security: false,
             site_info_presence: Default::default(),
             field_hovered: false,
+            floating_surface: None,
             #[cfg(target_os = "macos")]
-            glass: crate::platform::AppKitGlassBackdrop::new(),
+            site_info_native: {
+                let toggle = cx.entity().downgrade();
+                let close = toggle.clone();
+                crate::platform::AppKitSiteInfoPopover::new(
+                    cx.to_async(),
+                    move |control, cx| {
+                        toggle
+                            .update(cx, |this, cx| this.toggle_site_control(control, cx))
+                            .ok();
+                    },
+                    move |cx| {
+                        close.update(cx, |this, cx| this.close_site_info(cx)).ok();
+                    },
+                )
+            },
             address_text_offset: Tween::at(0.0),
             address_text_opacity: Tween::at(1.0),
             address_text_position_initialized: false,
@@ -275,6 +295,11 @@ impl Omnibox {
     /// Shows the active tab's address: its web view's, followed as it
     /// changes, or `page_address` for one of Photon's pages, which is `None`
     /// when the page leaves the field empty.
+    /// Sets the surface the field rests on while it floats over the page.
+    pub(super) fn set_floating_surface(&mut self, surface: Option<u32>) {
+        self.floating_surface = surface;
+    }
+
     pub(super) fn set_content(
         &mut self,
         webview: Option<Entity<PhotonWebView>>,
@@ -435,47 +460,22 @@ impl Render for Omnibox {
         let (address_text_offset, address_text_opacity) =
             self.address_text_motion(centered_sidebar, editing, resting_offset, window, cx);
         let motion = Settings::motion(cx);
-        #[cfg(target_os = "macos")]
-        let native_glass = self.glass.clone().map(|glass| {
-            glass
-                .corner_radius(px(style.radius))
-                .window_tint(crate::platform::GlassWindowTint {
-                    stops: [
-                        Some(menu_palette.window_tint),
-                        menu_palette.window_tint_middle,
-                        Some(menu_palette.window_tint_end),
-                    ]
-                    .into_iter()
-                    .flatten()
-                    .collect(),
-                    angle_degrees: crate::platform::theme_config::theme()
-                        .window
-                        .gradient_angle_degrees,
-                })
-                .absolute()
-                .inset_0()
-        });
-        #[cfg(target_os = "macos")]
-        let has_native_glass = native_glass.is_some();
-        #[cfg(not(target_os = "macos"))]
-        let has_native_glass = false;
-        let interaction_surface = if editing || self.field_hovered {
+        // At rest the glass alone is the field's surface; hover and editing
+        // tint it. Without glass the field paints its own surface.
+        let surface = if editing || self.field_hovered {
             palette.surface_hover
-        } else if has_native_glass {
-            // At rest the native glass alone is the field's surface.
+        } else if glass_available(cx) {
             0x0000_0000
         } else {
             palette.surface
         };
-        // The glass clears the field's own background beneath it, so with
-        // glass the hover and editing tint is a layer drawn over the glass.
-        let surface = if has_native_glass {
-            0x0000_0000
-        } else {
-            interaction_surface
-        };
-        let field_box = h_stack()
-            .id("titlebar-omnibox")
+        let field_box = glass("titlebar-omnibox")
+            .z_index(layer::CHROME)
+            .interactive(true)
+            .window_tint(menu_palette)
+            .backing(self.floating_surface)
+            .flex()
+            .flex_row()
             .relative()
             .items_center()
             .flex_1()
@@ -504,31 +504,6 @@ impl Render for Omnibox {
             .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
             .capture_action(cx.listener(Self::submit))
             .capture_action(cx.listener(Self::cancel));
-        #[cfg(target_os = "macos")]
-        let field_box = field_box
-            .children(native_glass)
-            .when(has_native_glass, |field_box| {
-                field_box.child(
-                    gpui_motion::MotionElement::new(
-                        "omnibox-glass-tint-motion",
-                        gpui::div()
-                            .absolute()
-                            .inset_0()
-                            .rounded(px(style.radius))
-                            .bg(rgba(interaction_surface)),
-                        gpui_motion::Motion::new(gpui_motion::Target::default().opacity(1.0)),
-                    )
-                    .style_motion(
-                        gpui_motion::StyleMotion::new(gpui_motion::StyleTarget::default().color(
-                            gpui_motion::ColorProperty::Background,
-                            super::motion::motion_rgba_color(interaction_surface),
-                        ))
-                        .transition(
-                            super::motion::Curve::EaseOut.transition(motion.duration(Speed::Quick)),
-                        ),
-                    ),
-                )
-            });
         let mut field_box = self.handle_editing_keys(field_box, cx);
         // The open panel draws the field's content itself, in the same place.
         field_box = if editing && !self.suggestions.is_empty() {

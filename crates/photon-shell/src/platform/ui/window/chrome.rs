@@ -236,7 +236,11 @@ impl BrowserWindow {
                 )
                 .into_any_element()
             }
-            ComponentId::AddressField => self.omnibox.clone().into_any_element(),
+            ComponentId::AddressField => {
+                self.omnibox
+                    .update(cx, |omnibox, _| omnibox.set_floating_surface(None));
+                self.omnibox.clone().into_any_element()
+            }
             ComponentId::BrowserMenuButton => menu_button(
                 if region == DockRegion::Leading || region == DockRegion::Trailing {
                     "side-browser-menu"
