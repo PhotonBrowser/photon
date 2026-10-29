@@ -14,10 +14,7 @@ use objc2::{
     rc::Retained,
     runtime::{AnyClass, AnyObject},
 };
-use objc2_app_kit::{
-    NSAnimatablePropertyContainer, NSAnimationContext, NSApplication, NSGlassEffectView,
-    NSGlassEffectViewStyle, NSView,
-};
+use objc2_app_kit::{NSApplication, NSGlassEffectView, NSGlassEffectViewStyle, NSView};
 use objc2_core_graphics::CGColor;
 use objc2_foundation::{NSArray, NSDictionary, NSNull, NSPoint, NSRect, NSSize, NSString};
 use objc2_quartz_core::CAGradientLayer;
@@ -43,19 +40,7 @@ pub struct AppKitGlassBackdrop {
     backing: Option<u32>,
     z_index: i32,
     interactive: bool,
-    appearance: Option<GlassAppearance>,
     style: StyleRefinement,
-}
-
-/// How glass grows into place when it appears: from `scale` of its size, out
-/// of the unit point `origin` (`(0.0, 0.5)` is the middle of its left edge),
-/// over `duration`. AppKit animates it, as glass draws nothing while it is
-/// changed frame by frame.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct GlassAppearance {
-    pub scale: f32,
-    pub origin: (f32, f32),
-    pub duration: std::time::Duration,
 }
 
 /// The window tint GPUI paints, as evenly spaced gradient stops along a CSS
@@ -125,7 +110,6 @@ impl AppKitGlassBackdrop {
             backing: None,
             z_index: 0,
             interactive: false,
-            appearance: None,
             style: StyleRefinement::default(),
         })
     }
@@ -160,11 +144,6 @@ impl AppKitGlassBackdrop {
     /// Plays AppKit's press response when the element is pressed, for glass
     /// that is itself a control. Panels leave it off, so pressing their
     /// content does not move the glass beneath it.
-    pub fn appearance(mut self, appearance: Option<GlassAppearance>) -> Self {
-        self.appearance = appearance;
-        self
-    }
-
     pub fn interactive(mut self, interactive: bool) -> Self {
         self.interactive = interactive;
         self
@@ -243,7 +222,6 @@ impl Element for AppKitGlassBackdrop {
         let tint = self.window_tint.clone();
         let backing = self.backing;
         let z_index = self.z_index;
-        let appearance = self.appearance;
         let viewport = window.viewport_size();
         window.with_element_state(global_id, |state: Option<GlassAttachment>, window| {
             let mut attachment = state.unwrap_or_else(|| GlassAttachment::new(inner));
@@ -261,7 +239,6 @@ impl Element for AppKitGlassBackdrop {
                         tint: &tint,
                         backing,
                         z_index,
-                        appearance,
                     },
                 );
             } else {
@@ -381,7 +358,6 @@ struct GlassPlacement<'a> {
     tint: &'a GlassWindowTint,
     backing: Option<u32>,
     z_index: i32,
-    appearance: Option<GlassAppearance>,
 }
 
 impl GlassAttachment {
@@ -407,7 +383,6 @@ impl GlassAttachment {
             tint,
             backing,
             z_index,
-            appearance,
         } = placement;
         self.inner.owner.set(self.token);
         // SAFETY: AppKit view hierarchy access runs on the main thread.
@@ -492,21 +467,17 @@ impl GlassAttachment {
         // show moves out of sight instead.
         let shown =
             visible && bounds.size.width > Pixels::ZERO && bounds.size.height > Pixels::ZERO;
-        let frame = host.convertRect_toView(frame, Some(&parent));
-        let appearing = shown && is_collapsed(container);
+        if shown {
+            container.setFrame(host.convertRect_toView(frame, Some(&parent)));
+        } else {
+            collapse(container);
+        }
         if container.isHidden() {
             container.setHidden(false);
         }
         container.setAlphaValue(alpha as f64);
         let glass = &self.inner.glass;
-        match appearance {
-            Some(appearance) if appearing => appear(container, glass, frame, appearance),
-            _ if shown => {
-                container.setFrame(frame);
-                glass.setFrame(container.bounds());
-            }
-            _ => collapse(container),
-        }
+        glass.setFrame(container.bounds());
         if radius_changed {
             if let Some(layer) = container.layer() {
                 layer.setCornerRadius(radius.as_f32() as f64);
@@ -663,39 +634,6 @@ impl Drop for GlassAttachment {
             collapse(&self.inner.container);
         }
     }
-}
-
-/// Grows glass into `frame` from its appearance's starting size, as one
-/// AppKit animation, which glass draws throughout.
-fn appear(container: &NSView, glass: &NSView, frame: NSRect, appearance: GlassAppearance) {
-    let scale = f64::from(appearance.scale);
-    let (origin_x, origin_y) = (
-        f64::from(appearance.origin.0),
-        f64::from(appearance.origin.1),
-    );
-    // GPUI's unit points run down from the top; AppKit's may run up.
-    // SAFETY: AppKit view hierarchy access runs on the main thread.
-    let flipped = unsafe { container.superview() }.is_some_and(|parent| parent.isFlipped());
-    let origin_y = if flipped { origin_y } else { 1.0 - origin_y };
-    let size = NSSize::new(frame.size.width * scale, frame.size.height * scale);
-    let start = NSRect::new(
-        NSPoint::new(
-            frame.origin.x + (frame.size.width - size.width) * origin_x,
-            frame.origin.y + (frame.size.height - size.height) * origin_y,
-        ),
-        size,
-    );
-    container.setFrame(start);
-    glass.setFrame(NSRect::new(NSPoint::ZERO, size));
-    NSAnimationContext::beginGrouping();
-    let context = NSAnimationContext::currentContext();
-    context.setDuration(appearance.duration.as_secs_f64());
-    context.setAllowsImplicitAnimation(true);
-    container.animator().setFrame(frame);
-    glass
-        .animator()
-        .setFrame(NSRect::new(NSPoint::ZERO, frame.size));
-    NSAnimationContext::endGrouping();
 }
 
 /// Where collapsed glass waits, far outside any window.

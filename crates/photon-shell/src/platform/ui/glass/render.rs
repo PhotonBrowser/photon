@@ -6,7 +6,7 @@ use gpui::{
 };
 
 use super::super::metrics;
-use super::super::motion::{AnimateIn, Transition};
+use super::super::motion::AnimateIn;
 use super::super::settings::Settings;
 use super::super::theme::{ThemeColors, with_opacity};
 use super::{Glass, glass_available};
@@ -70,21 +70,6 @@ impl RenderOnce for Glass {
         move_placement(content.style(), placement.style());
         let radius = corner_radius(content.style(), window);
 
-        // AppKit grows the glass itself as it appears, alongside the content.
-        #[cfg(target_os = "macos")]
-        let appearance =
-            match motion {
-                Some((entrance, Transition::Enter)) => entrance
-                    .native_appearance(&motion_config)
-                    .map(
-                        |(scale, origin, duration)| crate::platform::GlassAppearance {
-                            scale,
-                            origin,
-                            duration,
-                        },
-                    ),
-                _ => None,
-            };
         #[cfg(target_os = "macos")]
         let glass = {
             let glass = backdrop
@@ -98,12 +83,11 @@ impl RenderOnce for Glass {
                 .backing(backing)
                 .z_index(z_index)
                 .interactive(interactive)
-                .appearance(appearance)
                 .absolute()
                 .inset_0();
-            // Native glass draws nothing while GPUI changes it frame by
-            // frame, so GPUI leaves it still at the element's place and
-            // AppKit animates its appearance.
+            // Native glass draws nothing while it changes in any way, its
+            // frame, opacity or transform, so it stays still at the
+            // element's place while only the content animates inside it.
             glass.into_any_element()
         };
         #[cfg(not(target_os = "macos"))]
