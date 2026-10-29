@@ -108,8 +108,10 @@ frosted_glass = 0.55
 
 # Theme picker popover motion; tune here without adding user facing settings.
 [motion.theme_picker]
-# The popover fades in and out over this long.
+# The popover grows in and out over this long.
 duration_ms = 240
+# The scale it grows from, out of the side it opens on.
+scale_from = 0.85
 # Blur in px the popover's contents sharpen from, and soften to on close.
 blur_from = 8.0
 

@@ -86,9 +86,10 @@ impl RenderOnce for Glass {
                 .interactive(interactive)
                 .absolute()
                 .inset_0();
+            // The glass moves with the inner wrapper and takes the scale
+            // itself, as a layer transform. It does not fade or blur: native
+            // glass does not draw while partly transparent.
             match motion {
-                // The native view takes the fade and scale GPUI paints onto
-                // its siblings, and moves with the inner wrapper.
                 Some((entrance, transition)) => glass.animate_with_offset_stable_id(
                     (id.clone(), "glass-motion"),
                     entrance.native_part(),

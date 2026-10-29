@@ -24,23 +24,11 @@ pub(in super::super) struct Entrance {
     blur_from: Option<f32>,
     grow: Option<(f32, f32)>,
     scale_from: Option<f32>,
-    scale_origin_left: Option<f32>,
+    /// The edge an element scales from, and its length across that edge.
+    scale_origin: Option<(Edge, f32)>,
 }
 
 impl Entrance {
-    /// The part of this entrance a native view placed by its own frame can
-    /// take: its fade. A native view does not inherit GPUI's painted opacity,
-    /// but it moves with its parent's layout, which carries the slide. It
-    /// does not scale: resizing native glass every frame stutters.
-    pub(in super::super) const fn native_part(mut self) -> Self {
-        self.offset_from = None;
-        self.scale_from = None;
-        self.scale_origin_left = None;
-        self.blur_from = None;
-        self.grow = None;
-        self
-    }
-
     pub const fn new() -> Self {
         Self {
             speed: Speed::Standard,
@@ -53,7 +41,7 @@ impl Entrance {
             blur_from: None,
             grow: None,
             scale_from: None,
-            scale_origin_left: None,
+            scale_origin: None,
         }
     }
 
@@ -62,10 +50,28 @@ impl Entrance {
         self
     }
 
-    pub const fn scale_from_left(mut self, scale: f32, width: f32) -> Self {
+    /// Scales up from `scale` as though growing out of `edge`, as a
+    /// popover grows from the side it opens on. `length` is the element's
+    /// size across that edge: its width for a side, its height for the top or
+    /// bottom.
+    pub const fn scale_from_edge(mut self, scale: f32, edge: Edge, length: f32) -> Self {
         self.scale_from = Some(scale);
-        self.scale_origin_left = Some(width);
+        self.scale_origin = Some((edge, length));
         self
+    }
+
+    /// The part a native view takes: the scale, about its centre. A native
+    /// view moves with its parent's layout, which carries the slide and the
+    /// shift toward the edge it grows from, and it does not fade or blur.
+    pub(in super::super) const fn native_part(self) -> Self {
+        let mut native = Self::new();
+        native.speed = self.speed;
+        native.duration_override = self.duration_override;
+        native.delay = self.delay;
+        native.curve = self.curve;
+        native.exit_curve = self.exit_curve;
+        native.scale_from = self.scale_from;
+        native
     }
 
     pub const fn fade_from(mut self, opacity: f32) -> Self {
@@ -169,6 +175,7 @@ impl Entrance {
         let mut shown = Target::default();
         let mut hidden = Target::default();
         let mut hidden_x = base_offset.0;
+        let mut hidden_y = base_offset.1;
 
         if let Some(opacity) = self.opacity_from {
             shown = shown.opacity(1.0);
@@ -177,7 +184,8 @@ impl Entrance {
         if let Some((x, y)) = self.offset_from {
             shown = shown.x(base_offset.0).y(base_offset.1);
             hidden_x = base_offset.0 + x * strength;
-            hidden = hidden.x(hidden_x).y(base_offset.1 + y * strength);
+            hidden_y = base_offset.1 + y * strength;
+            hidden = hidden.x(hidden_x).y(hidden_y);
         }
         if let Some((size, fraction)) = self.grow {
             let start = (1.0 - (1.0 - fraction) * strength).clamp(0.2, 1.0);
@@ -188,10 +196,18 @@ impl Entrance {
             let start = (1.0 - (1.0 - from) * strength).clamp(0.2, 1.0);
             shown = shown.scale(1.0);
             hidden = hidden.scale(start);
-            if let Some(width) = self.scale_origin_left {
-                shown = shown.x(base_offset.0);
-                hidden_x += (start - 1.0) * width * 0.5;
-                hidden = hidden.x(hidden_x);
+            // Scaling about the centre, shift toward the edge so that edge
+            // stays put.
+            if let Some((edge, length)) = self.scale_origin {
+                let shift = (1.0 - start) * length * 0.5;
+                match edge {
+                    Edge::Left => hidden_x -= shift,
+                    Edge::Right => hidden_x += shift,
+                    Edge::Top => hidden_y -= shift,
+                    Edge::Bottom => hidden_y += shift,
+                }
+                shown = shown.x(base_offset.0).y(base_offset.1);
+                hidden = hidden.x(hidden_x).y(hidden_y);
             }
         }
 
@@ -209,14 +225,15 @@ impl Default for Entrance {
     }
 }
 
-/// The theme picker's glass container fades in as one piece while its
-/// controls sharpen inside it. It does not scale or slide: native glass
-/// resizing every frame stutters.
-pub(in super::super) fn theme_picker_entrance() -> Entrance {
+/// The theme picker grows out of `edge`, the side it opens on, as a popover
+/// does, while its controls fade and sharpen inside its glass. `width` is
+/// the picker's width.
+pub(in super::super) fn theme_picker_entrance(edge: Edge, width: f32) -> Entrance {
     let tokens = &crate::platform::theme_config::theme().motion.theme_picker;
     Entrance::new()
         .fade_from(0.0)
         .blur_from(tokens.blur_from)
+        .scale_from_edge(tokens.scale_from, edge, width)
         .curve(Curve::EaseOut)
         .exit_curve(Curve::EaseInOut)
         .duration(Duration::from_millis(tokens.duration_ms))

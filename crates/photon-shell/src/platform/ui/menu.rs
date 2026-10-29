@@ -6,7 +6,7 @@ use super::controls::{haptic_switch_toggle, switch, toggled};
 use super::icons::check_icon;
 use super::layout::h_stack;
 use super::motion::pressable;
-use super::motion::{Entrance, Transition, popover};
+use super::motion::{Edge, Entrance, Transition, popover};
 use super::{metrics, theme::ThemeColors};
 
 use super::ClickHandler;
@@ -36,7 +36,10 @@ pub(super) fn popover_surface(
     glass("browser-menu")
         .enabled(false)
         .z_index(layer::POPOVER)
-        .motion(MENU_MOTION.scale_from_left(0.94, width), transition)
+        .motion(
+            MENU_MOTION.scale_from_edge(0.94, Edge::Left, width),
+            transition,
+        )
         .fallback(move |surface| {
             surface
                 .border_1()

@@ -5,7 +5,7 @@ use photon_core::{DockRegion, SpaceId};
 
 use super::super::controls::OwnsClicks;
 use super::super::glass::{glass, glass_available, layer};
-use super::super::motion::theme_picker_entrance;
+use super::super::motion::{Edge, theme_picker_entrance};
 use super::super::settings::Settings;
 use super::super::theme;
 use super::super::{metrics, theme_picker};
@@ -51,12 +51,12 @@ impl BrowserWindow {
             self.theme_picker_space = None;
         }
         let animations = Settings::motion(cx);
-        let picker_motion = theme_picker_entrance();
+        let (left, top, edge) = self.picker_popup_position(window, cx);
+        let picker_motion = theme_picker_entrance(edge, metrics::PICKER_WIDTH);
         let (space_id, transition) =
             self.theme_picker_presence
                 .sync(requested, picker_motion, &animations, cx)?;
         let space = Settings::get(cx).spaces.get(space_id)?.clone();
-        let (left, top) = self.picker_popup_position(window, cx);
         let dialog_label = format!("Edit theme for {}", space.name);
         let over_glass = glass_available(cx);
         let picker = theme_picker::theme_picker(
@@ -110,7 +110,8 @@ impl BrowserWindow {
         Some(overlay.into_any_element())
     }
 
-    fn picker_popup_position(&self, window: &Window, cx: &Context<Self>) -> (f32, f32) {
+    /// Where the picker opens, and the side it opens on, which it grows from.
+    fn picker_popup_position(&self, window: &Window, cx: &Context<Self>) -> (f32, f32, Edge) {
         let viewport = window.viewport_size();
         let viewport_width = f32::from(viewport.width);
         let viewport_height = f32::from(viewport.height);
@@ -134,24 +135,30 @@ impl BrowserWindow {
         let sidebar_bottom = layout.bottom_extent() * self.sidebar.chrome_shown() + sidebar_inset;
         let centered_top = (sidebar_top + viewport_height - sidebar_bottom - height) / 2.0;
 
-        let (desired_left, desired_top) = match (region, self.theme_picker_anchor) {
-            (Some(DockRegion::Leading), _) => (sidebar_inset + sidebar_width + gap, centered_top),
+        let (desired_left, desired_top, edge) = match (region, self.theme_picker_anchor) {
+            (Some(DockRegion::Leading), _) => (
+                sidebar_inset + sidebar_width + gap,
+                centered_top,
+                Edge::Left,
+            ),
             (Some(DockRegion::Trailing), _) => (
                 viewport_width - sidebar_inset - sidebar_width - width - gap,
                 centered_top,
+                Edge::Right,
             ),
             (_, Some(anchor)) => {
                 let pointer_x = f32::from(anchor.x);
-                let left = if pointer_x + width + gap <= viewport_width {
-                    pointer_x + gap
+                let (left, edge) = if pointer_x + width + gap <= viewport_width {
+                    (pointer_x + gap, Edge::Left)
                 } else {
-                    pointer_x - width - gap
+                    (pointer_x - width - gap, Edge::Right)
                 };
-                (left, f32::from(anchor.y) - height / 2.0)
+                (left, f32::from(anchor.y) - height / 2.0, edge)
             }
             _ => (
                 (viewport_width - width) / 2.0,
                 (viewport_height - height) / 2.0,
+                Edge::Bottom,
             ),
         };
 
@@ -160,6 +167,7 @@ impl BrowserWindow {
         (
             desired_left.clamp(inset, max_left),
             desired_top.clamp(inset, max_top),
+            edge,
         )
     }
 }

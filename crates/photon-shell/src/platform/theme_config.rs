@@ -166,6 +166,7 @@ pub(crate) struct MotionTokens {
 #[derive(Deserialize)]
 pub(crate) struct ThemePickerMotionTokens {
     pub(crate) duration_ms: u64,
+    pub(crate) scale_from: f32,
     pub(crate) blur_from: f32,
 }
 
@@ -270,6 +271,10 @@ fn validate_theme(theme: &ThemeDefinition) {
     assert!(
         (1..=5_000).contains(&picker_motion.duration_ms),
         "theme picker motion duration must be between 1 and 5000 ms"
+    );
+    assert!(
+        picker_motion.scale_from.is_finite() && (0.2..=1.0).contains(&picker_motion.scale_from),
+        "theme picker starting scale must be between 0.2 and 1.0"
     );
     assert!(
         picker_motion.blur_from.is_finite() && picker_motion.blur_from >= 0.0,

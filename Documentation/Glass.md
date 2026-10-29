@@ -28,10 +28,13 @@ glass("my-panel")
 - **Fallback:** `.fallback(|el| ..)` styles apply only where there is no glass,
   for the painted surface that stands in for it.
 - **Motion:** use `.motion(entrance, transition)` rather than wrapping the
-  element in an animation. The slide moves the glass with the content and the
-  glass takes the fade, but only the content scales and blurs: resizing
-  native glass every frame stutters. For a glass container, prefer a fade, as
-  the theme picker uses, with its content sharpening inside.
+  element in an animation. The glass slides and scales with the content; the
+  scale is a Core Animation transform, so the glass is never laid out again
+  mid-animation. It does not fade or blur, as native glass does not draw
+  while partly transparent: it appears whole while its content fades and
+  sharpens. To grow a panel out of the side it opens on, as a popover does,
+  use `Entrance::scale_from_edge(scale, edge, length)` with `Edge::Left`,
+  `Right`, `Top` or `Bottom`; the theme picker grows from the sidebar's side.
 - **Reuse:** each element's native glass view is kept for its window, so a
   panel that closes and opens again shows the same glass instead of a new
   one that AppKit materializes with a flash. Give each glass a stable id.

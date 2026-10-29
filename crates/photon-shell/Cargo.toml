@@ -78,6 +78,7 @@ objc2-quartz-core = { version = "0.3.2", default-features = false, features = [
   "CALayer",
   "CAGradientLayer",
   "CATransaction",
+  "CATransform3D",
   "objc2-core-foundation",
   "objc2-core-graphics",
 ] }
