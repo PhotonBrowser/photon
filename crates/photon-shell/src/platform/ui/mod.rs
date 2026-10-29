@@ -23,8 +23,6 @@ mod theme_picker;
 pub(super) use crate::platform::metrics;
 mod modal;
 mod motion;
-#[cfg(target_os = "macos")]
-mod native_panel;
 mod omnibox;
 mod pages;
 mod settings;
