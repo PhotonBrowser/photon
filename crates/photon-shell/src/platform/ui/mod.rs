@@ -10,6 +10,7 @@ mod controls;
 mod downloads;
 mod dropdown;
 mod find_bar;
+mod glass;
 mod history;
 mod icons;
 mod input;
