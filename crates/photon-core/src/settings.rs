@@ -132,6 +132,8 @@ pub struct BrowserSettings {
     /// Continuous transparency, 0 (opaque) to 100. None follows the named preset.
     pub transparency_percent: Option<u8>,
     pub window_background_style: WindowBackgroundStyle,
+    /// Native Liquid Glass behind popovers and menus where the platform has it.
+    pub glass_surfaces: bool,
     /// How strongly static noise overlays the window background, from 0 to 20.
     /// Legacy boolean values under `background_noise` are migrated on load.
     #[serde(
@@ -251,6 +253,7 @@ impl Default for BrowserSettings {
             transparency: Transparency::default(),
             transparency_percent: None,
             window_background_style: WindowBackgroundStyle::default(),
+            glass_surfaces: true,
             background_noise_intensity: 5,
             tab_layout: TabLayout::Vertical,
             new_tab_position: NewTabPosition::default(),

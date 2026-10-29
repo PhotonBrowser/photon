@@ -25,6 +25,14 @@ pub(super) fn settings(
     delete_preset: Rc<dyn Fn(String) -> ClickHandler>,
 ) -> impl IntoElement {
     let current = Settings::get(cx).clone();
+    let glass_surfaces = [(true, "On"), (false, "Off")]
+        .into_iter()
+        .map(|(enabled, label)| Choice {
+            label: label.into(),
+            chosen: current.glass_surfaces == enabled,
+            on_choose: change(move |settings| settings.glass_surfaces = enabled),
+        })
+        .collect();
     let transparencies = [
         (Transparency::Off, "Off"),
         (Transparency::Subtle, "Subtle"),
@@ -288,6 +296,24 @@ pub(super) fn settings(
                 ))
                 .child(secondary_text(
                     "Choose Liquid Glass or the native blurred window material.",
+                    palette,
+                )),
+        )
+        .child(
+            v_stack()
+                .gap(px(metrics::MENU_ITEM_GAP))
+                .child(form_field(
+                    "Glass menus",
+                    choices(
+                        "settings-glass-surfaces",
+                        "Glass menus",
+                        glass_surfaces,
+                        palette,
+                    ),
+                    palette,
+                ))
+                .child(secondary_text(
+                    "Use Liquid Glass behind popovers and menus where available.",
                     palette,
                 )),
         )
