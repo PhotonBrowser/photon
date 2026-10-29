@@ -17,7 +17,7 @@ use objc2::{
 use objc2_app_kit::{NSApplication, NSGlassEffectView, NSGlassEffectViewStyle, NSView};
 use objc2_core_graphics::CGColor;
 use objc2_foundation::{NSArray, NSDictionary, NSNull, NSPoint, NSRect, NSSize, NSString};
-use objc2_quartz_core::{CAGradientLayer, CATransform3D};
+use objc2_quartz_core::CAGradientLayer;
 
 use super::appkit::{NEXT_NATIVE_VIEW_ID, appkit_host_view, enable_interactive_glass};
 use super::page_layer;
@@ -206,11 +206,8 @@ impl Element for AppKitGlassBackdrop {
         let visible = style.visibility == Visibility::Visible;
         let alpha = style.opacity.unwrap_or(1.0).clamp(0.0, 1.0);
         // GPUI paints a style scale about the element's centre without moving
-        // its layout. The native glass keeps its full frame and takes the
-        // scale as a layer transform, which Core Animation composites without
-        // the glass laying itself out again at every size.
+        // its layout, so the native glass follows that painted size.
         let scale = style.scale;
-        let frame_bounds = bounds;
         let bounds = Bounds::centered_at(
             bounds.center(),
             size(
@@ -219,7 +216,7 @@ impl Element for AppKitGlassBackdrop {
             ),
         );
         let inner = self.inner.clone();
-        let radius = self.corner_radius;
+        let radius = self.corner_radius * scale.width.min(scale.height);
         let tint = self.window_tint.clone();
         let backing = self.backing;
         let z_index = self.z_index;
@@ -232,8 +229,7 @@ impl Element for AppKitGlassBackdrop {
                 attachment.place(
                     unsafe { host.as_ref() },
                     GlassPlacement {
-                        bounds: frame_bounds,
-                        scale: (scale.width, scale.height),
+                        bounds,
                         viewport,
                         visible,
                         alpha,
@@ -338,10 +334,9 @@ struct GlassAttachment {
     token: u64,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(PartialEq)]
 struct AppliedGlass {
     bounds: Bounds<Pixels>,
-    scale: (f32, f32),
     viewport: Size<Pixels>,
     host_bounds: NSRect,
     visible: bool,
@@ -352,18 +347,8 @@ struct AppliedGlass {
     z_index: i32,
 }
 
-impl AppliedGlass {
-    fn differs_only_in_scale(&self, other: &Self) -> bool {
-        Self {
-            scale: other.scale,
-            ..self.clone()
-        } == *other
-    }
-}
-
 struct GlassPlacement<'a> {
     bounds: Bounds<Pixels>,
-    scale: (f32, f32),
     viewport: Size<Pixels>,
     visible: bool,
     alpha: f32,
@@ -389,7 +374,6 @@ impl GlassAttachment {
     fn place(&mut self, host: &NSView, placement: GlassPlacement<'_>) {
         let GlassPlacement {
             bounds,
-            scale,
             viewport,
             visible,
             alpha,
@@ -406,7 +390,6 @@ impl GlassAttachment {
         };
         let applied = AppliedGlass {
             bounds,
-            scale,
             viewport,
             host_bounds: host.bounds(),
             visible,
@@ -418,17 +401,6 @@ impl GlassAttachment {
         };
         // Unchanged frames touch nothing, not even the host lookup.
         if self.parent.is_some() && self.applied.as_ref() == Some(&applied) {
-            return;
-        }
-        // Only the scale changes while it animates.
-        if self.parent.is_some()
-            && self
-                .applied
-                .as_ref()
-                .is_some_and(|last| last.differs_only_in_scale(&applied))
-        {
-            self.apply_scale(scale);
-            self.applied = Some(applied);
             return;
         }
         let parent = page_layer::glass_host_view(host, &window_content, self.beneath_pages);
@@ -484,7 +456,6 @@ impl GlassAttachment {
             }
             glass.setCornerRadius(radius.as_f32() as f64);
         }
-        self.apply_scale(scale);
         if let Some(layer) = container.layer()
             && layer.zPosition() != z_index as f64
         {
@@ -497,37 +468,6 @@ impl GlassAttachment {
         if tint_changed {
             self.place_tint(bounds, viewport, container.isFlipped(), tint);
         }
-    }
-
-    /// Scales the glass about its centre, as GPUI paints a style scale.
-    fn apply_scale(&self, (width, height): (f32, f32)) {
-        let Some(layer) = self.inner.container.layer() else {
-            return;
-        };
-        let (width, height) = (f64::from(width), f64::from(height));
-        let bounds = layer.bounds();
-        let anchor = layer.anchorPoint();
-        // The centre, from the point the layer transforms about.
-        let pivot_x = (0.5 - anchor.x) * bounds.size.width;
-        let pivot_y = (0.5 - anchor.y) * bounds.size.height;
-        layer.setTransform(CATransform3D {
-            m11: width,
-            m12: 0.0,
-            m13: 0.0,
-            m14: 0.0,
-            m21: 0.0,
-            m22: height,
-            m23: 0.0,
-            m24: 0.0,
-            m31: 0.0,
-            m32: 0.0,
-            m33: 1.0,
-            m34: 0.0,
-            m41: pivot_x - width * pivot_x,
-            m42: pivot_y - height * pivot_y,
-            m43: 0.0,
-            m44: 1.0,
-        });
     }
 
     /// Keeps the glass in GPUI's paint order among the pages: in the host
