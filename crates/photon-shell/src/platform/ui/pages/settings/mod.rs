@@ -169,6 +169,7 @@ impl SettingsPage {
     }
 
     fn new(context: PageContext, cx: &mut Context<Self>) -> Self {
+        general::refresh_default_browser(cx);
         Self {
             context,
             section: Section::General,

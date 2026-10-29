@@ -2,7 +2,7 @@
 //! and reopens its windows from last time.
 
 use super::super::super::controls::{Choice, choices};
-use gpui::{App, prelude::*, px, rgb};
+use gpui::{App, Global, prelude::*, px, rgb};
 use std::time::Duration;
 
 use super::super::super::button::{ButtonKind, ButtonSize, button};
@@ -19,10 +19,38 @@ use crate::platform::{DefaultBrowserStatus, default_browser};
 const DEFAULT_BROWSER_CHECKS: u32 = 40;
 const DEFAULT_BROWSER_CHECK_INTERVAL: Duration = Duration::from_millis(250);
 
+/// The system's default browser, as last checked. Asking reaches the
+/// system's app registry and the disk, so it is checked off the main thread
+/// and drawn from here.
+#[derive(Default)]
+struct DefaultBrowser(Option<DefaultBrowserStatus>);
+
+impl Global for DefaultBrowser {}
+
+/// Checks the default browser again, off the main thread, and redraws once
+/// it is known.
+pub(super) fn refresh_default_browser(cx: &mut App) {
+    cx.spawn(async move |cx| {
+        let status = cx
+            .background_executor()
+            .spawn(async { default_browser::status() })
+            .await;
+        update_app(cx, |cx| set_default_browser(status, cx)).await;
+    })
+    .detach();
+}
+
+fn set_default_browser(status: DefaultBrowserStatus, cx: &mut App) {
+    if cx.try_global::<DefaultBrowser>().and_then(|known| known.0) != Some(status) {
+        cx.set_global(DefaultBrowser(Some(status)));
+        cx.refresh_windows();
+    }
+}
+
 pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
     v_stack()
         .gap(px(metrics::INTERNAL_PAGE_SECTION_GAP))
-        .child(default_browser(palette))
+        .child(default_browser(palette, cx))
         .child(config_file(palette, cx))
         .child(restore_session(palette, cx))
         .child(engine_idle_timeout(palette, cx))
@@ -149,32 +177,39 @@ fn restore_session(palette: ThemeColors, cx: &App) -> impl IntoElement {
         ))
 }
 
-fn default_browser(palette: ThemeColors) -> impl IntoElement {
+fn default_browser(palette: ThemeColors, cx: &App) -> impl IntoElement {
     let name = photon_brand::NAME;
-    let (control, note) = match default_browser::status() {
-        DefaultBrowserStatus::Default => (
-            div_text("In use", palette).into_any_element(),
-            format!("Links you open in other apps open in {name}."),
+    let status = cx.try_global::<DefaultBrowser>().and_then(|known| known.0);
+    let (control, note) = match status {
+        None => (
+            div_text("Checking…", palette).into_any_element(),
+            String::new(),
         ),
-        DefaultBrowserStatus::NotDefault => (
-            button(
-                "settings-make-default-browser",
-                "Make default",
-                ButtonKind::Secondary,
-                true,
-                ButtonSize::Regular,
-                palette,
-                Box::new(|_, _, cx| make_default_browser(cx)),
-            )
-            .into_any_element(),
-            format!(
-                "Make {name} open links from other apps. The operating system will ask you to confirm."
+        Some(status) => match status {
+            DefaultBrowserStatus::Default => (
+                div_text("In use", palette).into_any_element(),
+                format!("Links you open in other apps open in {name}."),
             ),
-        ),
-        DefaultBrowserStatus::Unavailable => (
-            div_text("Unavailable", palette).into_any_element(),
-            "This build can't change the system's default browser setting.".to_string(),
-        ),
+            DefaultBrowserStatus::NotDefault => (
+                button(
+                    "settings-make-default-browser",
+                    "Make default",
+                    ButtonKind::Secondary,
+                    true,
+                    ButtonSize::Regular,
+                    palette,
+                    Box::new(|_, _, cx| make_default_browser(cx)),
+                )
+                .into_any_element(),
+                format!(
+                    "Make {name} open links from other apps. The operating system will ask you to confirm."
+                ),
+            ),
+            DefaultBrowserStatus::Unavailable => (
+                div_text("Unavailable", palette).into_any_element(),
+                "This build can't change the system's default browser setting.".to_string(),
+            ),
+        },
     };
     v_stack()
         .gap(px(metrics::MENU_ITEM_GAP))
@@ -196,8 +231,12 @@ fn make_default_browser(cx: &mut App) {
             cx.background_executor()
                 .timer(DEFAULT_BROWSER_CHECK_INTERVAL)
                 .await;
-            let answered = default_browser::status() == DefaultBrowserStatus::Default;
-            update_app(cx, |cx| cx.refresh_windows()).await;
+            let status = cx
+                .background_executor()
+                .spawn(async { default_browser::status() })
+                .await;
+            let answered = status == DefaultBrowserStatus::Default;
+            update_app(cx, |cx| set_default_browser(status, cx)).await;
             if answered {
                 break;
             }
