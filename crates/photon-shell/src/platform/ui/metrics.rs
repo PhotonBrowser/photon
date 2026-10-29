@@ -52,13 +52,26 @@ pub(super) const WINDOW_CONTROL_GROUP_WIDTH: f32 =
     TOOLBAR_BUTTON_SIZE * 3.0 + WINDOW_CONTROL_GAP * 2.0;
 
 pub(super) const MENU_WIDTH: f32 = 200.0;
-pub(super) const SITE_INFO_WIDTH: f32 = 220.0;
+/// How far frosted glass blurs what lies behind it.
+pub(super) const FROSTED_GLASS_BLUR: f32 = 30.0;
+/// A popover closed by a press on the control that opens it stays closed
+/// rather than reopening from the same press, within this long.
+pub(super) const POPOVER_REOPEN_GUARD_MS: u64 = 250;
+pub(super) const SITE_INFO_WIDTH: f32 = 272.0;
+/// The site information popover's inset, and the space between its controls.
+pub(super) const SITE_INFO_PADDING: f32 = 12.0;
+pub(super) const SITE_INFO_GAP: f32 = 8.0;
+pub(super) const SITE_INFO_SECTION_GAP: f32 = 14.0;
+/// Its square controls, and the icons they and its rows show.
+pub(super) const SITE_INFO_TILE_HEIGHT: f32 = 44.0;
+pub(super) const SITE_INFO_TILE_ICON_SIZE: f32 = 18.0;
+/// The round icon leading a detail row, and the footer's controls.
+pub(super) const SITE_INFO_AVATAR_SIZE: f32 = 36.0;
+pub(super) const SITE_INFO_FOOTER_HEIGHT: f32 = 36.0;
+pub(super) const SITE_INFO_HEADING_FONT_SIZE: f32 = 15.0;
+pub(super) const SITE_INFO_DETAIL_FONT_SIZE: f32 = 11.0;
 /// The site information button's icon in the address field.
 pub(super) const SITE_INFO_BUTTON_ICON_SIZE: f32 = 16.0;
-/// A row in the site information popover, and its leading icon.
-pub(super) const SITE_INFO_ROW_HEIGHT: f32 = 28.0;
-pub(super) const SITE_INFO_ICON_SIZE: f32 = 14.0;
-pub(super) const SITE_INFO_TITLE_FONT_SIZE: f32 = 13.0;
 
 /// A keycap in a keyboard shortcut.
 pub(super) const KBD_HEIGHT: f32 = 18.0;
@@ -347,6 +360,15 @@ pub(super) const fn concentric_radius(inner: f32, inset: f32, border: f32) -> f3
 
 pub(super) fn menu_surface_radius() -> f32 {
     concentric_radius(menu_item_radius(), MENU_PADDING, SURFACE_BORDER_WIDTH)
+}
+
+pub(super) fn site_info_tile_radius() -> f32 {
+    crate::platform::theme_config::radius_tokens().site_info_tile
+}
+
+/// The site information popover follows its tiles through its padding.
+pub(super) fn site_info_radius() -> f32 {
+    concentric_radius(site_info_tile_radius(), SITE_INFO_PADDING, 0.0)
 }
 
 pub(super) fn menu_item_radius() -> f32 {
