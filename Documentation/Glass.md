@@ -61,6 +61,23 @@ flickers. Its blur is `FROSTED_GLASS_BLUR` in `metrics.rs`, and its surface
 opacity is `frosted_glass` in `theme.toml`. The new tab page's customise menu
 uses it.
 
+## Panels over GPUI content
+
+Glass inside GPUI's window refracts only what lies beneath GPUI: to show, it
+clears GPUI's drawing, so it cuts through any GPUI interface behind it. A panel
+that floats over GPUI content and must be native opens in a native `NSPopover`
+instead, with `NativePanel` in
+[`ui/native_panel.rs`](../crates/photon-shell/src/platform/ui/native_panel.rs),
+as Zen's panels do. The popover is its own window, composited by the system,
+so its material refracts everything behind it. It takes any GPUI content,
+points at an anchor in the browser window, and AppKit animates it in and out
+and closes it on a click elsewhere or Escape. Don't animate its content's
+entrance as well: the popover's own animation is the entrance.
+
+GPUI-CE shows a `WindowKind::AnchoredPopup` window this way on macOS (see
+`window/popover.rs` in `vendor/gpui-ce/crates/gpui_macos`). The theme picker
+opens in one; other platforms draw it in the window.
+
 ## What lies beneath the glass
 
 Glass refracts what is beneath GPUI, not what GPUI painted beneath the element:

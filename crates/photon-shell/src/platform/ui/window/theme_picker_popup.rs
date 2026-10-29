@@ -2,6 +2,8 @@
 
 use gpui::{AnyElement, Context, KeyDownEvent, MouseButton, Role, Window, div, prelude::*, px};
 use photon_core::{DockRegion, SpaceId};
+#[cfg(target_os = "macos")]
+use std::rc::Rc;
 
 use super::super::controls::OwnsClicks;
 use super::super::glass::{glass, glass_available, layer};
@@ -22,12 +24,88 @@ impl BrowserWindow {
             return;
         }
         self.theme_picker_space = Some(space);
+        #[cfg(target_os = "macos")]
+        if glass_available(cx) {
+            self.open_theme_picker_popover(space, window, cx);
+            return;
+        }
         window.focus(&self.root_focus, cx);
         cx.notify();
     }
 
+    /// Opens the picker in a native popover beside the sidebar, whose
+    /// material refracts the browser's own interface behind it, which glass
+    /// inside the window cannot.
+    #[cfg(target_os = "macos")]
+    fn open_theme_picker_popover(
+        &mut self,
+        space: SpaceId,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        let (left, top, side) = self.picker_popup_position(window, cx);
+        let size = gpui::size(px(metrics::PICKER_WIDTH), px(metrics::PICKER_POPUP_HEIGHT));
+        // The popover points at the side of the picker's place it opens from.
+        let anchor_x = match side {
+            Edge::Right => left + metrics::PICKER_WIDTH,
+            _ => left,
+        };
+        let anchor = gpui::Bounds::new(
+            gpui::point(px(anchor_x), px(top)),
+            gpui::size(px(1.0), size.height),
+        );
+        let content: super::super::native_panel::PanelContent = Rc::new(move |_, cx| {
+            let Some(space) = Settings::get(cx).spaces.get(space).cloned() else {
+                return div().into_any_element();
+            };
+            div()
+                .id("theme-picker-dialog")
+                .role(Role::Dialog)
+                .aria_label(format!("Edit theme for {}", space.name))
+                .size_full()
+                .child(
+                    theme_picker::theme_picker(
+                        ("window-theme-picker", space.id),
+                        space.color,
+                        theme::space_colors(&space),
+                        Some(space.id),
+                        theme_picker::change_space_theme(space.id),
+                    )
+                    .into_floating()
+                    .over_glass(true),
+                )
+                .into_any_element()
+        });
+        let browser = cx.entity().downgrade();
+        let browser_window = window.window_handle();
+        let on_dismiss = Rc::new(move |cx: &mut gpui::App| {
+            let browser = browser.clone();
+            let _ = browser_window.update(cx, |_, window, cx| {
+                let _ = browser.update(cx, |this, cx| this.dismiss_theme_picker(window, cx));
+            });
+        });
+        self.theme_picker_panel.open(
+            window,
+            super::super::native_panel::PanelOptions {
+                anchor,
+                // It opens away from the side it grows out of.
+                side: match side {
+                    Edge::Left => Edge::Right,
+                    Edge::Right => Edge::Left,
+                    edge => edge,
+                },
+                size,
+                content,
+                on_dismiss,
+            },
+            cx,
+        );
+    }
+
     pub(super) fn dismiss_theme_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.theme_picker_space.take().is_some() {
+            #[cfg(target_os = "macos")]
+            self.theme_picker_panel.close(cx);
             if let Some(active_tab) = self.active_tab {
                 self.activate_tab(active_tab, true, window, cx);
             } else {
@@ -44,6 +122,11 @@ impl BrowserWindow {
         window: &Window,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
+        // The native popover draws the picker in its own window.
+        #[cfg(target_os = "macos")]
+        if self.theme_picker_panel.is_open() {
+            return None;
+        }
         let requested = self
             .theme_picker_space
             .filter(|id| Settings::get(cx).spaces.get(*id).is_some());
