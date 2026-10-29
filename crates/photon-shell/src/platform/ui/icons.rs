@@ -188,16 +188,6 @@ pub(super) fn cookie_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("cookie"), color, size)
 }
 
-/// A box with an arrow leaving it, for something that opens elsewhere.
-pub(super) fn external_icon(color: u32, size: f32) -> impl IntoElement {
-    icon(lucide!("square-arrow-out-up-right"), color, size)
-}
-
-/// An arrow pointing right, for a row that leads further.
-pub(super) fn chevron_right_icon(color: u32, size: f32) -> impl IntoElement {
-    icon(lucide!("chevron-right"), color, size)
-}
-
 /// A window with a panel down its left side, for showing or hiding the
 /// sidebar.
 pub(super) fn sidebar_icon(color: u32, size: f32) -> impl IntoElement {

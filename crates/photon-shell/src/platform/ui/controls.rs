@@ -389,15 +389,6 @@ pub(super) struct Switch {
     disabled: bool,
 }
 
-impl Switch {
-    /// Shows the switch dimmed, ignoring the pointer, for something that
-    /// cannot be changed.
-    pub(super) fn disabled(mut self, disabled: bool) -> Self {
-        self.disabled = disabled;
-        self
-    }
-}
-
 impl RenderOnce for Switch {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let Self {

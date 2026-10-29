@@ -1,19 +1,19 @@
 //! Shared surface and items for browser menus.
 
-use gpui::{App, ElementId, Role, SharedString, div, prelude::*, px, rgb, rgba};
+use gpui::{ElementId, Role, SharedString, div, prelude::*, px, rgb, rgba};
 
 use super::controls::{haptic_switch_toggle, switch, toggled};
 use super::icons::check_icon;
-use super::layout::{Elevated, Elevation, Raised};
-use super::layout::{h_stack, v_stack};
+use super::layout::h_stack;
 use super::motion::pressable;
-use super::motion::{AnimateIn, Entrance, Transition, popover};
-use super::settings::Settings;
+use super::motion::{Entrance, Transition, popover};
 use super::{metrics, theme::ThemeColors};
 
 use super::ClickHandler;
 use super::controls::FocusRing;
 use super::controls::OwnsClicks;
+use super::glass::{Glass, glass, layer};
+use super::layout::{Elevated, Elevation, Raised};
 use std::cell::Cell;
 use std::rc::Rc;
 
@@ -30,31 +30,33 @@ pub(super) fn popover_surface(
     content: impl IntoElement,
     transition: Transition,
     palette: ThemeColors,
-    cx: &App,
-) -> impl IntoElement {
-    v_stack()
-        .id("browser-menu")
+) -> Glass {
+    // Menus are painted GPUI unless the caller turns glass on with
+    // `.enabled(true)`, when the glass alone is their surface.
+    glass("browser-menu")
+        .enabled(false)
+        .z_index(layer::POPOVER)
+        .motion(MENU_MOTION.scale_from_left(0.94, width), transition)
+        .fallback(move |surface| {
+            surface
+                .border_1()
+                .border_color(rgba(palette.menu_border))
+                .raised(palette)
+                .elevated(Elevation::High)
+        })
+        .rounded(px(metrics::menu_surface_radius()))
         .role(role)
         .aria_label(label)
         .tab_group()
+        .flex()
+        .flex_col()
         .w(px(width))
         // Rows sit inset from the edges, so their rounded highlight sits
         // inside the rounded surface.
         .p(px(metrics::MENU_PADDING))
-        .rounded(px(metrics::menu_surface_radius()))
-        .border_1()
-        .border_color(rgba(palette.menu_border))
-        .raised(palette)
         .text_size(px(metrics::MENU_FONT_SIZE))
         .text_color(rgb(palette.text_primary))
-        .elevated(Elevation::High)
         .child(content)
-        .animate(
-            "browser-menu-motion",
-            MENU_MOTION.scale_from_left(0.94, width),
-            transition,
-            &Settings::motion(cx),
-        )
 }
 
 pub(super) fn menu_separator(palette: ThemeColors) -> impl IntoElement {

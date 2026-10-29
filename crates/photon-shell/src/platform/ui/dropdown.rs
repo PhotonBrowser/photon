@@ -172,7 +172,6 @@ impl RenderOnce for Dropdown {
                         v_stack().children(rows),
                         transition,
                         menu_palette,
-                        cx,
                     )),
             )
             .priority(1)
