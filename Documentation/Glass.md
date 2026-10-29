@@ -12,10 +12,9 @@ Use `glass(id)` where you would use `div().id(id)`. Style it, fill it and
 handle its events as any `div`:
 
 ```rust
-use super::glass::{glass, layer};
+use super::glass::glass;
 
 glass("my-panel")
-    .z_index(layer::POPOVER)
     .fallback(move |panel| panel.raised(palette).border_1())
     .rounded(px(metrics::surface_radius()))
     .p(px(metrics::MENU_PADDING))
@@ -28,12 +27,10 @@ glass("my-panel")
 - **Fallback:** `.fallback(|el| ..)` styles apply only where there is no glass,
   for the painted surface that stands in for it.
 - **Motion:** use `.motion(entrance, transition)` rather than wrapping the
-  element in an animation. The native glass does not inherit GPUI's painted
-  fade and scale, so it takes the same motion itself and moves, scales and
-  fades with the content; only the blur is the content's alone. To grow a
-  panel out of the side it opens on, as a popover does, use
-  `Entrance::scale_from_edge(scale, edge, length)` with `Edge::Left`,
-  `Right`, `Top` or `Bottom`; the theme picker grows from the sidebar's side.
+  element in an animation. Only the content animates: native glass draws
+  nothing while it changes, so it stays still beneath. A panel that should
+  animate as a whole on native glass opens as a native popover instead; see
+  below.
 - **Reuse:** each element's native glass view is kept for its window, so a
   panel that closes and opens again shows the same glass instead of a new
   one that AppKit materializes with a flash. Closed, it waits out of sight at
@@ -94,32 +91,14 @@ backing: it cuts a hole through that surface. This is why buttons are plain
 GPUI. Menus, dropdowns and small panels are plain GPUI too; on macOS context
 menus are native.
 
-## Change the order
-
-Glass always lies beneath GPUI's own drawing. Overlapping glass is drawn in
-`z_index` order, highest on top, set when the glass first appears. Use the named
-layers in `glass::layer`, and add a layer there rather than a number at the
-call site:
-
-| Layer | For |
-| --- | --- |
-| `layer::CHROME` | Glass resting on the window, such as the address field |
-| `layer::POPOVER` | Panels over the chrome, such as the theme picker |
-
-Pages drawn after glass, such as a link preview over the chrome, cover it
-automatically.
-
 ## How it works on macOS
 
 Glass lies directly in the window's content view, just beneath GPUI's view,
-where it draws while it animates. Its order is its place among those views,
-as AppKit draws them: glass of a higher `z_index` is inserted above glass of
-a lower one, and glass moves beneath the pages' host only while a page drawn
-after it covers it. Adding, hiding or removing a view there redraws the whole
-window's glass, which flickers, so each glass view is inserted once and never
-hidden or removed while its window lives: glass that should not show waits out
-of sight instead. The native view and its placement live in
-`AppKitGlassBackdrop` in
+and beneath the pages' host only while a page drawn after it covers it.
+Adding, hiding or removing a view there redraws the whole window's glass,
+which flickers, so each glass view is inserted once and never hidden or
+removed while its window lives: glass that should not show waits out of sight
+instead. The native view and its placement live in `AppKitGlassBackdrop` in
 [`macos/glass_backdrop.rs`](../crates/photon-shell/src/platform/macos/glass_backdrop.rs).
 
 Native AppKit controls that need no GPUI content, such as the site information

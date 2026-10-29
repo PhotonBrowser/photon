@@ -19,7 +19,6 @@ impl RenderOnce for Glass {
             enabled,
             tint,
             backing,
-            z_index,
             interactive,
             frosted,
             motion,
@@ -51,7 +50,7 @@ impl RenderOnce for Glass {
             .flatten();
         #[cfg(not(target_os = "macos"))]
         let backdrop: Option<std::convert::Infallible> = {
-            let _ = (enabled, &tint, backing, z_index, interactive, &window);
+            let _ = (enabled, &tint, backing, interactive, &window);
             None
         };
 
@@ -81,26 +80,11 @@ impl RenderOnce for Glass {
                         .gradient_angle_degrees,
                 })
                 .backing(backing)
-                .z_index(z_index)
                 .interactive(interactive)
                 .absolute()
-                .top_0()
-                .left_0()
-                .size_full();
-            // The native view follows only its own style, so it takes the
-            // content's motion itself rather than inheriting a painted fade
-            // and scale. Placed by its top-left corner, the motion's offsets
-            // move it without stretching it.
-            match motion {
-                Some((entrance, transition)) => glass.animate_with_offset_stable_id(
-                    (id.clone(), "glass-motion"),
-                    entrance,
-                    transition,
-                    &motion_config,
-                    (0.0, 0.0),
-                ),
-                None => glass.into_any_element(),
-            }
+                .inset_0();
+            // Native glass stays still: it draws nothing while it changes.
+            glass.into_any_element()
         };
         #[cfg(not(target_os = "macos"))]
         let glass: gpui::AnyElement = match backdrop {};

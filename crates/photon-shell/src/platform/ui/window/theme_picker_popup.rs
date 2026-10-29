@@ -6,7 +6,7 @@ use photon_core::{DockRegion, SpaceId};
 use std::rc::Rc;
 
 use super::super::controls::OwnsClicks;
-use super::super::glass::{glass, glass_available, layer};
+use super::super::glass::{glass, glass_available};
 use super::super::motion::{Edge, theme_picker_entrance};
 use super::super::settings::Settings;
 use super::super::theme;
@@ -155,7 +155,6 @@ impl BrowserWindow {
         .over_glass(over_glass);
         // The picker paints its own surface where there is no glass.
         let dialog = glass("window-theme-picker-surface")
-            .z_index(layer::POPOVER)
             .rounded(px(metrics::theme_accent_panel_radius()))
             .motion(picker_motion, transition)
             .child(

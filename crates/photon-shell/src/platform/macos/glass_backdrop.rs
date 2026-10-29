@@ -7,7 +7,7 @@ use std::{ptr::NonNull, rc::Rc, sync::atomic::Ordering};
 use gpui::{
     App, Bounds, DispatchPhase, Element, ElementId, GlobalElementId, InspectorElementId,
     IntoElement, LayoutId, MouseButton, MouseDownEvent, MouseUpEvent, Pixels, Refineable, Size,
-    Style, StyleRefinement, Styled, Visibility, Window, size,
+    Style, StyleRefinement, Styled, Visibility, Window,
 };
 use objc2::{
     MainThreadMarker, msg_send,
@@ -40,7 +40,6 @@ pub struct AppKitGlassBackdrop {
     corner_radius: Pixels,
     window_tint: GlassWindowTint,
     backing: Option<u32>,
-    z_index: i32,
     interactive: bool,
     style: StyleRefinement,
 }
@@ -70,7 +69,10 @@ impl AppKitGlassBackdrop {
     /// Whether this Mac draws Liquid Glass, so callers can choose their
     /// painting before a backdrop exists.
     pub fn is_supported() -> bool {
-        MainThreadMarker::new().is_some() && AnyClass::get(c"NSGlassEffectView").is_some()
+        // Asked on every render; the class is there or not for the session.
+        static HAS_GLASS: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        MainThreadMarker::new().is_some()
+            && *HAS_GLASS.get_or_init(|| AnyClass::get(c"NSGlassEffectView").is_some())
     }
 
     /// Returns `None` before macOS 26, or off the AppKit main thread, so the
@@ -110,7 +112,6 @@ impl AppKitGlassBackdrop {
             corner_radius: Pixels::ZERO,
             window_tint: GlassWindowTint::default(),
             backing: None,
-            z_index: 0,
             interactive: false,
             style: StyleRefinement::default(),
         })
@@ -134,12 +135,6 @@ impl AppKitGlassBackdrop {
     /// GPUI painted, so without this the page would show through.
     pub fn backing(mut self, backing: Option<u32>) -> Self {
         self.backing = backing;
-        self
-    }
-
-    /// Orders overlapping glass: higher draws over lower.
-    pub fn z_index(mut self, z_index: i32) -> Self {
-        self.z_index = z_index;
         self
     }
 
@@ -168,8 +163,8 @@ impl IntoElement for AppKitGlassBackdrop {
 
 impl Element for AppKitGlassBackdrop {
     type RequestLayoutState = Style;
-    /// The painted bounds, after the element's style scale, and where the
-    /// glass fell in the order native views were placed.
+    /// The glass's bounds, and where it fell in the order native views were
+    /// placed.
     type PrepaintState = (Bounds<Pixels>, u64);
 
     fn id(&self) -> Option<ElementId> {
@@ -207,23 +202,11 @@ impl Element for AppKitGlassBackdrop {
         let global_id = id.expect("glass backdrop elements always have a stable id");
         let visible = style.visibility == Visibility::Visible;
         let alpha = style.opacity.unwrap_or(1.0).clamp(0.0, 1.0);
-        // GPUI paints a style scale about the element's centre without moving
-        // its layout, so the native glass follows that painted size.
-        let scale = style.scale;
-        let bounds = Bounds::centered_at(
-            bounds.center(),
-            size(
-                bounds.size.width * scale.width,
-                bounds.size.height * scale.height,
-            ),
-        );
+        // Native glass is never animated: it draws nothing while it changes.
         let inner = self.inner.clone();
-        // Its corners stay as they are while it scales, so animating it
-        // does not reshape the glass every frame.
         let radius = self.corner_radius;
         let tint = self.window_tint.clone();
         let backing = self.backing;
-        let z_index = self.z_index;
         let viewport = window.viewport_size();
         window.with_element_state(global_id, |state: Option<GlassAttachment>, window| {
             let mut attachment = state.unwrap_or_else(|| GlassAttachment::new(inner));
@@ -240,7 +223,6 @@ impl Element for AppKitGlassBackdrop {
                         radius,
                         tint: &tint,
                         backing,
-                        z_index,
                     },
                 );
             } else {
@@ -331,7 +313,6 @@ struct GlassAttachment {
     /// Where the glass was last painted in the placement order.
     placed: u64,
     beneath_pages: bool,
-    z_index: i32,
     token: u64,
 }
 
@@ -345,7 +326,6 @@ struct AppliedGlass {
     radius: Pixels,
     tint: GlassWindowTint,
     backing: Option<u32>,
-    z_index: i32,
 }
 
 struct GlassPlacement<'a> {
@@ -356,7 +336,6 @@ struct GlassPlacement<'a> {
     radius: Pixels,
     tint: &'a GlassWindowTint,
     backing: Option<u32>,
-    z_index: i32,
 }
 
 impl GlassAttachment {
@@ -367,7 +346,6 @@ impl GlassAttachment {
             applied: None,
             placed: 0,
             beneath_pages: false,
-            z_index: 0,
             token: NEXT_NATIVE_VIEW_ID.fetch_add(1, Ordering::Relaxed),
         }
     }
@@ -381,16 +359,8 @@ impl GlassAttachment {
             radius,
             tint,
             backing,
-            z_index,
         } = placement;
         self.inner.owner.set(self.token);
-        // Known before the glass is first inserted, which orders it by this.
-        if self.parent.is_none() || self.z_index != z_index {
-            self.z_index = z_index;
-            GLASS_Z_INDICES.with_borrow_mut(|indices| {
-                indices.insert(Retained::as_ptr(&self.inner.container) as usize, z_index);
-            });
-        }
         // SAFETY: AppKit view hierarchy access runs on the main thread.
         let Some(window_content) = (unsafe { host.superview() }) else {
             self.detach();
@@ -405,7 +375,6 @@ impl GlassAttachment {
             radius,
             tint: tint.clone(),
             backing,
-            z_index,
         };
         // Unchanged frames touch nothing, not even the host lookup.
         if self.parent.is_some() && self.applied.as_ref() == Some(&applied) {
@@ -517,8 +486,8 @@ impl GlassAttachment {
     }
 
     /// Places the glass among `parent`'s views by subview order, as AppKit
-    /// draws them: beneath the pages when one covers it, and otherwise
-    /// beneath GPUI's view `host`, above glass of a lower z-index.
+    /// draws them: beneath the pages when one covers it, and otherwise just
+    /// beneath GPUI's view `host`.
     fn insert(&self, host: &NSView, parent: &NSView) {
         let container = &*self.inner.container;
         if self.beneath_pages
@@ -531,21 +500,7 @@ impl GlassAttachment {
             );
             return;
         }
-        let higher = GLASS_Z_INDICES.with_borrow(|indices| {
-            let subviews = parent.subviews();
-            (0..subviews.count())
-                .map(|index| subviews.objectAtIndex(index))
-                .find(|view| {
-                    indices
-                        .get(&(Retained::as_ptr(view) as usize))
-                        .is_some_and(|&z_index| z_index > self.z_index)
-                })
-        });
-        parent.addSubview_positioned_relativeTo(
-            container,
-            NSWindowOrderingMode::Below,
-            Some(higher.as_deref().unwrap_or(host)),
-        );
+        parent.addSubview_positioned_relativeTo(container, NSWindowOrderingMode::Below, Some(host));
     }
 
     /// Lays the window-sized tint gradient under the field so the slice the
@@ -658,13 +613,6 @@ impl Drop for GlassAttachment {
     }
 }
 
-thread_local! {
-    /// Each glass view's z-index, by its container, to order new glass among
-    /// the glass already in a window.
-    static GLASS_Z_INDICES: std::cell::RefCell<std::collections::HashMap<usize, i32>> =
-        std::cell::RefCell::new(std::collections::HashMap::new());
-}
-
 /// Where collapsed glass waits, far outside any window.
 const COLLAPSED_ORIGIN: f64 = -100_000.0;
 
@@ -685,9 +633,6 @@ fn is_collapsed(container: &NSView) -> bool {
 
 impl Drop for AppKitGlassBackdropInner {
     fn drop(&mut self) {
-        GLASS_Z_INDICES.with_borrow_mut(|indices| {
-            indices.remove(&(Retained::as_ptr(&self.container) as usize));
-        });
         self.container.removeFromSuperview();
     }
 }

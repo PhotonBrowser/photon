@@ -12,7 +12,7 @@ use super::{metrics, theme::ThemeColors};
 use super::ClickHandler;
 use super::controls::FocusRing;
 use super::controls::OwnsClicks;
-use super::glass::{Glass, glass, layer};
+use super::glass::{Glass, glass};
 use super::layout::{Elevated, Elevation, Raised};
 use std::cell::Cell;
 use std::rc::Rc;
@@ -35,7 +35,6 @@ pub(super) fn popover_surface(
     // `.enabled(true)`, when the glass alone is their surface.
     glass("browser-menu")
         .enabled(false)
-        .z_index(layer::POPOVER)
         .motion(
             MENU_MOTION.scale_from_edge(0.94, Edge::Left, width),
             transition,

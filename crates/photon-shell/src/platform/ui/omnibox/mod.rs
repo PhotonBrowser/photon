@@ -10,7 +10,7 @@ mod panel;
 mod rows;
 mod site_info;
 
-use super::glass::{glass, glass_available, layer};
+use super::glass::{glass, glass_available};
 use gpui::{
     Context, Entity, EventEmitter, Focusable, MouseButton, Render, Subscription, Task, Window,
     prelude::*, px, rgb, rgba,
@@ -470,7 +470,6 @@ impl Render for Omnibox {
             palette.surface
         };
         let field_box = glass("titlebar-omnibox")
-            .z_index(layer::CHROME)
             .interactive(true)
             .window_tint(menu_palette)
             .backing(self.floating_surface)

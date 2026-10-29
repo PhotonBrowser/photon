@@ -18,15 +18,6 @@ use super::motion::{Entrance, Transition};
 use super::settings::Settings;
 use super::theme::ThemeColors;
 
-/// Glass `z_index` layers, lowest first. Overlapping glass draws in this
-/// order whatever order GPUI drew it in.
-pub(super) mod layer {
-    /// Glass resting on the window, such as the address field.
-    pub(in super::super) const CHROME: i32 = 0;
-    /// Panels over the chrome, such as the theme picker.
-    pub(in super::super) const POPOVER: i32 = 1;
-}
-
 /// Whether glass draws: the platform has it and the settings allow it.
 pub(super) fn glass_available(cx: &App) -> bool {
     #[cfg(target_os = "macos")]
@@ -49,7 +40,6 @@ pub(super) fn glass(id: impl Into<ElementId>) -> Glass {
         enabled: true,
         tint: Vec::new(),
         backing: None,
-        z_index: 0,
         interactive: false,
         frosted: None,
         motion: None,
@@ -66,7 +56,6 @@ pub(super) struct Glass {
     enabled: bool,
     tint: Vec<u32>,
     backing: Option<u32>,
-    z_index: i32,
     interactive: bool,
     /// Frosted glass's palette; `None` for native glass.
     frosted: Option<ThemeColors>,
@@ -113,13 +102,6 @@ impl Glass {
         self
     }
 
-    /// Orders overlapping glass: higher draws over lower. All glass lies
-    /// beneath GPUI's own drawing.
-    pub(super) fn z_index(mut self, z_index: i32) -> Self {
-        self.z_index = z_index;
-        self
-    }
-
     /// Plays AppKit's press response when the element is pressed, for glass
     /// that is itself a control, such as the address field. Panels leave it
     /// off, so pressing their content leaves the glass still.
@@ -138,8 +120,9 @@ impl Glass {
         self
     }
 
-    /// Animates the element with `entrance`. Native glass does not follow
-    /// GPUI's painted transforms, so it takes the same motion itself.
+    /// Animates the element's content with `entrance`. Native glass stays
+    /// still beneath it, as it draws nothing while it changes; animate a
+    /// native panel by its popover instead (`native_panel`).
     pub(super) fn motion(mut self, entrance: Entrance, transition: Transition) -> Self {
         self.motion = Some((entrance, transition));
         self
