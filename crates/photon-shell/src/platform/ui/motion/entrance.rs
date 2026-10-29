@@ -29,6 +29,18 @@ pub(in super::super) struct Entrance {
 }
 
 impl Entrance {
+    /// The part of this entrance a native view placed by its own frame can
+    /// take: its fade and scale. A native view does not inherit GPUI's
+    /// painted opacity and scale, but it does move with its parent's layout,
+    /// which carries the slide.
+    pub(in super::super) const fn native_part(mut self) -> Self {
+        self.offset_from = None;
+        self.scale_origin_left = None;
+        self.blur_from = None;
+        self.grow = None;
+        self
+    }
+
     pub const fn new() -> Self {
         Self {
             speed: Speed::Standard,
