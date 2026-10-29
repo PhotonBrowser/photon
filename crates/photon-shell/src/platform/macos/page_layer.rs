@@ -463,30 +463,67 @@ fn set_background_color(layer: &CALayer, rgb: u32) {
     layer.setBackgroundColor(Some(&color));
 }
 
-/// Reads the colour midway down the frame's painted right edge, as 0xRRGGBB.
+/// Estimates the colour at the frame's painted right edge, as 0xRRGGBB.
 /// Engine paints BGRA surfaces; other layouts are left to the page background.
 fn edge_color(surface: &IOSurface, painted_width: i32, painted_height: i32) -> Option<u32> {
     const READ_ONLY: u32 = 1;
+    const SAMPLE_RADIUS: usize = 4;
+    const SAMPLE_COUNT: usize = (SAMPLE_RADIUS * 2 + 1).pow(2);
     let obj = surface.obj;
     // SAFETY: the surface is retained by `surface`, and is locked read-only
-    // around the read, which stays within its painted bounds.
+    // around the read, which stays within its painted bounds. Taking the
+    // median of a small patch prevents one glyph or antialiased pixel from
+    // colouring the whole area exposed during a resize.
     unsafe {
         if io_surface::IOSurfaceGetBytesPerElement(obj) != 4 {
             return None;
         }
-        let x = usize::try_from(painted_width).ok()?.checked_sub(1)?;
-        let y = usize::try_from(painted_height).ok()? / 2;
-        if x >= io_surface::IOSurfaceGetWidth(obj) || y >= io_surface::IOSurfaceGetHeight(obj) {
+        let painted_width = usize::try_from(painted_width).ok()?;
+        let painted_height = usize::try_from(painted_height).ok()?;
+        if painted_width == 0 || painted_height == 0 {
+            return None;
+        }
+        let surface_width = io_surface::IOSurfaceGetWidth(obj);
+        let surface_height = io_surface::IOSurfaceGetHeight(obj);
+        if painted_width > surface_width || painted_height > surface_height {
             return None;
         }
         if io_surface::IOSurfaceLock(obj, READ_ONLY, std::ptr::null_mut()) != 0 {
             return None;
         }
         let base = io_surface::IOSurfaceGetBaseAddress(obj).cast::<u8>();
+        if base.is_null() {
+            io_surface::IOSurfaceUnlock(obj, READ_ONLY, std::ptr::null_mut());
+            return None;
+        }
         let row = io_surface::IOSurfaceGetBytesPerRow(obj);
-        let pixel = std::slice::from_raw_parts(base.add(y * row + x * 4), 4);
-        let [blue, green, red, _] = [pixel[0], pixel[1], pixel[2], pixel[3]];
+        let x_start = painted_width.saturating_sub(SAMPLE_RADIUS + 1);
+        let x_end = painted_width;
+        let center_y = painted_height / 2;
+        let y_start = center_y.saturating_sub(SAMPLE_RADIUS);
+        let y_end = (center_y + SAMPLE_RADIUS + 1).min(painted_height);
+        let mut red = [0; SAMPLE_COUNT];
+        let mut green = [0; SAMPLE_COUNT];
+        let mut blue = [0; SAMPLE_COUNT];
+        let mut samples = 0;
+        for y in y_start..y_end {
+            for x in x_start..x_end {
+                let pixel = std::slice::from_raw_parts(base.add(y * row + x * 4), 4);
+                blue[samples] = pixel[0];
+                green[samples] = pixel[1];
+                red[samples] = pixel[2];
+                samples += 1;
+            }
+        }
         io_surface::IOSurfaceUnlock(obj, READ_ONLY, std::ptr::null_mut());
+        if samples == 0 {
+            return None;
+        }
+        let median = samples / 2;
+        red[..samples].sort_unstable();
+        green[..samples].sort_unstable();
+        blue[..samples].sort_unstable();
+        let (red, green, blue) = (red[median], green[median], blue[median]);
         Some(u32::from_be_bytes([0, red, green, blue]))
     }
 }
