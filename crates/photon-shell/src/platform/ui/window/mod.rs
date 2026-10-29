@@ -107,9 +107,6 @@ pub(in crate::platform) struct BrowserWindow {
     theme_picker_space: Option<SpaceId>,
     theme_picker_anchor: Option<Point<Pixels>>,
     theme_picker_presence: Presence<SpaceId>,
-    /// Native Liquid Glass behind the theme popover, on macOS 26+.
-    #[cfg(target_os = "macos")]
-    theme_picker_glass: Option<crate::platform::AppKitGlassBackdrop>,
     tab_focus_handles: Vec<FocusHandle>,
     /// Closes today's tabs left unused, when the setting asks.
     _archive_task: Task<()>,
@@ -624,8 +621,6 @@ fn open_browser_window(
                 theme_picker_space: None,
                 theme_picker_anchor: None,
                 theme_picker_presence: Presence::default(),
-                #[cfg(target_os = "macos")]
-                theme_picker_glass: crate::platform::AppKitGlassBackdrop::new(),
                 tab_focus_handles: Vec::new(),
                 _archive_task: BrowserWindow::archive_unused_tabs_regularly(window, cx),
                 tab_sleep_waker,

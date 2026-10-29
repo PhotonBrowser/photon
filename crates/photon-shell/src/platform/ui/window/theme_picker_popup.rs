@@ -4,7 +4,8 @@ use gpui::{AnyElement, Context, KeyDownEvent, MouseButton, Role, Window, div, pr
 use photon_core::{DockRegion, SpaceId};
 
 use super::super::controls::OwnsClicks;
-use super::super::motion::{AnimateIn, theme_picker_entrance};
+use super::super::glass::{glass, glass_available, layer};
+use super::super::motion::theme_picker_entrance;
 use super::super::settings::Settings;
 use super::super::theme;
 use super::super::{metrics, theme_picker};
@@ -57,30 +58,7 @@ impl BrowserWindow {
         let space = Settings::get(cx).spaces.get(space_id)?.clone();
         let (left, top) = self.picker_popup_position(window, cx);
         let dialog_label = format!("Edit theme for {}", space.name);
-        #[cfg(target_os = "macos")]
-        let glass = self.theme_picker_glass.clone().map(|glass| {
-            glass
-                .corner_radius(px(metrics::theme_accent_panel_radius()))
-                // No tint beneath the glass: it refracts the page itself, and
-                // the picker paints the theme's tint over it.
-                .absolute()
-                .top_0()
-                .left_0()
-                .size_full()
-                // The native view follows only its own style, so it takes the
-                // panel's motion itself rather than inheriting a painted scale.
-                .animate_with_offset_stable_id(
-                    "window-theme-picker-glass-motion",
-                    picker_motion,
-                    transition,
-                    &animations,
-                    (0.0, 0.0),
-                )
-        });
-        #[cfg(target_os = "macos")]
-        let over_glass = glass.is_some();
-        #[cfg(not(target_os = "macos"))]
-        let over_glass = false;
+        let over_glass = glass_available(cx);
         let picker = theme_picker::theme_picker(
             ("window-theme-picker", space_id),
             space.color,
@@ -90,7 +68,11 @@ impl BrowserWindow {
         )
         .into_floating()
         .over_glass(over_glass);
-        let dialog = div()
+        // The picker paints its own surface where there is no glass.
+        let dialog = glass("window-theme-picker-surface")
+            .z_index(layer::POPOVER)
+            .rounded(px(metrics::theme_accent_panel_radius()))
+            .motion(picker_motion, transition)
             .child(
                 div()
                     .id("theme-picker-dialog")
@@ -98,22 +80,8 @@ impl BrowserWindow {
                     .aria_label(dialog_label)
                     .owns_clicks()
                     .child(picker),
-            )
-            .animate_with_offset_stable_id(
-                "window-theme-picker-panel-motion",
-                picker_motion,
-                transition,
-                &animations,
-                (0.0, 0.0),
             );
-        let panel = div()
-            .id("window-theme-picker-panel")
-            .absolute()
-            .left(px(left))
-            .top(px(top));
-        #[cfg(target_os = "macos")]
-        let panel = panel.children(glass);
-        let panel = panel.child(dialog);
+        let panel = dialog.absolute().left(px(left)).top(px(top));
         let mut overlay = div()
             .id("window-theme-picker-overlay")
             .absolute()
