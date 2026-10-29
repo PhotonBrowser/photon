@@ -7,6 +7,7 @@ pub(crate) mod display;
 pub(crate) mod glass_backdrop;
 pub(crate) mod idle;
 pub(crate) mod motion_observer;
+pub(crate) mod native_panel;
 mod page_layer;
 pub(crate) mod presentation;
 pub(crate) mod renderer;

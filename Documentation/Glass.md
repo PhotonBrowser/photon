@@ -61,6 +61,19 @@ flickers. Its blur is `FROSTED_GLASS_BLUR` in `metrics.rs`, and its surface
 opacity is `frosted_glass` in `theme.toml`. The new tab page's customise menu
 uses it.
 
+## Panels over GPUI content
+
+Glass inside GPUI's window refracts only what lies beneath GPUI: to show, it
+clears GPUI's drawing, so it cuts through any GPUI interface behind it. A panel
+that floats over GPUI content and must be native glass opens in its own window
+instead, with `NativePanel` in
+[`ui/native_panel.rs`](../crates/photon-shell/src/platform/ui/native_panel.rs).
+The system composites that window over the browser window, so its glass
+refracts everything behind it. It takes any GPUI content, moves with the
+browser window, closes on Escape or a click elsewhere, and plays the content's
+entrance and exit while the window fades. The theme picker opens this way on
+macOS; elsewhere it is drawn in the window.
+
 ## What lies beneath the glass
 
 Glass refracts what is beneath GPUI, not what GPUI painted beneath the element:
