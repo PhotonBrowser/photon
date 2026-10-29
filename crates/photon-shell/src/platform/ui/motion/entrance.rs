@@ -132,6 +132,27 @@ impl Entrance {
         self
     }
 
+    /// How a native view that cannot be animated frame by frame appears
+    /// along with this entrance: the scale it grows from, the unit point it
+    /// grows out of, and over how long. `None` when it does not scale, or
+    /// motion is off.
+    pub(in super::super) fn native_appearance(
+        self,
+        config: &MotionConfig,
+    ) -> Option<(f32, (f32, f32), Duration)> {
+        let from = self.scale_from.filter(|_| config.allows_motion())?;
+        let strength = config.effect_strength.clamp(0.0, 3.0);
+        let start = (1.0 - (1.0 - from) * strength).clamp(0.2, 1.0);
+        let origin = match self.scale_origin.map(|(edge, _)| edge) {
+            Some(Edge::Left) => (0.0, 0.5),
+            Some(Edge::Right) => (1.0, 0.5),
+            Some(Edge::Top) => (0.5, 0.0),
+            Some(Edge::Bottom) => (0.5, 1.0),
+            None => (0.5, 0.5),
+        };
+        Some((start, origin, self.resolved_duration(config)))
+    }
+
     fn resolved_duration(self, config: &MotionConfig) -> Duration {
         if !config.allows_motion() {
             return Duration::ZERO;

@@ -56,7 +56,7 @@ pub use macos::appkit::{
     AppKitButton, AppKitButtonStyle, AppKitTabBar, AppKitView, AppKitViewElement,
 };
 #[cfg(target_os = "macos")]
-pub use macos::glass_backdrop::{AppKitGlassBackdrop, GlassWindowTint};
+pub use macos::glass_backdrop::{AppKitGlassBackdrop, GlassAppearance, GlassWindowTint};
 #[cfg(target_os = "macos")]
 pub use macos::site_info_popover::AppKitSiteInfoPopover;
 #[cfg(target_os = "macos")]
