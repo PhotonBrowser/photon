@@ -64,9 +64,8 @@ impl RenderOnce for Glass {
         };
 
         // The glass and the content are siblings, so the content's own
-        // background and border draw over the glass. The outer wrapper takes
-        // the content's place in its parent's layout; the inner one carries
-        // the motion, as moving it moves the glass's frame with it.
+        // background and border draw over the glass. The wrapper takes the
+        // content's place in its parent's layout.
         let mut placement = div();
         move_placement(content.style(), placement.style());
         let radius = corner_radius(content.style(), window);
@@ -86,31 +85,18 @@ impl RenderOnce for Glass {
                 .interactive(interactive)
                 .absolute()
                 .inset_0();
-            // The glass moves with the inner wrapper and takes the scale
-            // itself, by its frame. It does not fade, blur or take a layer
-            // transform: native glass draws nothing while partly
-            // transparent or transformed.
-            match motion {
-                Some((entrance, transition)) => glass.animate_with_offset_stable_id(
-                    (id.clone(), "glass-motion"),
-                    entrance.native_part(),
-                    transition,
-                    &motion_config,
-                    (0.0, 0.0),
-                ),
-                None => glass.into_any_element(),
-            }
+            // Native glass draws nothing while it changes in any way, its
+            // frame, opacity or transform, so it stays still at the
+            // element's place while only the content animates inside it.
+            glass.into_any_element()
         };
         #[cfg(not(target_os = "macos"))]
         let glass: gpui::AnyElement = match backdrop {};
 
-        let moving = div()
-            .id((id.clone(), "surface"))
-            .relative()
-            .size_full()
+        placement
             .child(glass)
-            .child(content);
-        placement.child(animated(moving, &id)).into_any_element()
+            .child(animated(content, &id))
+            .into_any_element()
     }
 }
 

@@ -464,7 +464,7 @@ impl GlassAttachment {
         );
         // Glass is never hidden: showing a hidden glass view plays AppKit's
         // appearance, which draws nothing at first. Glass that should not
-        // show collapses to nothing instead.
+        // show moves out of sight instead.
         let shown =
             visible && bounds.size.width > Pixels::ZERO && bounds.size.height > Pixels::ZERO;
         if shown {
@@ -625,10 +625,10 @@ fn disable_layer_actions(layer: &CAGradientLayer) {
 }
 
 impl Drop for GlassAttachment {
-    /// A frame that does not draw the element drops its attachment. Collapse
-    /// the glass rather than remove or hide it: inserting or showing a glass
-    /// view again makes AppKit materialize it afresh, which draws nothing at
-    /// first, as when a panel or the sidebar comes back.
+    /// A frame that does not draw the element drops its attachment. Move the
+    /// glass out of sight rather than remove or hide it: inserting or showing
+    /// a glass view again makes AppKit materialize it afresh, which draws
+    /// nothing at first, as when a panel or the sidebar comes back.
     fn drop(&mut self) {
         if self.parent.is_some() && self.inner.owner.get() == self.token {
             collapse(&self.inner.container);
@@ -636,15 +636,22 @@ impl Drop for GlassAttachment {
     }
 }
 
-/// Shrinks glass to nothing where it is, in place of hiding it.
+/// Where collapsed glass waits, far outside any window.
+const COLLAPSED_ORIGIN: f64 = -100_000.0;
+
+/// Moves glass out of sight, keeping its size and shape, in place of hiding
+/// it: shown again, it only moves back, which glass draws at once.
 fn collapse(container: &NSView) {
-    let origin = container.frame().origin;
-    container.setFrame(NSRect::new(origin, NSSize::ZERO));
+    let size = container.frame().size;
+    container.setFrame(NSRect::new(
+        NSPoint::new(COLLAPSED_ORIGIN, COLLAPSED_ORIGIN),
+        size,
+    ));
 }
 
 fn is_collapsed(container: &NSView) -> bool {
-    let size = container.frame().size;
-    size.width == 0.0 || size.height == 0.0
+    let frame = container.frame();
+    frame.origin.x == COLLAPSED_ORIGIN || frame.size.width == 0.0 || frame.size.height == 0.0
 }
 
 impl Drop for AppKitGlassBackdropInner {

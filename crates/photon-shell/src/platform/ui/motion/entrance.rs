@@ -60,20 +60,6 @@ impl Entrance {
         self
     }
 
-    /// The part a native view takes: the scale, about its centre. A native
-    /// view moves with its parent's layout, which carries the slide and the
-    /// shift toward the edge it grows from, and it does not fade or blur.
-    pub(in super::super) const fn native_part(self) -> Self {
-        let mut native = Self::new();
-        native.speed = self.speed;
-        native.duration_override = self.duration_override;
-        native.delay = self.delay;
-        native.curve = self.curve;
-        native.exit_curve = self.exit_curve;
-        native.scale_from = self.scale_from;
-        native
-    }
-
     pub const fn fade_from(mut self, opacity: f32) -> Self {
         self.opacity_from = Some(opacity);
         self
