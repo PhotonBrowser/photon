@@ -1,5 +1,6 @@
 //! The field's content, and the panel it opens into while typing.
 
+use crate::platform::site_info::SiteControl;
 use gpui::{AnyElement, Context, Focusable, deferred, div, prelude::*, px, rgb, rgba};
 use gpui_elements::editable_text::text_input;
 use photon_core::DockRegion;
@@ -71,10 +72,11 @@ impl Omnibox {
                     metrics::SITE_INFO_BUTTON_ICON_SIZE,
                 )),
             palette,
-            Box::new(cx.listener(move |this, _, _, cx| {
-                this.site_info_open = !this.site_info_open;
-                cx.notify();
-            })),
+            Box::new(
+                cx.listener(move |this, event: &gpui::ClickEvent, window, cx| {
+                    this.toggle_site_info(event.position(), window, cx);
+                }),
+            ),
         )
         .group("site-info-button")
         .hover_style(|style| style)
@@ -163,6 +165,32 @@ impl Omnibox {
         }
     }
 
+    /// Opens or closes the popover: AppKit's own on macOS, GPUI's elsewhere.
+    fn toggle_site_info(
+        &mut self,
+        anchor: gpui::Point<gpui::Pixels>,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
+        #[cfg(target_os = "macos")]
+        if let Some(popover) = &self.site_info_native {
+            let guard = std::time::Duration::from_millis(metrics::POPOVER_REOPEN_GUARD_MS);
+            if popover.is_shown() {
+                popover.close();
+            } else if !popover.closed_within(guard) {
+                popover.update(&self.site_info(cx));
+                popover.show(window, anchor);
+            }
+            return;
+        }
+        // Only the native popover needs to know where it was opened from.
+        #[cfg(not(target_os = "macos"))]
+        let _ = (anchor, window);
+        self.site_info_open = !self.site_info_open;
+        self.site_info_security = false;
+        cx.notify();
+    }
+
     pub(super) fn site_info_popover(
         &mut self,
         palette: ThemeColors,
@@ -170,78 +198,96 @@ impl Omnibox {
         workspace_layout: &WorkspaceLayout,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let motion = super::super::settings::Settings::motion(cx);
-        let transition = self
-            .site_info_presence
-            .sync(self.site_info_open.then_some(()), MENU_MOTION, &motion, cx)
-            .map(|((), transition)| transition);
-        // The site's details are read only while the popover is drawn, not on
-        // every caret blink of the field.
-        let content = transition.map(|transition| {
-            super::site_info::popover(
-                self.site_info(cx),
-                self.site_info_actions(cx),
-                metrics::SITE_INFO_WIDTH,
-                transition,
-                palette,
-                cx,
+        // The native popover follows the site as the field redraws.
+        #[cfg(target_os = "macos")]
+        if let Some(popover) = &self.site_info_native {
+            if popover.is_shown() {
+                popover.update(&self.site_info(cx));
+            }
+            return deferred(gpui::div()).priority(1);
+        }
+        {
+            let motion = super::super::settings::Settings::motion(cx);
+            let transition = self
+                .site_info_presence
+                .sync(self.site_info_open.then_some(()), MENU_MOTION, &motion, cx)
+                .map(|((), transition)| transition);
+            // The site's details are read only while the popover is drawn, not on
+            // every caret blink of the field.
+            let content = transition.map(|transition| {
+                super::site_info::popover(
+                    self.site_info(cx),
+                    self.site_info_security,
+                    self.site_info_actions(cx),
+                    metrics::SITE_INFO_WIDTH,
+                    transition,
+                    palette,
+                    cx,
+                )
+                .into_any_element()
+            });
+            let opens_toward_page =
+                workspace_layout.sidebar_region() != Some(photon_core::DockRegion::Trailing);
+            // Like a context menu, the popover opens from the button, over the
+            // page rather than within the narrow sidebar.
+            let button_inset =
+                metrics::SIDEBAR_OMNIBOX_BUTTON_INSET + metrics::OMNIBOX_BORDER_WIDTH;
+            let button_start = if style.trailing_site_info {
+                let sidebar_width = workspace_layout
+                    .sidebar_extent()
+                    .unwrap_or_else(|| super::super::settings::Settings::get(cx).sidebar.width())
+                    as f32;
+                sidebar_width
+                    - 2.0 * metrics::SIDEBAR_PADDING
+                    - button_inset
+                    - metrics::SIDEBAR_OMNIBOX_BUTTON_SIZE
+            } else {
+                metrics::OMNIBOX_HORIZONTAL_PADDING
+            };
+            deferred(
+                gpui::div()
+                    .absolute()
+                    .when(opens_toward_page || !style.trailing_site_info, |popover| {
+                        popover.left(px(button_start))
+                    })
+                    .when(style.trailing_site_info && !opens_toward_page, |popover| {
+                        popover.right(px(button_inset))
+                    })
+                    .top(px(style.height + metrics::MENU_ITEM_GAP))
+                    // Only the open popover takes clicks; a leaving one lets them through.
+                    .when(self.site_info_open, |popover| {
+                        popover
+                            .occlude()
+                            .on_mouse_down_out(
+                                cx.listener(|this, _, _, cx| this.close_site_info(cx)),
+                            )
+                            .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, _, cx| {
+                                if event.keystroke.key == "escape" {
+                                    cx.stop_propagation();
+                                    this.close_site_info(cx);
+                                }
+                            }))
+                    })
+                    .children(content),
             )
-            .into_any_element()
-        });
-        let opens_toward_page =
-            workspace_layout.sidebar_region() != Some(photon_core::DockRegion::Trailing);
-        // Like a context menu, the popover opens from the button, over the
-        // page rather than within the narrow sidebar.
-        let button_inset = metrics::SIDEBAR_OMNIBOX_BUTTON_INSET + metrics::OMNIBOX_BORDER_WIDTH;
-        let button_start = if style.trailing_site_info {
-            let sidebar_width = workspace_layout
-                .sidebar_extent()
-                .unwrap_or_else(|| super::super::settings::Settings::get(cx).sidebar.width())
-                as f32;
-            sidebar_width
-                - 2.0 * metrics::SIDEBAR_PADDING
-                - button_inset
-                - metrics::SIDEBAR_OMNIBOX_BUTTON_SIZE
-        } else {
-            metrics::OMNIBOX_HORIZONTAL_PADDING
-        };
-        deferred(
-            gpui::div()
-                .absolute()
-                .when(opens_toward_page || !style.trailing_site_info, |popover| {
-                    popover.left(px(button_start))
-                })
-                .when(style.trailing_site_info && !opens_toward_page, |popover| {
-                    popover.right(px(button_inset))
-                })
-                .top(px(style.height + metrics::MENU_ITEM_GAP))
-                // Only the open popover takes clicks; a leaving one lets them through.
-                .when(self.site_info_open, |popover| {
-                    popover
-                        .occlude()
-                        .on_mouse_down_out(cx.listener(|this, _, _, cx| this.close_site_info(cx)))
-                        .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, _, cx| {
-                            if event.keystroke.key == "escape" {
-                                cx.stop_propagation();
-                                this.close_site_info(cx);
-                            }
-                        }))
-                })
-                .children(content),
-        )
-        .priority(1)
+            .priority(1)
+        }
     }
 
-    fn close_site_info(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn close_site_info(&mut self, cx: &mut Context<Self>) {
+        #[cfg(target_os = "macos")]
+        if let Some(popover) = &self.site_info_native {
+            popover.close();
+        }
         if self.site_info_open {
             self.site_info_open = false;
             cx.notify();
         }
     }
 
-    fn site_info(&self, cx: &Context<Self>) -> super::site_info::SiteInfo {
+    fn site_info(&self, cx: &Context<Self>) -> crate::platform::site_info::SiteInfo {
         let webview = self.webview.as_ref().map(|webview| webview.read(cx));
-        super::site_info::SiteInfo {
+        crate::platform::site_info::SiteInfo {
             site: Some(photon_core::display_domain(&self.page_url(cx)))
                 .filter(|site| !site.is_empty())
                 .unwrap_or_else(|| "Photon".to_owned()),
@@ -253,36 +299,47 @@ impl Omnibox {
 
     fn site_info_actions(&self, cx: &mut Context<Self>) -> super::site_info::SiteInfoActions {
         let this = cx.entity().downgrade();
-        let close = this.clone();
-        super::site_info::SiteInfoActions {
-            close: Box::new(move |_, _, cx| {
-                close.update(cx, |this, cx| this.close_site_info(cx)).ok();
-            }),
-            toggle_microphone: Box::new({
-                let this = this.clone();
-                move |_, _, cx| {
-                    this.update(cx, |this, cx| {
-                        if let Some(webview) = this.webview.clone() {
-                            webview.update(cx, |webview, cx| {
-                                let allowed = webview.microphone_allowed_here() == Some(true);
-                                webview.set_microphone_allowed_here(!allowed, cx);
-                            });
-                        }
-                        cx.notify();
-                    })
-                    .ok();
-                }
-            }),
-            toggle_sound: Box::new(move |_, _, cx| {
+        let page = |security| -> super::super::ClickHandler {
+            let this = this.clone();
+            Box::new(move |_, _, cx| {
                 this.update(cx, |this, cx| {
-                    if let Some(webview) = this.webview.clone() {
-                        webview.update(cx, |webview, cx| webview.toggle_audio_mute(cx));
-                    }
+                    this.site_info_security = security;
                     cx.notify();
                 })
                 .ok();
+            })
+        };
+        let toggle = |control| -> super::super::ClickHandler {
+            let this = this.clone();
+            Box::new(move |_, _, cx| {
+                this.update(cx, |this, cx| this.toggle_site_control(control, cx))
+                    .ok();
+            })
+        };
+        super::site_info::SiteInfoActions {
+            toggle_microphone: toggle(SiteControl::Microphone),
+            toggle_sound: toggle(SiteControl::Sound),
+            show_security: page(true),
+            back: page(false),
+            close: Box::new(move |_, _, cx| {
+                this.update(cx, |this, cx| this.close_site_info(cx)).ok();
             }),
         }
+    }
+
+    /// Turns one of the site's controls on or off, from either popover.
+    pub(super) fn toggle_site_control(&mut self, control: SiteControl, cx: &mut Context<Self>) {
+        if let Some(webview) = self.webview.clone() {
+            webview.update(cx, |webview, cx| match control {
+                SiteControl::Microphone => {
+                    let allowed = webview.microphone_allowed_here() == Some(true);
+                    webview.set_microphone_allowed_here(!allowed, cx);
+                }
+                SiteControl::Sound => webview.toggle_audio_mute(cx),
+                SiteControl::Camera | SiteControl::PopOut => {}
+            });
+        }
+        cx.notify();
     }
 
     /// The highlighted suggestion's icon while suggesting, otherwise a search icon.
