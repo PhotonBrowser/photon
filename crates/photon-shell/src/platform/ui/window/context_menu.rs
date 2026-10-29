@@ -46,8 +46,24 @@ struct MenuOverlay {
 }
 
 impl BrowserWindow {
-    /// Opens a Photon-styled menu at the pointer, clamped to the window.
+    /// Opens the context menu at the pointer: AppKit's on macOS, elsewhere a
+    /// Photon-styled menu clamped to the window.
     pub(super) fn show_context_menu(
+        &mut self,
+        window: &mut Window,
+        items: Vec<MenuItem>,
+        cx: &mut Context<Self>,
+    ) {
+        // AppKit draws its own menu from the same items, and choosing one
+        // dispatches its action as GPUI's menu does.
+        if cfg!(target_os = "macos") {
+            cx.show_context_menu(items);
+        } else {
+            self.show_gpui_context_menu(window, items, cx);
+        }
+    }
+
+    fn show_gpui_context_menu(
         &mut self,
         window: &mut Window,
         items: Vec<MenuItem>,
@@ -284,7 +300,6 @@ impl BrowserWindow {
                 content,
                 Transition::Enter,
                 overlay.palette,
-                cx,
             ));
         let close = cx.listener(|this, _: &MouseDownEvent, window, cx| {
             this.close_context_popover(window, cx);
