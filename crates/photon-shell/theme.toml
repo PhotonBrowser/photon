@@ -103,6 +103,8 @@ selected = 0.12
 surface_hover = 0.09
 accent_hover_blend = 0.12
 soft_accent_border = 0.48
+# How much of its surface colour frosted glass keeps over the blur.
+frosted_glass = 0.55
 
 # Theme picker popover motion; tune here without adding user facing settings.
 [motion.theme_picker]
@@ -169,6 +171,7 @@ sidebar_omnibox_button = 7.0
 page = 12.0
 page_smoothing = 0.6
 theme_accent_panel = 16.0
+site_info_tile = 10.0
 checkbox = 4.0
 segment = 5.0
 sidebar_collapsed_item = 8.0

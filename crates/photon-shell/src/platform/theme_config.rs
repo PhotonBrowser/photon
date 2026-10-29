@@ -77,6 +77,7 @@ pub(crate) struct OpacityTokens {
     pub(crate) surface_hover: f32,
     pub(crate) accent_hover_blend: f32,
     pub(crate) soft_accent_border: f32,
+    pub(crate) frosted_glass: f32,
 }
 
 #[derive(Deserialize)]
@@ -149,6 +150,7 @@ pub(crate) struct RadiusTokens {
     pub(crate) page: f32,
     pub(crate) page_smoothing: f32,
     pub(crate) theme_accent_panel: f32,
+    pub(crate) site_info_tile: f32,
     pub(crate) checkbox: f32,
     pub(crate) segment: f32,
     pub(crate) sidebar_collapsed_item: f32,

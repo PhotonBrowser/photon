@@ -604,6 +604,12 @@ fn legible_on(tint: Rgba, text: Rgba, background: Rgba) -> Rgba {
 }
 
 /// Relative luminance chooses the more legible of black and white ink.
+/// `rgba` with its alpha scaled by `opacity`, as GPUI paints it faded.
+pub(super) fn with_opacity(rgba: u32, opacity: f32) -> u32 {
+    let alpha = (rgba & 0xff) as f32 * opacity.clamp(0.0, 1.0);
+    (rgba & !0xff) | alpha.round() as u32
+}
+
 pub(super) fn contrasting_text(background: Rgba) -> u32 {
     let luminance = relative_luminance(background);
     let tokens = &crate::platform::theme_config::theme().picker;
