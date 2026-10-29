@@ -95,6 +95,8 @@ impl BrowserWindow {
                     edge => edge,
                 },
                 size,
+                // The picker tints its whole surface, which the arrow is not.
+                arrow: false,
                 content,
                 on_dismiss,
             },

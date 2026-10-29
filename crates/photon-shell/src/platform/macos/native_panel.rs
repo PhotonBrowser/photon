@@ -10,11 +10,13 @@ use gpui::{
 };
 
 /// A `size` popover attached to `anchor`, a rectangle in `parent`'s
-/// coordinates, opening toward `gravity`.
+/// coordinates, opening toward `gravity`, with an arrow at the anchor if
+/// `arrow`.
 pub(crate) fn options(
     parent: AnyWindowHandle,
     anchor: Bounds<Pixels>,
     gravity: PopupGravity,
+    arrow: bool,
     size: Size<Pixels>,
 ) -> WindowOptions {
     WindowOptions {
@@ -23,11 +25,10 @@ pub(crate) fn options(
             size,
         ))),
         titlebar: None,
-        // No arrow: AppKit draws it from material the content cannot tint.
         kind: WindowKind::AnchoredPopup(
             PopupOptions::new(parent, anchor)
                 .gravity(gravity)
-                .arrow(false),
+                .arrow(arrow),
         ),
         focus: true,
         show: true,

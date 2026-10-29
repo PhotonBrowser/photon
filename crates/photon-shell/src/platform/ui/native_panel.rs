@@ -35,6 +35,9 @@ pub(super) struct PanelOptions {
     /// The side of the anchor the popover opens on.
     pub(super) side: Edge,
     pub(super) size: Size<Pixels>,
+    /// Whether an arrow points at the anchor. AppKit draws it from its own
+    /// material, which content painting its own tint cannot reach.
+    pub(super) arrow: bool,
     pub(super) content: PanelContent,
     pub(super) on_dismiss: Rc<dyn Fn(&mut App)>,
 }
@@ -51,6 +54,7 @@ impl NativePanel {
             anchor,
             side,
             size,
+            arrow,
             content,
             on_dismiss,
         } = options;
@@ -67,6 +71,7 @@ impl NativePanel {
                 parent.window_handle(),
                 anchor,
                 gravity,
+                arrow,
                 size,
             ),
             move |window, cx| {
