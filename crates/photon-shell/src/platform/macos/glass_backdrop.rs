@@ -14,7 +14,9 @@ use objc2::{
     rc::Retained,
     runtime::{AnyClass, AnyObject},
 };
-use objc2_app_kit::{NSApplication, NSGlassEffectView, NSGlassEffectViewStyle, NSView};
+use objc2_app_kit::{
+    NSApplication, NSGlassEffectView, NSGlassEffectViewStyle, NSView, NSWindowOrderingMode,
+};
 use objc2_core_graphics::CGColor;
 use objc2_foundation::{NSArray, NSDictionary, NSNull, NSPoint, NSRect, NSSize, NSString};
 use objc2_quartz_core::CAGradientLayer;
@@ -272,11 +274,9 @@ impl Element for AppKitGlassBackdrop {
                 if let Some(beneath_pages) =
                     page_layer::page_placed_over(host, *bounds, attachment.placed, *placed)
                 {
-                    attachment.beneath_pages = beneath_pages;
+                    attachment.order(beneath_pages);
                 }
                 attachment.placed = *placed;
-                let beneath_pages = attachment.beneath_pages;
-                attachment.order(host, beneath_pages);
                 ((), attachment)
             });
         }
@@ -331,8 +331,7 @@ struct GlassAttachment {
     /// Where the glass was last painted in the placement order.
     placed: u64,
     beneath_pages: bool,
-    /// Which of the window's glass hosts holds the glass.
-    parent_beneath_pages: bool,
+    z_index: i32,
     token: u64,
 }
 
@@ -368,7 +367,7 @@ impl GlassAttachment {
             applied: None,
             placed: 0,
             beneath_pages: false,
-            parent_beneath_pages: false,
+            z_index: 0,
             token: NEXT_NATIVE_VIEW_ID.fetch_add(1, Ordering::Relaxed),
         }
     }
@@ -405,19 +404,9 @@ impl GlassAttachment {
         if self.parent.is_some() && self.applied.as_ref() == Some(&applied) {
             return;
         }
-        // The host only changes with the window, so moving glass skips it.
-        let host_changed = self
-            .applied
-            .as_ref()
-            .is_none_or(|last| last.host_bounds != applied.host_bounds);
-        let parent = match self.parent {
-            Some(parent) if !host_changed => {
-                // SAFETY: the parent is attached and accessed on the main thread.
-                unsafe { Retained::retain(parent.as_ptr()) }
-                    .expect("an attached glass host is non-null")
-            }
-            _ => page_layer::glass_host_view(host, &window_content, self.parent_beneath_pages),
-        };
+        // Glass lies directly in the window's content, where it draws while
+        // it animates, beside the pages' host and beneath GPUI's view.
+        let parent = window_content;
         let container = &self.inner.container;
         let gradient_changed = self
             .applied
@@ -442,8 +431,15 @@ impl GlassAttachment {
             .as_ref()
             .is_some_and(|current| std::ptr::eq(&**current, &*parent))
         {
+            // Inserted once: adding, hiding or removing a view here redraws
+            // the whole window's glass, so glass is never hidden or removed
+            // again while its window lives, and orders by depth alone.
             container.removeFromSuperview();
-            parent.addSubview(container);
+            parent.addSubview_positioned_relativeTo(
+                container,
+                NSWindowOrderingMode::Below,
+                Some(host),
+            );
         }
         self.parent = Some(NonNull::from(&*parent));
 
@@ -484,11 +480,8 @@ impl GlassAttachment {
             }
             glass.setCornerRadius(radius.as_f32() as f64);
         }
-        if let Some(layer) = container.layer()
-            && layer.zPosition() != z_index as f64
-        {
-            layer.setZPosition(z_index as f64);
-        }
+        self.z_index = z_index;
+        self.apply_depth();
         if backing_changed && let Some(layer) = container.layer() {
             let backing = backing.map(cg_color);
             layer.setBackgroundColor(backing.as_deref());
@@ -506,24 +499,21 @@ impl GlassAttachment {
     /// the chrome, and in the host above them otherwise, as the chrome over a
     /// page or a popover is. Moving glass makes AppKit materialize it afresh,
     /// so this happens only when that order changes.
-    fn order(&mut self, host: &NSView, beneath_pages: bool) {
-        if self.parent.is_some() && self.parent_beneath_pages == beneath_pages {
-            return;
-        }
-        // SAFETY: AppKit view hierarchy access runs on the main thread.
-        let Some(window_content) = (unsafe { host.superview() }) else {
+    fn order(&mut self, beneath_pages: bool) {
+        self.beneath_pages = beneath_pages;
+        self.apply_depth();
+    }
+
+    /// Sets the glass's layer depth from its place among the pages and its
+    /// z-index. Depth orders it without moving it among the views.
+    fn apply_depth(&self) {
+        let Some(layer) = self.inner.container.layer() else {
             return;
         };
-        let glass_host = page_layer::glass_host_view(host, &window_content, beneath_pages);
-        self.parent_beneath_pages = beneath_pages;
-        if self.parent == Some(NonNull::from(&*glass_host)) {
-            return;
+        let depth = page_layer::glass_depth(self.beneath_pages, self.z_index);
+        if layer.zPosition() != depth {
+            layer.setZPosition(depth);
         }
-        let container = &self.inner.container;
-        container.removeFromSuperview();
-        glass_host.addSubview(container);
-        self.parent = Some(NonNull::from(&*glass_host));
-        // The new host shares the old one's frame, so the glass stays put.
     }
 
     /// Lays the window-sized tint gradient under the field so the slice the

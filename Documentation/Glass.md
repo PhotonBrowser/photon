@@ -28,13 +28,12 @@ glass("my-panel")
 - **Fallback:** `.fallback(|el| ..)` styles apply only where there is no glass,
   for the painted surface that stands in for it.
 - **Motion:** use `.motion(entrance, transition)` rather than wrapping the
-  element in an animation. Only the content animates; the glass stays still
-  at the element's final place and size. Native glass draws nothing while it
-  changes in any way, its frame, opacity or transform, which shows as a dark
-  hole until it settles. To grow a panel out of the side it opens on, as a
-  popover does, use `Entrance::scale_from_edge(scale, edge, length)` with
-  `Edge::Left`, `Right`, `Top` or `Bottom`: the content grows from that edge
-  inside glass that is already there.
+  element in an animation. The native glass does not inherit GPUI's painted
+  fade and scale, so it takes the same motion itself and moves, scales and
+  fades with the content; only the blur is the content's alone. To grow a
+  panel out of the side it opens on, as a popover does, use
+  `Entrance::scale_from_edge(scale, edge, length)` with `Edge::Left`,
+  `Right`, `Top` or `Bottom`; the theme picker grows from the sidebar's side.
 - **Reuse:** each element's native glass view is kept for its window, so a
   panel that closes and opens again shows the same glass instead of a new
   one that AppKit materializes with a flash. Closed, it waits out of sight at
@@ -95,14 +94,16 @@ automatically.
 
 ## How it works on macOS
 
-Each window has two Photon-owned views beneath GPUI's: one above the pages and
-one beneath them (`glass_host_view` in
-[`macos/page_layer.rs`](../crates/photon-shell/src/platform/macos/page_layer.rs)).
-Every glass view lives in one of them. Glass never goes in the window's own
-content view: adding, hiding or removing a view there redraws the whole
-window's glass, which flickers. The native view and its placement live in
+Glass lies directly in the window's content view, beneath GPUI's view and
+beside the host that holds the pages, where it draws while it animates. Adding,
+hiding or removing a view there redraws the whole window's glass, which
+flickers, so each glass view is inserted once and never hidden or removed while
+its window lives: glass that should not show waits out of sight instead. Its
+order among the pages and other glass is a layer depth (`glass_depth` in
+[`macos/page_layer.rs`](../crates/photon-shell/src/platform/macos/page_layer.rs)),
+never a move among the views. The native view and its placement live in
 `AppKitGlassBackdrop` in
-[`macos/appkit.rs`](../crates/photon-shell/src/platform/macos/appkit.rs).
+[`macos/glass_backdrop.rs`](../crates/photon-shell/src/platform/macos/glass_backdrop.rs).
 
 Native AppKit controls that need no GPUI content, such as the site information
 popover and context menus, use AppKit directly instead; see

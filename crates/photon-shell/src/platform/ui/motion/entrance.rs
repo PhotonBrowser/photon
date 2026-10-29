@@ -26,6 +26,7 @@ pub(in super::super) struct Entrance {
     scale_from: Option<f32>,
     /// The edge an element scales from, and its length across that edge.
     scale_origin: Option<(Edge, f32)>,
+    exit_scale: Option<f32>,
 }
 
 impl Entrance {
@@ -42,6 +43,7 @@ impl Entrance {
             grow: None,
             scale_from: None,
             scale_origin: None,
+            exit_scale: None,
         }
     }
 
@@ -57,6 +59,12 @@ impl Entrance {
     pub const fn scale_from_edge(mut self, scale: f32, edge: Edge, length: f32) -> Self {
         self.scale_from = Some(scale);
         self.scale_origin = Some((edge, length));
+        self
+    }
+
+    /// Leaves at a different scale than it enters from.
+    pub const fn scale_exit_to(mut self, scale: f32) -> Self {
+        self.exit_scale = Some(scale);
         self
     }
 
@@ -211,16 +219,21 @@ impl Default for Entrance {
     }
 }
 
-/// The theme picker grows out of `edge`, the side it opens on, as a popover
-/// does, while its controls fade and sharpen inside its glass. `width` is
-/// the picker's width.
+/// The theme picker grows out of `edge`, the side it opens on, with a spring,
+/// as a popover does, fading in as its controls sharpen. `width` is the
+/// picker's width.
 pub(in super::super) fn theme_picker_entrance(edge: Edge, width: f32) -> Entrance {
     let tokens = &crate::platform::theme_config::theme().motion.theme_picker;
     Entrance::new()
         .fade_from(0.0)
         .blur_from(tokens.blur_from)
         .scale_from_edge(tokens.scale_from, edge, width)
-        .curve(Curve::EaseOut)
+        .scale_exit_to(tokens.scale_to)
+        .curve(Curve::Spring(SpringConfig::new(
+            tokens.spring.stiffness,
+            tokens.spring.damping,
+            tokens.spring.mass,
+        )))
         .exit_curve(Curve::EaseInOut)
         .duration(Duration::from_millis(tokens.duration_ms))
 }
@@ -249,7 +262,14 @@ pub(super) fn apply_entrance<E: Styled + gpui::IntoElement + 'static>(
             entrance.resolved_duration(config),
         ),
         Transition::Exit => (
-            hidden,
+            match entrance.exit_scale {
+                Some(scale) => {
+                    let mut exit = entrance;
+                    exit.scale_from = Some(scale);
+                    exit.targets(config, base_offset).1
+                }
+                None => hidden,
+            },
             shown,
             Duration::ZERO,
             entrance.exit_duration(config),

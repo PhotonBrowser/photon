@@ -84,11 +84,23 @@ impl RenderOnce for Glass {
                 .z_index(z_index)
                 .interactive(interactive)
                 .absolute()
-                .inset_0();
-            // Native glass draws nothing while it changes in any way, its
-            // frame, opacity or transform, so it stays still at the
-            // element's place while only the content animates inside it.
-            glass.into_any_element()
+                .top_0()
+                .left_0()
+                .size_full();
+            // The native view follows only its own style, so it takes the
+            // content's motion itself rather than inheriting a painted fade
+            // and scale. Placed by its top-left corner, the motion's offsets
+            // move it without stretching it.
+            match motion {
+                Some((entrance, transition)) => glass.animate_with_offset_stable_id(
+                    (id.clone(), "glass-motion"),
+                    entrance,
+                    transition,
+                    &motion_config,
+                    (0.0, 0.0),
+                ),
+                None => glass.into_any_element(),
+            }
         };
         #[cfg(not(target_os = "macos"))]
         let glass: gpui::AnyElement = match backdrop {};
