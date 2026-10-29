@@ -4,6 +4,7 @@ use gpui::{
     App, Edges, MouseButton, MouseUpEvent, Render, StyleRefinement, Window, div, prelude::*, px,
 };
 use photon_core::DockRegion;
+use std::time::Instant;
 
 use super::super::appearance_preview::AppearancePreview;
 use super::super::background_noise;
@@ -59,6 +60,31 @@ impl Render for BrowserWindow {
         } else {
             self.page_margins(&layout, cx)
         };
+        let page_opacity = self
+            .page_transition
+            .as_ref()
+            .map_or(1.0, |transition| transition.value_at(Instant::now()));
+        if let Some(transition) = self.page_transition.as_ref() {
+            if transition.is_running() {
+                window.request_animation_frame();
+            } else {
+                self.page_transition = None;
+            }
+        }
+        let active_webview = self.active_webview();
+        if let Some(webview) = active_webview.as_ref() {
+            webview.update(cx, |view, _| view.set_page_opacity(page_opacity));
+        }
+        let active_view = self.active_view(palette, cx);
+        let active_view = if active_webview.is_some() {
+            active_view
+        } else {
+            div()
+                .size_full()
+                .opacity(page_opacity)
+                .child(active_view)
+                .into_any_element()
+        };
         let page = div()
             .absolute()
             .inset_0()
@@ -69,7 +95,7 @@ impl Render for BrowserWindow {
             .pr(px(margins.right))
             .pb(px(margins.bottom))
             .pl(px(margins.left))
-            .child(self.active_view(palette, cx))
+            .child(active_view)
             // The find bar floats in the page's top-right corner.
             .children(find_bar.map(|(bar, transition)| {
                 div()

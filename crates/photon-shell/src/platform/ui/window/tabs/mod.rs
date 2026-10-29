@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use super::super::icons::LOADING_SPINNER_STEPS;
+use super::super::motion::{Speed, Tween, TweenCurve};
 use super::super::pages::{NEW_TAB, PageDefinition, find_page};
 use super::super::settings::Settings;
 use super::super::tabs::{ICON_ENTRANCE, TabDragAxis, TabIcon};
@@ -72,6 +73,10 @@ impl BrowserWindow {
             return;
         }
         if self.active_tab != Some(index) {
+            let animations = Settings::motion(cx);
+            let mut transition = Tween::at_with_curve(0.0, TweenCurve::SmoothStep);
+            transition.animate_to_for(1.0, animations.duration(Speed::Standard), &animations);
+            self.page_transition = animations.allows_motion().then_some(transition);
             // The find bar searches one page; switching tabs ends its search.
             self.close_find_bar(false, window, cx);
             if let Some(previous_index) = self.active_tab {

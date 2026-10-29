@@ -117,6 +117,8 @@ pub(in crate::platform) struct BrowserWindow {
     _memory_pressure_monitor: sleeping::MemoryPressureMonitor,
     tab_sleep_mode: TabSleepMode,
     active_tab: Option<usize>,
+    /// Fades the selected page into view after a tab switch.
+    page_transition: Option<Tween>,
     /// The active tab drag, its measured geometry, and the temporary motion.
     tab_drag_layout: Option<TabDragLayout>,
     tab_geometry: HashMap<u64, Bounds<Pixels>>,
@@ -628,6 +630,7 @@ fn open_browser_window(
                 _memory_pressure_monitor: memory_pressure_monitor,
                 tab_sleep_mode: Settings::get(cx).tab_sleep_mode,
                 active_tab: None,
+                page_transition: None,
                 tab_drag_layout: None,
                 tab_geometry: HashMap::new(),
                 tab_container_bounds: None,
