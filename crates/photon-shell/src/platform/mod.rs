@@ -24,6 +24,9 @@ mod permission_coordinator;
 mod portable_display;
 pub(crate) mod presentation;
 pub(crate) mod shortcuts;
+// SF Symbol names are only read by the native macOS popover.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub(crate) mod site_info;
 #[cfg_attr(target_os = "linux", allow(dead_code))]
 pub(crate) mod theme_config;
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
@@ -50,9 +53,12 @@ pub(crate) use linux::{
 };
 #[cfg(target_os = "macos")]
 pub use macos::appkit::{
-    AppKitButton, AppKitButtonStyle, AppKitGlassBackdrop, AppKitTabBar, AppKitView,
-    AppKitViewElement, GlassWindowTint,
+    AppKitButton, AppKitButtonStyle, AppKitTabBar, AppKitView, AppKitViewElement,
 };
+#[cfg(target_os = "macos")]
+pub use macos::glass_backdrop::{AppKitGlassBackdrop, GlassWindowTint};
+#[cfg(target_os = "macos")]
+pub use macos::site_info_popover::AppKitSiteInfoPopover;
 #[cfg(target_os = "macos")]
 pub(crate) use macos::{
     app_menus, default_browser, is_dark_appearance, keyboard_notation, motion_observer, renderer,
