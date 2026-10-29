@@ -11,6 +11,9 @@ documented in the guides linked from the [README](../README.md).
 - Improve tab and toolbar interactions, including copying the current address,
   background audio controls, and spring motion.
 
+- Show site certificates and TLS details from the Engine, replacing the
+  address-scheme check behind “Secure”. See [Omnibox](Omnibox.md#not-yet-implemented).
+
 ## Later
 
 - Add private windows with isolated, temporary profiles.

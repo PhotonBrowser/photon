@@ -87,6 +87,40 @@ palette view and window integration live in
 and [`ui/window/command_palette.rs`](../crates/photon-shell/src/platform/ui/window/command_palette.rs).
 ⌘T and “New Tab” controls continue to open a regular new tab.
 
+## Site information
+
+The button at the start of the field opens the active site's information: the
+site's controls (camera, microphone, sound and pop-out), its data and
+permissions, and its connection. Pressing the connection pill opens the
+connection's own page, which explains what the connection means for what the
+person sends the site.
+
+On macOS the popover is a native `NSPopover`
+([`macos/site_info_popover.rs`](../crates/photon-shell/src/platform/macos/site_info_popover.rs)),
+which is Liquid Glass on macOS 26 and later. Other platforms draw the same
+popover in GPUI
+([`ui/omnibox/site_info.rs`](../crates/photon-shell/src/platform/ui/omnibox/site_info.rs)).
+Both read one model,
+[`platform/site_info.rs`](../crates/photon-shell/src/platform/site_info.rs),
+for their controls, states and wording, and both change the site through the
+omnibox's `toggle_site_control`, so a change to one belongs in the other.
+
+### Not yet implemented
+
+These show dimmed until the Engine can do them:
+
+- **Certificates.** The connection page has a disabled "View certificate"
+  button. "Secure" means only that the page's address is `https`
+  (`notify_state` in `LibPhotonEmbedder`); RequestServer does not keep the
+  peer certificate or TLS details. Showing a certificate needs RequestServer to
+  record the main document's chain, the Engine to carry it through
+  `LibPhotonEmbedder` and `photon-ffi` into page state, and the popover to
+  show it: `SFCertificatePanel` on macOS and a GPUI view elsewhere. Security
+  should then come from the TLS result rather than the scheme. Check how the
+  Engine's Qt and AppKit UIs treat connection security first.
+- **Camera** and **pop out view**, which have no Engine support.
+- **Data and cookies** and **Permissions**, which have no pages to open.
+
 ## Who calls it
 
 - `crates/photon-shell`'s omnibox

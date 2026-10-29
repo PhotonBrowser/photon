@@ -232,3 +232,5 @@ switching tabs. Animate only what just changed:
 - Animate with `motion/`, and only on a change.
 - Take the browser's name, page scheme and logo from `photon-brand`, never
   literals (see [Profile and branding](Profile.md)).
+
+Liquid Glass behind GPUI elements is described in [Glass](Glass.md).
