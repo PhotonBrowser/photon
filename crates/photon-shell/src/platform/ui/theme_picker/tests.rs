@@ -537,7 +537,7 @@ fn removing_the_last_colour_restores_the_default_and_subtle_transparency(
 }
 
 #[gpui::test]
-fn empty_controls_do_nothing_until_a_field_click_creates_the_first_colour(
+fn empty_palette_disables_tint_controls_but_keeps_appearance_controls_available(
     cx: &mut gpui::TestAppContext,
 ) {
     cx.update(|cx| {
@@ -556,20 +556,18 @@ fn empty_controls_do_nothing_until_a_field_click_creates_the_first_colour(
             cx,
         )
     });
-    for selector in [
-        "theme-mode-Dark",
-        "theme-preset-Blue",
-        "Intensity",
-        "Grain intensity",
-    ] {
-        let bounds = cx
-            .debug_bounds(selector)
-            .expect("disabled control remains visible");
+    for selector in ["theme-preset-Blue", "Intensity", "Grain intensity"] {
+        let bounds = cx.debug_bounds(selector).expect("control remains visible");
         cx.simulate_click(bounds.center(), gpui::Modifiers::default());
     }
+    // The appearance controls work without colours.
+    let dark = cx
+        .debug_bounds("theme-mode-Dark")
+        .expect("appearance control remains visible");
+    cx.simulate_click(dark.center(), gpui::Modifiers::default());
     cx.update(|_, cx| {
         assert!(picker.read(cx).colors().colors().is_empty());
-        assert_eq!(Settings::get(cx).theme, ThemeMode::System);
+        assert_eq!(Settings::get(cx).theme, ThemeMode::Dark);
         assert_eq!(
             Settings::get(cx).background_noise_intensity,
             photon_core::BrowserSettings::default().background_noise_intensity

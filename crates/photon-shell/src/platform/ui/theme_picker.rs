@@ -672,12 +672,10 @@ impl Render for PickerState {
             .window_tint_middle
             .map(|color| (color & !0xff) | alpha);
         let background = background_palette.background_average();
-        // Over glass the ink follows the window appearance, not the theme.
-        let ink = if self.over_glass {
-            palette.text_primary
-        } else {
-            theme::contrasting_text(background)
-        };
+        // Keep picker text legible against the active tint in both glass and
+        // opaque presentations. The tint can have very different contrast
+        // from the selected page and menu appearance.
+        let ink = theme::contrasting_text(background);
         let mut picker_palette = palette;
         picker_palette.text_primary = ink;
         let motion = Settings::motion(cx);
@@ -724,9 +722,6 @@ impl Render for PickerState {
                     let mode = *mode;
                     Rc::new(
                         Box::new(move |_: &gpui::ClickEvent, _: &mut Window, cx: &mut App| {
-                            if empty {
-                                return;
-                            }
                             Settings::update(cx, |settings| settings.theme = mode);
                             haptics::play(cx, Feedback::StateChange);
                         }) as super::ClickHandler,
@@ -746,17 +741,9 @@ impl Render for PickerState {
                     .role(Role::RadioButton)
                     .aria_label(format!("{label} page and menu appearance"))
                     .aria_toggled(toggled(selected_mode == mode))
-                    .aria_disabled(empty)
-                    .when(empty, |button| {
-                        button.opacity(
-                            crate::platform::theme_config::theme()
-                                .opacity
-                                .disabled_control,
-                        )
-                    })
                     .track_focus(&mode_focus.handle(index))
                     .tab_index(index as isize)
-                    .tab_stop(!empty && mode_focus.selected(index))
+                    .tab_stop(mode_focus.selected(index))
                     .focus_ring(picker_palette)
                     .owns_clicks()
                     .pressable()
