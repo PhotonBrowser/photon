@@ -25,16 +25,16 @@ pub(in super::super) struct Entrance {
     grow: Option<(f32, f32)>,
     scale_from: Option<f32>,
     scale_origin_left: Option<f32>,
-    exit_scale: Option<f32>,
 }
 
 impl Entrance {
     /// The part of this entrance a native view placed by its own frame can
-    /// take: its fade and scale. A native view does not inherit GPUI's
-    /// painted opacity and scale, but it does move with its parent's layout,
-    /// which carries the slide.
+    /// take: its fade. A native view does not inherit GPUI's painted opacity,
+    /// but it moves with its parent's layout, which carries the slide. It
+    /// does not scale: resizing native glass every frame stutters.
     pub(in super::super) const fn native_part(mut self) -> Self {
         self.offset_from = None;
+        self.scale_from = None;
         self.scale_origin_left = None;
         self.blur_from = None;
         self.grow = None;
@@ -54,7 +54,6 @@ impl Entrance {
             grow: None,
             scale_from: None,
             scale_origin_left: None,
-            exit_scale: None,
         }
     }
 
@@ -71,12 +70,6 @@ impl Entrance {
 
     pub const fn fade_from(mut self, opacity: f32) -> Self {
         self.opacity_from = Some(opacity);
-        self
-    }
-
-    /// Leaves at a different scale than it enters from.
-    pub const fn scale_exit_to(mut self, scale: f32) -> Self {
-        self.exit_scale = Some(scale);
         self
     }
 
@@ -216,18 +209,15 @@ impl Default for Entrance {
     }
 }
 
-pub(in super::super) fn theme_picker_entrance(width: f32) -> Entrance {
+/// The theme picker's glass container fades in as one piece while its
+/// controls sharpen inside it. It does not scale or slide: native glass
+/// resizing every frame stutters.
+pub(in super::super) fn theme_picker_entrance() -> Entrance {
     let tokens = &crate::platform::theme_config::theme().motion.theme_picker;
     Entrance::new()
         .fade_from(0.0)
         .blur_from(tokens.blur_from)
-        .scale_from_left(tokens.scale_from, width)
-        .scale_exit_to(tokens.scale_to)
-        .curve(Curve::Spring(SpringConfig::new(
-            tokens.spring.stiffness,
-            tokens.spring.damping,
-            tokens.spring.mass,
-        )))
+        .curve(Curve::EaseOut)
         .exit_curve(Curve::EaseInOut)
         .duration(Duration::from_millis(tokens.duration_ms))
 }
@@ -256,14 +246,7 @@ pub(super) fn apply_entrance<E: Styled + gpui::IntoElement + 'static>(
             entrance.resolved_duration(config),
         ),
         Transition::Exit => (
-            match entrance.exit_scale {
-                Some(scale) => {
-                    let mut exit = entrance;
-                    exit.scale_from = Some(scale);
-                    exit.targets(config, base_offset).1
-                }
-                None => hidden,
-            },
+            hidden,
             shown,
             Duration::ZERO,
             entrance.exit_duration(config),

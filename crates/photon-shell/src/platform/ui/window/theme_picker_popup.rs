@@ -51,7 +51,7 @@ impl BrowserWindow {
             self.theme_picker_space = None;
         }
         let animations = Settings::motion(cx);
-        let picker_motion = theme_picker_entrance(metrics::PICKER_WIDTH);
+        let picker_motion = theme_picker_entrance();
         let (space_id, transition) =
             self.theme_picker_presence
                 .sync(requested, picker_motion, &animations, cx)?;

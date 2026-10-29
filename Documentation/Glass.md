@@ -28,9 +28,13 @@ glass("my-panel")
 - **Fallback:** `.fallback(|el| ..)` styles apply only where there is no glass,
   for the painted surface that stands in for it.
 - **Motion:** use `.motion(entrance, transition)` rather than wrapping the
-  element in an animation. The slide moves the glass with the content; the
-  fade and scale, which native views cannot inherit from GPUI, are given to
-  the glass as well. Blur applies to the content only.
+  element in an animation. The slide moves the glass with the content and the
+  glass takes the fade, but only the content scales and blurs: resizing
+  native glass every frame stutters. For a glass container, prefer a fade, as
+  the theme picker uses, with its content sharpening inside.
+- **Reuse:** each element's native glass view is kept for its window, so a
+  panel that closes and opens again shows the same glass instead of a new
+  one that AppKit materializes with a flash. Give each glass a stable id.
 - **Press response:** `.interactive(true)` plays AppKit's press effect, for
   glass that is itself a control, such as the address field. Leave it off for
   panels, or pressing their content moves the glass behind it.
