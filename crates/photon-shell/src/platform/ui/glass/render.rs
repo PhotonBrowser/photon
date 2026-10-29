@@ -1,21 +1,24 @@
 //! Draws a [`Glass`]: frosted, over native glass, or as its plain fallback.
 
 use gpui::{
-    App, Div, ElementId, IntoElement, Length, Pixels, RenderOnce, Stateful, StyleRefinement,
-    Styled, Window, div, prelude::*, px, rgba,
+    App, Div, ElementId, IntoElement, RenderOnce, Stateful, Styled, Window, prelude::*, px, rgba,
 };
+#[cfg(target_os = "macos")]
+use gpui::{Length, Pixels, StyleRefinement, div};
 
 use super::super::metrics;
 use super::super::motion::AnimateIn;
 use super::super::settings::Settings;
 use super::super::theme::{ThemeColors, with_opacity};
-use super::{Glass, glass_available};
+use super::Glass;
+#[cfg(target_os = "macos")]
+use super::glass_available;
 
 impl RenderOnce for Glass {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let Glass {
             id,
-            mut content,
+            content,
             enabled,
             tint,
             backing,
@@ -45,58 +48,80 @@ impl RenderOnce for Glass {
         }
 
         #[cfg(target_os = "macos")]
-        let backdrop = (enabled && frosted.is_none() && glass_available(cx))
-            .then(|| native_glass(&id, window, cx))
-            .flatten();
-        #[cfg(not(target_os = "macos"))]
-        let backdrop: Option<std::convert::Infallible> = {
-            let _ = (enabled, &tint, backing, interactive, &window);
-            None
-        };
-
-        let Some(backdrop) = backdrop else {
-            let content = match fallback {
-                Some(fallback) => fallback(content),
-                None => content,
+        if enabled
+            && frosted.is_none()
+            && glass_available(cx)
+            && let Some(backdrop) = native_glass(&id, window, cx)
+        {
+            let glass = NativeGlass {
+                tint,
+                backing,
+                interactive,
             };
-            return animated(content, &id);
-        };
+            return glass.under(backdrop, content, window, |content| animated(content, &id));
+        }
+        // Elsewhere there is no native glass, only frosted glass or the
+        // painted fallback, which look the same without the system material.
+        #[cfg(not(target_os = "macos"))]
+        let _ = (&tint, backing, interactive, &window);
 
-        // The glass and the content are siblings, so the content's own
-        // background and border draw over the glass. The wrapper takes the
-        // content's place in its parent's layout.
+        let content = match fallback {
+            Some(fallback) => fallback(content),
+            None => content,
+        };
+        animated(content, &id)
+    }
+}
+
+/// How native glass lies beneath a [`Glass`]'s content, on macOS.
+#[cfg(target_os = "macos")]
+struct NativeGlass {
+    tint: Vec<u32>,
+    backing: Option<u32>,
+    interactive: bool,
+}
+
+#[cfg(target_os = "macos")]
+impl NativeGlass {
+    /// Draws `content`, animated by `animate`, over `backdrop`. The glass
+    /// and the content are siblings, so the content's own background and
+    /// border draw over the glass; a wrapper takes the content's place in its
+    /// parent's layout. The glass stays still: it draws nothing while it
+    /// changes.
+    fn under(
+        self,
+        backdrop: crate::platform::AppKitGlassBackdrop,
+        mut content: Stateful<Div>,
+        window: &Window,
+        animate: impl FnOnce(Stateful<Div>) -> gpui::AnyElement,
+    ) -> gpui::AnyElement {
         let mut placement = div();
         move_placement(content.style(), placement.style());
-        let radius = corner_radius(content.style(), window);
-
-        #[cfg(target_os = "macos")]
-        let glass = {
-            let glass = backdrop
-                .corner_radius(radius)
-                .window_tint(crate::platform::GlassWindowTint {
-                    stops: if backing.is_some() { Vec::new() } else { tint },
-                    angle_degrees: crate::platform::theme_config::theme()
-                        .window
-                        .gradient_angle_degrees,
-                })
-                .backing(backing)
-                .interactive(interactive)
-                .absolute()
-                .inset_0();
-            // Native glass stays still: it draws nothing while it changes.
-            glass.into_any_element()
-        };
-        #[cfg(not(target_os = "macos"))]
-        let glass: gpui::AnyElement = match backdrop {};
-
+        let glass = backdrop
+            .corner_radius(corner_radius(content.style(), window))
+            .window_tint(crate::platform::GlassWindowTint {
+                stops: if self.backing.is_some() {
+                    Vec::new()
+                } else {
+                    self.tint
+                },
+                angle_degrees: crate::platform::theme_config::theme()
+                    .window
+                    .gradient_angle_degrees,
+            })
+            .backing(self.backing)
+            .interactive(self.interactive)
+            .absolute()
+            .inset_0();
         placement
             .child(glass)
-            .child(animated(content, &id))
+            .child(animate(content))
             .into_any_element()
     }
 }
 
 /// The glass follows the element's top-left corner radius.
+#[cfg(target_os = "macos")]
 fn corner_radius(style: &StyleRefinement, window: &Window) -> Pixels {
     style
         .corner_radii
@@ -108,6 +133,7 @@ fn corner_radius(style: &StyleRefinement, window: &Window) -> Pixels {
 /// Moves where an element sits in its parent from `content` to `wrapper`:
 /// its position, insets, margins, flex sizing and size. The content then
 /// fills the wrapper wherever it had a size of its own.
+#[cfg(target_os = "macos")]
 fn move_placement(content: &mut StyleRefinement, wrapper: &mut StyleRefinement) {
     wrapper.position = Some(content.position.take().unwrap_or(gpui::Position::Relative));
     wrapper.inset = std::mem::take(&mut content.inset);

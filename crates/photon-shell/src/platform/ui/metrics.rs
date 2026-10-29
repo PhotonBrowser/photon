@@ -62,6 +62,7 @@ pub(super) const MENU_WIDTH: f32 = 200.0;
 pub(super) const FROSTED_GLASS_BLUR: f32 = 30.0;
 /// A popover closed by a press on the control that opens it stays closed
 /// rather than reopening from the same press, within this long.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub(super) const POPOVER_REOPEN_GUARD_MS: u64 = 250;
 pub(super) const SITE_INFO_WIDTH: f32 = 272.0;
 /// The site information popover's inset, and the space between its controls.
