@@ -197,6 +197,17 @@ fn tab_row(parts: TabParts, palette: ThemeColors, reorder: &ReorderGroup<u64>) -
         row.surface_fade()
             .hover_style(|style| style.bg(rgba(palette.hover_surface)))
     };
+    let row = row
+        .scale(if parts.active {
+            metrics::SIDEBAR_TAB_SELECTED_SCALE
+        } else {
+            1.0
+        })
+        .transitions(|transitions| {
+            transitions.scale(Duration::from_millis(
+                metrics::SIDEBAR_TAB_SELECTION_DURATION_MS,
+            ))
+        });
     let close = if parts.active {
         parts.close
     } else {
@@ -238,6 +249,17 @@ fn tab_tile(parts: TabParts, palette: ThemeColors, reorder: &ReorderGroup<u64>) 
         tile.surface_fade()
             .hover_style(|style| style.bg(rgba(palette.hover_surface)))
     };
+    let tile = tile
+        .scale(if parts.active {
+            metrics::SIDEBAR_TAB_SELECTED_SCALE
+        } else {
+            1.0
+        })
+        .transitions(|transitions| {
+            transitions.scale(Duration::from_millis(
+                metrics::SIDEBAR_TAB_SELECTION_DURATION_MS,
+            ))
+        });
     let tile = animate_tab_motion(
         tile.child(parts.icon),
         motion,

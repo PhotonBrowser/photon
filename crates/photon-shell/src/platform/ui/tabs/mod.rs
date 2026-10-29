@@ -174,6 +174,7 @@ pub(super) const ICON_ENTRANCE: Entrance = pop(metrics::TAB_FAVICON_SIZE);
 
 /// New rows settle quickly so the list clears space as they arrive.
 const TAB_ENTRY_SPRING: SpringConfig = SpringConfig::new(7_200.0, 169.71, 1.0);
+const SIDEBAR_TAB_ENTRY_SPRING: SpringConfig = SpringConfig::new(4_200.0, 150.0, 1.0);
 const TAB_MOTION_EPSILON: f32 = 0.001;
 
 #[derive(Clone)]
@@ -183,6 +184,8 @@ pub(super) struct TabMotion {
     pub target: f32,
     pub opacity: f32,
     pub offset_scale: f32,
+    /// Sidebar rows enter slightly undersized; strip tabs keep their existing scale.
+    pub scale_from: f32,
 }
 
 pub(super) fn animate_tab_motion<E>(
@@ -197,21 +200,35 @@ where
     let Some(motion) = motion else {
         return element.into_any_element();
     };
+    let spring = if axis == TabDragAxis::Vertical {
+        SIDEBAR_TAB_ENTRY_SPRING
+    } else {
+        TAB_ENTRY_SPRING
+    };
     element
         .animate_spring(
             motion.id,
             motion.from,
             motion.target,
             SpringSpec {
-                config: TAB_ENTRY_SPRING,
+                config: spring,
                 epsilon: TAB_MOTION_EPSILON,
             },
             move |element, value| {
                 let progress = value.clamp(0.0, 1.0);
                 let leaving = 1.0 - progress;
-                let offset = -metrics::TAB_ENTRY_OFFSET * leaving * motion.offset_scale;
+                let entry_offset = if axis == TabDragAxis::Vertical {
+                    metrics::SIDEBAR_TAB_ENTRY_OFFSET
+                } else {
+                    metrics::TAB_ENTRY_OFFSET
+                };
+                let offset = -entry_offset * leaving * motion.offset_scale;
+                let scale = motion.scale_from + (1.0 - motion.scale_from) * progress;
                 element
                     .opacity(motion.opacity * progress)
+                    .when(axis == TabDragAxis::Vertical, |element| {
+                        element.scale(scale)
+                    })
                     .when(axis == TabDragAxis::Horizontal, |element| {
                         element.left(px(position_offset + offset))
                     })

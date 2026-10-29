@@ -151,9 +151,7 @@ impl BrowserWindow {
                     1.0
                 };
                 let offset_scale = f32::from(animations.effect_strength_percent.min(300)) / 100.0;
-                let motion = if suppress_motion
-                    || (entry_appearing && axis == super::super::tabs::TabDragAxis::Vertical)
-                {
+                let motion = if suppress_motion {
                     None
                 } else if entry_appearing {
                     Some(TabMotion {
@@ -162,6 +160,11 @@ impl BrowserWindow {
                         target: 1.0,
                         opacity,
                         offset_scale,
+                        scale_from: if axis == super::super::tabs::TabDragAxis::Vertical {
+                            super::super::metrics::SIDEBAR_TAB_ENTRY_SCALE
+                        } else {
+                            1.0
+                        },
                     })
                 } else {
                     None
@@ -170,10 +173,7 @@ impl BrowserWindow {
                     .tab_position_animations
                     .get(&stable_id)
                     .is_some_and(|animation| animation.axis == axis);
-                let reorder_transition = if suppress_motion
-                    || position_animation
-                    || (entry_appearing && axis == super::super::tabs::TabDragAxis::Vertical)
-                {
+                let reorder_transition = if suppress_motion || position_animation {
                     gpui_motion::Transition::Instant
                 } else {
                     gpui_motion::Transition::default()

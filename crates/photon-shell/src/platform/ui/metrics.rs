@@ -19,6 +19,12 @@ pub(super) const TAB_REORDER_DURATION_MS: u64 = 150;
 pub(super) const TAB_INSERT_PUSH_DURATION_MS: u64 = 120;
 pub(super) const TAB_DROP_SETTLE_DURATION_MS: u64 = 120;
 pub(super) const TAB_ENTRY_OFFSET: f32 = 5.0;
+/// Sidebar rows travel farther than strip tabs so their entrance reads clearly.
+pub(super) const SIDEBAR_TAB_ENTRY_OFFSET: f32 = 14.0;
+/// Sidebar rows settle from a visibly smaller size as they enter the list.
+pub(super) const SIDEBAR_TAB_ENTRY_SCALE: f32 = 0.88;
+pub(super) const SIDEBAR_TAB_SELECTED_SCALE: f32 = 1.035;
+pub(super) const SIDEBAR_TAB_SELECTION_DURATION_MS: u64 = 180;
 pub(super) const TAB_MAX_WIDTH: f32 = 220.0;
 pub(super) const TAB_HORIZONTAL_PADDING: f32 = 10.0;
 pub(super) const TAB_CLOSE_BUTTON_SIZE: f32 = 24.0;
