@@ -58,34 +58,38 @@ impl Omnibox {
         };
         // The icon is a rounded square of its own, so a hover surface around it
         // would draw a box in a box: the icon brightens instead.
-        let site_info_button = toolbar_button(
-            "site-info-button",
-            "Site information",
-            0,
-            true,
-            div()
-                .group_hover_style("site-info-button", |style| {
-                    style.text_color(rgb(palette.text_primary))
-                })
-                .child(site_controls_icon(
-                    icon_color,
-                    metrics::SITE_INFO_BUTTON_ICON_SIZE,
-                )),
-            palette,
-            Box::new(
-                cx.listener(move |this, event: &gpui::ClickEvent, window, cx| {
-                    this.toggle_site_info(event.position(), window, cx);
-                }),
-            ),
-        )
-        .group("site-info-button")
-        .hover_style(|style| style)
-        .active_style(|style| style)
-        .aria_expanded(site_info_open);
+        let site_info_button = (!editing).then(|| {
+            toolbar_button(
+                "site-info-button",
+                "Site information",
+                0,
+                true,
+                div()
+                    .group_hover_style("site-info-button", |style| {
+                        style.text_color(rgb(palette.text_primary))
+                    })
+                    .child(site_controls_icon(
+                        icon_color,
+                        metrics::SITE_INFO_BUTTON_ICON_SIZE,
+                    )),
+                palette,
+                Box::new(
+                    cx.listener(move |this, event: &gpui::ClickEvent, window, cx| {
+                        this.toggle_site_info(event.position(), window, cx);
+                    }),
+                ),
+            )
+            .group("site-info-button")
+            .hover_style(|style| style)
+            .active_style(|style| style)
+            .aria_expanded(site_info_open)
+        });
         let site_info_button = if style.trailing_site_info {
-            site_info_button
-                .size(px(metrics::SIDEBAR_OMNIBOX_BUTTON_SIZE))
-                .rounded(px(metrics::sidebar_omnibox_button_radius()))
+            site_info_button.map(|button| {
+                button
+                    .size(px(metrics::SIDEBAR_OMNIBOX_BUTTON_SIZE))
+                    .rounded(px(metrics::sidebar_omnibox_button_radius()))
+            })
         } else {
             site_info_button
         };
@@ -126,7 +130,11 @@ impl Omnibox {
             let row = row
                 .relative()
                 .pl(px(metrics::OMNIBOX_HORIZONTAL_PADDING))
-                .pr(px(metrics::SIDEBAR_OMNIBOX_BUTTON_INSET))
+                .pr(px(if editing {
+                    metrics::OMNIBOX_HORIZONTAL_PADDING
+                } else {
+                    metrics::SIDEBAR_OMNIBOX_BUTTON_INSET
+                }))
                 .child(
                     h_stack()
                         .flex_1()
@@ -135,7 +143,7 @@ impl Omnibox {
                         .items_center()
                         .child(input),
                 )
-                .child(site_info_button);
+                .when_some(site_info_button, |row, button| row.child(button));
             if let Some(icon) = icon {
                 row.child(
                     gpui::div()
@@ -153,13 +161,17 @@ impl Omnibox {
         } else if style.trailing_site_info {
             // The button sits as far from the end as from the top and bottom.
             row.pl(px(metrics::OMNIBOX_HORIZONTAL_PADDING))
-                .pr(px(metrics::SIDEBAR_OMNIBOX_BUTTON_INSET))
+                .pr(px(if editing {
+                    metrics::OMNIBOX_HORIZONTAL_PADDING
+                } else {
+                    metrics::SIDEBAR_OMNIBOX_BUTTON_INSET
+                }))
                 .children(icon)
                 .child(input)
-                .child(site_info_button)
+                .when_some(site_info_button, |row, button| row.child(button))
         } else {
             row.px(px(metrics::OMNIBOX_HORIZONTAL_PADDING))
-                .child(site_info_button)
+                .when_some(site_info_button, |row, button| row.child(button))
                 .children(icon)
                 .child(input)
         }
