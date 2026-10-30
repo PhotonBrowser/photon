@@ -57,7 +57,10 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let palette = theme::chrome_palette(window, cx);
+        // Keep the sidebar in the configured appearance. Unlike the toolbar,
+        // its revealed surface can cover a strongly tinted part of the page;
+        // that tint must not switch a light sidebar to dark colors.
+        let palette = theme::palette(window, cx);
         let layout = self.layout(cx);
         let sidebar = &self.sidebar;
         let leading = region == DockRegion::Leading;
