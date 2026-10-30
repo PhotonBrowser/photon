@@ -80,8 +80,8 @@ impl Omnibox {
                 ),
             )
             .group("site-info-button")
-            .hover_style(|style| style)
-            .active_style(|style| style)
+            .hover_style(|style| style.bg(rgba(palette.hover_surface)))
+            .active_style(|style| style.bg(rgba(palette.hover_surface)))
             .aria_expanded(site_info_open)
         });
         let site_info_button = if style.trailing_site_info {
