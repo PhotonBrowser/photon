@@ -1,23 +1,15 @@
 //! Sleep out-of-view Engine views and release hidden-page memory under pressure.
 
-#[cfg(target_os = "macos")]
-use block2::RcBlock;
-#[cfg(target_os = "macos")]
-use dispatch2::{
-    DispatchObject, DispatchRetained, DispatchSource,
-    dispatch_source_memorypressure_flags_t as MemoryPressureFlags,
-};
 use futures::channel::mpsc::{Sender, channel};
 use futures::future::{Either, select};
 use futures::{FutureExt, StreamExt, pin_mut};
 use gpui::{App, Context, Global, Task, Window};
 use photon_core::MemoryPressure;
 use std::collections::HashSet;
-#[cfg(target_os = "macos")]
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use crate::platform::app_update::update_app;
+use crate::platform::{app_update::update_app, memory_pressure};
 
 use super::super::super::trace;
 use super::super::settings::Settings;
@@ -25,10 +17,6 @@ use super::BrowserWindow;
 use super::content::{SleepingTab, TabContent};
 use super::registry::BrowserWindowRegistry;
 
-#[cfg(target_os = "macos")]
-const VM_PRESSURE_LEVEL_WARNING: libc::c_int = 2;
-#[cfg(target_os = "macos")]
-const VM_PRESSURE_LEVEL_CRITICAL: libc::c_int = 4;
 const MEMORY_PRESSURE_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 const ACTIVE_IDLE_RECHECK_INTERVAL: Duration = Duration::from_secs(30);
 
@@ -37,63 +25,23 @@ pub(super) type TabSleepWaker = Sender<SleepWake>;
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub(super) enum SleepWake {
     Recheck,
-    #[cfg(target_os = "macos")]
     MemoryPressure,
     MemoryPressureRetry,
     Deadline,
 }
 
-#[cfg(target_os = "macos")]
-pub(super) struct MemoryPressureMonitor(DispatchRetained<DispatchSource>);
-
-#[cfg(not(target_os = "macos"))]
-pub(super) struct MemoryPressureMonitor;
+/// Wakes the tab-sleep scheduler whenever the system pressure level changes.
+pub(super) struct MemoryPressureMonitor(#[allow(dead_code)] memory_pressure::Monitor);
 
 impl MemoryPressureMonitor {
     pub(super) fn new(waker: TabSleepWaker) -> Self {
-        #[cfg(target_os = "macos")]
-        {
-            let mut waker = waker;
-            // SAFETY: the memory-pressure source uses handle 0 and the documented
-            // normal, warning, and critical event mask.
-            let source = unsafe {
-                DispatchSource::new(
-                    std::ptr::addr_of!(dispatch2::_dispatch_source_type_memorypressure).cast_mut(),
-                    0,
-                    (MemoryPressureFlags::DISPATCH_MEMORYPRESSURE_NORMAL.0
-                        | MemoryPressureFlags::DISPATCH_MEMORYPRESSURE_WARN.0
-                        | MemoryPressureFlags::DISPATCH_MEMORYPRESSURE_CRITICAL.0)
-                        as usize,
-                    None,
-                )
-            };
-            let handler_waker = Mutex::new(waker.clone());
-            let handler = RcBlock::new(move || {
-                let _ = handler_waker
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .try_send(SleepWake::MemoryPressure);
-            });
-            // SAFETY: the source copies the block before activation. The block
-            // holds only the channel sender and never retains the source.
-            unsafe { source.set_event_handler_with_block(RcBlock::as_ptr(&handler)) };
-            source.activate();
-            let _ = waker.try_send(SleepWake::MemoryPressure);
-            Self(source)
-        }
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            let _ = waker;
-            Self
-        }
-    }
-}
-
-#[cfg(target_os = "macos")]
-impl Drop for MemoryPressureMonitor {
-    fn drop(&mut self) {
-        self.0.cancel();
+        let waker = Mutex::new(waker);
+        Self(memory_pressure::Monitor::new(move || {
+            let _ = waker
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .try_send(SleepWake::MemoryPressure);
+        }))
     }
 }
 
@@ -116,7 +64,7 @@ pub(super) fn current_memory_pressure(cx: &App) -> MemoryPressure {
     #[cfg(not(unix))]
     let _ = cx;
 
-    current_os_memory_pressure()
+    memory_pressure::current()
 }
 
 /// Allows the isolated automation harness to exercise pressure cleanup without
@@ -139,48 +87,6 @@ pub(super) fn set_test_memory_pressure(
         let _ = window.update(cx, |browser, _, _| browser.wake_tab_sleep_scheduler());
     }
     retry_at
-}
-
-/// Reads the kernel's current memory state instead of relying on coalesced
-/// dispatch flags, which can retain a stale warning after pressure subsides.
-#[cfg(target_os = "macos")]
-fn current_os_memory_pressure() -> MemoryPressure {
-    let mut level: libc::c_int = 0;
-    let mut size = std::mem::size_of::<libc::c_int>();
-    // SAFETY: a read-only sysctl into a correctly sized integer.
-    let status = unsafe {
-        sysctlbyname(
-            c"kern.memorystatus_vm_pressure_level".as_ptr(),
-            (&mut level as *mut libc::c_int).cast(),
-            &mut size,
-            std::ptr::null_mut(),
-            0,
-        )
-    };
-    if status != 0 {
-        return MemoryPressure::Normal;
-    }
-    match level {
-        VM_PRESSURE_LEVEL_CRITICAL => MemoryPressure::Critical,
-        VM_PRESSURE_LEVEL_WARNING => MemoryPressure::Warning,
-        _ => MemoryPressure::Normal,
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-fn current_os_memory_pressure() -> MemoryPressure {
-    MemoryPressure::Normal
-}
-
-#[cfg(target_os = "macos")]
-unsafe extern "C" {
-    fn sysctlbyname(
-        name: *const libc::c_char,
-        oldp: *mut libc::c_void,
-        oldlenp: *mut usize,
-        newp: *mut libc::c_void,
-        newlen: usize,
-    ) -> libc::c_int;
 }
 
 #[derive(Default)]
@@ -372,7 +278,6 @@ impl BrowserWindow {
                         };
                         next_pressure_retry = retry_at;
                     }
-                    #[cfg(target_os = "macos")]
                     Some(SleepWake::MemoryPressure) => {
                         let Some(retry_at) = update_app(cx, relieve_memory_pressure).await else {
                             break;

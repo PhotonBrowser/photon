@@ -3,9 +3,8 @@
 use gpui::{AnyElement, ImageSource, ObjectFit, img, prelude::*, px};
 
 use crate::platform::{
-    PagePlacement, PageSurfacePalette,
-    cpu_presentation::{PresentationRuntime, PresentedSurface},
-    metrics,
+    PagePlacement, PageSurfacePalette, metrics,
+    portable::presentation::{PresentationRuntime, PresentedSurface},
 };
 
 /// Shows a web view's frames by drawing them with GPUI, from pixels the

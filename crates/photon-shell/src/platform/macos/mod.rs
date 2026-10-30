@@ -6,6 +6,7 @@ pub(crate) mod default_browser;
 pub(crate) mod display;
 pub(crate) mod glass_backdrop;
 pub(crate) mod idle;
+pub(crate) mod memory_pressure;
 pub(crate) mod motion_observer;
 pub(crate) mod native_panel;
 mod page_layer;

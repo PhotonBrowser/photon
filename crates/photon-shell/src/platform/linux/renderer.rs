@@ -3,9 +3,9 @@
 //! The Engine publishes CPU frames here, which GPUI uploads and draws. Native
 //! composition, like the macOS Core Animation layer, would replace these with
 //! a `PagePresenter` and `page_surface` of this platform's own, and with an
-//! Engine surface import in place of `cpu_presentation`.
+//! Engine surface import in place of `portable::presentation`.
 
-pub(in crate::platform) use super::super::cpu_presentation::PresentedSurface;
-pub(in crate::platform) use super::super::cpu_renderer::{
+pub(in crate::platform) use crate::platform::portable::presentation::PresentedSurface;
+pub(in crate::platform) use crate::platform::portable::renderer::{
     PagePresenter, page_surface, replace_surface,
 };

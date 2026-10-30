@@ -15,7 +15,7 @@ use std::{
     time::Instant,
 };
 
-use super::engine::navigation_timing::NavigationTimingProfiler;
+use crate::platform::engine::navigation_timing::NavigationTimingProfiler;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::platform) struct FrameKey {

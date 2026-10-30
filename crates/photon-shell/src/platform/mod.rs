@@ -4,10 +4,6 @@ use photon_core::CommandAvailability;
 
 #[cfg_attr(target_os = "linux", allow(dead_code))]
 mod app_update;
-#[allow(dead_code)]
-mod cpu_presentation;
-#[allow(dead_code)]
-mod cpu_renderer;
 pub(crate) mod display;
 pub(crate) mod engine;
 mod engine_ffi;
@@ -20,8 +16,9 @@ mod macos;
 #[path = "ui/metrics.rs"]
 pub(crate) mod metrics;
 mod permission_coordinator;
-#[cfg(any(target_os = "linux", target_os = "windows"))]
-mod portable_display;
+#[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
+mod portable;
 pub(crate) mod presentation;
 pub(crate) mod shortcuts;
 // SF Symbol names are only read by the native macOS popover.
@@ -31,6 +28,8 @@ pub(crate) mod site_info;
 pub(crate) mod theme_config;
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 mod ui;
+#[cfg(unix)]
+mod unix;
 pub(crate) mod window_config;
 #[cfg(target_os = "windows")]
 mod windows;
@@ -44,6 +43,15 @@ pub(crate) fn system_idle_duration() -> Option<std::time::Duration> {
 pub(crate) fn system_idle_duration() -> Option<std::time::Duration> {
     None
 }
+
+#[cfg(target_os = "macos")]
+pub(crate) use macos::memory_pressure;
+#[cfg(not(target_os = "macos"))]
+pub(crate) use portable::memory_pressure;
+#[cfg(unix)]
+pub(crate) use unix::termination;
+#[cfg(target_os = "windows")]
+pub(crate) use windows::termination;
 
 #[cfg(target_os = "linux")]
 #[allow(unused_imports)]
@@ -105,6 +113,8 @@ pub(crate) enum DefaultBrowserStatus {
 
 #[derive(Clone, Copy)]
 pub(crate) struct PageSurfacePalette {
+    /// Read by the portable renderer; macOS paints the page layer natively.
+    #[cfg_attr(target_os = "macos", allow(dead_code))]
     pub(crate) background: u32,
 }
 
