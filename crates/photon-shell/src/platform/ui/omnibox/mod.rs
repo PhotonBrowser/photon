@@ -459,16 +459,21 @@ impl Render for Omnibox {
         let (address_text_offset, address_text_opacity) =
             self.address_text_motion(centered_sidebar, editing, resting_offset, window, cx);
         let motion = Settings::motion(cx);
+        // Native glass shows what lies beneath GPUI, so floating over the
+        // page it would show the page. There the field paints its own surface
+        // on the sidebar's instead.
+        let uses_glass = glass_available(cx) && self.floating_surface.is_none();
         // At rest the glass alone is the field's surface; hover and editing
         // tint it. Without glass the field paints its own surface.
         let surface = if editing || self.field_hovered {
             palette.surface_hover
-        } else if glass_available(cx) {
+        } else if uses_glass {
             0x0000_0000
         } else {
             palette.surface
         };
         let field_box = glass("titlebar-omnibox")
+            .enabled(uses_glass)
             .interactive(true)
             .window_tint(menu_palette)
             .backing(self.floating_surface)

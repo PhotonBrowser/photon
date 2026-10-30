@@ -57,14 +57,18 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        // Keep the sidebar in the configured appearance. Unlike the toolbar,
-        // its revealed surface can cover a strongly tinted part of the page;
-        // that tint must not switch a light sidebar to dark colors.
-        let palette = theme::palette(window, cx);
+        let over_page = self.sidebar.over_page();
+        // Docked, the sidebar sits on the window's tinted chrome and follows
+        // it. Revealed over the page, it keeps the configured appearance, so a
+        // strongly tinted page beneath cannot switch a light sidebar to dark.
+        let palette = if over_page {
+            theme::palette(window, cx)
+        } else {
+            theme::chrome_palette(window, cx)
+        };
         let layout = self.layout(cx);
         let sidebar = &self.sidebar;
         let leading = region == DockRegion::Leading;
-        let over_page = sidebar.over_page();
         let collapsed = sidebar.shows_icons();
         let full_width = sidebar.width(cx);
         let width = if over_page {

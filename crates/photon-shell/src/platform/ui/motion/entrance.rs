@@ -420,6 +420,22 @@ pub(in super::super) const fn popover_from(edge: Edge) -> Entrance {
         .speed(Speed::Quick)
 }
 
+/// A panel that opens in place around the field it extends, as the omnibox
+/// does: it only fades, so the field inside never moves or blurs.
+pub(in super::super) const fn field_panel() -> Entrance {
+    Entrance::new().fade_from(0.0).speed(Speed::Quick)
+}
+
+/// The list a field panel opens onto drops a short way into place below the
+/// field.
+pub(in super::super) const fn field_panel_rows() -> Entrance {
+    Entrance::new()
+        .fade_from(0.0)
+        .slide_from(Edge::Top, distance::NUDGE / 2.0)
+        .curve(Curve::SNAPPY)
+        .speed(Speed::Quick)
+}
+
 pub(in super::super) const fn slide_in(edge: Edge) -> Entrance {
     Entrance::new()
         .fade_from(0.0)

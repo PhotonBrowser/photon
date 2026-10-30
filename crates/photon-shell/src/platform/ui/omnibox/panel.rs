@@ -13,7 +13,7 @@ use super::super::icons::{search_icon_sized, site_controls_icon};
 use super::super::layout::{Elevated, Elevation, Raised};
 use super::super::layout::{h_stack, v_stack};
 use super::super::menu::MENU_MOTION;
-use super::super::motion::{AnimateIn, fade, popover, translated};
+use super::super::motion::{AnimateIn, field_panel, field_panel_rows, translated};
 use super::super::workspace_layout::WorkspaceLayout;
 use super::super::{metrics, theme::ThemeColors};
 use super::rows::{SuggestionActions, icon_slot, suggestion_icon, suggestion_rows};
@@ -414,12 +414,12 @@ impl Omnibox {
                 ))
                 .child(rows.animate_in(
                     "omnibox-suggestions-appear",
-                    fade(),
+                    field_panel_rows(),
                     &super::super::settings::Settings::motion(cx),
                 ))
                 .animate_in(
                     "omnibox-panel-appear",
-                    popover(),
+                    field_panel(),
                     &super::super::settings::Settings::motion(cx),
                 ),
         )

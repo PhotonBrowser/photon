@@ -278,6 +278,11 @@ impl SidebarState {
         self.visible = true;
         self.zen = false;
         if was_revealed {
+            // Kept, it stops floating over the page at once. Left revealed,
+            // its surface would fade with `shown` while the page still lay
+            // full width beneath, showing straight through the sidebar.
+            self.revealed = false;
+            self.reveal.jump_to(0.0);
             self.shown.jump_to(1.0);
             self.tucked.jump_to(0.0);
         } else {
