@@ -12,7 +12,6 @@ use anyhow::Context as _;
 use gpui::{AsyncApp, WeakEntity};
 use photon_core::{ClearBrowsingData, PopupPolicy};
 use photon_performance::PerformanceTask;
-#[cfg(not(feature = "ui-only"))]
 use std::cell::RefCell;
 #[cfg(any(unix, not(feature = "ui-only")))]
 use std::ffi::CStr;
@@ -154,6 +153,7 @@ impl EngineRuntime {
             callbacks: Box::new(RuntimeCallbacks {
                 views: Mutex::new(Vec::new()),
             }),
+            download_callback: RefCell::default(),
             popup_policy: AtomicU8::new(PopupPolicy::Ask as u8),
             performance_dashboard_users: Cell::new(0),
         }

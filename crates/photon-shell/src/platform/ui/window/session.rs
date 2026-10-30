@@ -148,6 +148,7 @@ pub(super) fn restore_session(
 
 /// Forgets the windows kept after the last one closed, when a new window
 /// opens instead of them, so they are not restored beside it next launch.
+#[cfg(not(feature = "ui-only"))]
 pub(super) fn forget_closed_windows(cx: &mut App) {
     if cx.has_global::<BrowsingSession>() {
         cx.update_global::<BrowsingSession, _>(|session, _| session.windows.clear());

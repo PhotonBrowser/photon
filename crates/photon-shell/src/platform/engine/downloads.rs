@@ -103,7 +103,7 @@ impl EngineRuntime {
             return;
         }
         let mut callback: Box<DownloadCallback> = Box::new(Box::new(on_change));
-        let context = (&mut *callback as *mut DownloadCallback).cast();
+        let context: *mut c_void = (&mut *callback as *mut DownloadCallback).cast();
         // Keep the callback alive before Engine reports the existing list.
         let previous = self.download_callback.replace(Some(callback));
         #[cfg(not(feature = "ui-only"))]
