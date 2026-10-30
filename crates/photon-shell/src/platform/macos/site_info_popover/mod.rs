@@ -25,6 +25,7 @@ use objc2_foundation::{
     NSEdgeInsets, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRect, NSRectEdge, NSSize,
     NSString,
 };
+use objc2_quartz_core::{CAMediaTiming, CATransition, kCATransitionFade};
 
 use super::appkit::{NativeControlActionTarget, appkit_host_view};
 
@@ -65,7 +66,22 @@ struct Pages {
 }
 
 impl Pages {
+    /// Switches to `page`. While open, the popover animates to the page's
+    /// size and cross-fades its content. The fade is a layer transition so
+    /// glass controls never render at partial opacity, which turns them black.
     fn show(&self, page: &NSView) {
+        // SAFETY: the page's superview is the popover's live content view,
+        // read on the main thread.
+        let container = unsafe { self.controller.view().superview() };
+        if self.popover.isShown()
+            && let Some(layer) = container.and_then(|view| view.layer())
+        {
+            let fade = CATransition::animation();
+            // SAFETY: an immutable AppKit constant.
+            fade.setType(unsafe { kCATransitionFade });
+            fade.setDuration(metrics::SITE_INFO_PAGE_DURATION_MS as f64 / 1000.0);
+            layer.addAnimation_forKey(&fade, None);
+        }
         self.controller.setView(page);
         self.popover.setContentSize(page.fittingSize());
     }
@@ -203,16 +219,18 @@ impl AppKitSiteInfoPopover {
         let host = unsafe { host.as_ref() };
         let x = f32::from(anchor.x) as f64;
         let y = f32::from(anchor.y) as f64;
-        let y = if host.isFlipped() {
-            y
+        // Prefer the edge that sits visually below the anchor, so resizing
+        // between pages never makes AppKit flip the popover to the other side.
+        let (y, below) = if host.isFlipped() {
+            (y, NSRectEdge::MaxY)
         } else {
-            host.bounds().size.height - y
+            (host.bounds().size.height - y, NSRectEdge::MinY)
         };
         self.inner.pages.show(&self.inner.pages.site);
         self.inner.popover.showRelativeToRect_ofView_preferredEdge(
             NSRect::new(NSPoint::new(x, y), NSSize::new(1.0, 1.0)),
             host,
-            NSRectEdge::MaxY,
+            below,
         );
     }
 

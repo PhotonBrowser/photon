@@ -77,6 +77,8 @@ pub(super) const SITE_INFO_AVATAR_SIZE: f32 = 36.0;
 pub(super) const SITE_INFO_FOOTER_HEIGHT: f32 = 36.0;
 pub(super) const SITE_INFO_HEADING_FONT_SIZE: f32 = 15.0;
 pub(super) const SITE_INFO_DETAIL_FONT_SIZE: f32 = 11.0;
+/// The cross-fade between the site information popover's pages.
+pub(super) const SITE_INFO_PAGE_DURATION_MS: u64 = 200;
 /// The site information button's icon in the address field.
 pub(super) const SITE_INFO_BUTTON_ICON_SIZE: f32 = 16.0;
 
