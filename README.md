@@ -16,7 +16,9 @@
 
 ## Run from source
 
-Install the platform prerequisites in [contributor setup](CONTRIBUTOR_SETUP.md) first.
+Install the platform prerequisites in [contributor setup](CONTRIBUTOR_SETUP.md)
+first, including Rust through rustup. `./photon` runs Cargo; it does not install
+Rust.
 
 ```sh
 git clone --recurse-submodules https://github.com/PhotonBrowser/photon.git

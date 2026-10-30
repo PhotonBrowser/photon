@@ -15,6 +15,10 @@ Use the `photon` CLI for setup, formatting, linting, building, and running Photo
 
 ## Common commands
 
+On a fresh checkout, install Rust with rustup, then run `./photon setup` from
+the repository root. The launcher uses Cargo; rustup selects the version pinned
+in `rust-toolchain.toml`. After setup installs the CLI, use `photon` below.
+
 ```sh
 photon setup
 photon doctor
@@ -33,8 +37,8 @@ photon run
 - `photon lint` checks Rust formatting, runs Clippy with warnings treated as errors, and checks Photon and Engine embedder C++ formatting.
 - `photon check` runs linting, compiles the Cargo workspace, and verifies architecture and dependency checkout rules.
 - `photon test` runs the Rust workspace tests.
-- `photon build` builds the Engine and the GPUI-CE application. It requires initialized Engine and GPUI-CE submodules and a full set of Ladybird build prerequisites; it can take a long time on the first run.
-- `photon run` builds and launches the native app in release mode by default. Use `--url URL` to choose the initial page. Use `--shutdown-after-seconds N` to quit after a fixed interval; `--verbose` prints output from the underlying build tools.
+- `photon build` builds the Engine and the GPUI-CE application. It requires initialized Engine and GPUI-CE submodules and a full set of Ladybird build prerequisites; it can take a long time on the first run. Pass `--debug` for an unoptimized build.
+- `photon run` builds and launches the native app in release mode by default. Use `--debug` for an unoptimized build, `--url URL` to choose the initial page, or `--shutdown-after-seconds N` to quit after a fixed interval. `--verbose` prints output from the underlying build tools.
 - `photon run --ui` builds and launches the shared browser window with the New Tab page, without building, linking, or starting Photon Engine. Shell-owned pages remain available; web pages cannot be opened in this mode. The path is available on macOS, Linux, and Windows.
 - Browser context menus and page `<select>` controls use the shared GPUI menu surface and work without platform-native menu hooks. They inherit the semantic theme roles, menu metrics, and motion used by Photon popovers.
 - `photon clean` removes generated build trees and stops the checkout-specific presentation broker.
@@ -47,7 +51,7 @@ photon run
 - **`photon doctor` reports missing values:** Doctor is informational and does not fail merely because a tool or submodule is missing. Use its output to locate the problem, then rerun setup after correcting it.
 - **Setup changed a remote URL:** Setup intentionally enforces HTTPS remotes from `photon.toml`; adjust that configuration for a persistent SSH preference. It does not move a dependency commit or advance a root gitlink.
 
-`photon check` includes the lint checks, so run it before sharing a change. Build and test commands use release mode by default; `--release` is accepted for compatibility.
+`photon check` includes the lint checks, so run it before sharing a change. Build and run commands use release mode by default; `photon test` uses release mode. `--release` remains accepted for existing build scripts; `--debug` selects an unoptimized build.
 
 ## Zed and C++ diagnostics
 

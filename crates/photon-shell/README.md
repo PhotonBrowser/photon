@@ -6,10 +6,9 @@ The shared GPUI-CE browser window and platform adapters. It owns browser views, 
 
 ## Run
 
-The shell is started by `photon-app`; use the repository command so the pinned Engine and GPUI-CE dependencies are prepared:
+The shell is started by `photon-app`. After following the [contributor setup guide](../../CONTRIBUTOR_SETUP.md), launch it with:
 
 ```sh
-photon setup
 photon run
 ```
 

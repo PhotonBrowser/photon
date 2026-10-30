@@ -2,9 +2,13 @@
 
 Photon's primary development platform is macOS. Linux support is experimental: Ubuntu 24.04 CI validates workspace checks, CLI smoke commands, and tests in the [latest passing run](https://github.com/PhotonBrowser/photon/actions/runs/40202068735), but a full interactive browser run is not currently validated in CI.
 
+## Bootstrap prerequisites
+
+Install Rust with [rustup](https://rustup.rs) before running `./photon setup`. The `./photon` launcher starts the CLI with `cargo run`, so it cannot install Rust for you. In the repository, rustup selects the pinned Rust 1.99.0 toolchain from `rust-toolchain.toml` (and installs it on first use). Ensure `~/.cargo/bin` is on `PATH` so `cargo`, `rustc`, and `rustup` are available.
+
 ## macOS
 
-Install Xcode Command Line Tools (`xcode-select --install`), [Homebrew](https://brew.sh), Rust using [rustup](https://rustup.rs), and Python 3 with pip. The repository pins Rust 1.99.0 and includes `rustfmt` and Clippy in `rust-toolchain.toml`. Ensure `~/.cargo/bin` is on `PATH`.
+Install Xcode Command Line Tools (`xcode-select --install`), [Homebrew](https://brew.sh), and Python 3 with pip, in addition to the Rust bootstrap prerequisites above. The pinned toolchain includes `rustfmt` and Clippy.
 
 Clone and set up Photon:
 
@@ -18,13 +22,13 @@ photon build
 photon run
 ```
 
-The system dependency option installs Ladybird's Homebrew build packages. Setup verifies tools, initializes missing pinned submodules, configures their remotes and persistent development branches, prepares formatting tools, and installs the `photon` command and `ph` alias in Cargo's bin directory. It does not install Xcode tools, Homebrew, Rust, or Python.
+The system dependency option installs Ladybird's Homebrew build packages. Setup verifies tools, initializes missing pinned submodules, configures their remotes and persistent development branches, prepares formatting tools, and installs the `photon` command and `ph` alias in Cargo's bin directory. It does not install Xcode Command Line Tools, Homebrew itself, Rust, or Python.
 
 ## Linux
 
 Ubuntu 24.04 is the CI-checked distribution; other Linux distributions may work if they meet Ladybird's current requirements.
 
-To work on the GPUI shell without downloading or preparing the Engine, install Rust with rustup and Git, then run:
+To work on the GPUI shell without downloading or preparing the Engine, install Git and the Rust bootstrap prerequisites above, then run:
 
 ```sh
 git clone https://github.com/PhotonBrowser/photon.git

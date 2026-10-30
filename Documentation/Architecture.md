@@ -75,7 +75,11 @@ Ladybird classes and engine implementation details inside `Engine/` and the
 embedder integration. Keep shared views in
 `crates/photon-shell/src/platform/ui/`, shared Engine calls in
 `crates/photon-shell/src/platform/engine/`, and operating-system behavior in
-`crates/photon-shell/src/platform/<target>/`.
+`crates/photon-shell/src/platform/<target>/` (`macos/`, `linux/`, `windows/`).
+Code shared by several targets has its own folder: `unix/` for macOS and Linux,
+and `portable/` for fallbacks used where no native adapter exists (the CPU page
+renderer, display metadata and memory pressure). A shared UI component with a
+native half keeps it beside the component, as `ui/glass/macos.rs` does.
 
 ## Where to make a change
 
