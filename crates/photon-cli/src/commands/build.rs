@@ -1,15 +1,17 @@
 use owo_colors::{OwoColorize, Stream};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, ExitStatus, Stdio};
+use std::process::{Child, Command, ExitStatus};
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::time::Instant;
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
+    io::Read,
 };
 
 use crate::support::{
-    diagnostics, invoke, output, path, require_tool_version, stage, success, with_progress,
+    hash_output, invoke, invoke_with_environment, output, path, require_tool_version, stage,
+    success, with_progress,
 };
 
 const HELPER_PROCESS_TARGETS: &[&str] = &[
@@ -48,6 +50,10 @@ fn wait_for_application(mut command: Command, launch_error: &str) -> Result<Exit
             );
             libc::signal(
                 libc::SIGTERM,
+                record_termination_signal as *const () as libc::sighandler_t,
+            );
+            libc::signal(
+                libc::SIGHUP,
                 record_termination_signal as *const () as libc::sighandler_t,
             );
         }
@@ -265,36 +271,10 @@ fn invoke_cargo(
     engine_dir: Option<&Path>,
     verbose: bool,
 ) -> Result<(), String> {
-    let mut command = Command::new("cargo");
-    command.args(args).current_dir(root);
-    if let Some(engine_dir) = engine_dir {
-        command.env("PHOTON_ENGINE_BUILD_DIR", engine_dir);
-    }
-    if verbose {
-        return command
-            .status()
-            .map_err(|error| error.to_string())
-            .and_then(|status| {
-                if status.success() {
-                    Ok(())
-                } else {
-                    Err(format!("cargo exited with {status}"))
-                }
-            });
-    }
-    let result = command
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .map_err(|error| format!("cannot run cargo: {error}"))?;
-    if result.status.success() {
-        return Ok(());
-    }
-    Err(format!(
-        "cargo failed ({}): {}",
-        result.status,
-        diagnostics(&result.stdout, &result.stderr, 12)
-    ))
+    let environment = engine_dir
+        .map(|directory| vec![("PHOTON_ENGINE_BUILD_DIR", directory.display().to_string())])
+        .unwrap_or_default();
+    invoke_with_environment("cargo", args, root, verbose, &environment)
 }
 
 pub(crate) fn engine_build(root: &Path, release: bool, verbose: bool) -> Result<(), String> {
@@ -463,17 +443,11 @@ fn engine_targets_are_current(engine_dir: &Path, root: &Path) -> Result<bool, St
 fn engine_fingerprint(root: &Path, release: bool) -> Result<String, String> {
     let engine_source = path(&root.join("Engine"));
     let revision = output("git", &["-C", &engine_source, "rev-parse", "HEAD"], root)?;
-    let diff = Command::new("git")
-        .args(["-C", &engine_source, "diff", "--binary", "HEAD"])
-        .current_dir(root)
-        .output()
-        .map_err(|error| format!("cannot inspect Photon Engine changes: {error}"))?;
-    if !diff.status.success() {
-        return Err(format!(
-            "cannot inspect Photon Engine changes: {}",
-            String::from_utf8_lossy(&diff.stderr).trim()
-        ));
-    }
+    let diff_hash = hash_output(
+        "git",
+        &["-C", &engine_source, "diff", "--binary", "HEAD"],
+        root,
+    )?;
     let status = output(
         "git",
         &[
@@ -499,7 +473,7 @@ fn engine_fingerprint(root: &Path, release: bool) -> Result<String, String> {
 
     let mut hasher = DefaultHasher::new();
     revision.hash(&mut hasher);
-    diff.stdout.hash(&mut hasher);
+    diff_hash.hash(&mut hasher);
     status.hash(&mut hasher);
     release.hash(&mut hasher);
     "ENABLE_PHOTON_EMBEDDER=ON;ENABLE_LADYBIRD_UI=OFF;ENABLE_GUI_TARGETS=OFF;ENABLE_CRANELIFT_JIT=OFF"
@@ -508,16 +482,34 @@ fn engine_fingerprint(root: &Path, release: bool) -> Result<String, String> {
         let file_path = root.join("Engine").join(relative_path);
         relative_path.hash(&mut hasher);
         if file_path.is_file() {
-            let contents = std::fs::read(&file_path).map_err(|error| {
-                format!(
-                    "cannot read untracked Engine file {}: {error}",
-                    file_path.display()
-                )
-            })?;
-            contents.hash(&mut hasher);
+            hash_file(&file_path, &mut hasher)?;
         }
     }
     Ok(format!("{:016x}", hasher.finish()))
+}
+
+fn hash_file(path: &Path, hasher: &mut impl Hasher) -> Result<(), String> {
+    let mut file = std::fs::File::open(path).map_err(|error| {
+        format!(
+            "cannot read untracked Engine file {}: {error}",
+            path.display()
+        )
+    })?;
+    file.metadata()
+        .map_err(|error| format!("cannot inspect Engine file {}: {error}", path.display()))?
+        .len()
+        .hash(hasher);
+
+    let mut buffer = [0; 8 * 1024];
+    loop {
+        let read = file
+            .read(&mut buffer)
+            .map_err(|error| format!("cannot read Engine file {}: {error}", path.display()))?;
+        if read == 0 {
+            return Ok(());
+        }
+        hasher.write(&buffer[..read]);
+    }
 }
 
 fn invoke_engine_configure(
@@ -527,38 +519,12 @@ fn invoke_engine_configure(
     mode: &str,
     verbose: bool,
 ) -> Result<(), String> {
-    let mut command = Command::new("cmake");
-    command
-        .args(args)
-        .current_dir(root)
-        .env("LADYBIRD_VCPKG_TYPE", mode)
-        .env("VCPKG_ROOT", vcpkg_root)
-        .env("LADYBIRD_MAIN_SOURCE_DIR", root.join("build"));
-    if verbose {
-        return command
-            .status()
-            .map_err(|e| e.to_string())
-            .and_then(|status| {
-                if status.success() {
-                    Ok(())
-                } else {
-                    Err(format!("cmake exited with {status}"))
-                }
-            });
-    }
-    let result = command
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .map_err(|e| e.to_string())?;
-    if result.status.success() {
-        return Ok(());
-    }
-    Err(format!(
-        "CMake configure failed ({}): {}",
-        result.status,
-        diagnostics(&result.stdout, &result.stderr, 12)
-    ))
+    let environment = [
+        ("LADYBIRD_VCPKG_TYPE", mode.to_owned()),
+        ("VCPKG_ROOT", path(vcpkg_root)),
+        ("LADYBIRD_MAIN_SOURCE_DIR", path(&root.join("build"))),
+    ];
+    invoke_with_environment("cmake", args, root, verbose, &environment)
 }
 
 pub(crate) fn run_direct(

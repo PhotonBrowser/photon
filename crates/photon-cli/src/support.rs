@@ -1,12 +1,15 @@
+use std::hash::{DefaultHasher, Hasher};
+use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::process::{Command, ExitStatus, Stdio};
 use std::time::Duration;
 
 use indicatif::{ProgressBar, ProgressStyle};
 use owo_colors::{OwoColorize, Stream};
 
 pub(crate) const CLANG_FORMAT_VERSION: &str = "22.1.8";
+const DIAGNOSTIC_TAIL_BYTES: usize = 32 * 1024;
 
 pub(crate) fn path(value: &Path) -> String {
     value.to_string_lossy().into_owned()
@@ -263,6 +266,55 @@ pub(crate) fn output(program: &str, args: &[&str], cwd: &Path) -> Result<String,
     Ok(String::from_utf8_lossy(&result.stdout).into_owned())
 }
 
+pub(crate) fn hash_output(program: &str, args: &[&str], cwd: &Path) -> Result<u64, String> {
+    let mut child = Command::new(program)
+        .args(args)
+        .current_dir(cwd)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| format!("cannot run {program}: {error}"))?;
+    let mut stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| format!("cannot capture {program} stdout"))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| format!("cannot capture {program} stderr"))?;
+
+    let (status, hash, stderr) = std::thread::scope(|scope| {
+        let stderr_reader = scope.spawn(move || read_tail(stderr, DIAGNOSTIC_TAIL_BYTES));
+        let mut hasher = DefaultHasher::new();
+        let mut buffer = [0; 8 * 1024];
+        loop {
+            let read = stdout.read(&mut buffer)?;
+            if read == 0 {
+                break;
+            }
+            hasher.write(&buffer[..read]);
+        }
+        let status = child.wait()?;
+        let stderr = stderr_reader
+            .join()
+            .map_err(|_| std::io::Error::other("stderr reader thread panicked"))??;
+        Ok::<_, std::io::Error>((status, hasher.finish(), stderr))
+    })
+    .map_err(|error| format!("could not read {program} output: {error}"))?;
+
+    if !status.success() {
+        let stdout = OutputTail {
+            bytes: Vec::new(),
+            truncated: false,
+        };
+        return Err(format!(
+            "{program} failed ({status}): {}",
+            bounded_diagnostics(&stdout, &stderr, 12)
+        ));
+    }
+    Ok(hash)
+}
+
 pub(crate) fn command(
     program: &str,
     args: &[&str],
@@ -302,19 +354,89 @@ pub(crate) fn invoke_with_environment(
             }
         });
     }
-    let result = cmd
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .map_err(|e| format!("cannot run {program}: {e}"))?;
-    if result.status.success() {
+    let (status, stdout, stderr) = run_with_bounded_output(cmd, program)?;
+    if status.success() {
         return Ok(());
     }
     Err(format!(
-        "{program} failed ({}): {}",
-        result.status,
-        diagnostics(&result.stdout, &result.stderr, 12)
+        "{program} failed ({status}): {}",
+        bounded_diagnostics(&stdout, &stderr, 12)
     ))
+}
+
+struct OutputTail {
+    bytes: Vec<u8>,
+    truncated: bool,
+}
+
+fn run_with_bounded_output(
+    mut command: Command,
+    program: &str,
+) -> Result<(ExitStatus, OutputTail, OutputTail), String> {
+    let mut child = command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| format!("cannot run {program}: {error}"))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| format!("cannot capture {program} stdout"))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| format!("cannot capture {program} stderr"))?;
+
+    let (status, stdout, stderr) = std::thread::scope(|scope| {
+        let stdout_reader = scope.spawn(move || read_tail(stdout, DIAGNOSTIC_TAIL_BYTES));
+        let stderr_reader = scope.spawn(move || read_tail(stderr, DIAGNOSTIC_TAIL_BYTES));
+        let status = child.wait()?;
+        let stdout = stdout_reader
+            .join()
+            .map_err(|_| std::io::Error::other("stdout reader thread panicked"))??;
+        let stderr = stderr_reader
+            .join()
+            .map_err(|_| std::io::Error::other("stderr reader thread panicked"))??;
+        Ok::<_, std::io::Error>((status, stdout, stderr))
+    })
+    .map_err(|error| format!("could not read {program} output: {error}"))?;
+
+    Ok((status, stdout, stderr))
+}
+
+fn read_tail(mut reader: impl std::io::Read, limit: usize) -> std::io::Result<OutputTail> {
+    let mut bytes = Vec::with_capacity(limit);
+    let mut buffer = [0; 8 * 1024];
+    let mut truncated = false;
+    loop {
+        let read = reader.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        truncated |= bytes.len() + read > limit;
+        if read >= limit {
+            bytes.clear();
+            bytes.extend_from_slice(&buffer[read - limit..read]);
+        } else {
+            let overflow = bytes.len().saturating_add(read).saturating_sub(limit);
+            bytes.drain(..overflow);
+            bytes.extend_from_slice(&buffer[..read]);
+        }
+    }
+    Ok(OutputTail { bytes, truncated })
+}
+
+fn bounded_diagnostics(stdout: &OutputTail, stderr: &OutputTail, limit: usize) -> String {
+    let source = if stderr.bytes.iter().all(u8::is_ascii_whitespace) {
+        stdout
+    } else {
+        stderr
+    };
+    let mut message = diagnostics(&stdout.bytes, &stderr.bytes, limit);
+    if source.truncated {
+        message.insert_str(0, "… earlier output omitted …\n");
+    }
+    message
 }
 
 pub(crate) fn diagnostics(stdout: &[u8], stderr: &[u8], limit: usize) -> String {
@@ -346,4 +468,35 @@ pub(crate) fn diagnostics(stdout: &[u8], stderr: &[u8], limit: usize) -> String 
         tail = format!("… {start} earlier lines omitted\n{tail}");
     }
     tail
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{OutputTail, bounded_diagnostics, read_tail};
+    use std::io::Cursor;
+
+    #[test]
+    fn read_tail_keeps_only_the_newest_bytes() {
+        let tail = read_tail(Cursor::new(b"abcdefgh"), 4).expect("read input tail");
+
+        assert_eq!(tail.bytes, b"efgh");
+        assert!(tail.truncated);
+    }
+
+    #[test]
+    fn bounded_diagnostics_marks_truncated_output() {
+        let stdout = OutputTail {
+            bytes: Vec::new(),
+            truncated: false,
+        };
+        let stderr = OutputTail {
+            bytes: b"error: build failed".to_vec(),
+            truncated: true,
+        };
+
+        let message = bounded_diagnostics(&stdout, &stderr, 12);
+
+        assert!(message.contains("earlier output omitted"));
+        assert!(message.contains("error: build failed"));
+    }
 }
