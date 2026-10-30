@@ -17,13 +17,12 @@ use gpui::{
 };
 
 use super::motion::{Entrance, Transition};
-use super::settings::Settings;
 use super::theme::ThemeColors;
 
 /// Whether glass draws: the platform has it and the settings allow it.
 pub(super) fn glass_available(cx: &App) -> bool {
     #[cfg(target_os = "macos")]
-    return Settings::get(cx).glass_surfaces
+    return super::settings::Settings::get(cx).glass_surfaces
         && crate::platform::AppKitGlassBackdrop::is_supported();
     #[cfg(not(target_os = "macos"))]
     {
