@@ -404,12 +404,17 @@ pub(in super::super) const fn fall() -> Entrance {
         .curve(Curve::SNAPPY)
 }
 
-/// Menus and popovers grow out of what opened them, softly in focus.
+/// Menus and popovers enter from above their anchor, softly in focus.
 pub(in super::super) const fn popover() -> Entrance {
+    popover_from(Edge::Top)
+}
+
+/// A popover entrance that moves away from the edge nearest its anchor.
+pub(in super::super) const fn popover_from(edge: Edge) -> Entrance {
     Entrance::new()
         .fade_from(0.0)
         .scale_from(0.95)
-        .slide_from(Edge::Top, distance::NUDGE / 2.0)
+        .slide_from(edge, distance::NUDGE / 2.0)
         .blur_from(2.0)
         .curve(Curve::SNAPPY)
         .speed(Speed::Quick)

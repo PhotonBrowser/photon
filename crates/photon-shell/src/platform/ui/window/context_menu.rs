@@ -7,19 +7,21 @@ use gpui::{
 };
 
 use super::super::menu::{menu_action_with_state, menu_heading, menu_separator, popover_surface};
-use super::super::motion::Transition;
+use super::super::motion::{Edge, Transition};
 use super::super::{PhotonWebView, SelectDropdown, SelectItem, metrics, theme::ThemeColors};
 use super::BrowserWindow;
 use super::menu::{MenuCommand, command_item};
 
 pub(super) struct ContextMenuState {
     position: Point<Pixels>,
+    edge: Edge,
     items: Vec<ContextMenuItem>,
     return_focus: FocusHandle,
 }
 
 pub(super) struct SelectDropdownState {
     position: Point<Pixels>,
+    edge: Edge,
     width: f32,
     dropdown: SelectDropdown,
     webview: WeakEntity<PhotonWebView>,
@@ -39,6 +41,7 @@ enum ContextMenuItem {
 
 struct MenuOverlay {
     position: Point<Pixels>,
+    edge: Edge,
     width: f32,
     label: &'static str,
     role: Role,
@@ -89,7 +92,8 @@ impl BrowserWindow {
         // Menus invoked near the bottom should open above the pointer, keeping
         // the control that opened them visible instead of covering it.
         let below = viewport_height - pointer_y;
-        let preferred_y = if height <= below || pointer_y < height {
+        let opens_below = height <= below || pointer_y < height;
+        let preferred_y = if opens_below {
             pointer_y
         } else {
             pointer_y - height
@@ -97,6 +101,7 @@ impl BrowserWindow {
         let y = preferred_y.clamp(0.0, viewport_height - height);
         self.context_menu = Some(ContextMenuState {
             position: point(px(x), px(y)),
+            edge: if opens_below { Edge::Top } else { Edge::Bottom },
             items: entries,
             return_focus,
         });
@@ -129,7 +134,8 @@ impl BrowserWindow {
         let anchor_y = origin.1 + dropdown.position.1;
         let x = anchor_x.clamp(0.0, f32::from(viewport.width) - width);
         let below = f32::from(viewport.height) - anchor_y;
-        let preferred_y = if height <= below || anchor_y < height {
+        let opens_below = height <= below || anchor_y < height;
+        let preferred_y = if opens_below {
             anchor_y
         } else {
             anchor_y - height
@@ -137,6 +143,7 @@ impl BrowserWindow {
         let y = preferred_y.clamp(0.0, f32::from(viewport.height) - height);
         self.select_dropdown = Some(SelectDropdownState {
             position: point(px(x), px(y)),
+            edge: if opens_below { Edge::Top } else { Edge::Bottom },
             width,
             dropdown,
             webview: webview.downgrade(),
@@ -202,6 +209,7 @@ impl BrowserWindow {
     ) -> Option<AnyElement> {
         let menu = self.context_menu.as_ref()?;
         let position = menu.position;
+        let edge = menu.edge;
         let palette = self.palette(window, cx);
         let items = menu
             .items
@@ -216,6 +224,7 @@ impl BrowserWindow {
             self.menu_overlay(
                 MenuOverlay {
                     position,
+                    edge,
                     width,
                     label: "Context menu",
                     role: Role::Menu,
@@ -239,6 +248,7 @@ impl BrowserWindow {
     ) -> Option<AnyElement> {
         let dropdown = self.select_dropdown.as_ref()?;
         let position = dropdown.position;
+        let edge = dropdown.edge;
         let width = dropdown.width.min(f32::from(window.viewport_size().width));
         let viewport = window.viewport_size();
         let palette = self.palette(window, cx);
@@ -254,6 +264,7 @@ impl BrowserWindow {
             self.menu_overlay(
                 MenuOverlay {
                     position,
+                    edge,
                     width,
                     label: "Choose an option",
                     role: Role::ListBox,
@@ -297,6 +308,7 @@ impl BrowserWindow {
                 overlay.label,
                 overlay.role,
                 overlay.width,
+                overlay.edge,
                 content,
                 Transition::Enter,
                 overlay.palette,

@@ -11,7 +11,7 @@ use super::super::icons::{
 };
 use super::super::layout::{h_stack, v_stack};
 use super::super::menu::{menu_separator, popover_surface};
-use super::super::motion::{Transition, pressable};
+use super::super::motion::{Edge, Transition, pressable};
 use super::super::tooltip::label_tooltip;
 use super::super::{ClickHandler, metrics, theme::ThemeColors};
 use crate::platform::site_info::{
@@ -44,9 +44,17 @@ pub(super) fn popover(
     } else {
         site(&info, actions, palette, cx).into_any_element()
     };
-    popover_surface(TITLE, Role::Dialog, width, content, transition, palette)
-        .rounded(px(metrics::site_info_radius()))
-        .p(px(metrics::SITE_INFO_PADDING))
+    popover_surface(
+        TITLE,
+        Role::Dialog,
+        width,
+        Edge::Top,
+        content,
+        transition,
+        palette,
+    )
+    .rounded(px(metrics::site_info_radius()))
+    .p(px(metrics::SITE_INFO_PADDING))
 }
 
 /// The site's page: its controls, where its details are managed, and its

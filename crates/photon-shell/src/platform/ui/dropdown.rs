@@ -13,7 +13,7 @@ use super::controls::{Choice, FocusRing, OwnsClicks, Pressable};
 use super::icons::chevron_down_icon;
 use super::layout::{ControlSurface, h_stack, v_stack};
 use super::menu::{MENU_MOTION, menu_option, popover_surface};
-use super::motion::Transition;
+use super::motion::{Edge, Transition};
 use super::{metrics, theme::ThemeColors};
 
 /// A button showing the chosen option, which opens a menu of the options
@@ -169,6 +169,7 @@ impl RenderOnce for Dropdown {
                         label,
                         Role::ListBox,
                         metrics::DROPDOWN_WIDTH,
+                        Edge::Top,
                         v_stack().children(rows),
                         transition,
                         menu_palette,

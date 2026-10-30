@@ -10,7 +10,7 @@ use super::super::super::menu::{
     MENU_MOTION, menu_action, menu_block, menu_heading, menu_separator, menu_switch,
     popover_surface,
 };
-use super::super::super::motion::Transition;
+use super::super::super::motion::{Edge, Transition};
 use super::super::super::{metrics, theme::ThemeColors};
 use super::super::SETTINGS;
 use super::NewTabPage;
@@ -138,6 +138,7 @@ impl NewTabPage {
             "Customise new tab page",
             Role::Dialog,
             metrics::MENU_WIDTH,
+            Edge::Bottom,
             content,
             transition,
             palette,

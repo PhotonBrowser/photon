@@ -6,7 +6,7 @@ use super::controls::{haptic_switch_toggle, switch, toggled};
 use super::icons::check_icon;
 use super::layout::h_stack;
 use super::motion::pressable;
-use super::motion::{Edge, Entrance, Transition, popover};
+use super::motion::{Edge, Entrance, Transition, popover, popover_from};
 use super::{metrics, theme::ThemeColors};
 
 use super::ClickHandler;
@@ -20,13 +20,12 @@ use std::rc::Rc;
 /// How menus open and close.
 pub(super) const MENU_MOTION: Entrance = popover();
 
-/// A raised surface for menus and small panels, `width` wide. It animates in
-/// each time it opens and out as it closes, so every popover, dropdown and
-/// context menu built on it does too.
+/// A raised surface for menus and small panels, animated from its anchor-facing `edge`.
 pub(super) fn popover_surface(
     label: &'static str,
     role: Role,
     width: f32,
+    edge: Edge,
     content: impl IntoElement,
     transition: Transition,
     palette: ThemeColors,
@@ -35,10 +34,7 @@ pub(super) fn popover_surface(
     // `.enabled(true)`, when the glass alone is their surface.
     glass("browser-menu")
         .enabled(false)
-        .motion(
-            MENU_MOTION.scale_from_edge(0.94, Edge::Left, width),
-            transition,
-        )
+        .motion(popover_from(edge), transition)
         .fallback(move |surface| {
             surface
                 .border_1()
