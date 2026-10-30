@@ -48,21 +48,20 @@ enum Command {
     /// Report tool versions, installed Rust tools, and dependency checkout state.
     Doctor,
     /// Report Rust editor metadata.
+    #[command(hide = true)]
     Ide {
         #[command(subcommand)]
         command: IdeCommand,
     },
     /// Build Photon Engine and the GPUI-CE application.
     Build {
-        /// Build with optimizations (the default).
-        #[arg(long, default_value_t = true)]
-        release: bool,
+        #[command(flatten)]
+        profile: BuildProfile,
     },
     /// Build and launch Photon.
     Run {
-        /// Build with optimizations (the default).
-        #[arg(long, default_value_t = true)]
-        release: bool,
+        #[command(flatten)]
+        profile: BuildProfile,
         /// Build and launch the shell without building, linking, or starting Photon Engine.
         #[arg(long)]
         ui: bool,
@@ -84,6 +83,7 @@ enum Command {
     /// Run Rust lints and native formatting checks.
     Lint,
     /// Print a copyable AI prompt for fixing a check failure.
+    #[command(hide = true)]
     FixPrompt,
     /// Format Photon-owned Rust and C++ files.
     Format,
@@ -186,9 +186,8 @@ enum EngineCommand {
     Pin,
     /// Build Photon Engine libraries and services.
     Build {
-        /// Build with optimizations (the default).
-        #[arg(long, default_value_t = true)]
-        release: bool,
+        #[command(flatten)]
+        profile: BuildProfile,
     },
     /// Fetch and merge upstream/master into the Engine checkout.
     #[command(hide = true)]
@@ -197,6 +196,27 @@ enum EngineCommand {
         #[arg(long)]
         check: bool,
     },
+}
+
+#[derive(Debug, Args)]
+struct BuildProfile {
+    /// Build without optimizations for faster iteration and debugging.
+    #[arg(long, conflicts_with = "release_compat")]
+    debug: bool,
+    /// Build with optimizations (the default).
+    #[arg(
+        long = "release",
+        hide = true,
+        id = "release_compat",
+        conflicts_with = "debug"
+    )]
+    release_compat: bool,
+}
+
+impl BuildProfile {
+    fn release(&self) -> bool {
+        !self.debug || self.release_compat
+    }
 }
 
 pub fn run() -> Result<(), String> {
@@ -215,9 +235,11 @@ pub fn run() -> Result<(), String> {
         Some(Command::Ide { command }) => match command {
             IdeCommand::Setup => commands::ide::setup(&root, verbose),
         },
-        Some(Command::Build { release }) => commands::build::build(&root, release, verbose),
+        Some(Command::Build { profile }) => {
+            commands::build::build(&root, profile.release(), verbose)
+        }
         Some(Command::Run {
-            release,
+            profile,
             ui,
             url,
             shutdown_after_seconds,
@@ -227,11 +249,11 @@ pub fn run() -> Result<(), String> {
                 return Err("--url cannot be used with --ui".into());
             }
             if ui {
-                commands::build::run_ui(&root, release, verbose, shutdown_after_seconds)
+                commands::build::run_ui(&root, profile.release(), verbose, shutdown_after_seconds)
             } else {
                 commands::build::run_direct(
                     &root,
-                    release,
+                    profile.release(),
                     verbose,
                     url.as_deref(),
                     shutdown_after_seconds,
@@ -294,8 +316,8 @@ pub fn run() -> Result<(), String> {
             None | Some(EngineCommand::Status) => {
                 commands::engine::engine(&root, Some("status"), false, verbose)
             }
-            Some(EngineCommand::Build { release }) => {
-                commands::engine::engine(&root, Some("build"), release, verbose)
+            Some(EngineCommand::Build { profile }) => {
+                commands::engine::engine(&root, Some("build"), profile.release(), verbose)
             }
             Some(EngineCommand::Edit) => commands::engine::edit(&root, verbose),
             Some(EngineCommand::Pin) => commands::engine::pin(&root, verbose),
@@ -426,10 +448,30 @@ mod tests {
     #[test]
     fn run_uses_optimized_direct_build_by_default() {
         let cli = Cli::try_parse_from(["photon", "run"]).unwrap();
-        let Some(Command::Run { release, .. }) = cli.command else {
+        let Some(Command::Run { profile, .. }) = cli.command else {
             panic!("expected run command");
         };
 
-        assert!(release);
+        assert!(profile.release());
+    }
+
+    #[test]
+    fn run_can_select_a_debug_build() {
+        let cli = Cli::try_parse_from(["photon", "run", "--debug"]).unwrap();
+        let Some(Command::Run { profile, .. }) = cli.command else {
+            panic!("expected run command");
+        };
+
+        assert!(!profile.release());
+    }
+
+    #[test]
+    fn release_flag_remains_supported_for_existing_scripts() {
+        let cli = Cli::try_parse_from(["photon", "build", "--release"]).unwrap();
+        let Some(Command::Build { profile }) = cli.command else {
+            panic!("expected build command");
+        };
+
+        assert!(profile.release());
     }
 }
