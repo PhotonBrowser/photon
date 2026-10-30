@@ -458,7 +458,11 @@ impl PhotonWebView {
     }
 
     /// Keeps Engine page focus in step with GPUI focus and window activation.
-    pub(super) fn track_engine_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(in crate::platform) fn track_engine_focus(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.focus_subscriptions = vec![
             cx.on_focus(&self.focus_handle, window, |this, window, _| {
                 this.sync_engine_focus(window)
