@@ -212,7 +212,8 @@ pub(super) struct ThemeColors {
     pub suggestion_address: u32,
     /// Dims what a modal covers.
     pub modal_backdrop: u32,
-    /// Dims the page under a link preview, lightly, so it stays in view.
+    /// Dims the page under a link preview with a dark shade of the window's
+    /// tint, so it recedes but keeps the space's colour.
     pub peek_backdrop: u32,
 }
 
@@ -439,11 +440,15 @@ impl ThemeColors {
                 .opacity(opacity.modal_backdrop),
             ),
             peek_backdrop: to_rgba_token(
-                color(if dark {
-                    &theme.colors.peek_backdrop.dark
-                } else {
-                    &theme.colors.peek_backdrop.light
-                })
+                mix_colors(
+                    window_tint,
+                    color(if dark {
+                        &theme.colors.peek_backdrop.dark
+                    } else {
+                        &theme.colors.peek_backdrop.light
+                    }),
+                    opacity.peek_backdrop_tint,
+                )
                 .opacity(opacity.peek_backdrop),
             ),
         }

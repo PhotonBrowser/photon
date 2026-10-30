@@ -70,6 +70,8 @@ pub(crate) struct OpacityTokens {
     pub(crate) background_noise_max: f32,
     pub(crate) modal_backdrop: f32,
     pub(crate) peek_backdrop: f32,
+    /// How much of the window's tint colours the peek backdrop's shade.
+    pub(crate) peek_backdrop_tint: f32,
     pub(crate) menu_border: f32,
     pub(crate) hover: f32,
     pub(crate) surface_tint: f32,
@@ -250,6 +252,7 @@ fn validate_theme(theme: &ThemeDefinition) {
         ("background_noise_max", opacity.background_noise_max),
         ("modal_backdrop", opacity.modal_backdrop),
         ("peek_backdrop", opacity.peek_backdrop),
+        ("peek_backdrop_tint", opacity.peek_backdrop_tint),
         ("menu_border", opacity.menu_border),
         ("hover", opacity.hover),
         ("surface_tint", opacity.surface_tint),
