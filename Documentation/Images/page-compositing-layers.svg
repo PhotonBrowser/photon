@@ -1,0 +1,180 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 1620" width="1240" height="1620" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif">
+  <title>How a Photon window composites a page on macOS</title>
+  <style>
+    .bg { fill: #f6f6f8; }
+    .ink { fill: #1d1d22; }
+    .muted { fill: #5c5c66; }
+    .h1 { font-size: 26px; font-weight: 700; }
+    .h2 { font-size: 18px; font-weight: 650; }
+    .label { font-size: 15px; font-weight: 600; }
+    .note { font-size: 13px; }
+    .code { font-family: 'SF Mono', Menlo, monospace; font-size: 12.5px; }
+    .edge { fill: none; stroke: #8a8a96; stroke-width: 1; }
+    .guide { stroke: #a0a0ac; stroke-width: 1; stroke-dasharray: 4 5; }
+    .leader { stroke: #9a9aa6; stroke-width: 1; fill: none; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #16161a; }
+      .ink { fill: #ececf1; }
+      .muted { fill: #a3a3ae; }
+      .edge { stroke: #6a6a76; }
+      .guide { stroke: #55555f; }
+      .leader { stroke: #5f5f6a; }
+    }
+  </style>
+
+  <!-- Each plane is drawn in a flat 400 x 260 window space, then projected:
+       u runs along the window's width, v down its height. -->
+  <defs>
+    <!-- The page's rounded rectangle in window space: radius 14. -->
+    <path id="page-area" d="M134 12 H376 A14 14 0 0 1 390 26 V236 A14 14 0 0 1 376 250 H134 A14 14 0 0 1 120 236 V26 A14 14 0 0 1 134 12 Z"/>
+    <!-- The address field in the sidebar. -->
+    <rect id="field" x="10" y="30" width="98" height="20" rx="7"/>
+  </defs>
+
+  <rect class="bg" width="1240" height="1620"/>
+
+  <text class="ink h1" x="40" y="54">How a Photon window puts a page on screen (macOS)</text>
+  <text class="muted note" x="40" y="80">Exploded view, back to front. Each plane is a separate layer the window server composites; nothing below GPUI-CE's layer is drawn by GPUI-CE.</text>
+
+  <!-- Vertical guides through the window's four corners, across all planes. -->
+  <g class="guide">
+    <line x1="330" y1="150" x2="330" y2="950"/>
+    <line x1="650" y1="278" x2="650" y2="1078"/>
+    <line x1="463" y1="372" x2="463" y2="1172"/>
+    <line x1="143" y1="244" x2="143" y2="1044"/>
+  </g>
+
+  <!-- Plane 1 (back): the window's own material. -->
+  <g transform="matrix(0.8 0.32 -0.72 0.36 330 950)">
+    <rect width="400" height="260" rx="10" fill="#c9b8e8" fill-opacity="0.85"/>
+    <rect width="400" height="260" rx="10" class="edge"/>
+  </g>
+
+  <!-- Plane 2: native glass views, shown through their own GPUI cutouts. -->
+  <g transform="matrix(0.8 0.32 -0.72 0.36 330 750)">
+    <rect width="400" height="260" rx="10" fill="none" class="edge" stroke-dasharray="3 4"/>
+    <use href="#field" fill="#9fc6f2" stroke="#5b9be0" stroke-width="1.2"/>
+  </g>
+
+  <!-- Plane 3: the page's Core Animation layer, from Engine's IOSurface. -->
+  <g transform="matrix(0.8 0.32 -0.72 0.36 330 550)">
+    <rect width="400" height="260" rx="10" fill="none" class="edge" stroke-dasharray="3 4"/>
+    <path d="M135.5 12 H374.5 A15.5 15.5 0 0 1 390 27.5 V234.5 A15.5 15.5 0 0 1 374.5 250 H135.5 A15.5 15.5 0 0 1 120 234.5 V27.5 A15.5 15.5 0 0 1 135.5 12 Z" fill="#202024" stroke="#000" stroke-width="0.8"/>
+    <rect x="200" y="70" width="110" height="26" rx="4" fill="#e8e8ee"/>
+    <rect x="170" y="112" width="170" height="16" rx="8" fill="#3a3a42"/>
+    <rect x="150" y="160" width="210" height="6" rx="3" fill="#4a4a54"/>
+    <rect x="150" y="176" width="180" height="6" rx="3" fill="#4a4a54"/>
+    <rect x="150" y="192" width="196" height="6" rx="3" fill="#4a4a54"/>
+  </g>
+
+  <!-- Plane 4: GPUI-CE's layer: chrome and page frame, with holes cut out. -->
+  <g transform="matrix(0.8 0.32 -0.72 0.36 330 350)">
+    <path fill-rule="evenodd" fill="#5a4a8c" fill-opacity="0.92"
+      d="M10 0 H390 A10 10 0 0 1 400 10 V250 A10 10 0 0 1 390 260 H10 A10 10 0 0 1 0 250 V10 A10 10 0 0 1 10 0 Z
+         M137 12 H373 A17 17 0 0 1 390 29 V233 A17 17 0 0 1 373 250 H137 A17 17 0 0 1 120 233 V29 A17 17 0 0 1 137 12 Z
+         M17 30 H101 A7 7 0 0 1 108 37 V43 A7 7 0 0 1 101 50 H17 A7 7 0 0 1 10 43 V37 A7 7 0 0 1 17 30 Z"/>
+    <!-- The page frame's own background: only the slivers outside the hole remain. -->
+    <path fill-rule="evenodd" fill="#2c2c32"
+      d="M134 12 H376 A14 14 0 0 1 390 26 V236 A14 14 0 0 1 376 250 H134 A14 14 0 0 1 120 236 V26 A14 14 0 0 1 134 12 Z
+         M137 12 H373 A17 17 0 0 1 390 29 V233 A17 17 0 0 1 373 250 H137 A17 17 0 0 1 120 233 V29 A17 17 0 0 1 137 12 Z"/>
+    <path d="M137 12 H373 A17 17 0 0 1 390 29 V233 A17 17 0 0 1 373 250 H137 A17 17 0 0 1 120 233 V29 A17 17 0 0 1 137 12 Z" fill="none" stroke="#f0b429" stroke-width="1.6" stroke-dasharray="5 4"/>
+    <use href="#field" fill="none" stroke="#f0b429" stroke-width="1.4" stroke-dasharray="4 3"/>
+    <rect x="10" y="66" width="98" height="16" rx="5" fill="#ffffff" fill-opacity="0.18"/>
+    <rect x="10" y="88" width="98" height="16" rx="5" fill="#ffffff" fill-opacity="0.08"/>
+    <rect x="10" y="110" width="98" height="16" rx="5" fill="#ffffff" fill-opacity="0.08"/>
+    <rect width="400" height="260" rx="10" class="edge"/>
+  </g>
+
+  <!-- Plane 5 (front): GPUI-CE drawing painted after the cutout, still in its layer. -->
+  <g transform="matrix(0.8 0.32 -0.72 0.36 330 150)">
+    <rect width="400" height="260" rx="10" fill="none" class="edge" stroke-dasharray="3 4"/>
+    <rect x="10" y="52" width="150" height="86" rx="9" fill="#2a2a30" stroke="#6a6a78" stroke-width="1"/>
+    <rect x="18" y="62" width="134" height="14" rx="4" fill="#4b4b58"/>
+    <rect x="18" y="82" width="110" height="10" rx="4" fill="#3b3b46"/>
+    <rect x="18" y="98" width="120" height="10" rx="4" fill="#3b3b46"/>
+    <rect x="128" y="226" width="120" height="16" rx="6" fill="#2a2a30" stroke="#6a6a78" stroke-width="1"/>
+  </g>
+
+  <!-- Labels for the planes, on the right. -->
+  <g>
+    <path class="leader" d="M680 261 H770"/>
+    <text class="ink label" x="780" y="257">5 · GPUI-CE, drawn after the cutout</text>
+    <text class="muted note" x="780" y="277">Omnibox panel, menus, tooltips, link status.</text>
+    <text class="muted note" x="780" y="295">Same layer as 4, painted later, so it sits over the page.</text>
+
+    <path class="leader" d="M680 461 H770"/>
+    <text class="ink label" x="780" y="457">4 · GPUI-CE window layer (Metal)</text>
+    <text class="muted note" x="780" y="477">Sidebar, toolbar and the page frame's background.</text>
+    <text class="muted note" x="780" y="495">Holes (amber dashes) are painted fully transparent:</text>
+    <text class="muted code" x="780" y="514">Window::paint_cutout</text>
+    <text class="muted note" x="938" y="514">for the page, and for glass.</text>
+
+    <path class="leader" d="M680 661 H770"/>
+    <text class="ink label" x="780" y="657">3 · Page layer (Core Animation)</text>
+    <text class="muted note" x="780" y="677">Engine's IOSurface frames, shown with no pixel copies.</text>
+    <text class="muted note" x="780" y="695">One CALayer per web view, in Photon's page host view</text>
+    <text class="muted note" x="780" y="713">just beneath GPUI-CE's view.</text>
+    <text class="muted code" x="780" y="732">macos/page_layer.rs</text>
+
+    <path class="leader" d="M680 861 H770"/>
+    <text class="ink label" x="780" y="857">2 · Native glass (NSGlassEffectView)</text>
+    <text class="muted note" x="780" y="877">Liquid Glass under the address field and other glass.</text>
+    <text class="muted note" x="780" y="895">Below GPUI-CE; beneath the pages too when one covers it.</text>
+    <text class="muted code" x="780" y="914">macos/glass_backdrop.rs</text>
+
+    <path class="leader" d="M680 1061 H770"/>
+    <text class="ink label" x="780" y="1057">1 · Window material</text>
+    <text class="muted note" x="780" y="1077">The translucent window and whatever is behind it.</text>
+    <text class="muted note" x="780" y="1095">Shows wherever every plane above is transparent.</text>
+  </g>
+
+  <!-- What the viewer sees. -->
+  <text class="ink h2" x="40" y="1310">Why the hole: the page layer is beneath GPUI-CE</text>
+  <text class="muted note" x="40" y="1334">GPUI-CE never receives page pixels. The page reaches the screen only where GPUI-CE leaves its layer transparent.</text>
+  <text class="muted note" x="40" y="1354">Everything GPUI-CE paints after the cutout still lands on top of the page, which is why the page layer is not above GPUI-CE.</text>
+
+  <!-- Corner detail: before and after. Scale: 1 pt = 8 px; page radius 14 pt. -->
+  <text class="ink h2" x="40" y="1396">Corner detail (8× zoom)</text>
+
+  <!-- Before: hole at the frame's radius, layer rounded 1.5 pt more. -->
+  <g transform="translate(60 1414)">
+    <text class="ink label" x="0" y="0">Before: light arc</text>
+    <g transform="translate(0 14)">
+      <rect width="300" height="160" fill="#c9b8e8"/>
+      <!-- Frame edge and hole coincide at r = 14 pt (112 px); nothing GPUI-CE paints is left inside it. -->
+      <!-- Page layer, r = 15.5 pt (124 px). -->
+      <path d="M124 0 H300 V160 H0 V124 A124 124 0 0 1 124 0 Z" fill="#202024"/>
+      <!-- The sliver between them shows the window. -->
+      <path d="M112 0 H124 A124 124 0 0 0 0 124 V112 A112 112 0 0 1 112 0 Z" fill="#f4f0ff"/>
+      <path d="M112 0 A112 112 0 0 0 0 112" fill="none" stroke="#f0b429" stroke-width="2" stroke-dasharray="6 4"/>
+      <path d="M124 0 A124 124 0 0 0 0 124" fill="none" stroke="#5b9be0" stroke-width="1.5"/>
+    </g>
+  </g>
+
+  <!-- After: hole rounded 3 pt more than the frame. -->
+  <g transform="translate(420 1414)">
+    <text class="ink label" x="0" y="0">After: the frame's background fills it</text>
+    <g transform="translate(0 14)">
+      <rect width="300" height="160" fill="#c9b8e8"/>
+      <!-- Frame background, r = 14 pt. -->
+      <path d="M112 0 H300 V160 H0 V112 A112 112 0 0 1 112 0 Z" fill="#2c2c32"/>
+      <!-- Page through the hole, r = 17 pt (136 px). -->
+      <path d="M136 0 H300 V160 H0 V136 A136 136 0 0 1 136 0 Z" fill="#202024"/>
+      <path d="M136 0 A136 136 0 0 0 0 136" fill="none" stroke="#f0b429" stroke-width="2" stroke-dasharray="6 4"/>
+      <path d="M124 0 A124 124 0 0 0 0 124" fill="none" stroke="#5b9be0" stroke-width="1.5" stroke-dasharray="2 3"/>
+      <path d="M112 0 A112 112 0 0 0 0 112" fill="none" stroke="#8a8a96" stroke-width="1.2"/>
+    </g>
+  </g>
+
+  <!-- Key for the corner detail. -->
+  <g transform="translate(790 1428)">
+    <line x1="0" y1="6" x2="26" y2="6" stroke="#8a8a96" stroke-width="1.5"/>
+    <text class="muted note" x="36" y="10">Page frame edge (GPUI-CE), r</text>
+    <line x1="0" y1="32" x2="26" y2="32" stroke="#5b9be0" stroke-width="1.5"/>
+    <text class="muted note" x="36" y="36">Page layer edge (Core Animation), r + 1.5 pt</text>
+    <line x1="0" y1="58" x2="26" y2="58" stroke="#f0b429" stroke-width="2" stroke-dasharray="6 4"/>
+    <text class="muted note" x="36" y="62">Hole: was r, now r + 3 pt</text>
+    <text class="muted note" x="0" y="92">The hole must lie inside the page layer, and the</text>
+    <text class="muted note" x="0" y="110">page layer inside the frame. Any gap shows layer 1.</text>
+  </g>
+</svg>

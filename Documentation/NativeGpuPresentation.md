@@ -8,6 +8,10 @@ Photon looks up each backing's IOSurface once and holds only the surface itself.
 
 Each web view owns a `CALayer` placed directly beneath GPUI-CE's window layer. GPUI-CE paints a rounded cutout where the page is (`Window::paint_cutout`), so Core Animation and the window server composite the page, and anything GPUI-CE draws over the page afterwards, such as tooltips, menus, the omnibox panel and dialogs, stays above it. Core Animation cannot wait for the producer's GPU work, so a frame is installed only once its producer `MTLSharedEvent` value has signaled; a Metal shared-event listener on the main queue wakes the view then, without a waiting thread. A hidden tab hides its layer.
 
+![Exploded view of a Photon window's layers on macOS: window material, native glass, the page's Core Animation layer, GPUI-CE's layer with its cutouts, and GPUI-CE drawing over the page](Images/page-compositing-layers.svg)
+
+The page layer and the cutout are rounded by different renderers, Core Animation's continuous corner and GPUI-CE's smoothed one, which never match exactly. A layer that reaches past the cutout shows the page through the translucent window; a cutout that reaches past the layer shows the window behind it. So the layer is rounded 1.5 pt more than the page frame, and the cutout 3 pt more: the cutout always lies inside the layer, and the frame's own background fills the corner between them.
+
 When a frame is shown, the frames it replaced are released at once, like Ladybird's view releasing its previous front buffer. A frame that was never shown is reported finished and can be reused immediately. A frame that Core Animation displayed is not reported finished while the window server may still read it: the compositor does not render into it and adds a backing store rather than wait. While the window is fully occluded Photon marks the active view hidden, and Engine stops rendering frames. At shutdown, the application disables new frame publication, releases pending and displayed leases, and checks `received == completed == released` with `outstanding == 0`.
 
 The XPC protocol, Rust client channel, and native Objective-C transport live in

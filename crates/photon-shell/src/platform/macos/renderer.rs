@@ -90,9 +90,13 @@ pub(in crate::platform) fn page_surface(
     gpui::canvas(
         |_, _, _| {},
         |bounds, _, window, _| {
+            // Rounded more than the page layer, whose corner is rounded more
+            // than the frame's. The hole then lies within the layer, so no
+            // sliver at a corner shows the window behind it, and the frame's
+            // own background fills what the layer leaves between them.
             window.paint_cutout(
                 bounds,
-                px(metrics::page_radius()).into(),
+                px(metrics::page_radius() + 2.0 * super::page_layer::CORNER_INSET).into(),
                 metrics::page_smoothing(),
             )
         },

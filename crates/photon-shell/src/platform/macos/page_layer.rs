@@ -23,8 +23,8 @@ use objc2_quartz_core::{
 use super::appkit::appkit_host_view;
 use crate::platform::PagePlacement;
 
-/// How much more the layer is rounded than GPUI's cutout, in points.
-const CORNER_INSET: f32 = 1.5;
+/// How much more the layer is rounded than the page's frame, in points.
+pub(super) const CORNER_INSET: f32 = 1.5;
 
 /// Identifies a frame by Engine backing, generation and frame number.
 pub(super) type FrameIdentity = (u64, u64, u64);
