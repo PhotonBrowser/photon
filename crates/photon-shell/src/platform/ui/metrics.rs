@@ -209,6 +209,8 @@ pub(super) const LIST_ROW_GAP: f32 = 12.0;
 pub(super) const LIST_ROW_PADDING: f32 = 10.0;
 pub(super) const LIST_ROW_ICON_SIZE: f32 = 16.0;
 pub(super) const DOWNLOAD_PROGRESS_HEIGHT: f32 = 4.0;
+/// Fixed height keeps the downloads list efficiently virtualizable.
+pub(super) const DOWNLOAD_ROW_HEIGHT: f32 = 64.0;
 /// How many history entries the page lists before offering more.
 pub(super) const HISTORY_PAGE_BATCH: usize = 200;
 pub(super) const HISTORY_ROW_REMOVE_SIZE: f32 = 24.0;
