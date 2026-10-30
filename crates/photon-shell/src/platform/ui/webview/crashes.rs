@@ -8,6 +8,7 @@ use super::super::super::trace;
 use super::super::button::{ButtonKind, ButtonSize, button};
 use super::super::controls::OwnsClicks;
 use super::super::layout::{secondary_text, v_stack};
+use super::super::pages::page_frame;
 use super::super::{ClickHandler, metrics, theme::ThemeColors};
 use super::PhotonWebView;
 
@@ -63,6 +64,7 @@ impl PhotonWebView {
     pub(super) fn crash_overlay(
         &self,
         palette: ThemeColors,
+        radius: f32,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
         let Some(CrashNotice::KeepsCrashing { failed_url }) = self.crash_notice.as_ref() else {
@@ -123,23 +125,29 @@ impl PhotonWebView {
             reload,
         ));
         Some(
-            v_stack()
-                .id("page-crash-recovery")
+            div()
                 .absolute()
                 .inset_0()
-                .items_center()
-                .justify_center()
-                .overflow_y_scroll()
-                .p(px(metrics::INTERNAL_PAGE_INSET))
-                .bg(rgb(palette.page_background))
-                .role(Role::Group)
-                .aria_label("Page crash recovery")
-                .aria_live(gpui::accesskit::Live::Assertive)
-                .occlude()
-                .owns_clicks()
-                .on_key_down(|_, _, cx| cx.stop_propagation())
-                .on_key_up(|_, _, cx| cx.stop_propagation())
-                .child(content)
+                .child(page_frame(
+                    v_stack()
+                        .id("page-crash-recovery")
+                        .size_full()
+                        .items_center()
+                        .justify_center()
+                        .overflow_y_scroll()
+                        .p(px(metrics::INTERNAL_PAGE_INSET))
+                        .role(Role::Group)
+                        .aria_label("Page crash recovery")
+                        .aria_live(gpui::accesskit::Live::Assertive)
+                        .occlude()
+                        .owns_clicks()
+                        .on_key_down(|_, _, cx| cx.stop_propagation())
+                        .on_key_up(|_, _, cx| cx.stop_propagation())
+                        .child(content)
+                        .into_any_element(),
+                    palette,
+                    radius,
+                ))
                 .into_any_element(),
         )
     }

@@ -2,7 +2,11 @@
 
 use super::super::engine::{EngineSession, RequestedWebView};
 use super::input::{EditCommand, WebViewInput};
-use super::{metrics, settings::Settings, theme::palette};
+use super::{
+    metrics,
+    settings::Settings,
+    theme::{page_palette, palette},
+};
 use gpui::{
     AnyWindowHandle, Context, CursorStyle, EventEmitter, FocusHandle, InteractiveElement,
     KeyDownEvent, KeyUpEvent, MouseButton, NavigationDirection, Render, Subscription, Task, Window,
@@ -808,7 +812,7 @@ impl Render for PhotonWebView {
                 palette.performance_palette,
             ));
         }
-        if let Some(overlay) = self.crash_overlay(palette, cx) {
+        if let Some(overlay) = self.crash_overlay(page_palette(window, cx), radius, cx) {
             webview = webview.child(overlay);
         }
         webview

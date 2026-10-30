@@ -118,6 +118,19 @@ impl InternalPage {
     }
 }
 
+/// Frames shell pages like the page viewport, including its material and corners.
+pub(super) fn page_frame(content: AnyElement, palette: ThemeColors, radius: f32) -> AnyElement {
+    gpui::div()
+        .size_full()
+        .overflow_hidden()
+        .rounded(px(radius))
+        .rounded_smoothing(metrics::page_smoothing())
+        .bg(rgba(palette.page_surface))
+        .backdrop_blur(px(palette.surface_blur))
+        .child(content)
+        .into_any_element()
+}
+
 /// Separates the live surface from an internal page's expensive form/layout.
 struct PageFrame {
     body: AnyView,
@@ -156,18 +169,14 @@ impl gpui::Render for PageFrame {
         {
             gpui::App::notify(cx, self.body.entity_id());
         }
-        gpui::div()
-            .size_full()
-            .overflow_hidden()
-            .rounded(px(metrics::page_radius()))
-            .rounded_smoothing(metrics::page_smoothing())
-            .bg(rgba(palette.page_surface))
-            .backdrop_blur(px(palette.surface_blur))
-            .child(
-                self.body
-                    .clone()
-                    .cached(StyleRefinement::default().size_full()),
-            )
+        page_frame(
+            self.body
+                .clone()
+                .cached(StyleRefinement::default().size_full())
+                .into_any_element(),
+            palette,
+            metrics::page_radius(),
+        )
     }
 }
 
