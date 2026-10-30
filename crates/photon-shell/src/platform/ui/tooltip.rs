@@ -21,7 +21,7 @@ impl Render for LabelTooltip {
             .raised(self.palette)
             .elevated(Elevation::High)
             .text_size(px(metrics::TOOLTIP_FONT_SIZE))
-            .text_color(rgb(self.palette.text_primary))
+            .text_color(rgb(self.palette.raised_text_primary))
             .child(self.label.clone())
     }
 }

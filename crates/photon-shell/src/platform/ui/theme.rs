@@ -171,6 +171,8 @@ pub(super) struct ThemeColors {
     pub surface_blur: f32,
     pub text_primary: u32,
     pub text_secondary: u32,
+    /// Primary text on raised surfaces such as tooltips.
+    pub raised_text_primary: u32,
     pub selection: u32,
     /// Error messages, and the label of a button that deletes or resets.
     pub error: u32,
@@ -393,6 +395,7 @@ impl ThemeColors {
             surface_blur: surfaces.surface_blur,
             text_primary: to_rgb_token(colors.text),
             text_secondary: to_rgb_token(text_secondary),
+            raised_text_primary: to_rgb_token(colors.text),
             selection: to_rgba_token(colors.selected),
             error: to_rgb_token(error),
             error_hover_surface: to_rgba_token(error.opacity(opacity.error_hover)),
@@ -634,6 +637,7 @@ pub(super) fn page_palette(window: &Window, cx: &App) -> ThemeColors {
     let opacity = &crate::platform::theme_config::theme().opacity;
     result.text_primary = ink;
     result.text_secondary = to_rgb_token(mix_colors(rgb(ink), background, opacity.text_secondary));
+    result.raised_text_primary = ink;
     result.surface = to_rgba_token(rgb(ink).opacity(opacity.surface_tint));
     result.menu_surface = result.surface;
     result.hover_surface = to_rgba_token(rgb(ink).opacity(opacity.hover));
@@ -827,6 +831,39 @@ mod tests {
             let page = page_palette(window, cx);
             assert!(rgba(page.page_surface).alpha < 1.0);
             assert_eq!(page.text_primary, 0x000000);
+        });
+    }
+    #[gpui::test]
+    fn chrome_tooltips_keep_appearance_ink_on_raised_surfaces(cx: &mut gpui::TestAppContext) {
+        let mut settings = photon_core::BrowserSettings {
+            theme: photon_core::ThemeMode::Light,
+            transparency: Transparency::Off,
+            ..Default::default()
+        };
+        let id = settings.spaces.active().id;
+        settings.spaces.get_mut(id).unwrap().tint = Some(SpaceTint {
+            saturation: 0,
+            lightness: 10,
+            ..Default::default()
+        });
+        cx.update(|cx| super::super::settings::load_settings(None, settings, None, cx));
+        let cx = cx.add_empty_window();
+        cx.update(|window, cx| {
+            let chrome = chrome_palette(window, cx);
+            let menu = palette(window, cx);
+            assert_eq!(
+                chrome.text_primary, 0xffffff,
+                "dark chrome tint needs light ink"
+            );
+            assert_eq!(
+                chrome.raised_text_primary, menu.text_primary,
+                "tooltips retain the light appearance's ink"
+            );
+            assert!(
+                contrast_ratio(rgb(chrome.raised_text_primary), rgba(chrome.menu_surface))
+                    >= MIN_TINTED_TEXT_CONTRAST,
+                "tooltip text must contrast with its raised surface"
+            );
         });
     }
     #[test]
