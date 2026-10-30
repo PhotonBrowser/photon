@@ -2,19 +2,20 @@
 //! to read and close, or to keep as a tab without reloading.
 
 use gpui::{
-    AnyElement, Bounds, Context, Entity, KeyDownEvent, MouseButton, Pixels, Point, Subscription,
-    Window, bounds, div, point, prelude::*, px, rgb, rgba, size,
+    AnyElement, App, Bounds, Context, Entity, KeyDownEvent, MouseButton, Pixels, Point,
+    Subscription, Window, bounds, div, point, prelude::*, px, rgb, rgba, size,
 };
 use std::time::Instant;
 
 use super::super::button::icon_button;
 use super::super::controls::OwnsClicks;
 use super::super::icons::{close_icon, open_in_tab_icon};
-use super::super::layout::{Elevated, Elevation, Raised, h_stack};
+use super::super::layout::{Elevated, Elevation, Raised, v_stack};
 use super::super::motion::{PEEK_CLOSE_SPRING, PEEK_MORPH_SPRING, Speed, Tween, mix};
 use super::super::{PhotonWebView, WebViewEvent, metrics, theme::ThemeColors};
 use super::BrowserWindow;
 use super::content::{create_webview, follow_appearance};
+use super::workspace::page_margins;
 
 /// The page shown in the preview, and the window following it.
 pub(super) struct Peek {
@@ -64,10 +65,11 @@ impl BrowserWindow {
                 WebViewEvent::OpenInNewTab { url, activate } => {
                     this.open_tab_beside(webview, url, *activate, window, cx);
                 }
-                WebViewEvent::StateChanged => {
-                    this.sync_dialog(window, cx);
-                    cx.notify();
-                }
+                // The preview shows none of its page's state but its dialogs,
+                // and its page reports state many times while loading: each
+                // redraw of the window would rebuild the chrome and menu bar
+                // mid-animation. `sync_dialog` redraws when a dialog changes.
+                WebViewEvent::StateChanged => this.sync_dialog(window, cx),
                 WebViewEvent::ContextMenuRequested
                 | WebViewEvent::SelectDropdownRequested
                 | WebViewEvent::NewWebViewRequested(_) => {}
@@ -80,7 +82,7 @@ impl BrowserWindow {
         );
         // Lay the page out at the card's final size now, so it loads and
         // lays out while the card is still growing, before its first frame.
-        let page = peek_page_size(peek_frame(window));
+        let page = peek_page_size(self.peek_frame(window, cx));
         let scale = window.scale_factor();
         webview.update(cx, |view, cx| {
             view.set_page_visible(true);
@@ -102,7 +104,8 @@ impl BrowserWindow {
             morph: None,
             _subscription: subscription,
         });
-        cx.notify();
+        // Only the overlays draw the preview; the rest of the window is as it was.
+        self.overlays.update(cx, |_, cx| cx.notify());
     }
 
     /// The page in the preview, while it is open.
@@ -138,12 +141,20 @@ impl BrowserWindow {
         if !animate {
             self.finish_closing_peek(cx);
         }
-        if let Some(active_tab) = self.active_tab {
-            self.activate_tab(active_tab, true, window, cx);
+        // The page under the preview never stopped being the active tab, so
+        // it only takes the keyboard back. Activating the tab again would
+        // redraw the whole window, chrome and menu bar, as the card starts
+        // shrinking.
+        match self.active_webview() {
+            Some(webview) => webview.update(cx, |view, cx| {
+                window.focus(&view.focus_handle, cx);
+                view.track_engine_focus(window, cx);
+            }),
+            None => window.focus(&self.root_focus, cx),
         }
         // A dialog the preview's page had open goes with it.
         self.sync_dialog(window, cx);
-        cx.notify();
+        self.overlays.update(cx, |_, cx| cx.notify());
     }
 
     /// Hides the page of a preview that has shrunk away.
@@ -192,6 +203,8 @@ impl BrowserWindow {
             self.finish_closing_peek(cx);
         }
         let open = self.peek.open.is_some();
+        let area = self.peek_area(window, cx);
+        let frame = self.peek_frame(window, cx);
         let animations = super::super::settings::Settings::motion(cx);
         let reduce_motion = cx.reduce_motion();
         let peek = self.peek.open.as_mut().or(self.peek.closing.as_mut())?;
@@ -204,7 +217,6 @@ impl BrowserWindow {
             }
             morph
         });
-        let frame = peek_frame(window);
         let settled = peek.settled(now);
         if !settled {
             window.request_animation_frame();
@@ -216,7 +228,7 @@ impl BrowserWindow {
         let card_bounds = if landed {
             frame
         } else {
-            morph_bounds(peek.origin, frame, progress)
+            morph_bounds(peek.origin, area, frame, progress)
         };
         let layout_size = (!landed).then(|| peek_page_size(frame));
         // The bounce carries the card past its frame; the fades stop at full.
@@ -231,9 +243,14 @@ impl BrowserWindow {
             view.set_page_opacity(card_opacity);
         });
 
+        // The backdrop dims the page panel only, leaving the sidebar clear.
         let backdrop = div()
             .absolute()
-            .inset_0()
+            .left(area.origin.x)
+            .top(area.origin.y)
+            .w(area.size.width)
+            .h(area.size.height)
+            .rounded(px(metrics::page_radius()))
             .bg(rgba(palette.peek_backdrop))
             .opacity(shown);
         let card = div()
@@ -251,39 +268,47 @@ impl BrowserWindow {
             .opacity(card_opacity)
             .owns_clicks()
             .child(webview);
-        // The buttons ride on the card's top-right corner, on a raised pill
-        // that reads over any page.
-        let controls_height = metrics::peek_controls_height();
-        let buttons = h_stack()
+        // The buttons stand in a column beside the card's top-right corner,
+        // each a raised circle that reads over any page.
+        let button = |button: AnyElement| {
+            div()
+                .rounded_full()
+                .border(px(metrics::SURFACE_BORDER_WIDTH))
+                .border_color(rgba(palette.menu_border))
+                .raised(palette)
+                .elevated(Elevation::High)
+                .child(button)
+        };
+        let buttons = v_stack()
             .absolute()
-            .top(card_bounds.origin.y - px(controls_height + metrics::PEEK_CONTROL_GAP))
-            .right(window.viewport_size().width - card_bounds.right())
-            .h(px(controls_height))
-            .p(px(metrics::MENU_PADDING))
+            .top(card_bounds.origin.y)
+            .left(card_bounds.right() + px(metrics::PEEK_CONTROL_GAP))
             .gap(px(metrics::PEEK_CONTROL_GAP))
-            .rounded_full()
-            .border_1()
-            .border_color(rgba(palette.menu_border))
-            .raised(palette)
             .opacity(shown)
             .owns_clicks()
-            .child(icon_button(
-                "peek-open-in-tab",
-                "Open in tab",
-                open,
-                metrics::ICON_BUTTON_SIZE,
-                open_in_tab_icon(palette.text_primary, metrics::ICON_BUTTON_ICON_SIZE),
-                palette,
-                Box::new(cx.listener(|this, _, window, cx| this.keep_peek_as_tab(window, cx))),
+            .child(button(
+                icon_button(
+                    "peek-close",
+                    "Close preview",
+                    open,
+                    metrics::PEEK_BUTTON_SIZE,
+                    close_icon(palette.text_primary, metrics::PEEK_BUTTON_ICON_SIZE),
+                    palette,
+                    Box::new(cx.listener(|this, _, window, cx| this.close_peek(window, cx))),
+                )
+                .into_any_element(),
             ))
-            .child(icon_button(
-                "peek-close",
-                "Close preview",
-                open,
-                metrics::ICON_BUTTON_SIZE,
-                close_icon(palette.text_primary, metrics::ICON_BUTTON_ICON_SIZE),
-                palette,
-                Box::new(cx.listener(|this, _, window, cx| this.close_peek(window, cx))),
+            .child(button(
+                icon_button(
+                    "peek-open-in-tab",
+                    "Open in tab",
+                    open,
+                    metrics::PEEK_BUTTON_SIZE,
+                    open_in_tab_icon(palette.text_primary, metrics::PEEK_BUTTON_ICON_SIZE),
+                    palette,
+                    Box::new(cx.listener(|this, _, window, cx| this.keep_peek_as_tab(window, cx))),
+                )
+                .into_any_element(),
             ));
 
         let mut overlay = div()
@@ -310,31 +335,42 @@ impl BrowserWindow {
         }
         Some(overlay.into_any_element())
     }
-}
 
-/// How far the preview sits in from the window's sides and top, in whole
-/// pixels: the page is laid out at a whole size, and a card at a fractional
-/// one would shift it by a fraction of a pixel when it stops scaling.
-fn peek_insets(window: &Window) -> (f32, f32) {
-    let viewport = window.viewport_size();
-    (
-        (f32::from(viewport.width) * metrics::PEEK_INSET_FRACTION).round(),
-        (f32::from(viewport.height) * metrics::PEEK_INSET_FRACTION / 2.0).round(),
-    )
-}
+    /// The page panel the preview lies over, beside the sidebar and under
+    /// the bars.
+    fn peek_area(&self, window: &Window, cx: &App) -> Bounds<Pixels> {
+        let viewport = window.viewport_size();
+        let margins = page_margins(&self.sidebar, &self.layout(cx), cx);
+        bounds(
+            point(px(margins.left), px(margins.top)),
+            size(
+                viewport.width - px(margins.left + margins.right),
+                viewport.height - px(margins.top + margins.bottom),
+            ),
+        )
+    }
 
-/// Where the card lands, under its buttons.
-fn peek_frame(window: &Window) -> Bounds<Pixels> {
-    let viewport = window.viewport_size();
-    let (inset_x, inset_y) = peek_insets(window);
-    let card_top = inset_y + metrics::peek_controls_height() + metrics::PEEK_CONTROL_GAP;
-    bounds(
-        point(px(inset_x), px(card_top)),
-        size(
-            viewport.width - px(inset_x * 2.0),
-            viewport.height - px(inset_y + card_top),
-        ),
-    )
+    /// Where the card lands: centred on the page panel and a little taller
+    /// than it, with room either side for the buttons. In whole
+    /// pixels, as the page is laid out at a whole size and a card at a
+    /// fractional one would shift it by a fraction of a pixel when it stops
+    /// scaling.
+    fn peek_frame(&self, window: &Window, cx: &App) -> Bounds<Pixels> {
+        let area = self.peek_area(window, cx);
+        let overhang = metrics::PEEK_OVERHANG;
+        let side = (f32::from(area.size.width) * metrics::PEEK_SIDE_FRACTION)
+            .max(metrics::PEEK_BUTTON_SIZE + metrics::PEEK_CONTROL_GAP * 2.0);
+        let left = (f32::from(area.origin.x) + side).round();
+        let top = (f32::from(area.origin.y) - overhang).max(0.0).round();
+        let right = (f32::from(area.right()) - side).round();
+        let bottom = (f32::from(area.bottom()) + overhang)
+            .min(f32::from(window.viewport_size().height))
+            .round();
+        bounds(
+            point(px(left), px(top)),
+            size(px((right - left).max(1.0)), px((bottom - top).max(1.0))),
+        )
+    }
 }
 
 /// The page's size in a card at `frame`, inside the card's border, so the
@@ -346,13 +382,25 @@ fn peek_page_size(frame: Bounds<Pixels>) -> gpui::Size<Pixels> {
 
 /// The card's bounds `progress` of the way from a link-sized copy of `frame`
 /// around `origin` to `frame`. Every step keeps the frame's shape, so the page
-/// scaled into it is never stretched.
-fn morph_bounds(origin: Point<Pixels>, frame: Bounds<Pixels>, progress: f32) -> Bounds<Pixels> {
+/// scaled into it is never stretched. The copy starts inside `area`, so the
+/// card never strays over the sidebar, where its page would show through.
+fn morph_bounds(
+    origin: Point<Pixels>,
+    area: Bounds<Pixels>,
+    frame: Bounds<Pixels>,
+    progress: f32,
+) -> Bounds<Pixels> {
     let start_width = metrics::PEEK_MORPH_ORIGIN_WIDTH;
     let start_height =
         start_width * f32::from(frame.size.height) / f32::from(frame.size.width).max(1.0);
-    let start_left = f32::from(origin.x) - start_width / 2.0;
-    let start_top = f32::from(origin.y) - start_height / 2.0;
+    let start_left = (f32::from(origin.x) - start_width / 2.0).clamp(
+        f32::from(area.origin.x),
+        (f32::from(area.right()) - start_width).max(f32::from(area.origin.x)),
+    );
+    let start_top = (f32::from(origin.y) - start_height / 2.0).clamp(
+        f32::from(area.origin.y),
+        (f32::from(area.bottom()) - start_height).max(f32::from(area.origin.y)),
+    );
     bounds(
         point(
             px(mix(start_left, f32::from(frame.origin.x), progress)),

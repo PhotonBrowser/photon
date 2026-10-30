@@ -216,7 +216,11 @@ impl BrowserWindow {
 /// The page's margins inside the window: room for the bars around it
 /// and the sidebar beside it, with a small inset elsewhere. Zen mode
 /// tucks the bars away, leaving the inset in their place.
-fn page_margins(sidebar: &SidebarState, layout: &WorkspaceLayout, cx: &App) -> Edges<f32> {
+pub(super) fn page_margins(
+    sidebar: &SidebarState,
+    layout: &WorkspaceLayout,
+    cx: &App,
+) -> Edges<f32> {
     let chrome_shown = sidebar.chrome_shown();
     let inset = metrics::PAGE_INSET;
     let top_extent = layout.top_extent();

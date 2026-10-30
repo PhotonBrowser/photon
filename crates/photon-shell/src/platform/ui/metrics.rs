@@ -490,19 +490,20 @@ pub(super) const SPACE_DOT_SIZE: f32 = 7.0;
 pub(super) const SPACE_DOT_ACTIVE_SIZE: f32 = 10.0;
 pub(super) const SPACE_DOT_BUTTON_SIZE: f32 = 22.0;
 pub(super) const SPACE_DOT_GAP: f32 = 2.0;
-/// Peek: the space around the preview, as a fraction of the window, and
-/// between its buttons and the page.
-pub(super) const PEEK_INSET_FRACTION: f32 = 0.08;
-pub(super) const PEEK_CONTROL_GAP: f32 = 6.0;
+/// Peek: how far the preview reaches past the page panel's top and bottom,
+/// so it reads as a popup over the page; the share of the panel's width left
+/// either side of it; and the gap beside and between its buttons.
+pub(super) const PEEK_OVERHANG: f32 = 6.0;
+pub(super) const PEEK_SIDE_FRACTION: f32 = 0.09;
+pub(super) const PEEK_CONTROL_GAP: f32 = 10.0;
+/// The preview's round buttons, stacked beside its top-right corner.
+pub(super) const PEEK_BUTTON_SIZE: f32 = 36.0;
+pub(super) const PEEK_BUTTON_ICON_SIZE: f32 = 16.0;
 /// The width of the preview's copy around the clicked link it grows from.
 pub(super) const PEEK_MORPH_ORIGIN_WIDTH: f32 = 120.0;
 /// How much faster than it grows the preview card fades: at 2.5 it is fully
 /// opaque two fifths of the way out, and fades over the last two fifths back.
 pub(super) const PEEK_CARD_FADE_RATE: f32 = 2.5;
-/// The height of the pill holding the preview's buttons.
-pub(super) fn peek_controls_height() -> f32 {
-    ICON_BUTTON_SIZE + MENU_PADDING * 2.0 + SURFACE_BORDER_WIDTH * 2.0
-}
 
 // Arc-style theme controls: shared geometry and bounded rendering work.
 pub(super) const PICKER_WIDTH: f32 = 344.0;
