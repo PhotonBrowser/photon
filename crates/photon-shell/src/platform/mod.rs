@@ -124,6 +124,9 @@ pub(crate) struct PageSurfacePalette {
 pub(crate) struct PagePlacement {
     pub(crate) bounds: gpui::Bounds<gpui::Pixels>,
     pub(crate) corner_radius: f32,
+    /// How far each corner is smoothed into a squircle, as GPUI-CE's
+    /// `rounded_smoothing`, so the layer's corners match the cutout's.
+    pub(crate) corner_smoothing: f32,
     pub(crate) scale_factor: f32,
     /// Shown until the page's first frame, as `0xRRGGBB`.
     pub(crate) background: u32,

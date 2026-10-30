@@ -672,6 +672,7 @@ impl Render for PhotonWebView {
                         PagePlacement {
                             bounds: event.bounds,
                             corner_radius: radius,
+                            corner_smoothing: metrics::page_smoothing(),
                             scale_factor,
                             background: page_background,
                             scaled: this.layout_size.is_some(),

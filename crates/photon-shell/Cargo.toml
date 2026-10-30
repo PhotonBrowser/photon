@@ -77,6 +77,7 @@ objc2-app-kit = { version = "0.3.2", default-features = false, features = [
 objc2-quartz-core = { version = "0.3.2", default-features = false, features = [
   "CALayer",
   "CAGradientLayer",
+  "CAShapeLayer",
   "CAAnimation",
   "CAMediaTiming",
   "CATransaction",
@@ -85,6 +86,7 @@ objc2-quartz-core = { version = "0.3.2", default-features = false, features = [
 ] }
 objc2-core-graphics = { version = "0.3.2", default-features = false, features = [
   "CGColor",
+  "CGPath",
 ] }
 objc2-foundation = { version = "0.3.2", default-features = false, features = [
   "NSArray",

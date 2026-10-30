@@ -138,7 +138,7 @@
 
   <!-- Before: hole at the frame's radius, layer rounded 1.5 pt more. -->
   <g transform="translate(60 1414)">
-    <text class="ink label" x="0" y="0">Before: light arc</text>
+    <text class="ink label" x="0" y="0">Before: two different curves</text>
     <g transform="translate(0 14)">
       <rect width="300" height="160" fill="#c9b8e8"/>
       <!-- Frame edge and hole coincide at r = 14 pt (112 px); nothing GPUI-CE paints is left inside it. -->
@@ -151,18 +151,15 @@
     </g>
   </g>
 
-  <!-- After: hole rounded 3 pt more than the frame. -->
+  <!-- After: one squircle for both -->
   <g transform="translate(420 1414)">
-    <text class="ink label" x="0" y="0">After: the frame's background fills it</text>
+    <text class="ink label" x="0" y="0">After: one squircle, edges meet</text>
     <g transform="translate(0 14)">
       <rect width="300" height="160" fill="#c9b8e8"/>
-      <!-- Frame background, r = 14 pt. -->
-      <path d="M112 0 H300 V160 H0 V112 A112 112 0 0 1 112 0 Z" fill="#2c2c32"/>
-      <!-- Page through the hole, r = 17 pt (136 px). -->
-      <path d="M136 0 H300 V160 H0 V136 A136 136 0 0 1 136 0 Z" fill="#202024"/>
-      <path d="M136 0 A136 136 0 0 0 0 136" fill="none" stroke="#f0b429" stroke-width="2" stroke-dasharray="6 4"/>
-      <path d="M124 0 A124 124 0 0 0 0 124" fill="none" stroke="#5b9be0" stroke-width="1.5" stroke-dasharray="2 3"/>
-      <path d="M112 0 A112 112 0 0 0 0 112" fill="none" stroke="#8a8a96" stroke-width="1.2"/>
+      <!-- Hole and page layer share GPUI-CE's squircle, r = 14 pt, smoothing 0.6. -->
+      <path d="M150 0 H300 V160 H0 V150 C0 58 58 0 150 0 Z" fill="#202024"/>
+      <path d="M150 0 C58 0 0 58 0 150" fill="none" stroke="#f0b429" stroke-width="2" stroke-dasharray="6 4"/>
+      <path d="M150 0 C58 0 0 58 0 150" fill="none" stroke="#5b9be0" stroke-width="1.5" stroke-dasharray="2 6"/>
     </g>
   </g>
 
@@ -171,10 +168,10 @@
     <line x1="0" y1="6" x2="26" y2="6" stroke="#8a8a96" stroke-width="1.5"/>
     <text class="muted note" x="36" y="10">Page frame edge (GPUI-CE), r</text>
     <line x1="0" y1="32" x2="26" y2="32" stroke="#5b9be0" stroke-width="1.5"/>
-    <text class="muted note" x="36" y="36">Page layer edge (Core Animation), r + 1.5 pt</text>
+    <text class="muted note" x="36" y="36">Page layer edge: was CA's continuous corner at r + 1.5 pt</text>
     <line x1="0" y1="58" x2="26" y2="58" stroke="#f0b429" stroke-width="2" stroke-dasharray="6 4"/>
-    <text class="muted note" x="36" y="62">Hole: was r, now r + 3 pt</text>
-    <text class="muted note" x="0" y="92">The hole must lie inside the page layer, and the</text>
-    <text class="muted note" x="0" y="110">page layer inside the frame. Any gap shows layer 1.</text>
+    <text class="muted note" x="36" y="62">Hole (GPUI-CE squircle, r)</text>
+    <text class="muted note" x="0" y="92">Now the layer is masked with the hole's own squircle,</text>
+    <text class="muted note" x="0" y="110">so neither reaches past the other.</text>
   </g>
 </svg>

@@ -14,17 +14,17 @@ use gpui::{Bounds, Pixels, Window};
 use io_surface::IOSurface;
 use objc2::{MainThreadMarker, msg_send, rc::Retained, runtime::AnyObject};
 use objc2_app_kit::{NSView, NSWindowOrderingMode};
-use objc2_core_graphics::CGColor;
+use objc2_core_graphics::{CGColor, CGMutablePath};
 use objc2_foundation::{NSDictionary, NSNull, NSPoint, NSRect, NSSize, NSString};
 use objc2_quartz_core::{
-    CALayer, kCACornerCurveContinuous, kCAGravityBottomLeft, kCAGravityResize, kCAGravityTopLeft,
+    CALayer, CAShapeLayer, kCAGravityBottomLeft, kCAGravityResize, kCAGravityTopLeft,
 };
 
 use super::appkit::appkit_host_view;
 use crate::platform::PagePlacement;
 
-/// How much more the layer is rounded than the page's frame, in points.
-pub(super) const CORNER_INSET: f32 = 1.5;
+/// Points along each corner of the mask's squircle.
+const CORNER_SEGMENTS: usize = 32;
 
 /// Identifies a frame by Engine backing, generation and frame number.
 pub(super) type FrameIdentity = (u64, u64, u64);
@@ -38,6 +38,8 @@ pub(super) struct PageLayer {
     /// The colour at the painted frame's edge, as 0xRRGGBB, which fills
     /// uncovered area while Engine lays out at a new size.
     edge_color: Cell<Option<u32>>,
+    /// The page's rounded shape, when it has corners.
+    mask: Retained<CAShapeLayer>,
     /// What `place` last applied, so an unchanged layout touches nothing.
     placed: Cell<Option<(PagePlacement, NSRect, bool)>>,
 }
@@ -73,12 +75,22 @@ impl PageLayer {
         );
         // SAFETY: NSNull is a valid CAAction that disables an animation.
         let _: () = unsafe { msg_send![&*layer, setActions: &*actions] };
-        // SAFETY: Core Animation exposes these process-wide immutable values.
-        unsafe {
-            layer.setCornerCurve(kCACornerCurveContinuous);
-        }
+        // Rounds the page as GPUI-CE rounds its cutout: Core Animation's own
+        // corners are a different curve, so the two edges never met.
+        let mask = CAShapeLayer::layer();
+        let mask_actions = NSDictionary::from_slices(
+            &[
+                &*NSString::from_str("path"),
+                &*NSString::from_str("bounds"),
+                &*NSString::from_str("position"),
+            ],
+            &[&*null, &*null, &*null],
+        );
+        // SAFETY: as above.
+        let _: () = unsafe { msg_send![&*mask, setActions: &*mask_actions] };
         Self {
             layer,
+            mask,
             current_surface: RefCell::new(None),
             current_identity: Cell::new(None),
             contents_fraction: Cell::new((1.0, 1.0)),
@@ -247,16 +259,22 @@ impl PageLayer {
         set_contents_gravity(layer, placement.scaled);
         layer.setContentsRect(contents_rect(layer, self.contents_fraction.get()));
         layer.setFrame(frame);
-        // Core Animation's continuous corner and GPUI's smoothed cutout differ
-        // slightly, and where the layer reached past the hole its page showed
-        // through the translucent window as a light hairline. Round the layer
-        // a little more, so its corner always lies inside the hole.
-        let corner_radius = if placement.corner_radius > 0.0 {
-            placement.corner_radius + CORNER_INSET
+        if placement.corner_radius > 0.0 {
+            let size = (frame.size.width, frame.size.height);
+            self.mask
+                .setFrame(NSRect::new(NSPoint::new(0.0, 0.0), frame.size));
+            set_squircle_path(
+                &self.mask,
+                size,
+                f64::from(placement.corner_radius),
+                f64::from(placement.corner_smoothing),
+            );
+            // SAFETY: the mask is a layer of its own, used by no other.
+            unsafe { layer.setMask(Some(&self.mask)) };
         } else {
-            0.0
-        };
-        layer.setCornerRadius(f64::from(corner_radius));
+            // SAFETY: clearing a mask is always valid.
+            unsafe { layer.setMask(None) };
+        }
         layer.setOpacity(placement.opacity.clamp(0.0, 1.0));
         layer.setContentsScale(f64::from(placement.scale_factor));
         // Shown until the first frame arrives, as the page's own background,
@@ -526,4 +544,50 @@ fn edge_color(surface: &IOSurface, painted_width: i32, painted_height: i32) -> O
         let (red, green, blue) = (red[median], green[median], blue[median]);
         Some(u32::from_be_bytes([0, red, green, blue]))
     }
+}
+
+/// Turns a corner curve's two coordinates into an offset from its centre.
+type CornerMap = fn(f64, f64) -> (f64, f64);
+
+/// GPUI-CE's smoothed rounded rectangle, as its `corner_smoothing` shader
+/// draws it: each corner is the superellipse |x|^n + |y|^n = 1 spanning
+/// `radius * (1 + smoothing)`, with `n` chosen so its diagonal sits where the
+/// shader puts it. The shape is symmetric, so flipping does not change it.
+fn set_squircle_path(mask: &CAShapeLayer, size: (f64, f64), radius: f64, smoothing: f64) {
+    const DIAGONAL_INSET: f64 = 0.292_893_218_813_452_4;
+    let smoothing = smoothing.clamp(0.0, 1.0);
+    let power = -(2.0_f64.ln()) / (1.0 - DIAGONAL_INSET / (1.0 + smoothing)).ln();
+    let (width, height) = size;
+    let extent = (radius * (1.0 + smoothing))
+        .min(width / 2.0)
+        .min(height / 2.0);
+    let path = CGMutablePath::new();
+    // Each corner's centre and how its curve's two coordinates map onto it.
+    let corners: [((f64, f64), CornerMap); 4] = [
+        ((extent, extent), |a, b| (-a, -b)),
+        ((width - extent, extent), |a, b| (b, -a)),
+        ((width - extent, height - extent), |a, b| (a, b)),
+        ((extent, height - extent), |a, b| (-b, a)),
+    ];
+    let mut first = true;
+    for ((cx, cy), map) in corners {
+        for step in 0..=CORNER_SEGMENTS {
+            let angle = std::f64::consts::FRAC_PI_2 * step as f64 / CORNER_SEGMENTS as f64;
+            let a = angle.cos().max(0.0).powf(2.0 / power);
+            let b = angle.sin().max(0.0).powf(2.0 / power);
+            let (dx, dy) = map(a, b);
+            let (x, y) = (cx + extent * dx, cy + extent * dy);
+            // SAFETY: a null transform is allowed, and the path is live.
+            unsafe {
+                if first {
+                    CGMutablePath::move_to_point(Some(&path), std::ptr::null(), x, y);
+                } else {
+                    CGMutablePath::add_line_to_point(Some(&path), std::ptr::null(), x, y);
+                }
+            }
+            first = false;
+        }
+    }
+    CGMutablePath::close_subpath(Some(&path));
+    mask.setPath(Some(&path));
 }
