@@ -7,6 +7,8 @@
 //! 26+. Off macOS, before macOS 26, or with the "Glass menus" setting off, it
 //! is that `div` alone, with any [`Glass::fallback`] styles applied.
 
+#[cfg(target_os = "macos")]
+mod macos;
 mod render;
 
 use gpui::{
