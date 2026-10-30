@@ -32,7 +32,7 @@ The intended path is **DMA-BUF import**, matching macOS's IOSurface design:
 
 - [x] Shared shell, Engine adapter and pages compile for Linux.
 - [x] CI installs the GPUI, font and audio (`libasound2-dev`) packages.
-- [ ] CI is green again on `main`.
+- [x] CI is green again on `main`.
 - [ ] `photon setup` installs Linux system packages (currently manual; follow
       [Ladybird's build guide](../Engine/Documentation/BuildInstructionsLadybird.md)).
 - [ ] Full `photon build` of the Engine on Ubuntu 24.04 (needs Qt 6.10+).
