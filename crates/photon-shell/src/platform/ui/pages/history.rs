@@ -2,8 +2,8 @@
 //! day, with a search and a way to forget a page.
 
 use gpui::{
-    App, Context, ElementId, Entity, Focusable, ImageSource, ObjectFit, Render, Role, Subscription,
-    Window, div, img, prelude::*, px, rgb, rgba,
+    App, Context, ElementId, Entity, Focusable, ImageSource, ListAlignment, ListState, ObjectFit,
+    Render, Role, Subscription, Window, div, img, list, prelude::*, px, rgb, rgba,
 };
 use gpui_elements::editable_text::{EditableTextState, StringStorage, text_input};
 use photon_core::History;
@@ -17,9 +17,8 @@ use super::super::controls::text_field;
 use super::super::history::BrowsingHistory;
 use super::super::icons::{close_icon, globe_icon, history_icon};
 use super::super::layout::{h_stack, v_stack};
-use super::super::settings::Settings;
 use super::super::{metrics, theme::ThemeColors, theme::page_palette as palette};
-use super::layout::{group, heading, scrolling_column, secondary_text};
+use super::layout::{group, heading, secondary_text};
 use super::{PageContext, PageDefinition, PageIcon};
 
 pub(super) const PAGE: PageDefinition = PageDefinition {
@@ -34,8 +33,7 @@ pub(super) const PAGE: PageDefinition = PageDefinition {
 pub(in super::super) struct HistoryPage {
     context: PageContext,
     search: Entity<EditableTextState>,
-    /// How many matching entries are listed.
-    shown: usize,
+    list: ListState,
     /// Other browsers whose history can be imported.
     import_sources: Vec<ImportSource>,
     /// The browser being imported from.
@@ -43,6 +41,8 @@ pub(in super::super) struct HistoryPage {
     /// The matching entries, newest first, kept until the history or the
     /// search changes rather than worked out again every frame.
     listing: Option<Listing>,
+    pending: Option<(usize, String, u64)>,
+    request_id: u64,
     _history: Subscription,
     _search: Subscription,
 }
@@ -51,7 +51,7 @@ pub(in super::super) struct HistoryPage {
 struct Listing {
     history: Weak<History>,
     query: String,
-    indices: Vec<usize>,
+    indices: Arc<Vec<usize>>,
 }
 
 impl HistoryPage {
@@ -73,14 +73,18 @@ impl HistoryPage {
         Self {
             context,
             _search: cx.observe(&search, |this, _, cx| {
-                this.shown = metrics::HISTORY_PAGE_BATCH;
+                this.request_id = this.request_id.wrapping_add(1);
+                this.pending = None;
+                this.list.reset(0);
                 cx.notify();
             }),
             search,
-            shown: metrics::HISTORY_PAGE_BATCH,
+            list: ListState::new(0, ListAlignment::Top, px(metrics::LIST_ROW_ICON_SIZE)),
             import_sources: Vec::new(),
             importing: None,
             listing: None,
+            pending: None,
+            request_id: 0,
             // Follow visits, removals and icons arriving.
             _history: cx.observe_global::<BrowsingHistory>(|_, cx| cx.notify()),
         }
@@ -171,29 +175,76 @@ impl HistoryPage {
 }
 
 impl HistoryPage {
-    /// The entries matching `query`, newest first, worked out again only
-    /// when the history or the query has changed.
-    fn listing(&mut self, history: &Arc<History>, query: String) -> &[usize] {
+    /// Starts filtering away from the UI thread; stale results are discarded.
+    fn load_listing(&mut self, history: Arc<History>, query: String, cx: &mut Context<Self>) {
+        let key = Arc::as_ptr(&history) as usize;
         let current = self.listing.as_ref().is_some_and(|listing| {
-            std::ptr::eq(listing.history.as_ptr(), Arc::as_ptr(history)) && listing.query == query
+            listing
+                .history
+                .upgrade()
+                .is_some_and(|cached| Arc::ptr_eq(&cached, &history))
+                && listing.query == query
         });
-        if !current {
-            let words: Vec<String> = query.split_whitespace().map(str::to_owned).collect();
-            let pages = history.pages();
-            let mut indices: Vec<usize> = (0..pages.len())
-                .filter(|&index| matches(&pages[index], &words))
-                .collect();
-            indices.sort_by_key(|&index| std::cmp::Reverse(pages[index].last_visit));
-            self.listing = Some(Listing {
-                history: Arc::downgrade(history),
-                query,
-                indices,
-            });
+        if current
+            || self
+                .pending
+                .as_ref()
+                .is_some_and(|(pending_key, pending_query, _)| {
+                    *pending_key == key && pending_query == &query
+                })
+        {
+            return;
         }
-        self.listing
-            .as_ref()
-            .map_or(&[], |listing| listing.indices.as_slice())
+
+        self.request_id = self.request_id.wrapping_add(1);
+        let request_id = self.request_id;
+        self.pending = Some((key, query.clone(), request_id));
+        self.list.reset(0);
+        let pages = history.clone();
+        let worker_query = query.clone();
+        let result = cx
+            .background_executor()
+            .spawn(async move { matching_pages(&pages, &worker_query) });
+        cx.spawn(async move |this, cx| {
+            let indices = result.await;
+            this.update(cx, |this, cx| {
+                if this.request_id != request_id {
+                    return;
+                }
+                let current_query = this.search.read(cx).as_str().to_lowercase();
+                let current_history = BrowsingHistory::pages(cx);
+                if current_query != query || !Arc::ptr_eq(&current_history, &history) {
+                    this.pending = None;
+                    cx.notify();
+                    return;
+                }
+                this.pending = None;
+                this.listing = Some(Listing {
+                    history: Arc::downgrade(&history),
+                    query,
+                    indices: Arc::new(indices),
+                });
+                this.list.reset(
+                    this.listing
+                        .as_ref()
+                        .map_or(0, |listing| listing.indices.len()),
+                );
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
     }
+}
+
+fn matching_pages(history: &History, query: &str) -> Vec<usize> {
+    let words: Vec<String> = query.split_whitespace().map(str::to_owned).collect();
+    let pages = history.pages();
+    let mut indices: Vec<usize> = (0..pages.len())
+        .filter(|&index| matches(&pages[index], &words))
+        .collect();
+    indices.sort_by_key(|&index| std::cmp::Reverse(pages[index].last_visit));
+    indices
 }
 
 fn matches(entry: &HistoryEntry, words: &[String]) -> bool {
@@ -242,12 +293,12 @@ fn page_icon(url: &str, palette: ThemeColors, cx: &mut App) -> gpui::AnyElement 
 
 impl HistoryPage {
     fn row(
-        &self,
+        context: &PageContext,
         index: usize,
         entry: &HistoryEntry,
         utc_offset: i64,
         palette: ThemeColors,
-        cx: &mut Context<Self>,
+        cx: &mut App,
     ) -> impl IntoElement {
         let title = if entry.title.trim().is_empty() {
             entry.url.clone()
@@ -255,7 +306,7 @@ impl HistoryPage {
             entry.title.clone()
         };
         let open_url = entry.url.clone();
-        let context = self.context.clone();
+        let context = context.clone();
         let remove_url = entry.url.clone();
         let group_name: gpui::SharedString = format!("history-row-{index}").into();
         h_stack()
@@ -329,21 +380,65 @@ impl HistoryPage {
     }
 }
 
+fn history_skeleton(palette: ThemeColors) -> impl IntoElement {
+    let placeholder = rgba(palette.menu_border);
+    v_stack()
+        .w_full()
+        .gap(px(metrics::MENU_ITEM_GAP * 3.0))
+        .child(secondary_text("Loading history…", palette))
+        .children((0..6).map(|_| {
+            h_stack()
+                .w_full()
+                .items_center()
+                .gap(px(metrics::LIST_ROW_GAP))
+                .p(px(metrics::LIST_ROW_PADDING))
+                .rounded(px(metrics::surface_radius()))
+                .bg(rgba(palette.menu_surface))
+                .child(
+                    div()
+                        .size(px(metrics::LIST_ROW_ICON_SIZE))
+                        .rounded_full()
+                        .bg(placeholder),
+                )
+                .child(
+                    v_stack()
+                        .flex_1()
+                        .gap(px(metrics::HISTORY_ROW_LINE_GAP))
+                        .child(
+                            div()
+                                .w_full()
+                                .max_w(px(metrics::INTERNAL_PAGE_MAX_WIDTH * 0.42))
+                                .h(px(metrics::MENU_FONT_SIZE))
+                                .rounded(px(metrics::control_radius()))
+                                .bg(placeholder),
+                        )
+                        .child(
+                            div()
+                                .w_full()
+                                .max_w(px(metrics::INTERNAL_PAGE_MAX_WIDTH * 0.26))
+                                .h(px(metrics::HISTORY_ROW_DETAIL_FONT_SIZE))
+                                .rounded(px(metrics::control_radius()))
+                                .bg(placeholder),
+                        ),
+                )
+        }))
+}
+
 impl Render for HistoryPage {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = palette(window, cx);
         let history = BrowsingHistory::pages(cx);
         let query = self.search.read(cx).as_str().to_lowercase();
         let searching = !query.trim().is_empty();
-        let shown = self.shown;
-        let listing = self.listing(&history, query);
-        let total = listing.len();
-        let pages = history.pages();
-        let entries: Vec<&HistoryEntry> = listing
-            .iter()
-            .take(shown)
-            .map(|&index| &pages[index])
-            .collect();
+        self.load_listing(history.clone(), query.clone(), cx);
+        let indices = self.listing.as_ref().and_then(|listing| {
+            (listing
+                .history
+                .upgrade()
+                .is_some_and(|cached| Arc::ptr_eq(&cached, &history))
+                && listing.query == query)
+                .then(|| listing.indices.clone())
+        });
 
         let offset = utc_offset();
         let now = SystemTime::now()
@@ -361,55 +456,51 @@ impl Render for HistoryPage {
             palette,
         );
 
-        let mut list = v_stack().gap(px(metrics::INTERNAL_PAGE_SECTION_GAP / 2.0));
-        if entries.is_empty() {
-            let message = if !searching {
-                "Pages you visit will appear here."
-            } else {
-                "No pages match your search."
-            };
-            list = list.child(
+        let list_content: gpui::AnyElement = if let Some(indices) = indices {
+            if indices.is_empty() {
+                let message = if searching {
+                    "No pages match your search."
+                } else {
+                    "Pages you visit will appear here."
+                };
                 group(palette)
                     .p(px(metrics::LIST_ROW_PADDING))
-                    .child(secondary_text(message, palette)),
-            );
-        }
-        let mut index = 0;
-        while index < entries.len() {
-            let day = local_day(entries[index].last_visit, offset);
-            let mut rows = group(palette);
-            while index < entries.len() && local_day(entries[index].last_visit, offset) == day {
-                rows = rows.child(self.row(index, entries[index], offset, palette, cx));
-                index += 1;
+                    .child(secondary_text(message, palette))
+                    .into_any_element()
+            } else {
+                let list_state = self.list.clone();
+                let pages = history.clone();
+                let context = self.context.clone();
+                let item_indices = indices.clone();
+                list(list_state, move |index, _window, app| {
+                    let entry_index = item_indices[index];
+                    let entry = &pages.pages()[entry_index];
+                    let day = local_day(entry.last_visit, offset);
+                    let is_first_of_day = index == 0
+                        || local_day(pages.pages()[item_indices[index - 1]].last_visit, offset)
+                            != day;
+                    let row = HistoryPage::row(&context, entry_index, entry, offset, palette, app)
+                        .into_any_element();
+                    let mut item = v_stack().gap(px(metrics::MENU_ITEM_GAP * 2.0));
+                    if is_first_of_day {
+                        item = item.child(
+                            div()
+                                .px(px(metrics::LIST_ROW_PADDING))
+                                .text_size(px(metrics::MENU_FONT_SIZE))
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .text_color(rgb(palette.text_secondary))
+                                .child(day_heading(day, today)),
+                        );
+                    }
+                    item.child(group(palette).child(row)).into_any_element()
+                })
+                .w_full()
+                .h_full()
+                .into_any_element()
             }
-            list = list.child(
-                v_stack()
-                    .gap(px(metrics::MENU_ITEM_GAP * 3.0))
-                    .child(
-                        div()
-                            .px(px(metrics::LIST_ROW_PADDING))
-                            .text_size(px(metrics::MENU_FONT_SIZE))
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(rgb(palette.text_secondary))
-                            .child(day_heading(day, today)),
-                    )
-                    .child(rows),
-            );
-        }
-        if total > self.shown {
-            list = list.child(button(
-                "history-show-more",
-                "Show More",
-                ButtonKind::Secondary,
-                true,
-                ButtonSize::Regular,
-                palette,
-                Box::new(cx.listener(|this, _, _, cx| {
-                    this.shown += metrics::HISTORY_PAGE_BATCH;
-                    cx.notify();
-                })),
-            ));
-        }
+        } else {
+            history_skeleton(palette).into_any_element()
+        };
 
         let context = self.context.clone();
         let header = h_stack()
@@ -432,16 +523,21 @@ impl Render for HistoryPage {
                 palette,
                 Box::new(move |_, _, cx| context.open_page(super::SETTINGS, cx)),
             ));
-        scrolling_column(
-            "history-page",
-            v_stack()
-                .gap(px(metrics::INTERNAL_PAGE_SECTION_GAP))
-                .child(header)
-                .children(self.import_section(palette, cx))
-                .child(search)
-                .child(list),
-            crate::platform::supports_elastic_scroll() && Settings::get(cx).elastic_scroll,
-            metrics::INTERNAL_PAGE_MAX_WIDTH,
-        )
+        v_stack()
+            .id("history-page")
+            .size_full()
+            .items_center()
+            .overflow_hidden()
+            .p(px(metrics::INTERNAL_PAGE_INSET))
+            .child(
+                v_stack()
+                    .size_full()
+                    .max_w(px(metrics::INTERNAL_PAGE_MAX_WIDTH))
+                    .gap(px(metrics::INTERNAL_PAGE_SECTION_GAP))
+                    .child(header)
+                    .children(self.import_section(palette, cx))
+                    .child(search)
+                    .child(div().flex_1().min_h(px(0.)).w_full().child(list_content)),
+            )
     }
 }
