@@ -25,11 +25,11 @@ where the page is, so browser UI drawn over the page stays on top. See
 disables new publications, drains all leases, and reports zero outstanding
 frames.
 
-Linux and Windows currently use the portable CPU-frame path: the Engine hands
+Linux and Windows currently use the interim portable CPU-frame path, which copies and uploads every frame and is not the intended design: the Engine hands
 frames to the shell, the shared presenter wraps them as GPUI images, and GPUI
 uploads and draws them. The platform `renderer` adapter selects this presenter;
 the shared `PhotonWebView` consumes the same `PresentedSurface` contract on
-every target. Future Linux DMA-BUF import belongs behind
+every target. Linux DMA-BUF import, which will replace it (see [Linux support](Linux.md)), belongs behind
 `platform/linux/renderer.rs` and the explicit embedder API, without adding
 surface ownership or pixel buffers to shared UI state. A UI-only build starts
 the shell without creating Engine sessions or frames.

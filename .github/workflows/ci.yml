@@ -46,6 +46,7 @@ jobs:
             ninja-build \
             python3 \
             pkg-config \
+            libasound2-dev \
             libfontconfig1-dev \
             libfreetype6-dev \
             libx11-dev \

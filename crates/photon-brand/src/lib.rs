@@ -17,6 +17,9 @@ pub const PAGE_SCHEME: &str = "photon";
 /// development, so macOS can open web links with it.
 pub const DEVELOPMENT_BUNDLE_IDENTIFIER: &str = "org.photonbrowser.photon.development";
 
+/// The freedesktop desktop-entry ID that Linux installs register Photon under.
+pub const LINUX_DESKTOP_ID: &str = "org.photonbrowser.photon.desktop";
+
 /// The folder in the platform's application data folder that holds profiles.
 pub const DATA_FOLDER: &str = NAME;
 

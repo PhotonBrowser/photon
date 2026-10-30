@@ -97,10 +97,11 @@ native half keeps it beside the component, as `ui/glass/macos.rs` does.
 ## Platform support
 
 macOS is Photon’s primary development platform, with AppKit integration and
-IOSurface/Metal page presentation. Linux has a shared GPUI shell and a
-portable CPU-frame renderer; its shell-only mode can run without the Engine,
+IOSurface/Metal page presentation. Linux has a shared GPUI shell and an
+interim portable CPU-frame renderer; its shell-only mode can run without the Engine,
 while full browser runtime validation is still outstanding. Windows support is
 experimental, and native Engine builds are not yet established. See
+[Linux support](Linux.md) for the Linux checklist and
 [Building Photon](Building.md) for current build and validation details.
 
 ## Related guides
