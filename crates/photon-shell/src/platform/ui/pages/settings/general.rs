@@ -54,7 +54,6 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
         .child(config_file(palette, cx))
         .child(restore_session(palette, cx))
         .child(engine_idle_timeout(palette, cx))
-        .child(elastic_scroll(palette, cx))
         .child(interaction_sounds(palette, cx))
 }
 
@@ -136,23 +135,6 @@ fn config_file(palette: ThemeColors, cx: &App) -> impl IntoElement {
         .child(group(palette).child(control_row("Configuration", control)))
         .child(secondary_text(
             "Edit browser preferences in config.toml. Changes apply automatically.",
-            palette,
-        ))
-}
-
-fn elastic_scroll(palette: ThemeColors, cx: &App) -> impl IntoElement {
-    let enabled = Settings::get(cx).elastic_scroll;
-    v_stack()
-        .gap(px(metrics::MENU_ITEM_GAP))
-        .child(group(palette).child(switch_row(
-            "settings-elastic-scroll",
-            "Elastic scrolling",
-            enabled,
-            palette,
-            change(move |settings| settings.elastic_scroll = !enabled),
-        )))
-        .child(secondary_text(
-            "Let pages stretch briefly when you scroll past an edge.",
             palette,
         ))
 }

@@ -170,7 +170,7 @@ pub struct BrowserSettings {
     /// Seconds to keep the shared browser engine running after the last
     /// window closes. Zero quits immediately.
     pub engine_idle_timeout_seconds: u16,
-    /// Whether page scrolling can stretch past the viewport edge on macOS.
+    /// Whether page scrolling can stretch past the viewport edge where supported.
     pub elastic_scroll: bool,
     /// Whether Photon plays subtle sounds for semantic UI feedback.
     pub interaction_sounds: bool,
@@ -269,7 +269,7 @@ impl Default for BrowserSettings {
             tab_sleep_mode: TabSleepMode::default(),
             restore_session: true,
             engine_idle_timeout_seconds: 60,
-            elastic_scroll: false,
+            elastic_scroll: true,
             interaction_sounds: false,
             animations: AnimationSettings::default(),
         }
