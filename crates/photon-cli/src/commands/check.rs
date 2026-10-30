@@ -3,13 +3,7 @@ use std::path::Path;
 use crate::support::{invoke_with_environment, output, success, with_progress};
 
 pub(crate) fn check(root: &Path, verbose: bool) -> Result<(), String> {
-    match check_inner(root, verbose) {
-        Ok(()) => Ok(()),
-        Err(error) => {
-            print_fix_prompt(root, &error);
-            Err(error)
-        }
-    }
+    check_inner(root, verbose)
 }
 
 fn check_inner(root: &Path, verbose: bool) -> Result<(), String> {
@@ -59,15 +53,4 @@ fn check_inner(root: &Path, verbose: bool) -> Result<(), String> {
     }
     success("Formatting, workspace, and architecture checks passed");
     Ok(())
-}
-
-pub(crate) fn print_fix_prompt(root: &Path, diagnostics: &str) {
-    let instructions = std::fs::read_to_string(root.join("AGENTS.md")).unwrap_or_default();
-    println!("\n--- Copy the prompt below into your AI agent ---\n");
-    println!(
-        "Fix the failing Photon check in this repository. Inspect the relevant files, make the smallest correct change, and rerun `photon check`. Explain what you changed and report the check result. Preserve the project architecture and avoid unrelated edits.\n"
-    );
-    println!("Project instructions:\n{instructions}");
-    println!("Check failure / diagnostics:\n{diagnostics}");
-    println!("--- End prompt ---");
 }

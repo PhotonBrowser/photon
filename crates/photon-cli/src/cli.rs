@@ -82,9 +82,6 @@ enum Command {
     Check,
     /// Run Rust lints and native formatting checks.
     Lint,
-    /// Print a copyable AI prompt for fixing a check failure.
-    #[command(hide = true)]
-    FixPrompt,
     /// Format Photon-owned Rust and C++ files.
     Format,
     /// Verify and commit the current dependency branch tips as Photon pins.
@@ -268,13 +265,6 @@ pub fn run() -> Result<(), String> {
         }
         Some(Command::Check) => commands::check::check(&root, verbose),
         Some(Command::Lint) => commands::lint::lint(&root, verbose),
-        Some(Command::FixPrompt) => {
-            commands::check::print_fix_prompt(
-                &root,
-                "Paste the failing command and its output here.",
-            );
-            Ok(())
-        }
         Some(Command::Format) => commands::format::format(&root, verbose),
         Some(Command::Pin) => commands::pin::pin(&root, verbose),
         Some(Command::Sync { check, no_review }) => {
