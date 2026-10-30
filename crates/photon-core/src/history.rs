@@ -222,13 +222,20 @@ impl History {
 
     /// The pages visited most often, most visited first.
     pub fn most_visited(&self, limit: usize) -> Vec<&HistoryEntry> {
+        if limit == 0 {
+            return Vec::new();
+        }
         let mut pages: Vec<&HistoryEntry> = self.pages.iter().collect();
-        pages.sort_by(|a, b| {
+        let compare = |a: &&HistoryEntry, b: &&HistoryEntry| {
             b.visit_count
                 .cmp(&a.visit_count)
                 .then(b.last_visit.cmp(&a.last_visit))
-        });
-        pages.truncate(limit);
+        };
+        if limit < pages.len() {
+            pages.select_nth_unstable_by(limit, compare);
+            pages.truncate(limit);
+        }
+        pages.sort_by(compare);
         pages
     }
 
@@ -297,6 +304,44 @@ mod tests {
         assert_eq!(entry.visit_count, 2);
         assert_eq!(entry.title, "Example");
         assert_eq!(entry.last_visit, 20);
+    }
+
+    #[test]
+    fn most_visited_selects_the_requested_top_entries_in_order() {
+        let history = History::from_parts(
+            vec![
+                HistoryEntry {
+                    url: "https://older.example/".into(),
+                    title: "Older".into(),
+                    visit_count: 4,
+                    last_visit: 10,
+                },
+                HistoryEntry {
+                    url: "https://popular.example/".into(),
+                    title: "Popular".into(),
+                    visit_count: 8,
+                    last_visit: 5,
+                },
+                HistoryEntry {
+                    url: "https://recent.example/".into(),
+                    title: "Recent".into(),
+                    visit_count: 4,
+                    last_visit: 20,
+                },
+            ],
+            Vec::new(),
+        );
+
+        assert_eq!(
+            history
+                .most_visited(2)
+                .iter()
+                .map(|page| page.url.as_str())
+                .collect::<Vec<_>>(),
+            ["https://popular.example/", "https://recent.example/"]
+        );
+        assert_eq!(history.most_visited(0).len(), 0);
+        assert_eq!(history.most_visited(10).len(), 3);
     }
 
     #[test]
