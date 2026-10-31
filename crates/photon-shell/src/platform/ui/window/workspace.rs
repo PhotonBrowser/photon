@@ -62,17 +62,6 @@ impl Render for BrowserWindow {
         } else {
             page_margins(&self.sidebar, &layout, cx)
         };
-        let page_opacity = self
-            .page_transition
-            .as_ref()
-            .map_or(1.0, |transition| transition.value_at(Instant::now()));
-        if let Some(transition) = self.page_transition.as_ref() {
-            if transition.is_running() {
-                window.request_animation_frame();
-            } else {
-                self.page_transition = None;
-            }
-        }
         // While the sidebar or Zen mode moves the page's edges, Engine keeps
         // the page laid out at the larger of now and rest, clipped to where
         // it is drawn, rather than laying it out again every frame.
@@ -88,22 +77,42 @@ impl Render for BrowserWindow {
             }
         };
         let active_webview = self.active_webview();
+        let transition_frame = self.tab_page_transition.as_ref().map(|transition| {
+            (
+                transition.incoming.clone(),
+                transition.progress.value_at(Instant::now()),
+                transition.progress.is_running(),
+            )
+        });
+        if let Some((incoming, progress, running)) = transition_frame {
+            if running {
+                incoming.update(cx, |view, _| {
+                    view.set_tab_switch_transition(progress, true);
+                });
+                window.request_animation_frame();
+            } else {
+                self.finish_tab_page_transition(cx);
+            }
+        }
+        // Keep the outgoing WebView in the same content box as the incoming
+        // one. Its native page layer is positioned from these prepaint bounds.
+        let outgoing_view = self.tab_page_transition.as_ref().map(|transition| {
+            div()
+                .absolute()
+                .inset_0()
+                .pt(px(margins.top))
+                .pr(px(margins.right))
+                .pb(px(margins.bottom))
+                .pl(px(margins.left))
+                .child(transition.outgoing.clone().into_any_element())
+                .into_any_element()
+        });
         if let Some(webview) = active_webview.as_ref() {
             webview.update(cx, |view, _| {
-                view.set_page_opacity(page_opacity);
                 view.set_layout_growth(layout_growth);
             });
         }
         let active_view = self.active_view(palette, cx);
-        let active_view = if active_webview.is_some() {
-            active_view
-        } else {
-            div()
-                .size_full()
-                .opacity(page_opacity)
-                .child(active_view)
-                .into_any_element()
-        };
         let page = div()
             .absolute()
             .inset_0()
@@ -114,6 +123,7 @@ impl Render for BrowserWindow {
             .pr(px(margins.right))
             .pb(px(margins.bottom))
             .pl(px(margins.left))
+            .children(outgoing_view)
             .child(active_view)
             // The find bar floats in the page's top-right corner.
             .children(find_bar.map(|(bar, transition)| {

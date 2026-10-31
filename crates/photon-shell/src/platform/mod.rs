@@ -135,6 +135,10 @@ pub(crate) struct PagePlacement {
     pub(crate) scaled: bool,
     /// How opaque the page is, as while a preview fades away.
     pub(crate) opacity: f32,
+    /// How opaque the complete page layer is, as another tab cross-fades in.
+    pub(crate) layer_opacity: f32,
+    /// Places the incoming page above the outgoing page during a cross-fade.
+    pub(crate) layer_on_top: bool,
 }
 
 pub(crate) fn verbose_trace_enabled() -> bool {

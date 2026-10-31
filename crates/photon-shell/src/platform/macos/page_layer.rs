@@ -1,4 +1,4 @@
-//! The Core Animation layer that shows a page's Engine IOSurface.
+//! Core Animation layers that show Engine's IOSurface over an opaque page backing.
 //!
 //! The layer sits beneath GPUI's layer, which cuts a hole where the page is
 //! (see `Window::paint_cutout`). Core Animation and the window server
@@ -30,7 +30,10 @@ const CORNER_SEGMENTS: usize = 32;
 pub(super) type FrameIdentity = (u64, u64, u64);
 
 pub(super) struct PageLayer {
+    /// Opaque page backing, composited through GPUI's page cutout.
     layer: Retained<CALayer>,
+    /// Engine's surface, faded independently above the opaque page backing.
+    surface_layer: Retained<CALayer>,
     /// Retained until a later transaction replaces the layer's contents.
     current_surface: RefCell<Option<IOSurface>>,
     current_identity: Cell<Option<FrameIdentity>>,
@@ -50,6 +53,8 @@ impl PageLayer {
             .expect("Core Animation layers must be created on the AppKit main thread");
         let layer = CALayer::layer();
         layer.setMasksToBounds(true);
+        let surface_layer = CALayer::layer();
+        layer.addSublayer(&surface_layer);
         // Without animations, changes join the main thread's implicit
         // transaction: the one GPUI-CE presents a frame whose cutout moved
         // with, so the page and its hole reach the screen together.
@@ -75,6 +80,21 @@ impl PageLayer {
         );
         // SAFETY: NSNull is a valid CAAction that disables an animation.
         let _: () = unsafe { msg_send![&*layer, setActions: &*actions] };
+        // The Engine surface fades independently from the opaque backing.
+        let surface_keys = [
+            "opacity",
+            "contents",
+            "contentsRect",
+            "contentsScale",
+            "contentsGravity",
+        ]
+        .map(NSString::from_str);
+        let surface_actions = NSDictionary::from_slices(
+            &surface_keys.iter().map(|key| &**key).collect::<Vec<_>>(),
+            &vec![&*null; surface_keys.len()],
+        );
+        // SAFETY: NSNull is a valid CAAction that disables an animation.
+        let _: () = unsafe { msg_send![&*surface_layer, setActions: &*surface_actions] };
         // Rounds the page as GPUI-CE rounds its cutout: Core Animation's own
         // corners are a different curve, so the two edges never met.
         let mask = CAShapeLayer::layer();
@@ -90,6 +110,7 @@ impl PageLayer {
         let _: () = unsafe { msg_send![&*mask, setActions: &*mask_actions] };
         Self {
             layer,
+            surface_layer,
             mask,
             current_surface: RefCell::new(None),
             current_identity: Cell::new(None),
@@ -102,6 +123,11 @@ impl PageLayer {
     /// Whether the layer already shows this frame.
     pub(super) fn shows(&self, identity: FrameIdentity) -> bool {
         self.current_identity.get() == Some(identity)
+    }
+
+    /// Sets the page-group opacity without waiting for another prepaint.
+    pub(super) fn set_layer_opacity(&self, opacity: f32) {
+        self.layer.setOpacity(opacity.clamp(0.0, 1.0));
     }
 
     /// Shows a frame, without painting page pixels through GPUI.
@@ -129,11 +155,11 @@ impl PageLayer {
             f64::from(painted_height).min(height) / height,
         );
         self.contents_fraction.set(contents_fraction);
-        self.layer
-            .setContentsRect(contents_rect(&self.layer, contents_fraction));
+        self.surface_layer
+            .setContentsRect(contents_rect(&self.surface_layer, contents_fraction));
         // IOSurface is a Core Foundation object accepted by CALayer.contents.
         let contents = unsafe { &*surface.obj.cast::<AnyObject>() };
-        unsafe { self.layer.setContents(Some(contents)) };
+        unsafe { self.surface_layer.setContents(Some(contents)) };
         // Engine's reported page background can differ from what the page
         // shows at its edge, and flashes through as the window grows.
         let edge_color = edge_color(surface, painted_width, painted_height);
@@ -155,7 +181,7 @@ impl PageLayer {
         if self.current_identity.get().is_none() {
             return;
         }
-        unsafe { self.layer.setContents(None) };
+        unsafe { self.surface_layer.setContents(None) };
         *self.current_surface.borrow_mut() = None;
         self.current_identity.set(None);
         self.contents_fraction.set((1.0, 1.0));
@@ -205,6 +231,7 @@ impl PageLayer {
         let attached = layer
             .superlayer()
             .is_some_and(|parent| std::ptr::eq(&*parent, &*parent_layer));
+        let base_z_position = if has_sibling_layer { 0.0 } else { -1.0 };
 
         // Convert through AppKit's views, which honour each view's flipping,
         // as the glass backdrop does; a layer's backing view shares its
@@ -247,18 +274,29 @@ impl PageLayer {
                 // A page attached later, like a link preview over its page,
                 // lies above those attached before.
                 parent_layer.addSublayer(layer);
-                layer.setZPosition(0.0);
+                layer.setZPosition(base_z_position);
             } else {
                 // A root layer has no sibling slot. Keep the page behind the
                 // GPUI contents so the painted cutout exposes it.
                 parent_layer.addSublayer(layer);
-                layer.setZPosition(-1.0);
+                layer.setZPosition(base_z_position);
             }
         }
+        layer.setZPosition(if placement.layer_on_top {
+            if has_sibling_layer { 1.0 } else { -0.5 }
+        } else {
+            base_z_position
+        });
         layer.setGeometryFlipped(flipped);
-        set_contents_gravity(layer, placement.scaled);
-        layer.setContentsRect(contents_rect(layer, self.contents_fraction.get()));
         layer.setFrame(frame);
+        self.surface_layer.setGeometryFlipped(flipped);
+        self.surface_layer
+            .setFrame(NSRect::new(NSPoint::ZERO, frame.size));
+        set_contents_gravity(&self.surface_layer, placement.scaled);
+        self.surface_layer.setContentsRect(contents_rect(
+            &self.surface_layer,
+            self.contents_fraction.get(),
+        ));
         if placement.corner_radius > 0.0 {
             let size = (frame.size.width, frame.size.height);
             self.mask
@@ -276,8 +314,14 @@ impl PageLayer {
             // SAFETY: clearing a mask is always valid.
             unsafe { layer.setMask(None) };
         }
-        layer.setOpacity(placement.opacity.clamp(0.0, 1.0));
+        // An incoming tab fades as a complete page over the outgoing page
+        // underneath. The outgoing page stays opaque, so neither layer can
+        // expose the window behind Photon.
+        layer.setOpacity((placement.layer_opacity * placement.opacity).clamp(0.0, 1.0));
+        self.surface_layer.setOpacity(1.0);
         layer.setContentsScale(f64::from(placement.scale_factor));
+        self.surface_layer
+            .setContentsScale(f64::from(placement.scale_factor));
         // Shown until the first frame arrives, as the page's own background,
         // then as the colour at the frame's edge.
         let background = self.edge_color.get().unwrap_or(placement.background);

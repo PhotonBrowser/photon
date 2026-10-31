@@ -1511,6 +1511,7 @@ impl BrowserWindow {
         if index >= self.tabs.len() {
             return;
         }
+        self.finish_tab_page_transition(cx);
         let was_active = self.active_tab == Some(index);
         let next = was_active
             .then(|| self.tab_after_closing(index, cx))

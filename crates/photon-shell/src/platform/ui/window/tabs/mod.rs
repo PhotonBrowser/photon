@@ -73,30 +73,52 @@ impl BrowserWindow {
             return;
         }
         if self.active_tab != Some(index) {
+            self.finish_tab_page_transition(cx);
             let animations = Settings::motion(cx);
-            let mut transition = Tween::at_with_curve(0.0, TweenCurve::SmoothStep);
-            transition.animate_to_for(1.0, animations.duration(Speed::Standard), &animations);
-            self.page_transition = animations.allows_motion().then_some(transition);
+            let outgoing = self
+                .active_tab
+                .and_then(|previous_index| self.tabs.get(previous_index))
+                .and_then(|tab| tab.content.webview());
+            let incoming = self.tabs[index].content.webview();
+            let mut page_transition = None;
+            if animations.allows_motion()
+                && let (Some(outgoing), Some(incoming)) = (&outgoing, &incoming)
+                && outgoing.read(cx).external.is_some()
+                && incoming.read(cx).external.is_some()
+            {
+                incoming.update(cx, |view, _| {
+                    view.set_tab_switch_transition(0.0, true);
+                });
+                let mut progress = Tween::at_with_curve(0.0, TweenCurve::EaseOut);
+                progress.animate_to(1.0, Speed::Quick, &animations);
+                page_transition = Some(super::TabPageTransition {
+                    outgoing: outgoing.clone(),
+                    incoming: incoming.clone(),
+                    progress,
+                });
+            }
             // The find bar searches one page; switching tabs ends its search.
             self.close_find_bar(false, window, cx);
             if let Some(previous_index) = self.active_tab {
                 if let Some(previous) = self.tabs.get_mut(previous_index) {
                     previous.last_active = Instant::now();
                 }
-                if let Some(previous) = self
-                    .tabs
-                    .get(previous_index)
-                    .and_then(|tab| tab.content.webview())
-                {
+                if let Some(previous) = outgoing {
+                    let keeps_layer = page_transition.is_some();
                     previous.update(cx, |view, cx| {
                         view.reset_history_swipe(true);
-                        view.set_page_visible(false);
+                        if keeps_layer {
+                            view.pause_page_for_transition();
+                        } else {
+                            view.set_page_visible(false);
+                        }
                         view.session.set_focus(false);
                         cx.notify();
                     });
                 }
             }
             self.active_tab = Some(index);
+            self.tab_page_transition = page_transition;
         }
         self.tabs[index].last_active = Instant::now();
         // A tab of another space brings its space; a favourite's tab
@@ -142,6 +164,18 @@ impl BrowserWindow {
         self.sync_dialog(window, cx);
         cx.notify();
         self.wake_tab_sleep_scheduler();
+    }
+
+    pub(super) fn finish_tab_page_transition(&mut self, cx: &mut Context<Self>) {
+        let Some(transition) = self.tab_page_transition.take() else {
+            return;
+        };
+        transition
+            .incoming
+            .update(cx, |view, _| view.set_tab_switch_transition(1.0, false));
+        transition
+            .outgoing
+            .update(cx, |view, _| view.set_page_visible(false));
     }
 
     fn move_tab_focus(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
@@ -680,6 +714,7 @@ impl BrowserWindow {
         if index >= self.tabs.len() {
             return;
         }
+        self.finish_tab_page_transition(cx);
         let removed = self.tabs[index].clone();
         let closes_window = self.tabs.len() == 1 && Self::closes_with_last_tab(window, cx);
         if let Some(webview) = removed.content.webview() {

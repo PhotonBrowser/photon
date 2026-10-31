@@ -118,6 +118,10 @@ pub(in crate::platform) struct PhotonWebView {
     layout_size: Option<gpui::Size<gpui::Pixels>>,
     /// How opaque the page is drawn, as while a preview fades.
     page_opacity: f32,
+    /// Opacity of the complete tab surface during a tab switch.
+    tab_switch_opacity: f32,
+    /// Whether this page is the incoming layer in a tab cross-fade.
+    tab_switch_on_top: bool,
     /// How much larger than its bounds the page stays laid out while the
     /// chrome around it moves, so Engine lays it out once, not every frame.
     layout_growth: gpui::Size<f32>,
@@ -437,6 +441,8 @@ impl PhotonWebView {
             page_fullscreen: false,
             layout_size: None,
             page_opacity: 1.0,
+            tab_switch_opacity: 1.0,
+            tab_switch_on_top: false,
             layout_growth: gpui::Size::default(),
             input: WebViewInput::default(),
             history_swipe: history_swipe::HistorySwipe::default(),
@@ -677,6 +683,8 @@ impl Render for PhotonWebView {
                             background: page_background,
                             scaled: this.layout_size.is_some(),
                             opacity: this.page_opacity,
+                            layer_opacity: this.tab_switch_opacity,
+                            layer_on_top: this.tab_switch_on_top,
                         },
                     );
                     // Follow the window across displays so Engine paces to the
@@ -816,6 +824,10 @@ impl Render for PhotonWebView {
         if let Some(overlay) = self.crash_overlay(page_palette(window, cx), radius, cx) {
             webview = webview.child(overlay);
         }
+        #[cfg(not(target_os = "macos"))]
+        {
+            webview = webview.opacity(self.tab_switch_opacity * self.page_opacity);
+        }
         webview
     }
 }
@@ -837,6 +849,20 @@ impl PhotonWebView {
     /// Fades the page's native layer, which GPUI's opacity cannot reach.
     pub(in crate::platform) fn set_page_opacity(&mut self, opacity: f32) {
         self.page_opacity = opacity;
+    }
+
+    /// Cross-fades this tab's complete surface over the page beneath it.
+    pub(in crate::platform) fn set_tab_switch_transition(&mut self, opacity: f32, incoming: bool) {
+        self.tab_switch_opacity = opacity.clamp(0.0, 1.0);
+        self.tab_switch_on_top = incoming;
+        self.presenter
+            .set_layer_opacity(self.tab_switch_opacity * self.page_opacity);
+    }
+
+    /// Pauses Engine rendering while keeping the last page layer visible for
+    /// the short tab cross-fade.
+    pub(in crate::platform) fn pause_page_for_transition(&mut self) {
+        self.session.set_visible(false);
     }
 
     /// Shows or hides the page: Engine pauses rendering while hidden, and a

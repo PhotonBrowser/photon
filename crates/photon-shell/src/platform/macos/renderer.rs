@@ -52,6 +52,11 @@ impl PagePresenter {
         self.layer.place(window, placement);
     }
 
+    /// Updates the native page layer immediately during a tab cross-fade.
+    pub(in crate::platform) fn set_layer_opacity(&mut self, opacity: f32) {
+        self.layer.set_layer_opacity(opacity);
+    }
+
     /// Hides this page's native layer while its tab or window is hidden.
     pub(in crate::platform) fn hide(&mut self) {
         self.layer.hide();

@@ -32,6 +32,9 @@ impl PagePresenter {
     /// Leaves page placement to GPUI's normal layout and rendering path.
     pub(in crate::platform) fn place(&mut self, _: &gpui::Window, _: PagePlacement) {}
 
+    /// Portable pages take their tab-transition opacity from GPUI styling.
+    pub(in crate::platform) fn set_layer_opacity(&mut self, _: f32) {}
+
     /// Hides native presentation; the portable presenter has no native layer.
     pub(in crate::platform) fn hide(&mut self) {}
 

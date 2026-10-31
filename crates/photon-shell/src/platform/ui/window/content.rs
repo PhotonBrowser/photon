@@ -214,6 +214,7 @@ impl BrowserWindow {
             self.insert_content(self.tabs.len(), content, true, window, cx);
             return;
         };
+        self.finish_tab_page_transition(cx);
         if let Some(webview) = self.active_webview() {
             webview.update(cx, |view, _| {
                 view.set_page_visible(false);

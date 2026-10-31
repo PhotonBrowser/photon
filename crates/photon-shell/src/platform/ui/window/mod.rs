@@ -120,8 +120,8 @@ pub(in crate::platform) struct BrowserWindow {
     _memory_pressure_monitor: sleeping::MemoryPressureMonitor,
     tab_sleep_mode: TabSleepMode,
     active_tab: Option<usize>,
-    /// Fades the selected page into view after a tab switch.
-    page_transition: Option<Tween>,
+    /// Cross-fades a retained web page beneath the newly selected page.
+    tab_page_transition: Option<TabPageTransition>,
     /// The active tab drag, its measured geometry, and the temporary motion.
     tab_drag_layout: Option<TabDragLayout>,
     tab_geometry: HashMap<u64, Bounds<Pixels>>,
@@ -279,6 +279,12 @@ enum TabDragPhase {
 struct TabPositionAnimation {
     axis: TabDragAxis,
     tween: Tween,
+}
+
+struct TabPageTransition {
+    outgoing: Entity<crate::platform::ui::PhotonWebView>,
+    incoming: Entity<crate::platform::ui::PhotonWebView>,
+    progress: Tween,
 }
 
 #[derive(Clone, Debug)]
@@ -635,7 +641,7 @@ fn open_browser_window(
                 _memory_pressure_monitor: memory_pressure_monitor,
                 tab_sleep_mode: Settings::get(cx).tab_sleep_mode,
                 active_tab: None,
-                page_transition: None,
+                tab_page_transition: None,
                 tab_drag_layout: None,
                 tab_geometry: HashMap::new(),
                 tab_container_bounds: None,
