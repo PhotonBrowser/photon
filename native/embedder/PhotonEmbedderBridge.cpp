@@ -66,6 +66,8 @@ Photon::ViewCallbacks make_view_callbacks(
     auto http_credentials_callback = callbacks.http_credentials_callback;
     auto download_replaced_initial_document_callback = callbacks.download_replaced_initial_document_callback;
     auto certificate_error_callback = callbacks.certificate_error_callback;
+    auto open_in_new_window_callback = callbacks.open_in_new_window_callback;
+    auto download_path_callback = callbacks.download_path_callback;
 
     Photon::ViewCallbacks result;
     result.state_changed = [=](Photon::ViewState const& state) {
@@ -244,6 +246,16 @@ Photon::ViewCallbacks make_view_callbacks(
         result.http_credentials_requested = [=](Photon::HTTPCredentialsRequest const& request) {
             http_credentials_callback(callback_data, request.request_id, request.url.c_str(),
                 request.origin.c_str(), request.realm.c_str());
+        };
+    }
+    if (open_in_new_window_callback) {
+        result.open_in_new_window_requested = [=](std::string const& url, bool is_private) {
+            open_in_new_window_callback(callback_data, url.c_str(), is_private);
+        };
+    }
+    if (download_path_callback) {
+        result.download_path_requested = [=](uint64_t request_id, std::string const& suggested_name) {
+            download_path_callback(callback_data, request_id, suggested_name.c_str());
         };
     }
     if (certificate_error_callback) {
@@ -596,6 +608,12 @@ extern "C" void photon_view_select_dropdown_closed(void* view, bool chosen, uint
             chosen ? std::optional<uint32_t> { id } : std::nullopt);
 }
 
+extern "C" void photon_view_download_path_chosen(void* view, uint64_t request_id, char const* path)
+{
+    if (view)
+        static_cast<ViewHandle*>(view)->view->download_path_chosen(request_id, path ? path : "");
+}
+
 extern "C" void photon_view_file_picker_closed(void* view, char const* const* paths, size_t count)
 {
     if (!view)
@@ -813,6 +831,7 @@ extern "C" void photon_runtime_set_download_callbacks(void* runtime,
                 download.bytes_per_second.value_or(0),
                 download.error.c_str(),
                 download.created_time_ms,
+                download.is_private,
             };
             changed(callback_data, &state);
         },

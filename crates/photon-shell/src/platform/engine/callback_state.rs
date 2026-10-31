@@ -190,6 +190,16 @@ impl CallbackState {
         });
     }
 
+    pub(super) fn open_in_new_window(&self, url: String, private: bool) {
+        self.update_webview(move |view, cx| view.open_in_new_window(url, private, cx));
+    }
+
+    pub(super) fn request_download_path(&self, request_id: u64, suggested_name: String) {
+        self.update_webview(move |view, cx| {
+            view.request_download_path(request_id, suggested_name, cx)
+        });
+    }
+
     pub(super) fn certificate_error(&self, url: String, host: String) {
         self.update_webview(move |view, cx| view.certificate_error(url, host, cx));
     }

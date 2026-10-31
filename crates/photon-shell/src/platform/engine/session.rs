@@ -362,6 +362,8 @@ impl EngineSession {
             input_method_state_callback: Some(on_engine_input_method_state),
             http_credentials_callback: Some(on_engine_http_credentials),
             certificate_error_callback: Some(on_engine_certificate_error),
+            open_in_new_window_callback: Some(on_engine_open_in_new_window),
+            download_path_callback: Some(on_engine_download_path),
             download_replaced_initial_document_callback: Some(
                 on_engine_download_replaced_initial_document,
             ),
@@ -616,6 +618,22 @@ impl EngineSession {
 
     /// Answers the open file picker with the chosen files; none when it was
     /// cancelled.
+    /// Answers a download path request; `None` cancels the save.
+    pub(in crate::platform) fn download_path_chosen(
+        &mut self,
+        request_id: u64,
+        path: Option<&std::path::Path>,
+    ) {
+        let path = path.and_then(path_to_cstring);
+        unsafe {
+            embedder::photon_view_download_path_chosen(
+                self.view,
+                request_id,
+                path.as_ref().map_or(std::ptr::null(), |path| path.as_ptr()),
+            )
+        }
+    }
+
     pub(in crate::platform) fn file_picker_closed(&mut self, paths: &[std::path::PathBuf]) {
         let paths: Vec<CString> = paths
             .iter()

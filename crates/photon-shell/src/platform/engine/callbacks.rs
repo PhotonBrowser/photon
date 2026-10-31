@@ -605,6 +605,33 @@ pub(super) unsafe extern "C" fn on_engine_dialog(
     });
 }
 
+pub(super) unsafe extern "C" fn on_engine_open_in_new_window(
+    context: *mut c_void,
+    url: *const c_char,
+    private: bool,
+) {
+    if context.is_null() {
+        return;
+    }
+    let Some(url) = (unsafe { engine_string(url) }) else {
+        return;
+    };
+    unsafe { &*(context.cast::<CallbackState>()) }.open_in_new_window(url, private);
+}
+
+pub(super) unsafe extern "C" fn on_engine_download_path(
+    context: *mut c_void,
+    request_id: u64,
+    suggested_name: *const c_char,
+) {
+    if context.is_null() {
+        return;
+    }
+    let suggested_name = unsafe { engine_string(suggested_name) }.unwrap_or_default();
+    unsafe { &*(context.cast::<CallbackState>()) }
+        .request_download_path(request_id, suggested_name);
+}
+
 pub(super) unsafe extern "C" fn on_engine_certificate_error(
     context: *mut c_void,
     url: *const c_char,

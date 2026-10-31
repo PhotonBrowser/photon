@@ -91,6 +91,7 @@ pub(super) mod embedder {
         pub bytes_per_second: u64,
         pub error: *const c_char,
         pub created_time_ms: i64,
+        pub is_private: bool,
     }
 
     pub(crate) type SelectDropdownCallback =
@@ -200,6 +201,9 @@ pub(super) mod embedder {
         pub download_replaced_initial_document_callback: Option<unsafe extern "C" fn(*mut c_void)>,
         pub certificate_error_callback:
             Option<unsafe extern "C" fn(*mut c_void, *const c_char, *const c_char)>,
+        pub open_in_new_window_callback:
+            Option<unsafe extern "C" fn(*mut c_void, *const c_char, bool)>,
+        pub download_path_callback: Option<unsafe extern "C" fn(*mut c_void, u64, *const c_char)>,
         #[cfg(target_os = "macos")]
         pub native_metal_presentation: bool,
         #[cfg(target_os = "macos")]
@@ -312,6 +316,11 @@ pub(super) mod embedder {
         pub fn photon_view_set_focus(view: *mut c_void, focused: bool);
         pub fn photon_view_activate_context_menu_item(view: *mut c_void, index: usize);
         pub fn photon_view_select_dropdown_closed(view: *mut c_void, chosen: bool, id: u32);
+        pub fn photon_view_download_path_chosen(
+            view: *mut c_void,
+            request_id: u64,
+            path: *const c_char,
+        );
         pub fn photon_view_file_picker_closed(
             view: *mut c_void,
             paths: *const *const c_char,

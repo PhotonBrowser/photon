@@ -32,6 +32,8 @@ pub(in crate::platform) struct Download {
     pub(in crate::platform) bytes_per_second: Option<u64>,
     pub(in crate::platform) error: Option<String>,
     pub(in crate::platform) created_time_ms: i64,
+    /// Started in a private window, which alone lists it.
+    pub(in crate::platform) private: bool,
 }
 
 /// What Engine reports about the download list.
@@ -79,6 +81,7 @@ pub(super) unsafe extern "C" fn on_engine_download_changed(
             .then_some(download.bytes_per_second),
         error: (!error.is_empty()).then_some(error),
         created_time_ms: download.created_time_ms,
+        private: download.is_private,
     });
     let callback = unsafe { &*context.cast::<DownloadCallback>() };
     callback(change);
