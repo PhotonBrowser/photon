@@ -221,7 +221,6 @@ pub(super) const DOWNLOAD_RING_SPIN_MS: u64 = 1_200;
 pub(super) const DOWNLOAD_RING_INDETERMINATE_SWEEP: f32 = 0.25;
 /// The downloads popover, opened from the sidebar's downloads button.
 pub(super) const DOWNLOADS_POPOVER_WIDTH: f32 = 340.0;
-pub(super) const DOWNLOADS_POPOVER_PADDING: f32 = 6.0;
 pub(super) const DOWNLOADS_POPOVER_HEADER_HEIGHT: f32 = 40.0;
 pub(super) const DOWNLOADS_POPOVER_ROW_HEIGHT: f32 = 52.0;
 pub(super) const DOWNLOADS_POPOVER_FOOTER_HEIGHT: f32 = 36.0;

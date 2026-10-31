@@ -113,9 +113,6 @@ pub(in crate::platform) struct BrowserWindow {
     theme_picker_panel: super::native_panel::NativePanel,
     /// Where the downloads popover was opened from, while it is open.
     downloads_popover: Option<Point<Pixels>>,
-    /// The downloads popover in a native popover, on macOS.
-    #[cfg(target_os = "macos")]
-    downloads_panel: super::native_panel::NativePanel,
     /// Redraws the downloads button, popover and notices as downloads change.
     _downloads_subscription: Subscription,
     tab_focus_handles: Vec<FocusHandle>,
@@ -574,8 +571,6 @@ fn open_browser_window(
                 cx.observe_global::<super::downloads::Downloads>(|this: &mut BrowserWindow, cx| {
                     this.chrome.update(cx, |_, cx| cx.notify());
                     this.overlays.update(cx, |_, cx| cx.notify());
-                    #[cfg(target_os = "macos")]
-                    this.downloads_panel.refresh(cx);
                     cx.notify();
                 });
             let backdrop = cx.new(|_| workspace::WindowBackdrop);
@@ -656,8 +651,6 @@ fn open_browser_window(
                 #[cfg(target_os = "macos")]
                 theme_picker_panel: Default::default(),
                 downloads_popover: None,
-                #[cfg(target_os = "macos")]
-                downloads_panel: Default::default(),
                 _downloads_subscription: downloads_subscription,
                 tab_focus_handles: Vec::new(),
                 _archive_task: BrowserWindow::archive_unused_tabs_regularly(window, cx),

@@ -2,8 +2,8 @@
 //! latest downloads, their progress, and the way to the full list.
 
 use gpui::{
-    AnyElement, App, Context, ElementId, KeyDownEvent, MouseButton, Pixels, Point, Role, Window,
-    div, prelude::*, px, relative, rgb, rgba,
+    AnyElement, App, Context, ElementId, KeyDownEvent, MouseButton, Role, Window, div, prelude::*,
+    px, relative, rgb, rgba,
 };
 use std::rc::Rc;
 
@@ -11,10 +11,10 @@ use super::super::super::engine::{Download, DownloadStatus, EngineRuntime};
 use super::super::button::icon_button;
 use super::super::controls::OwnsClicks;
 use super::super::downloads::{Downloads, FileKind, file_name, progress_fraction, status_text};
-use super::super::glass::glass;
 use super::super::icons::{close_icon, file_icon, folder_open_icon, open_in_tab_icon};
 use super::super::layout::{h_stack, v_stack};
-use super::super::motion::{Edge, SurfaceFade, theme_picker_entrance};
+use super::super::menu::popover_surface;
+use super::super::motion::{Edge, SurfaceFade, Transition};
 use super::super::pages::DOWNLOADS;
 use super::super::settings::Settings;
 use super::super::{metrics, theme::ThemeColors, theme::palette};
@@ -30,7 +30,7 @@ struct PopoverActions {
 impl BrowserWindow {
     /// Opens the downloads popover above the pointer, which is on the
     /// sidebar's downloads button, or closes it when it is open.
-    pub(super) fn toggle_downloads_popover(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn toggle_downloads_popover(&mut self, window: &Window, cx: &mut Context<Self>) {
         if self.downloads_popover.is_some() {
             self.dismiss_downloads_popover(cx);
             return;
@@ -38,18 +38,11 @@ impl BrowserWindow {
         Downloads::mark_seen(cx);
         let anchor = window.mouse_position();
         self.downloads_popover = Some(anchor);
-        #[cfg(target_os = "macos")]
-        if super::super::glass::glass_available(cx) {
-            self.open_downloads_panel(anchor, window, cx);
-            return;
-        }
         cx.notify();
     }
 
     pub(super) fn dismiss_downloads_popover(&mut self, cx: &mut Context<Self>) {
         if self.downloads_popover.take().is_some() {
-            #[cfg(target_os = "macos")]
-            self.downloads_panel.close(cx);
             cx.notify();
         }
     }
@@ -75,50 +68,13 @@ impl BrowserWindow {
         PopoverActions { close, show_all }
     }
 
-    /// Opens the popover as a native `NSPopover`, whose material refracts the
-    /// browser behind it.
-    #[cfg(target_os = "macos")]
-    fn open_downloads_panel(
-        &mut self,
-        anchor: Point<Pixels>,
-        window: &Window,
-        cx: &mut Context<Self>,
-    ) {
-        let actions = self.downloads_popover_actions(window, cx);
-        let runtime = self.runtime.clone();
-        let content_actions = actions.clone();
-        let content: super::super::native_panel::PanelContent = Rc::new(move |window, cx| {
-            let palette = palette(window, cx);
-            popover_content(&runtime, &content_actions, palette, cx)
-        });
-        let close = actions.close.clone();
-        self.downloads_panel.open(
-            window,
-            super::super::native_panel::PanelOptions {
-                anchor: gpui::Bounds::new(anchor, gpui::size(px(1.0), px(1.0))),
-                side: Edge::Top,
-                size: gpui::size(
-                    px(metrics::DOWNLOADS_POPOVER_WIDTH),
-                    px(popover_height(Downloads::list(cx).len())),
-                ),
-                arrow: true,
-                content,
-                on_dismiss: Rc::new(move |cx| close(cx)),
-            },
-            cx,
-        );
-    }
-
-    /// The popover drawn in the window, where there is no native popover.
+    /// The popover, drawn in the window above its button. Its height follows
+    /// the downloads listed, so it grows as downloads arrive.
     pub(super) fn downloads_popover_overlay(
         &mut self,
         window: &Window,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        #[cfg(target_os = "macos")]
-        if self.downloads_panel.is_open() {
-            return None;
-        }
         let anchor = self.downloads_popover?;
         let palette = palette(window, cx);
         let actions = self.downloads_popover_actions(window, cx);
@@ -130,19 +86,29 @@ impl BrowserWindow {
             inset,
             (f32::from(viewport.width) - width - inset).max(inset),
         );
-        let top = (f32::from(anchor.y) - height - metrics::PAGE_CHROME_GAP).clamp(
-            inset,
-            (f32::from(viewport.height) - height - inset).max(inset),
+        // The pointer may be anywhere on the button, so clear a whole button
+        // above it to leave the button uncovered.
+        let top = (f32::from(anchor.y)
+            - height
+            - metrics::TOOLBAR_BUTTON_SIZE
+            - metrics::PAGE_CHROME_GAP)
+            .clamp(
+                inset,
+                (f32::from(viewport.height) - height - inset).max(inset),
+            );
+        // The surface positions its own content, so a wrapper places it.
+        let panel = div().absolute().left(px(left)).top(px(top)).child(
+            popover_surface(
+                "Recent downloads",
+                Role::Dialog,
+                width,
+                Edge::Bottom,
+                popover_content(&self.runtime, &actions, palette, cx),
+                Transition::Enter,
+                palette,
+            )
+            .h(px(height)),
         );
-        let motion = theme_picker_entrance(Edge::Bottom, height);
-        let panel = glass("downloads-popover-surface")
-            .rounded(px(metrics::theme_accent_panel_radius()))
-            .motion(motion, super::super::motion::Transition::Enter)
-            .child(popover_content(&self.runtime, &actions, palette, cx))
-            .absolute()
-            .left(px(left))
-            .top(px(top))
-            .w(px(width));
         let close = actions.close.clone();
         let close_on_key = actions.close.clone();
         let _ = Settings::motion(cx);
@@ -173,7 +139,7 @@ fn popover_height(count: usize) -> f32 {
     metrics::DOWNLOADS_POPOVER_HEADER_HEIGHT
         + rows * metrics::DOWNLOADS_POPOVER_ROW_HEIGHT
         + metrics::DOWNLOADS_POPOVER_FOOTER_HEIGHT
-        + metrics::DOWNLOADS_POPOVER_PADDING * 2.0
+        + metrics::MENU_PADDING * 2.0
 }
 
 fn popover_content(
@@ -249,10 +215,7 @@ fn popover_content(
         ));
     v_stack()
         .id("downloads-popover")
-        .role(Role::Dialog)
-        .aria_label("Recent downloads")
         .size_full()
-        .p(px(metrics::DOWNLOADS_POPOVER_PADDING))
         .owns_clicks()
         .child(header)
         .child(v_stack().flex_1().min_h(px(0.)).children(rows))
