@@ -65,6 +65,7 @@ Photon::ViewCallbacks make_view_callbacks(
     auto input_method_state_callback = callbacks.input_method_state_callback;
     auto http_credentials_callback = callbacks.http_credentials_callback;
     auto download_replaced_initial_document_callback = callbacks.download_replaced_initial_document_callback;
+    auto certificate_error_callback = callbacks.certificate_error_callback;
 
     Photon::ViewCallbacks result;
     result.state_changed = [=](Photon::ViewState const& state) {
@@ -243,6 +244,11 @@ Photon::ViewCallbacks make_view_callbacks(
         result.http_credentials_requested = [=](Photon::HTTPCredentialsRequest const& request) {
             http_credentials_callback(callback_data, request.request_id, request.url.c_str(),
                 request.origin.c_str(), request.realm.c_str());
+        };
+    }
+    if (certificate_error_callback) {
+        result.certificate_verification_failed = [=](std::string const& url, std::string const& host) {
+            certificate_error_callback(callback_data, url.c_str(), host.c_str());
         };
     }
     if (download_replaced_initial_document_callback) {
@@ -710,6 +716,37 @@ extern "C" void photon_runtime_set_elastic_scroll_enabled(void* runtime,
 {
     if (runtime)
         static_cast<RuntimeHandle*>(runtime)->runtime->set_elastic_scroll_enabled(enabled);
+}
+
+extern "C" void photon_runtime_peer_certificate(void* runtime, char const* host, void* callback_data,
+    PhotonCertificateCallback callback)
+{
+    if (!runtime || !host || !callback)
+        return;
+    static_cast<RuntimeHandle*>(runtime)->runtime->peer_certificate(host,
+        [=](std::optional<Photon::CertificateInfo> const& info) {
+            if (!info) {
+                callback(callback_data, nullptr);
+                return;
+            }
+            PhotonCertificate certificate {
+                info->subject_common_name.c_str(),
+                info->subject_organization.c_str(),
+                info->issuer_common_name.c_str(),
+                info->issuer_organization.c_str(),
+                info->valid_from.c_str(),
+                info->valid_until.c_str(),
+                info->sha256_fingerprint.c_str(),
+                info->verified,
+            };
+            callback(callback_data, &certificate);
+        });
+}
+
+extern "C" void photon_runtime_allow_certificate_errors_for_host(void* runtime, char const* host)
+{
+    if (runtime && host)
+        static_cast<RuntimeHandle*>(runtime)->runtime->allow_certificate_errors_for_host(host);
 }
 
 extern "C" void photon_runtime_clear_browsing_data(void* runtime,

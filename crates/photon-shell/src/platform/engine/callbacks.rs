@@ -33,7 +33,7 @@ static NEXT_WINDOW_HANDLE: AtomicU64 = AtomicU64::new(1);
 /// # Safety
 ///
 /// `value` is null or a NUL-terminated string valid for this call.
-unsafe fn engine_string(value: *const c_char) -> Option<String> {
+pub(super) unsafe fn engine_string(value: *const c_char) -> Option<String> {
     if value.is_null() {
         return None;
     }
@@ -602,6 +602,19 @@ pub(super) unsafe extern "C" fn on_engine_dialog(
         title: text(title),
         message: text(message),
     });
+}
+
+pub(super) unsafe extern "C" fn on_engine_certificate_error(
+    context: *mut c_void,
+    url: *const c_char,
+    host: *const c_char,
+) {
+    if context.is_null() {
+        return;
+    }
+    let url = unsafe { engine_string(url) }.unwrap_or_default();
+    let host = unsafe { engine_string(host) }.unwrap_or_default();
+    unsafe { &*(context.cast::<CallbackState>()) }.certificate_error(url, host);
 }
 
 pub(super) unsafe extern "C" fn on_engine_download_replaced_initial_document(context: *mut c_void) {

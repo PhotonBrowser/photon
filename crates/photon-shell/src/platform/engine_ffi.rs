@@ -67,6 +67,18 @@ pub(super) mod embedder {
     }
 
     #[repr(C)]
+    pub(crate) struct PhotonCertificate {
+        pub subject_common_name: *const c_char,
+        pub subject_organization: *const c_char,
+        pub issuer_common_name: *const c_char,
+        pub issuer_organization: *const c_char,
+        pub valid_from: *const c_char,
+        pub valid_until: *const c_char,
+        pub sha256_fingerprint: *const c_char,
+        pub verified: bool,
+    }
+
+    #[repr(C)]
     pub(crate) struct PhotonDownload {
         pub id: u64,
         pub url: *const c_char,
@@ -186,6 +198,8 @@ pub(super) mod embedder {
             unsafe extern "C" fn(*mut c_void, u64, *const c_char, *const c_char, *const c_char),
         >,
         pub download_replaced_initial_document_callback: Option<unsafe extern "C" fn(*mut c_void)>,
+        pub certificate_error_callback:
+            Option<unsafe extern "C" fn(*mut c_void, *const c_char, *const c_char)>,
         #[cfg(target_os = "macos")]
         pub native_metal_presentation: bool,
         #[cfg(target_os = "macos")]
@@ -221,6 +235,16 @@ pub(super) mod embedder {
             error: *mut c_char,
             capacity: usize,
         ) -> *mut c_void;
+        pub fn photon_runtime_peer_certificate(
+            runtime: *mut c_void,
+            host: *const c_char,
+            callback_data: *mut c_void,
+            callback: Option<unsafe extern "C" fn(*mut c_void, *const PhotonCertificate)>,
+        );
+        pub fn photon_runtime_allow_certificate_errors_for_host(
+            runtime: *mut c_void,
+            host: *const c_char,
+        );
         pub fn photon_runtime_clear_browsing_data(
             runtime: *mut c_void,
             since_unix_seconds: i64,

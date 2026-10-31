@@ -35,7 +35,7 @@ fn path_to_cstring(path: &std::path::Path) -> Option<CString> {
 }
 
 pub(in crate::platform) struct EngineSession {
-    _runtime: Rc<EngineRuntime>,
+    runtime: Rc<EngineRuntime>,
     view: *mut c_void,
     startup_url: Option<CString>,
     callbacks: Arc<CallbackState>,
@@ -57,6 +57,10 @@ pub(in crate::platform) struct RequestedWebView {
 }
 
 impl EngineSession {
+    pub(in crate::platform) fn runtime(&self) -> &Rc<EngineRuntime> {
+        &self.runtime
+    }
+
     pub(in crate::platform) fn release_hidden_memory(&self) {
         if !self.view.is_null() {
             unsafe { embedder::photon_view_release_hidden_memory(self.view) };
@@ -71,7 +75,7 @@ impl EngineSession {
     pub(in crate::platform) fn registered_engine_processes(
         &self,
     ) -> Vec<super::RegisteredEngineProcess> {
-        self._runtime.registered_processes()
+        self.runtime.registered_processes()
     }
 
     #[cfg(unix)]
@@ -346,6 +350,7 @@ impl EngineSession {
             page_background_callback: Some(on_engine_page_background),
             input_method_state_callback: Some(on_engine_input_method_state),
             http_credentials_callback: Some(on_engine_http_credentials),
+            certificate_error_callback: Some(on_engine_certificate_error),
             download_replaced_initial_document_callback: Some(
                 on_engine_download_replaced_initial_document,
             ),
@@ -369,7 +374,7 @@ impl EngineSession {
             callbacks.set_dashboard_enabled(true);
         }
         let session = Self {
-            _runtime: runtime,
+            runtime,
             view,
             startup_url,
             callbacks,

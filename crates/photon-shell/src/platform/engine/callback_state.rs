@@ -188,6 +188,10 @@ impl CallbackState {
         });
     }
 
+    pub(super) fn certificate_error(&self, url: String, host: String) {
+        self.update_webview(move |view, cx| view.certificate_error(url, host, cx));
+    }
+
     pub(super) fn download_replaced_initial_document(&self) {
         self.update_webview(|view, cx| view.download_replaced_initial_document(cx));
     }

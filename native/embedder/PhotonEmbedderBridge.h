@@ -86,6 +86,8 @@ using PhotonHTTPCredentialsCallback = void (*)(void*, uint64_t, char const*, cha
 using PhotonPermissionCancelledCallback = void (*)(void*, uint64_t, char const*);
 // Called when a download took over the view's first navigation, leaving only its initial blank page.
 using PhotonDownloadReplacedInitialDocumentCallback = void (*)(void*);
+// Called with the page's URL and host when its certificate could not be verified.
+using PhotonCertificateErrorCallback = void (*)(void*, char const*, char const*);
 // Called with a URL a context menu action opens in a new tab, and whether to
 // switch to it.
 using PhotonOpenInNewTabCallback = void (*)(void*, char const*, bool);
@@ -192,6 +194,7 @@ struct PhotonViewCallbacks {
     PhotonInputMethodStateCallback input_method_state_callback;
     PhotonHTTPCredentialsCallback http_credentials_callback;
     PhotonDownloadReplacedInitialDocumentCallback download_replaced_initial_document_callback;
+    PhotonCertificateErrorCallback certificate_error_callback;
 #if defined(__APPLE__)
     bool native_metal_presentation;
     PhotonNativeBackingCallback native_backing_callback;
@@ -204,6 +207,22 @@ void* photon_runtime_create(char const* helper_directory,
     char const* profile_path, char* error, size_t error_capacity);
 // Called once website data has been deleted.
 using PhotonBrowsingDataClearedCallback = void (*)(void*);
+struct PhotonCertificate {
+    char const* subject_common_name;
+    char const* subject_organization;
+    char const* issuer_common_name;
+    char const* issuer_organization;
+    char const* valid_from;
+    char const* valid_until;
+    char const* sha256_fingerprint;
+    bool verified;
+};
+// Called with the certificate, or null when Engine has not connected to the host.
+using PhotonCertificateCallback = void (*)(void*, PhotonCertificate const*);
+void photon_runtime_peer_certificate(void* runtime, char const* host, void* callback_data,
+    PhotonCertificateCallback callback);
+// Lets pages from `host` load although its certificate cannot be verified, until the browser quits.
+void photon_runtime_allow_certificate_errors_for_host(void* runtime, char const* host);
 // Deletes the cache and/or site data last used since `since_unix_seconds`.
 void photon_runtime_clear_browsing_data(void* runtime,
     int64_t since_unix_seconds, bool cache, bool site_data, void* callback_data,

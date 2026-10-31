@@ -3,6 +3,7 @@
 
 mod callback_state;
 mod callbacks;
+mod certificates;
 mod downloads;
 pub(super) mod navigation_timing;
 mod session;
@@ -30,6 +31,7 @@ use std::{ffi::CString, path::Path};
 use crate::platform::engine_ffi::embedder;
 use crate::platform::ui::PhotonWebView;
 use callbacks::*;
+pub(crate) use certificates::Certificate;
 pub(in crate::platform) use downloads::{Download, DownloadChange, DownloadStatus};
 #[cfg(not(feature = "ui-only"))]
 use photon_core::EngineService;
@@ -77,6 +79,8 @@ pub(in crate::platform) struct EngineRuntime {
     service_callback: RefCell<Option<Box<ServiceCallback>>>,
     download_callback: RefCell<Option<Box<downloads::DownloadCallback>>>,
     popup_policy: AtomicU8,
+    /// Hosts the user chose to reach past a certificate error, this run.
+    certificate_exceptions: RefCell<std::collections::HashSet<String>>,
     performance_dashboard_users: Cell<usize>,
 }
 
@@ -139,6 +143,7 @@ impl EngineRuntime {
             service_callback: RefCell::default(),
             download_callback: RefCell::default(),
             popup_policy: AtomicU8::new(PopupPolicy::Ask as u8),
+            certificate_exceptions: RefCell::default(),
             performance_dashboard_users: Cell::new(0),
         })
     }
@@ -155,6 +160,7 @@ impl EngineRuntime {
             }),
             download_callback: RefCell::default(),
             popup_policy: AtomicU8::new(PopupPolicy::Ask as u8),
+            certificate_exceptions: RefCell::default(),
             performance_dashboard_users: Cell::new(0),
         }
     }
