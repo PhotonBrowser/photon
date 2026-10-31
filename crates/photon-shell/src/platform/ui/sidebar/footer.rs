@@ -67,10 +67,29 @@ pub(in super::super) fn footer(
     });
     let menu = menu_button("sidebar-menu", 2, palette, actions.menu, window, cx)
         .tooltip(label_tooltip("Open browser menu", palette));
+    let new_space = actions.new_space.map(|on_click| {
+        toolbar_button(
+            "sidebar-new-space",
+            "New space",
+            1,
+            true,
+            animated_icon(
+                "sidebar-new-space",
+                plus(),
+                palette.text_secondary,
+                metrics::TOOLBAR_ICON_SIZE,
+                window,
+                cx,
+            )
+            .size_full(),
+            palette,
+            on_click,
+        )
+    });
     if collapsed {
         let spacing = metrics::SidebarSpacing::new(collapsed);
         let menu = super::collapsed_tile(menu);
-        let downloads = super::collapsed_tile(downloads_anchor(actions.downloads_drawn).child(
+        let downloads = downloads_anchor(actions.downloads_drawn).child(super::collapsed_tile(
             downloads_button(
                 "sidebar-downloads",
                 0,
@@ -79,8 +98,12 @@ pub(in super::super) fn footer(
                 window,
                 cx,
                 actions.downloads,
-            ),
+            )
+            .tooltip(label_tooltip("Downloads", palette)),
         ));
+        let new_space = new_space.map(|button| {
+            super::collapsed_tile(button.tooltip(label_tooltip("New space", palette)))
+        });
         return v_stack()
             .w_full()
             .flex_shrink_0()
@@ -95,6 +118,7 @@ pub(in super::super) fn footer(
                 focus,
                 RovingAxis::Vertical,
             ))
+            .children(new_space)
             .child(downloads)
             .child(menu)
             .into_any_element();
@@ -128,25 +152,7 @@ pub(in super::super) fn footer(
                     focus,
                     RovingAxis::Horizontal,
                 ))
-                .children(actions.new_space.map(|new_space| {
-                    toolbar_button(
-                        "sidebar-new-space",
-                        "New space",
-                        1,
-                        true,
-                        animated_icon(
-                            "sidebar-new-space",
-                            plus(),
-                            palette.text_secondary,
-                            metrics::TOOLBAR_ICON_SIZE,
-                            window,
-                            cx,
-                        )
-                        .size_full(),
-                        palette,
-                        new_space,
-                    )
-                })),
+                .children(new_space),
         )
         .child(menu)
         .into_any_element()

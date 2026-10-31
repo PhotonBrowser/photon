@@ -3,7 +3,8 @@
 //! downloads popover was last opened.
 
 use gpui::{
-    App, PathBuilder, Pixels, Point, Window, canvas, div, point, prelude::*, px, rgb, rgba,
+    App, Div, PathBuilder, Pixels, Point, Stateful, Window, canvas, div, point, prelude::*, px,
+    rgb, rgba,
 };
 use std::{
     f32::consts::TAU,
@@ -32,7 +33,7 @@ pub(super) fn downloads_button(
     window: &mut Window,
     cx: &mut App,
     on_click: ClickHandler,
-) -> impl IntoElement {
+) -> gpui_motion::PressScaleElement<Stateful<Div>> {
     let icon_color = if state.progress.is_some() || state.unseen {
         palette.text_primary
     } else {
