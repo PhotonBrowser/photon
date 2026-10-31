@@ -7,10 +7,11 @@ use gpui::{AnyElement, Context, Div, Stateful, Window, div, prelude::*, px};
 use photon_core::{Command, DockRegion, MAX_FAVOURITES};
 
 use super::super::super::button::toolbar_button;
+use super::super::super::download_button::DownloadsButton;
+use super::super::super::downloads::Downloads;
 use super::super::super::icons::sidebar_icon;
 use super::super::super::layout::{Elevated, Elevation, Raised, v_stack};
 use super::super::super::motion::{AnimateIn, Edge, slide_in, translated};
-use super::super::super::pages::SETTINGS;
 use super::super::super::settings::Settings;
 use super::super::super::sidebar::{
     FooterActions, SidebarSection, collapsed_tile, favourites_empty_state, favourites_grid, footer,
@@ -415,9 +416,15 @@ impl BrowserWindow {
         footer(
             self.space_dots(palette, cx),
             FooterActions {
-                settings: Box::new(cx.listener(|this, _, window, cx| {
-                    this.open_page_tab(SETTINGS, window, cx);
+                downloads: Box::new(cx.listener(|this, _, window, cx| {
+                    cx.stop_propagation();
+                    this.toggle_downloads_popover(window, cx);
                 })),
+                downloads_state: DownloadsButton {
+                    progress: Downloads::progress(cx),
+                    unseen: Downloads::has_unseen(cx),
+                    animate: Settings::motion(cx).enabled,
+                },
                 menu: Box::new(cx.listener(|this, _, window, cx| {
                     cx.stop_propagation();
                     this.show_browser_menu(window, cx);

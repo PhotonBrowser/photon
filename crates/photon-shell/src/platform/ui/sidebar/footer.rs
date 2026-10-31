@@ -1,20 +1,23 @@
-//! The sidebar's footer: settings at the left, the spaces in the middle, and
-//! the browser menu at the right. Collapsed to icons, the spaces stack
-//! above the browser menu.
+//! The sidebar's footer: downloads at the left, the spaces in the middle,
+//! and the browser menu at the right. Collapsed to icons, the spaces stack
+//! above downloads and the browser menu.
 
 use gpui::{App, MouseButton, Orientation, Role, Window, div, prelude::*, px, rgb, rgba};
 
-use super::super::animated_icons::{animated_icon, plus, settings_cog};
+use super::super::animated_icons::{animated_icon, plus};
 use super::super::button::{menu_button, toolbar_button};
 use super::super::controls::{FocusRing, RovingAxis, RovingFocus};
 use super::super::controls::{OwnsClicks, Pressable};
+use super::super::download_button::{DownloadsButton, downloads_button};
 use super::super::layout::{h_stack, v_stack};
 use super::super::motion::SurfaceFade;
 use super::super::tooltip::label_tooltip;
 use super::super::{ClickHandler, MouseDownHandler, metrics, theme::ThemeColors};
 
 pub(in super::super) struct FooterActions {
-    pub(in super::super) settings: ClickHandler,
+    /// Opens the downloads popover.
+    pub(in super::super) downloads: ClickHandler,
+    pub(in super::super) downloads_state: DownloadsButton,
     pub(in super::super) menu: ClickHandler,
     pub(in super::super) new_space: ClickHandler,
 }
@@ -56,6 +59,13 @@ pub(in super::super) fn footer(
     if collapsed {
         let spacing = metrics::SidebarSpacing::new(collapsed);
         let menu = super::collapsed_tile(menu);
+        let downloads = super::collapsed_tile(div().child(downloads_button(
+            "sidebar-downloads",
+            0,
+            actions.downloads_state,
+            palette,
+            actions.downloads,
+        )));
         return v_stack()
             .w_full()
             .flex_shrink_0()
@@ -69,6 +79,7 @@ pub(in super::super) fn footer(
                 focus,
                 RovingAxis::Vertical,
             ))
+            .child(downloads)
             .child(menu)
             .into_any_element();
     }
@@ -79,22 +90,12 @@ pub(in super::super) fn footer(
         .items_center()
         .justify_between()
         .px(px(metrics::SIDEBAR_PADDING))
-        .child(toolbar_button(
-            "sidebar-settings",
-            "Settings",
+        .child(downloads_button(
+            "sidebar-downloads",
             0,
-            true,
-            animated_icon(
-                "sidebar-settings",
-                settings_cog(),
-                palette.text_secondary,
-                metrics::TOOLBAR_ICON_SIZE,
-                window,
-                cx,
-            )
-            .size_full(),
+            actions.downloads_state,
             palette,
-            actions.settings,
+            actions.downloads,
         ))
         .child(
             h_stack()

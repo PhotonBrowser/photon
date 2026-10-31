@@ -5,10 +5,9 @@
 //!
 //! 1. Vendor its SVG into `assets/icons/heroicons/` or `assets/icons/lucide/`,
 //!    keeping the `@license` header, and load it with `heroicon!` or `lucide!`.
-//! 2. Describe its hover motion in the catalogue below, following
-//!    `settings_cog`.
+//! 2. Describe its hover motion in the catalogue below, following `plus`.
 //! 3. Swap the static icon at the call site for
-//!    `animated_icon("<unique id>", settings_cog(), color, size, window, cx)`.
+//!    `animated_icon("<unique id>", plus(), color, size, window, cx)`.
 //!
 //! The motion moves the whole icon: rotation, scale and translation, on a
 //! spring. Animating single parts, changing opacity and keyframe sequences are
@@ -195,11 +194,6 @@ impl MotionState {
 // The catalogue. heroicons-animated animates some icons per part, which this
 // framework cannot draw; those entries take the nearest whole-icon motion and
 // say so.
-
-/// The settings cog from heroicons-animated: half a turn on hover.
-pub(super) fn settings_cog() -> AnimatedIcon {
-    AnimatedIcon::new(heroicon!("cog-6-tooth")).rotate(180.0)
-}
 
 /// The plus from heroicons-animated: half a turn on its own, quicker spring.
 pub(super) fn plus() -> AnimatedIcon {
