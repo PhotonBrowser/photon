@@ -63,12 +63,17 @@ flowchart LR
     PerfUI --> Perf[photon-performance<br/>sampling and diagnostics]
     FFI[photon-ffi<br/>C API] --> Core
     CLI[photon-cli<br/>setup and developer commands]
+    IOS[ios/<br/>SwiftUI host] --> IOSFFI[photon-ffi adapter]
+    IOS --> IOSWebKit[WebKit adapter<br/>WKWebView]
+    IOSFFI --> Core
 ```
 
 The shell connects the browser interface to framework-independent browser
 rules, profile storage, and the Ladybird Engine. See the
 [architecture guide](Documentation/Architecture.md) for component boundaries
-and common change locations.
+and common change locations. The iOS app host and backend design are in
+[ios/](ios/README.md); its home surface uses SwiftUI/WebKit and does not use
+Ladybird.
 
 <details>
 <summary>Rust crate guides</summary>
