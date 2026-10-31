@@ -22,6 +22,8 @@ pub(super) enum MenuCommand {
     EditSpace(SpaceId),
     EditTheme(SpaceId),
     DeleteSpace(SpaceId),
+    // TODO: Scope these to the site whose info popover opened the menu;
+    // clear_browsing_data currently clears data for the whole profile.
     ClearCache,
     ClearCookies,
 }
