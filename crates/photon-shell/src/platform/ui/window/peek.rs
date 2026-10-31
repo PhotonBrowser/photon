@@ -72,7 +72,8 @@ impl BrowserWindow {
                 WebViewEvent::StateChanged => this.sync_dialog(window, cx),
                 WebViewEvent::ContextMenuRequested
                 | WebViewEvent::SelectDropdownRequested
-                | WebViewEvent::NewWebViewRequested(_) => {}
+                | WebViewEvent::NewWebViewRequested(_)
+                | WebViewEvent::DownloadReplacedInitialDocument => {}
                 // A preview is too small to show a page fullscreen.
                 WebViewEvent::FullscreenChanged(true) => {
                     webview.update(cx, |view, _| view.exit_page_fullscreen());

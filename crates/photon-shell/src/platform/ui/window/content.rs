@@ -337,6 +337,17 @@ impl BrowserWindow {
                         this.handle_requested_web_view(webview, request, window, cx);
                     }
                 }
+                // A tab a page opened only for a download has nothing left to show.
+                WebViewEvent::DownloadReplacedInitialDocument => {
+                    if webview.read(cx).opened_by_page
+                        && let Some(index) = this
+                            .tabs
+                            .iter()
+                            .position(|tab| tab.content.webview().as_ref() == Some(webview))
+                    {
+                        this.close_tab(index, window, cx);
+                    }
+                }
             },
         )
     }

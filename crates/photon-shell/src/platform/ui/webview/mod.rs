@@ -140,6 +140,8 @@ pub(in crate::platform) struct PhotonWebView {
     /// stands for the page until it loads, as for a tab reopened in the
     /// background that has not been shown yet.
     pub(in crate::platform) requested: Option<photon_core::Shortcut>,
+    /// Whether a page opened this tab, by a link or script, rather than the user.
+    pub(in crate::platform) opened_by_page: bool,
 }
 
 /// Page changes the browser chrome shows. Engine frames do not emit it, so
@@ -160,6 +162,8 @@ pub(in crate::platform) enum WebViewEvent {
     SelectDropdownRequested,
     /// The page entered or left element fullscreen.
     FullscreenChanged(bool),
+    /// A download took over the first navigation, leaving only a blank page.
+    DownloadReplacedInitialDocument,
 }
 
 impl EventEmitter<WebViewEvent> for PhotonWebView {}
@@ -265,6 +269,13 @@ impl PhotonWebView {
         }
         self.page_cursor = cursor;
         cx.notify();
+    }
+
+    pub(in crate::platform) fn download_replaced_initial_document(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        cx.emit(WebViewEvent::DownloadReplacedInitialDocument);
     }
 
     pub(in crate::platform) fn set_audio_state(
@@ -450,6 +461,7 @@ impl PhotonWebView {
             focus_handle: cx.focus_handle(),
             last_viewport: None,
             requested: None,
+            opened_by_page: false,
             sent_dark_color_scheme: None,
             sent_force_dark_mode: None,
             hovered_link: None,

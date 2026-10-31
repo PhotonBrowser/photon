@@ -81,6 +81,8 @@ pub(super) fn open_minimal_window(
                             webview.update(cx, |view, _| view.exit_page_fullscreen());
                         }
                         WebViewEvent::FullscreenChanged(false) => {}
+                        // A site window opened only for a download has nothing left to show.
+                        WebViewEvent::DownloadReplacedInitialDocument => window.remove_window(),
                         WebViewEvent::ContextMenuRequested
                         | WebViewEvent::SelectDropdownRequested
                         | WebViewEvent::OpenInNewTab { .. }

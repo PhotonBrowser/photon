@@ -402,6 +402,7 @@ impl BrowserWindow {
             .position(|tab| tab.content.webview().as_ref() == Some(opener))
             .map_or(self.tabs.len(), |index| index + 1);
         if let Some(webview) = create_webview(cx, self.runtime.clone(), address) {
+            webview.update(cx, |view, _| view.opened_by_page = true);
             self.insert_webview(index, webview, None, activate, window, cx);
         }
     }
@@ -419,6 +420,7 @@ impl BrowserWindow {
             request.activate
         ));
         let webview = create_webview_from_session(cx, self.runtime.clone(), request.session);
+        webview.update(cx, |view, _| view.opened_by_page = true);
         self.insert_webview(
             self.new_tab_index(cx),
             webview,
