@@ -604,6 +604,34 @@ pub(super) unsafe extern "C" fn on_engine_dialog(
     });
 }
 
+pub(super) unsafe extern "C" fn on_engine_http_credentials(
+    context: *mut c_void,
+    request_id: u64,
+    url: *const c_char,
+    origin: *const c_char,
+    realm: *const c_char,
+) {
+    if context.is_null() {
+        return;
+    }
+    let text = |value: *const c_char| unsafe { engine_string(value) }.unwrap_or_default();
+    let url = text(url);
+    let realm = text(realm);
+    let mut message = if realm.is_empty() {
+        "This site needs you to sign in.".to_owned()
+    } else {
+        format!("Sign in to \u{201c}{realm}\u{201d}.")
+    };
+    if url.starts_with("http:") {
+        message.push_str(" Your password will be sent without encryption.");
+    }
+    unsafe { &*(context.cast::<CallbackState>()) }.request_page_dialog(DialogRequest {
+        kind: DialogKind::SignIn { request_id },
+        title: text(origin),
+        message,
+    });
+}
+
 #[cfg(target_os = "macos")]
 pub(super) unsafe extern "C" fn on_engine_backing(
     context: *mut c_void,

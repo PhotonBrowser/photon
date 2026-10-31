@@ -345,6 +345,7 @@ impl EngineSession {
             permission_cancelled_callback: Some(on_engine_permission_cancelled),
             page_background_callback: Some(on_engine_page_background),
             input_method_state_callback: Some(on_engine_input_method_state),
+            http_credentials_callback: Some(on_engine_http_credentials),
             #[cfg(target_os = "macos")]
             native_metal_presentation: true,
             #[cfg(target_os = "macos")]
@@ -502,9 +503,37 @@ impl EngineSession {
                 // Interior NULs cannot cross the C ABI; drop them.
                 text.map(|text| CString::new(text.replace('\0', "")).unwrap_or_default()),
             ),
+            DialogReply::SignIn {
+                request_id,
+                credentials,
+            } => return self.reply_sign_in(request_id, credentials),
         };
         let text_ptr = text.as_ref().map_or(std::ptr::null(), |text| text.as_ptr());
         unsafe { embedder::photon_view_close_dialog(self.view, dialog_type, accepted, text_ptr) }
+    }
+
+    /// Answers a server's sign-in request, cancelled when `credentials` is `None`.
+    fn reply_sign_in(&mut self, request_id: u64, credentials: Option<photon_core::Credentials>) {
+        // Interior NULs cannot cross the C ABI; drop them.
+        let c_string = |text: &str| CString::new(text.replace('\0', "")).unwrap_or_default();
+        let (username, password) = credentials.as_ref().map_or_else(
+            || (CString::default(), CString::default()),
+            |credentials| {
+                (
+                    c_string(&credentials.username),
+                    c_string(&credentials.password),
+                )
+            },
+        );
+        unsafe {
+            embedder::photon_view_http_credentials_provided(
+                self.view,
+                request_id,
+                credentials.is_some(),
+                username.as_ptr(),
+                password.as_ptr(),
+            )
+        }
     }
 
     /// Finds text in the page, highlighting every match; an empty query

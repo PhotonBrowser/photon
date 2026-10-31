@@ -182,6 +182,9 @@ pub(super) mod embedder {
         pub page_background_callback: Option<unsafe extern "C" fn(*mut c_void, u32)>,
         pub input_method_state_callback:
             Option<unsafe extern "C" fn(*mut c_void, *const InputMethodState)>,
+        pub http_credentials_callback: Option<
+            unsafe extern "C" fn(*mut c_void, u64, *const c_char, *const c_char, *const c_char),
+        >,
         #[cfg(target_os = "macos")]
         pub native_metal_presentation: bool,
         #[cfg(target_os = "macos")]
@@ -408,6 +411,13 @@ pub(super) mod embedder {
             replacement_length: i32,
         );
         pub fn photon_view_unmark_text(view: *mut c_void);
+        pub fn photon_view_http_credentials_provided(
+            view: *mut c_void,
+            request_id: u64,
+            signed_in: bool,
+            username: *const c_char,
+            password: *const c_char,
+        );
         #[cfg(target_os = "macos")]
         pub fn photon_view_release_native_frame(
             view: *mut c_void,

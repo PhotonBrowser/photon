@@ -1,7 +1,7 @@
 //! A page's JavaScript dialogs.
 
 use gpui::Context;
-use photon_core::{DialogReply, DialogRequest};
+use photon_core::{DialogInput, DialogReply, DialogRequest};
 
 use super::super::super::trace;
 use super::PhotonWebView;
@@ -28,15 +28,15 @@ impl PhotonWebView {
         }
     }
 
-    /// Closes the open dialog with OK (using `text` for a prompt) or Cancel.
+    /// Closes the open dialog with OK, using what was entered, or Cancel.
     pub(in super::super) fn close_dialog(
         &mut self,
         accepted: bool,
-        text: String,
+        input: DialogInput,
         cx: &mut Context<Self>,
     ) {
         let reply = if accepted {
-            self.dialogs.accept(text)
+            self.dialogs.accept(input)
         } else {
             self.dialogs.dismiss()
         };
