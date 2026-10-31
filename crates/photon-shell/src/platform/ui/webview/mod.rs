@@ -109,6 +109,8 @@ pub(in crate::platform) struct PhotonWebView {
     window: Option<AnyWindowHandle>,
     /// The color scheme last sent to Engine, `true` for dark.
     sent_dark_color_scheme: Option<bool>,
+    /// Whether force dark mode has been sent to Engine.
+    sent_force_dark_mode: Option<bool>,
     /// The link under the pointer, shown over the page.
     hovered_link: Option<String>,
     /// The page has an element in fullscreen.
@@ -329,6 +331,14 @@ impl PhotonWebView {
         }
     }
 
+    /// Applies the profile's force dark mode preference to the page.
+    pub(super) fn update_force_dark_mode(&mut self, enabled: bool) {
+        if self.sent_force_dark_mode != Some(enabled) {
+            self.session.set_force_dark_mode_enabled(enabled);
+            self.sent_force_dark_mode = Some(enabled);
+        }
+    }
+
     /// Uses the page's own background where it has not painted.
     pub(in crate::platform) fn set_page_background(&mut self, rgb: u32, cx: &mut Context<Self>) {
         if self.page_background != Some(rgb) {
@@ -437,6 +447,7 @@ impl PhotonWebView {
             last_viewport: None,
             requested: None,
             sent_dark_color_scheme: None,
+            sent_force_dark_mode: None,
             hovered_link: None,
             page_fullscreen: false,
             layout_size: None,

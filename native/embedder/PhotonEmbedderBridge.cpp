@@ -640,6 +640,13 @@ extern "C" void photon_view_set_preferred_color_scheme(void* view,
     static_cast<ViewHandle*>(view)->view->set_preferred_color_scheme(scheme);
 }
 
+extern "C" void photon_view_set_force_dark_mode_enabled(void* view,
+    bool enabled)
+{
+    if (view)
+        static_cast<ViewHandle*>(view)->view->set_force_dark_mode_enabled(enabled);
+}
+
 extern "C" void photon_view_set_fullscreen(void* view, bool fullscreen)
 {
     if (view)

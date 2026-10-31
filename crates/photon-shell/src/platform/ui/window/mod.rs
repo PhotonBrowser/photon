@@ -387,7 +387,7 @@ impl BrowserWindow {
             window_settings::apply_background_style(window, background_style);
             self.window_background_style = background_style;
         }
-        self.update_page_color_schemes(window, cx);
+        self.update_page_preferences(window, cx);
         for webview in self.tabs.iter().filter_map(|tab| tab.content.webview()) {
             webview.update(cx, |_, cx| cx.notify());
         }
@@ -397,15 +397,19 @@ impl BrowserWindow {
         cx.notify();
     }
 
-    fn update_page_color_schemes(&mut self, window: &Window, cx: &mut App) {
+    fn update_page_preferences(&mut self, window: &Window, cx: &mut App) {
         let appearance = Settings::appearance(window.appearance(), cx);
+        let force_dark_mode = Settings::get(cx).force_dark_mode;
         for webview in self
             .tabs
             .iter()
             .filter_map(|tab| tab.content.webview())
             .chain(self.peek_webview())
         {
-            webview.update(cx, |view, _| view.update_color_scheme(appearance));
+            webview.update(cx, |view, _| {
+                view.update_color_scheme(appearance);
+                view.update_force_dark_mode(force_dark_mode);
+            });
         }
     }
 
@@ -530,7 +534,7 @@ fn open_browser_window(
         cx.new(move |cx: &mut Context<BrowserWindow>| {
             let appearance_subscription =
                 cx.observe_window_appearance(window, |this: &mut BrowserWindow, window, cx| {
-                    this.update_page_color_schemes(window, cx);
+                    this.update_page_preferences(window, cx);
                     this.preview_foreground = None;
                     this.backdrop.update(cx, |_, cx| cx.notify());
                     cx.notify();

@@ -128,6 +128,8 @@ pub enum PopupPolicy {
 #[serde(default)]
 pub struct BrowserSettings {
     pub theme: ThemeMode,
+    /// Whether pages should prefer a dark theme and darken light content.
+    pub force_dark_mode: bool,
     pub transparency: Transparency,
     /// Continuous transparency, 0 (opaque) to 100. None follows the named preset.
     pub transparency_percent: Option<u8>,
@@ -250,6 +252,7 @@ impl Default for BrowserSettings {
     fn default() -> Self {
         Self {
             theme: ThemeMode::System,
+            force_dark_mode: false,
             transparency: Transparency::default(),
             transparency_percent: None,
             window_background_style: WindowBackgroundStyle::default(),
@@ -356,6 +359,23 @@ mod tests {
     #[test]
     fn keeps_the_shared_engine_warm_for_one_minute_by_default() {
         assert_eq!(BrowserSettings::default().engine_idle_timeout_seconds, 60);
+    }
+
+    #[test]
+    fn force_dark_mode_round_trips_and_defaults_off_for_older_profiles() {
+        let older: BrowserSettings = serde_json::from_str(r#"{"theme":"dark"}"#).unwrap();
+        assert!(!older.force_dark_mode);
+
+        let settings = BrowserSettings {
+            force_dark_mode: true,
+            ..BrowserSettings::default()
+        };
+        let saved = serde_json::to_string(&settings).unwrap();
+        assert!(
+            serde_json::from_str::<BrowserSettings>(&saved)
+                .unwrap()
+                .force_dark_mode
+        );
     }
 
     #[test]

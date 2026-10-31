@@ -14,7 +14,8 @@ use super::super::super::theme::ThemeColors;
 use super::super::super::workspace_layout::WorkspaceLayout;
 use super::super::ClickHandler;
 use super::super::change;
-use super::super::layout::{label, secondary_text};
+use super::super::controls::switch_row;
+use super::super::layout::{group, label, secondary_text};
 
 pub(super) fn settings(
     window: &mut Window,
@@ -25,6 +26,7 @@ pub(super) fn settings(
     delete_preset: Rc<dyn Fn(String) -> ClickHandler>,
 ) -> impl IntoElement {
     let current = Settings::get(cx).clone();
+    let force_dark_mode = current.force_dark_mode;
     let glass_surfaces = [(true, "On"), (false, "Off")]
         .into_iter()
         .map(|(enabled, label)| Choice {
@@ -281,6 +283,21 @@ pub(super) fn settings(
         .w_full()
         .max_w(px(metrics::INTERNAL_PAGE_MAX_WIDTH))
         .gap(px(metrics::INTERNAL_PAGE_SECTION_GAP))
+        .child(
+            v_stack()
+                .gap(px(metrics::MENU_ITEM_GAP))
+                .child(group(palette).child(switch_row(
+                    "settings-force-dark-mode",
+                    "Force dark mode",
+                    force_dark_mode,
+                    palette,
+                    change(move |settings| settings.force_dark_mode = !force_dark_mode),
+                )))
+                .child(secondary_text(
+                    "Prefer dark page themes and darken light content where a page has no dark theme.",
+                    palette,
+                )),
+        )
         .child(
             v_stack()
                 .gap(px(metrics::MENU_ITEM_GAP))

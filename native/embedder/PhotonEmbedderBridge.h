@@ -248,6 +248,7 @@ void photon_view_notify_state(void* view);
 void photon_view_copy_window_handle(void* view, char* handle, size_t capacity);
 // 0 follows the engine default, 1 prefers dark, 2 prefers light.
 void photon_view_set_preferred_color_scheme(void* view, int color_scheme);
+void photon_view_set_force_dark_mode_enabled(void* view, bool enabled);
 // Reports whether the shell shows the page fullscreen.
 void photon_view_set_fullscreen(void* view, bool fullscreen);
 // Asks the page to leave element fullscreen.

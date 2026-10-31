@@ -611,6 +611,11 @@ impl EngineSession {
         unsafe { embedder::photon_view_set_preferred_color_scheme(self.view, scheme) }
     }
 
+    /// Enables or disables the Engine's force dark page treatment.
+    pub(in crate::platform) fn set_force_dark_mode_enabled(&mut self, enabled: bool) {
+        unsafe { embedder::photon_view_set_force_dark_mode_enabled(self.view, enabled) }
+    }
+
     /// Reports whether the window now shows this page fullscreen.
     pub(in crate::platform) fn set_fullscreen(&mut self, fullscreen: bool) {
         unsafe { embedder::photon_view_set_fullscreen(self.view, fullscreen) }

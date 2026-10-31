@@ -282,6 +282,7 @@ pub(super) mod embedder {
             capacity: usize,
         );
         pub fn photon_view_set_preferred_color_scheme(view: *mut c_void, color_scheme: i32);
+        pub fn photon_view_set_force_dark_mode_enabled(view: *mut c_void, enabled: bool);
         pub fn photon_view_set_fullscreen(view: *mut c_void, fullscreen: bool);
         pub fn photon_view_exit_fullscreen(view: *mut c_void);
         pub fn photon_view_find_in_page(
