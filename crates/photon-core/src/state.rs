@@ -26,6 +26,7 @@ pub enum BrowserCommand {
     Forward,
     NewTab,
     NewWindow,
+    NewPrivateWindow,
 }
 
 impl BrowserCommand {
@@ -46,9 +47,10 @@ impl BrowserState {
     /// Whether a browser command is currently meaningful for this page state.
     pub fn can_execute(&self, command: &BrowserCommand) -> bool {
         match command {
-            BrowserCommand::Navigate(_) | BrowserCommand::NewTab | BrowserCommand::NewWindow => {
-                true
-            }
+            BrowserCommand::Navigate(_)
+            | BrowserCommand::NewTab
+            | BrowserCommand::NewWindow
+            | BrowserCommand::NewPrivateWindow => true,
             BrowserCommand::Reload => !self.url.is_empty(),
             BrowserCommand::StopLoading => self.loading,
             BrowserCommand::Back => self.can_go_back,

@@ -9,6 +9,7 @@ use crate::omnibox::match_words;
 pub enum Command {
     NewTab,
     NewWindow,
+    NewPrivateWindow,
     ReopenClosedTab,
     CloseTab,
     ReloadPage,
@@ -82,6 +83,12 @@ const BUILT_IN_COMMANDS: &[CommandDefinition] = &[
         command: Command::NewWindow,
         name: "New Window",
         keywords: "",
+        requirement: CommandRequirement::Always,
+    },
+    CommandDefinition {
+        command: Command::NewPrivateWindow,
+        name: "New Private Window",
+        keywords: "incognito private browsing",
         requirement: CommandRequirement::Always,
     },
     CommandDefinition {
@@ -300,11 +307,33 @@ pub struct CommandAvailability {
     pub shows_spaces: bool,
     pub has_next_space: bool,
     pub has_previous_space: bool,
+    /// A private window is disposable: it cannot change settings, themes or
+    /// spaces.
+    pub private: bool,
+}
+
+impl Command {
+    /// Whether the command changes how Photon is set up, which a private
+    /// window may not do.
+    pub fn customises(self) -> bool {
+        matches!(
+            self,
+            Self::ToggleSidebarIcons
+                | Self::ToggleZenMode
+                | Self::NewSpace
+                | Self::NextSpace
+                | Self::PreviousSpace
+                | Self::OpenSettings
+        )
+    }
 }
 
 impl CommandAvailability {
     /// Whether `command` can run with these capabilities.
     pub fn allows(self, command: Command) -> bool {
+        if self.private && command.customises() {
+            return false;
+        }
         match COMMAND_REGISTRY.definition(command).requirement {
             CommandRequirement::Always => true,
             CommandRequirement::HasPage => self.has_page,
@@ -332,6 +361,20 @@ impl CommandAvailability {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn private_windows_cannot_customise() {
+        let private = CommandAvailability {
+            private: true,
+            shows_spaces: true,
+            has_next_space: true,
+            ..CommandAvailability::default()
+        };
+        assert!(!private.allows(Command::OpenSettings));
+        assert!(!private.allows(Command::NextSpace));
+        assert!(private.allows(Command::NewTab));
+        assert!(private.allows(Command::NewPrivateWindow));
+    }
     use super::*;
     use std::collections::HashSet;
 
@@ -347,6 +390,7 @@ mod tests {
         for command in [
             Command::NewTab,
             Command::NewWindow,
+            Command::NewPrivateWindow,
             Command::ReopenClosedTab,
             Command::CloseTab,
             Command::ReloadPage,
@@ -389,6 +433,7 @@ mod tests {
             shows_spaces: true,
             has_next_space: true,
             has_previous_space: false,
+            private: false,
         };
 
         assert!(availability.allows(Command::ReloadPage));
