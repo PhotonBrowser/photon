@@ -4,5 +4,7 @@ tools/velocity/results/
 .cache/
 .DS_Store
 *.user
+*.xcuserstate
+**/xcuserdata/
 ui/node_modules/
 .env
