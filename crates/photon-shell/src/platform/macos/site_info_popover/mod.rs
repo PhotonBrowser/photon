@@ -14,12 +14,12 @@ use objc2::{
     runtime::ProtocolObject, sel,
 };
 use objc2_app_kit::{
-    NSAccessibility, NSBezelStyle, NSBox, NSBoxType, NSButton, NSButtonType, NSCellImagePosition,
-    NSColor, NSFont, NSFontWeightRegular, NSFontWeightSemibold, NSImage,
-    NSImageSymbolConfiguration, NSImageView, NSLayoutAttribute, NSLayoutConstraintOrientation,
-    NSLineBreakMode, NSPopover, NSPopoverBehavior, NSPopoverDelegate, NSStackView,
-    NSStackViewDistribution, NSStackViewGravity, NSTextField, NSUserInterfaceLayoutOrientation,
-    NSView, NSViewController,
+    NSAccessibility, NSAutoresizingMaskOptions, NSBezelStyle, NSBox, NSBoxType, NSButton,
+    NSButtonType, NSCellImagePosition, NSColor, NSFont, NSFontWeightRegular, NSFontWeightSemibold,
+    NSImage, NSImageSymbolConfiguration, NSImageView, NSLayoutAttribute,
+    NSLayoutConstraintOrientation, NSLineBreakMode, NSPopover, NSPopoverBehavior,
+    NSPopoverDelegate, NSStackView, NSStackViewDistribution, NSStackViewGravity, NSTextField,
+    NSUserInterfaceLayoutOrientation, NSView, NSViewController,
 };
 use objc2_foundation::{
     NSEdgeInsets, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRect, NSRectEdge, NSSize,
@@ -70,11 +70,13 @@ impl Pages {
     /// size and cross-fades its content. The fade is a layer transition so
     /// glass controls never render at partial opacity, which turns them black.
     fn show(&self, page: &NSView) {
-        // Resize at once, then swap: animating the size while the new page is
-        // already in place lays it out at the old size, clipping it.
-        let animates = self.popover.animates();
-        self.popover.setAnimates(false);
-        self.popover.setContentSize(page.fittingSize());
+        // Lay the page out at its own height and pin it to the popover's top,
+        // so while AppKit animates the popover to that height the page is
+        // revealed or cropped from the bottom rather than drawn at the wrong
+        // size.
+        let size = page.fittingSize();
+        page.setFrameSize(size);
+        page.setAutoresizingMask(NSAutoresizingMaskOptions::ViewMinYMargin);
         // SAFETY: the page's superview is the popover's live content view,
         // read on the main thread.
         let container = unsafe { self.controller.view().superview() };
@@ -88,7 +90,7 @@ impl Pages {
             layer.addAnimation_forKey(&fade, None);
         }
         self.controller.setView(page);
-        self.popover.setAnimates(animates);
+        self.popover.setContentSize(size);
     }
 }
 
@@ -318,7 +320,9 @@ impl AppKitSiteInfoPopover {
         // Details arriving while the connection page is open change its height.
         let pages = &self.inner.pages;
         if pages.popover.isShown() && std::ptr::eq(&*pages.controller.view(), &*pages.security) {
-            pages.popover.setContentSize(pages.security.fittingSize());
+            let size = pages.security.fittingSize();
+            pages.security.setFrameSize(size);
+            pages.popover.setContentSize(size);
         }
         *self.inner.shown.borrow_mut() = Some(info.clone());
     }
