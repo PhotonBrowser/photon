@@ -108,22 +108,30 @@ pub(in super::super) fn tab_strip_content(
         }
         focus_index += stops;
     }
-    h_stack()
+    let tab_viewport = h_stack()
         .id("browser-tab-strip-scroll")
+        .items_center()
+        .h(px(metrics::TITLEBAR_HEIGHT))
+        .min_w_0()
+        .flex_1()
+        .overflow_x_scroll()
+        .elastic_scroll(elastic_scroll)
+        .track_scroll(&scroll_handle)
+        .child(tabs_element)
+        .on_prepaint(move |prepaint, window, cx| {
+            on_bounds(prepaint.bounds, window, cx);
+        });
+    h_stack()
+        .id("browser-tab-strip")
         .items_center()
         .gap(px(metrics::TAB_STRIP_GAP))
         .h(px(metrics::TITLEBAR_HEIGHT))
         .px(px(metrics::TAB_STRIP_INSET))
         .tab_group()
         .min_w_0()
-        .overflow_x_scroll()
-        .elastic_scroll(elastic_scroll)
-        .track_scroll(&scroll_handle)
-        .child(tabs_element)
+        .w_full()
+        .child(tab_viewport)
         .child(new_tab_button(on_new_tab, focus_index, palette))
-        .on_prepaint(move |prepaint, window, cx| {
-            on_bounds(prepaint.bounds, window, cx);
-        })
         .on_mouse_move_all(move |event, phase, hitbox, window, cx| {
             on_drag_move(event, phase, hitbox, window, cx);
         })

@@ -113,7 +113,9 @@ impl BrowserWindow {
             return;
         }
         let position = event.position;
-        self.tab_container_bounds = Some(hitbox.bounds);
+        if self.tab_axis(cx) != TabDragAxis::Horizontal {
+            self.tab_container_bounds = Some(hitbox.bounds);
+        }
         let current_window = window.window_handle();
 
         if let Some(dragged) = cx
