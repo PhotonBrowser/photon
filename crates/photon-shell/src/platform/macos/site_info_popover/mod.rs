@@ -14,12 +14,12 @@ use objc2::{
     runtime::ProtocolObject, sel,
 };
 use objc2_app_kit::{
-    NSAccessibility, NSAutoresizingMaskOptions, NSBezelStyle, NSBox, NSBoxType, NSButton,
-    NSButtonType, NSCellImagePosition, NSColor, NSFont, NSFontWeightRegular, NSFontWeightSemibold,
-    NSImage, NSImageSymbolConfiguration, NSImageView, NSLayoutAttribute,
-    NSLayoutConstraintOrientation, NSLineBreakMode, NSPopover, NSPopoverBehavior,
-    NSPopoverDelegate, NSStackView, NSStackViewDistribution, NSStackViewGravity, NSTextField,
-    NSUserInterfaceLayoutOrientation, NSView, NSViewController,
+    NSAccessibility, NSBezelStyle, NSBox, NSBoxType, NSButton, NSButtonType, NSCellImagePosition,
+    NSColor, NSFont, NSFontWeightRegular, NSFontWeightSemibold, NSImage,
+    NSImageSymbolConfiguration, NSImageView, NSLayoutAttribute, NSLayoutConstraintOrientation,
+    NSLineBreakMode, NSPopover, NSPopoverBehavior, NSPopoverDelegate, NSStackView,
+    NSStackViewDistribution, NSStackViewGravity, NSTextField, NSUserInterfaceLayoutOrientation,
+    NSView, NSViewController,
 };
 use objc2_foundation::{
     NSEdgeInsets, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRect, NSRectEdge, NSSize,
@@ -66,22 +66,55 @@ struct Pages {
 }
 
 impl Pages {
+    /// Holds both pages in one view that the popover keeps, each pinned to
+    /// its top so a page never moves while the popover changes height.
+    fn new(
+        popover: Retained<NSPopover>,
+        controller: Retained<NSViewController>,
+        site: Retained<NSView>,
+        security: Retained<NSView>,
+        mtm: MainThreadMarker,
+    ) -> Self {
+        let container = NSView::new(mtm);
+        for page in [&site, &security] {
+            page.setTranslatesAutoresizingMaskIntoConstraints(false);
+            container.addSubview(page);
+            page.topAnchor()
+                .constraintEqualToAnchor(&container.topAnchor())
+                .setActive(true);
+            page.leadingAnchor()
+                .constraintEqualToAnchor(&container.leadingAnchor())
+                .setActive(true);
+        }
+        security.setHidden(true);
+        controller.setView(&container);
+        Self {
+            popover,
+            controller,
+            site,
+            security,
+        }
+    }
+
+    fn showing_security(&self) -> bool {
+        !self.security.isHidden()
+    }
+}
+
+impl Pages {
     /// Switches to `page`. While open, the popover animates to the page's
     /// size and cross-fades its content. The fade is a layer transition so
     /// glass controls never render at partial opacity, which turns them black.
     fn show(&self, page: &NSView) {
-        // Lay the page out at its own height and pin it to the popover's top,
-        // so while AppKit animates the popover to that height the page is
-        // revealed or cropped from the bottom rather than drawn at the wrong
-        // size.
-        let size = page.fittingSize();
-        page.setFrameSize(size);
-        page.setAutoresizingMask(NSAutoresizingMaskOptions::ViewMinYMargin);
-        // SAFETY: the page's superview is the popover's live content view,
-        // read on the main thread.
-        let container = unsafe { self.controller.view().superview() };
+        // The popover animates to the page's height; the page stays pinned to
+        // its top while the other fades out.
+        // The fade runs on the popover's own content view: glass controls in a
+        // layer faded on its own render black at partial opacity.
+        // SAFETY: the container's superview is the popover's live content
+        // view, read on the main thread.
+        let content = unsafe { self.controller.view().superview() };
         if self.popover.isShown()
-            && let Some(layer) = container.and_then(|view| view.layer())
+            && let Some(layer) = content.and_then(|view| view.layer())
         {
             let fade = CATransition::animation();
             // SAFETY: an immutable AppKit constant.
@@ -89,8 +122,10 @@ impl Pages {
             fade.setDuration(metrics::SITE_INFO_PAGE_DURATION_MS as f64 / 1000.0);
             layer.addAnimation_forKey(&fade, None);
         }
-        self.controller.setView(page);
-        self.popover.setContentSize(size);
+        for shown in [&self.site, &self.security] {
+            shown.setHidden(!std::ptr::eq(&**shown, page));
+        }
+        self.popover.setContentSize(page.fittingSize());
     }
 }
 
@@ -124,12 +159,13 @@ impl AppKitSiteInfoPopover {
         popover.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
         let site_view = page(mtm);
         let (security_view, security, security_header) = security_page(mtm);
-        let pages = Pages {
-            popover: popover.clone(),
+        let pages = Pages::new(
+            popover.clone(),
             controller,
-            site: Retained::into_super(site_view.clone()),
-            security: Retained::into_super(security_view),
-        };
+            Retained::into_super(site_view.clone()),
+            Retained::into_super(security_view),
+            mtm,
+        );
 
         let controls_row = stack(
             NSUserInterfaceLayoutOrientation::Horizontal,
@@ -319,10 +355,8 @@ impl AppKitSiteInfoPopover {
         security.certificate.setHidden(details.is_none());
         // Details arriving while the connection page is open change its height.
         let pages = &self.inner.pages;
-        if pages.popover.isShown() && std::ptr::eq(&*pages.controller.view(), &*pages.security) {
-            let size = pages.security.fittingSize();
-            pages.security.setFrameSize(size);
-            pages.popover.setContentSize(size);
+        if pages.popover.isShown() && pages.showing_security() {
+            pages.popover.setContentSize(pages.security.fittingSize());
         }
         *self.inner.shown.borrow_mut() = Some(info.clone());
     }
