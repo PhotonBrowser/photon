@@ -112,7 +112,10 @@ pub(in crate::platform) struct BrowserWindow {
     #[cfg(target_os = "macos")]
     theme_picker_panel: super::native_panel::NativePanel,
     /// Where the downloads popover was opened from, while it is open.
-    downloads_popover: Option<Point<Pixels>>,
+    downloads_popover: Option<gpui::Bounds<Pixels>>,
+    /// Where the sidebar last drew the downloads button, which the popover
+    /// points at.
+    downloads_button_bounds: Option<gpui::Bounds<Pixels>>,
     /// Redraws the downloads button, popover and notices as downloads change.
     _downloads_subscription: Subscription,
     tab_focus_handles: Vec<FocusHandle>,
@@ -609,6 +612,7 @@ fn open_browser_window(
                 window,
                 |this, _, event: &OmniboxEvent, window, cx| match event {
                     OmniboxEvent::Navigate(url) => this.navigate_active(url, window, cx),
+                    OmniboxEvent::SiteInfoMenu => this.show_site_info_menu(window, cx),
                 },
             );
             let this = cx.entity().downgrade();
@@ -651,6 +655,7 @@ fn open_browser_window(
                 #[cfg(target_os = "macos")]
                 theme_picker_panel: Default::default(),
                 downloads_popover: None,
+                downloads_button_bounds: None,
                 _downloads_subscription: downloads_subscription,
                 tab_focus_handles: Vec::new(),
                 _archive_task: BrowserWindow::archive_unused_tabs_regularly(window, cx),

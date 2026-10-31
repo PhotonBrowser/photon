@@ -14,10 +14,20 @@ use super::super::motion::SurfaceFade;
 use super::super::tooltip::label_tooltip;
 use super::super::{ClickHandler, MouseDownHandler, metrics, theme::ThemeColors};
 
+pub(in super::super) type PrepaintHandler =
+    Box<dyn Fn(&gpui::InteractivityPrepaint, &mut Window, &mut App)>;
+
+/// Holds the downloads button and reports where it is drawn.
+fn downloads_anchor(on_drawn: PrepaintHandler) -> gpui::Stateful<gpui::Div> {
+    div().id("sidebar-downloads-anchor").on_prepaint(on_drawn)
+}
+
 pub(in super::super) struct FooterActions {
     /// Opens the downloads popover.
     pub(in super::super) downloads: ClickHandler,
     pub(in super::super) downloads_state: DownloadsButton,
+    /// Told where the downloads button is drawn, which its popover points at.
+    pub(in super::super) downloads_drawn: PrepaintHandler,
     pub(in super::super) menu: ClickHandler,
     pub(in super::super) new_space: ClickHandler,
 }
@@ -59,18 +69,21 @@ pub(in super::super) fn footer(
     if collapsed {
         let spacing = metrics::SidebarSpacing::new(collapsed);
         let menu = super::collapsed_tile(menu);
-        let downloads = super::collapsed_tile(div().child(downloads_button(
-            "sidebar-downloads",
-            0,
-            actions.downloads_state,
-            palette,
-            actions.downloads,
-        )));
+        let downloads = super::collapsed_tile(downloads_anchor(actions.downloads_drawn).child(
+            downloads_button(
+                "sidebar-downloads",
+                0,
+                actions.downloads_state,
+                palette,
+                actions.downloads,
+            ),
+        ));
         return v_stack()
             .w_full()
             .flex_shrink_0()
             .items_center()
-            .py(px(spacing.padding))
+            .pt(px(spacing.padding))
+            .pb(px(metrics::PAGE_INSET + spacing.padding))
             .gap(px(spacing.item_gap))
             .child(space_switcher(
                 v_stack(),
@@ -90,13 +103,15 @@ pub(in super::super) fn footer(
         .items_center()
         .justify_between()
         .px(px(metrics::SIDEBAR_PADDING))
-        .child(downloads_button(
-            "sidebar-downloads",
-            0,
-            actions.downloads_state,
-            palette,
-            actions.downloads,
-        ))
+        .child(
+            downloads_anchor(actions.downloads_drawn).child(downloads_button(
+                "sidebar-downloads",
+                0,
+                actions.downloads_state,
+                palette,
+                actions.downloads,
+            )),
+        )
         .child(
             h_stack()
                 .items_center()

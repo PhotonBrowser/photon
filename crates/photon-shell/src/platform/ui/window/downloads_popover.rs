@@ -28,15 +28,18 @@ struct PopoverActions {
 }
 
 impl BrowserWindow {
-    /// Opens the downloads popover above the pointer, which is on the
-    /// sidebar's downloads button, or closes it when it is open.
+    /// Opens the downloads popover above the sidebar's downloads button, or
+    /// closes it when it is open.
     pub(super) fn toggle_downloads_popover(&mut self, window: &Window, cx: &mut Context<Self>) {
         if self.downloads_popover.is_some() {
             self.dismiss_downloads_popover(cx);
             return;
         }
         Downloads::mark_seen(cx);
-        let anchor = window.mouse_position();
+        // Below its button where the sidebar shows it, else where it was asked for.
+        let anchor = self.downloads_button_bounds.unwrap_or_else(|| {
+            gpui::Bounds::new(window.mouse_position(), gpui::size(px(0.0), px(0.0)))
+        });
         self.downloads_popover = Some(anchor);
         cx.notify();
     }
@@ -82,20 +85,15 @@ impl BrowserWindow {
         let width = metrics::DOWNLOADS_POPOVER_WIDTH;
         let height = popover_height(Downloads::list(cx).len());
         let inset = metrics::PAGE_INSET;
-        let left = (f32::from(anchor.x) - width / 2.0).clamp(
+        let left = (f32::from(anchor.center().x) - width / 2.0).clamp(
             inset,
             (f32::from(viewport.width) - width - inset).max(inset),
         );
-        // The pointer may be anywhere on the button, so clear a whole button
-        // above it to leave the button uncovered.
-        let top = (f32::from(anchor.y)
-            - height
-            - metrics::TOOLBAR_BUTTON_SIZE
-            - metrics::PAGE_CHROME_GAP)
-            .clamp(
-                inset,
-                (f32::from(viewport.height) - height - inset).max(inset),
-            );
+        // Just above the button, leaving it uncovered.
+        let top = (f32::from(anchor.origin.y) - height - metrics::PAGE_CHROME_GAP).clamp(
+            inset,
+            (f32::from(viewport.height) - height - inset).max(inset),
+        );
         // The surface positions its own content, so a wrapper places it.
         let panel = div().absolute().left(px(left)).top(px(top)).child(
             popover_surface(

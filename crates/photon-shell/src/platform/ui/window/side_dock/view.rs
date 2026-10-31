@@ -420,6 +420,11 @@ impl BrowserWindow {
                     cx.stop_propagation();
                     this.toggle_downloads_popover(window, cx);
                 })),
+                downloads_drawn: Box::new(cx.listener(
+                    |this, event: &gpui::InteractivityPrepaint, _, _| {
+                        this.downloads_button_bounds = Some(event.bounds);
+                    },
+                )),
                 downloads_state: DownloadsButton {
                     progress: Downloads::progress(cx),
                     unseen: Downloads::has_unseen(cx),
