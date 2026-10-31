@@ -13,10 +13,11 @@ documented in the guides linked from the [README](../README.md).
 
 - Show the full certificate chain and TLS version, and take “Secure” from the
   TLS result rather than the address scheme. See [Omnibox](Omnibox.md#certificates).
+- Show downloads from private windows in their own downloads list, and offer
+  “Open Link in Private Window” in the page context menu.
 
 ## Later
 
-- Add private windows with isolated, temporary profiles.
 - Add a bookmark manager and import bookmarks and history from other browsers.
 - Add a history page and a download manager.
 - Add native file upload pickers and permission prompts through explicit Engine
