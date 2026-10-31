@@ -2,16 +2,19 @@
 //! downloads in progress, and a dot says a download arrived since the
 //! downloads popover was last opened.
 
-use gpui::{PathBuilder, Pixels, Point, Window, canvas, div, point, prelude::*, px, rgb, rgba};
+use gpui::{
+    App, PathBuilder, Pixels, Point, Window, canvas, div, point, prelude::*, px, rgb, rgba,
+};
 use std::{
     f32::consts::TAU,
     sync::OnceLock,
     time::{Duration, Instant},
 };
 
+use super::animated_icons::{animated_icon, download_arrow};
 use super::button::toolbar_button;
 use super::downloads::DownloadProgress;
-use super::icons::download_icon;
+use super::icons::{icon, lucide};
 use super::{ClickHandler, metrics, theme::ThemeColors};
 
 pub(super) struct DownloadsButton {
@@ -26,6 +29,8 @@ pub(super) fn downloads_button(
     tab_index: isize,
     state: DownloadsButton,
     palette: ThemeColors,
+    window: &mut Window,
+    cx: &mut App,
     on_click: ClickHandler,
 ) -> impl IntoElement {
     let icon_color = if state.progress.is_some() || state.unseen {
@@ -33,13 +38,27 @@ pub(super) fn downloads_button(
     } else {
         palette.text_secondary
     };
+    let icon_size = metrics::TOOLBAR_ICON_SIZE;
     let content = div()
         .relative()
         .size_full()
         .flex()
         .items_center()
         .justify_center()
-        .child(download_icon(icon_color, metrics::TOOLBAR_ICON_SIZE))
+        .child(icon(lucide!("download-tray"), icon_color, icon_size))
+        .child(
+            animated_icon(
+                "sidebar-download-arrow",
+                download_arrow(),
+                icon_color,
+                icon_size,
+                window,
+                cx,
+            )
+            .absolute()
+            .inset_0()
+            .size_full(),
+        )
         .children(
             state
                 .progress

@@ -9,15 +9,15 @@
 //! 3. Swap the static icon at the call site for
 //!    `animated_icon("<unique id>", plus(), color, size, window, cx)`.
 //!
-//! The motion moves the whole icon: rotation, scale and translation, on a
-//! spring. Animating single parts, changing opacity and keyframe sequences are
-//! not supported.
+//! The motion moves the whole SVG: rotation, scale and translation, on a
+//! spring. Split an icon into SVG parts when only one part should move.
 
 use gpui::{App, Div, ElementId, SharedString, Stateful, Window, div, prelude::*, px};
 use gpui_motion::{Spring, SvgFrame, SvgMotion, SvgMotionState, SvgTarget, Transition};
 use std::time::{Duration, Instant};
 
 use super::icons::{heroicon, icon, lucide};
+use super::metrics;
 use super::motion::{Curve, MotionConfig, Speed, hover_icon_spring};
 use super::settings::Settings;
 
@@ -51,6 +51,12 @@ impl AnimatedIcon {
     /// Scales the icon around its centre, so `1.2` makes it a fifth larger.
     pub(super) fn scale(mut self, factor: f32) -> Self {
         self.hovered = self.hovered.scale(factor);
+        self
+    }
+
+    /// Moves the icon by logical pixels while hovered.
+    pub(super) fn translate(mut self, x: f32, y: f32) -> Self {
+        self.hovered = self.hovered.translate(x, y);
         self
     }
 
@@ -220,6 +226,13 @@ pub(super) fn reload_arrow() -> AnimatedIcon {
     AnimatedIcon::new(lucide!("rotate-cw"))
         .rotate(50.0)
         .spring(250.0, 25.0)
+}
+
+/// The downloads arrow dips into its tray, leaving the tray still.
+pub(super) fn download_arrow() -> AnimatedIcon {
+    AnimatedIcon::new(lucide!("download-arrow"))
+        .translate(0.0, metrics::DOWNLOAD_ARROW_HOVER_OFFSET)
+        .spring(200.0, 10.0)
 }
 
 #[cfg(test)]
