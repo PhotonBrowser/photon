@@ -20,4 +20,7 @@ if (photon_browser_navigate(browser, "example.com", destination,
 photon_browser_destroy(browser);
 ```
 
-The build produces Rust and static-library targets. Strings returned by the API are borrowed; their lifetime and mutation rules are documented in the header.
+The API checks command availability against Rust browser state before a native
+adapter executes it. The build produces Rust and static-library targets.
+Strings returned by the API are borrowed; their lifetime and mutation rules are
+documented in the header.

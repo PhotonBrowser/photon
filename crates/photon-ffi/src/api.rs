@@ -291,7 +291,7 @@ pub unsafe extern "C" fn photon_browser_load_failed(
     handle.error = c_string(handle.state.error.as_deref().unwrap_or_default());
 }
 
-/// Validates commands before the native shell adapter executes them.
+/// Checks command availability before the native adapter executes a command.
 ///
 /// # Safety
 /// `handle` must be null or point to a live browser handle.
@@ -300,9 +300,9 @@ pub unsafe extern "C" fn photon_browser_command(
     handle: *const BrowserHandle,
     command: u32,
 ) -> bool {
-    if unsafe { handle.as_ref() }.is_none() {
+    let Some(handle) = (unsafe { handle.as_ref() }) else {
         return false;
-    }
+    };
     let command = match command {
         COMMAND_RELOAD => BrowserCommand::Reload,
         COMMAND_BACK => BrowserCommand::Back,
@@ -310,11 +310,5 @@ pub unsafe extern "C" fn photon_browser_command(
         COMMAND_STOP_LOADING => BrowserCommand::StopLoading,
         _ => return false,
     };
-    matches!(
-        command,
-        BrowserCommand::Reload
-            | BrowserCommand::StopLoading
-            | BrowserCommand::Back
-            | BrowserCommand::Forward
-    )
+    handle.state.can_execute(&command)
 }

@@ -43,6 +43,19 @@ pub enum EngineEvent {
 }
 
 impl BrowserState {
+    /// Whether a browser command is currently meaningful for this page state.
+    pub fn can_execute(&self, command: &BrowserCommand) -> bool {
+        match command {
+            BrowserCommand::Navigate(_) | BrowserCommand::NewTab | BrowserCommand::NewWindow => {
+                true
+            }
+            BrowserCommand::Reload => !self.url.is_empty(),
+            BrowserCommand::StopLoading => self.loading,
+            BrowserCommand::Back => self.can_go_back,
+            BrowserCommand::Forward => self.can_go_forward,
+        }
+    }
+
     /// Applies the latest complete state snapshot from LibPhotonEmbedder.
     pub fn apply(&mut self, event: EngineEvent) {
         match event {

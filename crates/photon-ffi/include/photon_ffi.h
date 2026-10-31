@@ -75,7 +75,7 @@ char const* photon_browser_error(PhotonBrowserHandle const* handle);
 void photon_browser_load_failed(PhotonBrowserHandle* handle,
     char const* message);
 
-/// Validates a reload, back, forward, or stop-loading command value.
+/// Returns whether reload, back, forward, or stop-loading is currently available.
 bool photon_browser_command(PhotonBrowserHandle const* handle,
     uint32_t command);
 
