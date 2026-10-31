@@ -80,6 +80,9 @@ using PhotonSelectDropdownCallback = void (*)(void*, double, double, double,
 // Answer with photon_view_file_picker_closed, also when it is cancelled.
 using PhotonFilePickerCallback = void (*)(void*, bool);
 using PhotonPermissionCallback = void (*)(void*, uint64_t, char const*, char const*, char const*, char const*);
+// A server asked the user to sign in: request ID, URL, origin and realm, the
+// last possibly empty. Answer with photon_view_http_credentials_provided.
+using PhotonHTTPCredentialsCallback = void (*)(void*, uint64_t, char const*, char const*, char const*);
 using PhotonPermissionCancelledCallback = void (*)(void*, uint64_t, char const*);
 // Called with a URL a context menu action opens in a new tab, and whether to
 // switch to it.
@@ -185,6 +188,7 @@ struct PhotonViewCallbacks {
     PhotonPermissionCancelledCallback permission_cancelled_callback;
     PhotonPageBackgroundCallback page_background_callback;
     PhotonInputMethodStateCallback input_method_state_callback;
+    PhotonHTTPCredentialsCallback http_credentials_callback;
 #if defined(__APPLE__)
     bool native_metal_presentation;
     PhotonNativeBackingCallback native_backing_callback;
@@ -317,6 +321,10 @@ void photon_view_set_marked_text(void* view, char const* text);
 void photon_view_commit_text(void* view, char const* text,
     int32_t replacement_start, int32_t replacement_length);
 void photon_view_unmark_text(void* view);
+// Answers an HTTP sign-in request; `signed_in` is false when the user
+// cancelled, and the UTF-8 username and password are then ignored.
+void photon_view_http_credentials_provided(void* view, uint64_t request_id,
+    bool signed_in, char const* username, char const* password);
 void photon_view_shutdown(void* view);
 void photon_view_destroy(void* view);
 #if defined(__APPLE__)

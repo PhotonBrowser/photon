@@ -63,6 +63,7 @@ Photon::ViewCallbacks make_view_callbacks(
     auto permission_callback = callbacks.permission_callback;
     auto permission_cancelled_callback = callbacks.permission_cancelled_callback;
     auto input_method_state_callback = callbacks.input_method_state_callback;
+    auto http_credentials_callback = callbacks.http_credentials_callback;
 
     Photon::ViewCallbacks result;
     result.state_changed = [=](Photon::ViewState const& state) {
@@ -235,6 +236,12 @@ Photon::ViewCallbacks make_view_callbacks(
         result.permission_requested = [=](Photon::PermissionRequest const& request) {
             permission_callback(callback_data, request.request_id, request.document_id.c_str(),
                 request.requesting_origin.c_str(), request.top_level_origin.c_str(), request.capability.c_str());
+        };
+    }
+    if (http_credentials_callback) {
+        result.http_credentials_requested = [=](Photon::HTTPCredentialsRequest const& request) {
+            http_credentials_callback(callback_data, request.request_id, request.url.c_str(),
+                request.origin.c_str(), request.realm.c_str());
         };
     }
     if (permission_cancelled_callback) {
@@ -878,6 +885,14 @@ extern "C" void photon_view_commit_text(void* view, char const* text,
 {
     if (view && text)
         static_cast<ViewHandle*>(view)->view->commit_text(text, replacement_start, replacement_length);
+}
+
+extern "C" void photon_view_http_credentials_provided(void* view, uint64_t request_id,
+    bool signed_in, char const* username, char const* password)
+{
+    if (view)
+        static_cast<ViewHandle*>(view)->view->http_credentials_provided(request_id, signed_in,
+            signed_in && username ? username : "", signed_in && password ? password : "");
 }
 
 extern "C" void photon_view_unmark_text(void* view)
