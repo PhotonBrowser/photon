@@ -185,6 +185,7 @@ pub(super) mod embedder {
         pub http_credentials_callback: Option<
             unsafe extern "C" fn(*mut c_void, u64, *const c_char, *const c_char, *const c_char),
         >,
+        pub download_replaced_initial_document_callback: Option<unsafe extern "C" fn(*mut c_void)>,
         #[cfg(target_os = "macos")]
         pub native_metal_presentation: bool,
         #[cfg(target_os = "macos")]

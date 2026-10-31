@@ -84,6 +84,8 @@ using PhotonPermissionCallback = void (*)(void*, uint64_t, char const*, char con
 // last possibly empty. Answer with photon_view_http_credentials_provided.
 using PhotonHTTPCredentialsCallback = void (*)(void*, uint64_t, char const*, char const*, char const*);
 using PhotonPermissionCancelledCallback = void (*)(void*, uint64_t, char const*);
+// Called when a download took over the view's first navigation, leaving only its initial blank page.
+using PhotonDownloadReplacedInitialDocumentCallback = void (*)(void*);
 // Called with a URL a context menu action opens in a new tab, and whether to
 // switch to it.
 using PhotonOpenInNewTabCallback = void (*)(void*, char const*, bool);
@@ -189,6 +191,7 @@ struct PhotonViewCallbacks {
     PhotonPageBackgroundCallback page_background_callback;
     PhotonInputMethodStateCallback input_method_state_callback;
     PhotonHTTPCredentialsCallback http_credentials_callback;
+    PhotonDownloadReplacedInitialDocumentCallback download_replaced_initial_document_callback;
 #if defined(__APPLE__)
     bool native_metal_presentation;
     PhotonNativeBackingCallback native_backing_callback;

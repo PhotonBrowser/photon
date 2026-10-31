@@ -64,6 +64,7 @@ Photon::ViewCallbacks make_view_callbacks(
     auto permission_cancelled_callback = callbacks.permission_cancelled_callback;
     auto input_method_state_callback = callbacks.input_method_state_callback;
     auto http_credentials_callback = callbacks.http_credentials_callback;
+    auto download_replaced_initial_document_callback = callbacks.download_replaced_initial_document_callback;
 
     Photon::ViewCallbacks result;
     result.state_changed = [=](Photon::ViewState const& state) {
@@ -242,6 +243,11 @@ Photon::ViewCallbacks make_view_callbacks(
         result.http_credentials_requested = [=](Photon::HTTPCredentialsRequest const& request) {
             http_credentials_callback(callback_data, request.request_id, request.url.c_str(),
                 request.origin.c_str(), request.realm.c_str());
+        };
+    }
+    if (download_replaced_initial_document_callback) {
+        result.download_replaced_initial_document = [=] {
+            download_replaced_initial_document_callback(callback_data);
         };
     }
     if (permission_cancelled_callback) {

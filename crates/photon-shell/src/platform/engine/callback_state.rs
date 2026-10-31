@@ -188,6 +188,10 @@ impl CallbackState {
         });
     }
 
+    pub(super) fn download_replaced_initial_document(&self) {
+        self.update_webview(|view, cx| view.download_replaced_initial_document(cx));
+    }
+
     pub(super) fn request_page_dialog(&self, request: DialogRequest) {
         self.update_webview(move |view, cx| view.request_dialog(request, cx));
     }

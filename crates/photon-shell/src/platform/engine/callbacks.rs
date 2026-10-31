@@ -604,6 +604,12 @@ pub(super) unsafe extern "C" fn on_engine_dialog(
     });
 }
 
+pub(super) unsafe extern "C" fn on_engine_download_replaced_initial_document(context: *mut c_void) {
+    if !context.is_null() {
+        unsafe { &*(context.cast::<CallbackState>()) }.download_replaced_initial_document();
+    }
+}
+
 pub(super) unsafe extern "C" fn on_engine_http_credentials(
     context: *mut c_void,
     request_id: u64,

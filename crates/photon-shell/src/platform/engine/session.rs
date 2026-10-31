@@ -346,6 +346,9 @@ impl EngineSession {
             page_background_callback: Some(on_engine_page_background),
             input_method_state_callback: Some(on_engine_input_method_state),
             http_credentials_callback: Some(on_engine_http_credentials),
+            download_replaced_initial_document_callback: Some(
+                on_engine_download_replaced_initial_document,
+            ),
             #[cfg(target_os = "macos")]
             native_metal_presentation: true,
             #[cfg(target_os = "macos")]
