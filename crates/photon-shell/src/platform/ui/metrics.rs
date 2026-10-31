@@ -209,6 +209,25 @@ pub(super) const LIST_ROW_ICON_SIZE: f32 = 16.0;
 pub(super) const DOWNLOAD_PROGRESS_HEIGHT: f32 = 4.0;
 /// Fixed height keeps the downloads list efficiently virtualizable.
 pub(super) const DOWNLOAD_ROW_HEIGHT: f32 = 64.0;
+/// The sidebar's downloads button: a ring of the downloads' progress around
+/// its icon, and a dot when a download arrived since the popover was opened.
+pub(super) const DOWNLOAD_RING_STROKE: f32 = 2.0;
+pub(super) const DOWNLOAD_RING_INSET: f32 = 3.0;
+pub(super) const DOWNLOAD_BADGE_SIZE: f32 = 7.0;
+pub(super) const DOWNLOAD_BADGE_INSET: f32 = 3.0;
+/// How long one turn of the ring takes while a download's size is unknown.
+pub(super) const DOWNLOAD_RING_SPIN_MS: u64 = 1_200;
+/// The share of the ring drawn while a download's size is unknown.
+pub(super) const DOWNLOAD_RING_INDETERMINATE_SWEEP: f32 = 0.25;
+/// The downloads popover, opened from the sidebar's downloads button.
+pub(super) const DOWNLOADS_POPOVER_WIDTH: f32 = 340.0;
+pub(super) const DOWNLOADS_POPOVER_PADDING: f32 = 6.0;
+pub(super) const DOWNLOADS_POPOVER_HEADER_HEIGHT: f32 = 40.0;
+pub(super) const DOWNLOADS_POPOVER_ROW_HEIGHT: f32 = 52.0;
+pub(super) const DOWNLOADS_POPOVER_FOOTER_HEIGHT: f32 = 36.0;
+pub(super) const DOWNLOADS_POPOVER_MAX_ROWS: usize = 5;
+pub(super) const DOWNLOADS_POPOVER_FILE_ICON_SIZE: f32 = 20.0;
+pub(super) const DOWNLOADS_POPOVER_TITLE_FONT_SIZE: f32 = 13.0;
 pub(super) const HISTORY_ROW_REMOVE_SIZE: f32 = 24.0;
 pub(super) const HISTORY_ROW_REMOVE_ICON_SIZE: f32 = 14.0;
 /// The address and time under and beside a history row's title.
