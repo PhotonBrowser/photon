@@ -17,6 +17,7 @@ mod input;
 mod js_dialog;
 mod kbd;
 mod layout;
+mod masked_text;
 mod menu;
 mod theme_gradient;
 mod theme_picker;
