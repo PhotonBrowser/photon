@@ -618,18 +618,27 @@ fn launch_target(
                 root,
                 verbose,
             )?;
-            invoke(
-                "open",
-                &[
-                    "-a",
-                    "Simulator",
-                    "--args",
-                    "-CurrentDeviceUDID",
-                    device.identifier.as_str(),
-                ],
-                root,
-                verbose,
-            )?;
+            let developer_directory = output("xcode-select", &["-p"], root)?;
+            let simulator_app = Path::new(developer_directory.trim())
+                .join("Applications")
+                .join("Simulator.app");
+            if simulator_app.is_dir() {
+                let simulator_app = path(&simulator_app);
+                invoke(
+                    "open",
+                    &[
+                        "-a",
+                        simulator_app.as_str(),
+                        "--args",
+                        "-CurrentDeviceUDID",
+                        device.identifier.as_str(),
+                    ],
+                    root,
+                    verbose,
+                )?;
+            } else {
+                stage("Simulator.app is unavailable; launching through simctl");
+            }
             invoke(
                 "xcrun",
                 &[

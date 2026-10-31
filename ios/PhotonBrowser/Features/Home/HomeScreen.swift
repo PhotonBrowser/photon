@@ -37,16 +37,16 @@ private struct HomeBackground: View {
 
                 RadialGradient(
                     colors: [BrowserTheme.Colors.homeBlueGlow.opacity(0.72), .clear],
-                    center: .topTrailing,
+                    center: .top,
                     startRadius: 0,
-                    endRadius: geometry.size.width * 0.98
+                    endRadius: geometry.size.width * 1.12
                 )
 
                 RadialGradient(
-                    colors: [BrowserTheme.Colors.homeLilacGlow.opacity(0.36), .clear],
-                    center: .bottomTrailing,
+                    colors: [BrowserTheme.Colors.homePinkGlow.opacity(0.48), .clear],
+                    center: .topTrailing,
                     startRadius: 0,
-                    endRadius: geometry.size.width * 0.9
+                    endRadius: geometry.size.width * 0.82
                 )
 
                 DotPattern()

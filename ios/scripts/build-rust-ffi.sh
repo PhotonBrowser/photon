@@ -2,27 +2,37 @@
 set -euo pipefail
 
 repo_root="$(cd "${PROJECT_DIR}/.." && pwd)"
-output_dir="${DERIVED_FILE_DIR}"
 configuration="${CONFIGURATION:-Debug}"
 sdk_name="${SDK_NAME:-}"
 architectures="${ARCHS:-arm64}"
+output_dir="${PROJECT_DIR}/../build/ios/rust-libs/${sdk_name}/${configuration}"
 
-if ! command -v cargo >/dev/null 2>&1; then
+if command -v cargo >/dev/null 2>&1; then
+    cargo_bin="$(command -v cargo)"
+else
+    cargo_home="${CARGO_HOME:-${HOME:-}/.cargo}"
+    cargo_bin="${cargo_home}/bin/cargo"
+fi
+
+if [[ ! -x "${cargo_bin}" ]]; then
     echo "error: cargo was not found in PATH. Install Rust and run photon ios build from a terminal." >&2
     exit 1
 fi
 
-if ! command -v rustup >/dev/null 2>&1; then
+rustup_bin="$(dirname "${cargo_bin}")/rustup"
+if [[ ! -x "${rustup_bin}" ]] && command -v rustup >/dev/null 2>&1; then
+    rustup_bin="$(command -v rustup)"
+fi
+
+if [[ ! -x "${rustup_bin}" ]]; then
     echo "error: rustup was not found in PATH. Install Rust with rustup before building the iOS target." >&2
     exit 1
 fi
 
 if [[ "${configuration}" == "Release" ]]; then
     cargo_profile="release"
-    cargo_profile_args=(--release)
 else
     cargo_profile="debug"
-    cargo_profile_args=()
 fi
 
 libraries=()
@@ -43,15 +53,22 @@ for architecture in ${architectures}; do
         exit 1
     fi
 
-    if ! rustup target list --installed | grep -Fxq "${rust_target}"; then
-        rustup target add "${rust_target}"
+    if ! "${rustup_bin}" target list --installed | grep -Fxq "${rust_target}"; then
+        "${rustup_bin}" target add "${rust_target}"
     fi
 
-    cargo build \
-        --manifest-path "${repo_root}/Cargo.toml" \
-        --package photon-ffi \
-        --target "${rust_target}" \
-        "${cargo_profile_args[@]}"
+    if [[ "${configuration}" == "Release" ]]; then
+        "${cargo_bin}" build \
+            --manifest-path "${repo_root}/Cargo.toml" \
+            --package photon-ffi \
+            --target "${rust_target}" \
+            --release
+    else
+        "${cargo_bin}" build \
+            --manifest-path "${repo_root}/Cargo.toml" \
+            --package photon-ffi \
+            --target "${rust_target}"
+    fi
     libraries+=("${repo_root}/target/${rust_target}/${cargo_profile}/libphoton_ffi.a")
 done
 
