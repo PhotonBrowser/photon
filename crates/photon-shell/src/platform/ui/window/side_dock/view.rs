@@ -442,8 +442,8 @@ impl BrowserWindow {
                     },
                 )),
                 downloads_state: DownloadsButton {
-                    progress: Downloads::progress(cx),
-                    unseen: Downloads::has_unseen(cx),
+                    progress: Downloads::progress(self.private, cx),
+                    unseen: Downloads::has_unseen(self.private, cx),
                     animate: Settings::motion(cx).enabled,
                 },
                 menu: Box::new(cx.listener(|this, _, window, cx| {

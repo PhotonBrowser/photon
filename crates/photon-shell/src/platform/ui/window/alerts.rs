@@ -393,7 +393,7 @@ impl BrowserWindow {
         if self.downloads_popover.is_some() {
             return None;
         }
-        let (event, at) = Downloads::latest_event(cx)?;
+        let (event, at) = Downloads::latest_event(self.private, cx)?;
         let id = match event {
             DownloadEvent::Started(id)
             | DownloadEvent::Finished(id)

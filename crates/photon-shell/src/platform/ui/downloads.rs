@@ -22,14 +22,17 @@ pub(super) enum DownloadEvent {
     Failed(u64),
 }
 
-/// Downloads, newest first.
+/// Downloads, newest first. Private windows list only private downloads and
+/// other windows only the rest, so each kind keeps its own news.
 #[derive(Default)]
 pub(super) struct Downloads {
     downloads: Vec<Download>,
-    /// The latest start, finish or failure, and when it happened.
-    latest_event: Option<(DownloadEvent, Instant)>,
-    /// Whether a download arrived since the downloads popover was last open.
-    unseen: bool,
+    /// For other windows, then private ones: the latest start, finish or
+    /// failure, and when it happened.
+    latest_event: [Option<(DownloadEvent, Instant)>; 2],
+    /// For other windows, then private ones: whether a download arrived since
+    /// the downloads popover was last open.
+    unseen: [bool; 2],
 }
 
 /// How far along the downloads in progress are, together.
@@ -42,35 +45,42 @@ pub(super) struct DownloadProgress {
 impl Global for Downloads {}
 
 impl Downloads {
-    pub(super) fn list(cx: &App) -> &[Download] {
+    /// The downloads a private window, or another window, lists.
+    pub(super) fn list(private: bool, cx: &App) -> impl Iterator<Item = &Download> {
         cx.try_global::<Self>()
-            .map_or(&[], |downloads| downloads.downloads.as_slice())
+            .into_iter()
+            .flat_map(|downloads| downloads.downloads.iter())
+            .filter(move |download| download.private == private)
     }
 
     pub(super) fn get(id: u64, cx: &App) -> Option<&Download> {
-        Self::list(cx).iter().find(|download| download.id == id)
+        cx.try_global::<Self>()?
+            .downloads
+            .iter()
+            .find(|download| download.id == id)
     }
 
-    pub(super) fn latest_event(cx: &App) -> Option<(DownloadEvent, Instant)> {
-        cx.try_global::<Self>()?.latest_event
+    pub(super) fn latest_event(private: bool, cx: &App) -> Option<(DownloadEvent, Instant)> {
+        cx.try_global::<Self>()?.latest_event[usize::from(private)]
     }
 
-    pub(super) fn has_unseen(cx: &App) -> bool {
+    pub(super) fn has_unseen(private: bool, cx: &App) -> bool {
         cx.try_global::<Self>()
-            .is_some_and(|downloads| downloads.unseen)
+            .is_some_and(|downloads| downloads.unseen[usize::from(private)])
     }
 
     /// The downloads popover was opened, so nothing in it is new any more.
-    pub(super) fn mark_seen(cx: &mut App) {
-        if Self::has_unseen(cx) {
-            cx.update_global::<Self, _>(|downloads, _| downloads.unseen = false);
+    pub(super) fn mark_seen(private: bool, cx: &mut App) {
+        if Self::has_unseen(private, cx) {
+            cx.update_global::<Self, _>(|downloads, _| {
+                downloads.unseen[usize::from(private)] = false;
+            });
         }
     }
 
     /// The progress of the downloads in progress, or `None` when there are none.
-    pub(super) fn progress(cx: &App) -> Option<DownloadProgress> {
-        let active: Vec<_> = Self::list(cx)
-            .iter()
+    pub(super) fn progress(private: bool, cx: &App) -> Option<DownloadProgress> {
+        let active: Vec<_> = Self::list(private, cx)
             .filter(|download| download.status.is_active())
             .collect();
         if active.is_empty() {
@@ -107,15 +117,16 @@ impl Downloads {
                         .iter()
                         .find(|d| d.id == download.id)
                         .map(|existing| existing.status);
+                    let kind = usize::from(download.private);
                     if let Some(event) = event_for(previous, &download) {
-                        self.latest_event = Some((event, Instant::now()));
+                        self.latest_event[kind] = Some((event, Instant::now()));
                     }
                     if let Some(existing) = self.downloads.iter_mut().find(|d| d.id == download.id)
                     {
                         *existing = download;
                     } else {
                         self.downloads.push(download);
-                        self.unseen = true;
+                        self.unseen[kind] = true;
                         added = true;
                     }
                 }
@@ -313,7 +324,23 @@ mod tests {
             bytes_per_second: None,
             error: None,
             created_time_ms,
+            private: false,
         }
+    }
+
+    #[test]
+    fn private_downloads_keep_their_own_news() {
+        let mut downloads = Downloads::default();
+        let private = Download {
+            id: 2,
+            private: true,
+            ..download(DownloadStatus::InProgress, now_ms())
+        };
+        downloads.apply([DownloadChange::Changed(private)]);
+        assert!(downloads.unseen[1]);
+        assert!(!downloads.unseen[0]);
+        assert!(downloads.latest_event[1].is_some());
+        assert!(downloads.latest_event[0].is_none());
     }
 
     #[test]

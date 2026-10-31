@@ -26,6 +26,8 @@ pub(super) const PAGE: PageDefinition = PageDefinition {
 
 pub(in super::super) struct DownloadsPage {
     runtime: Rc<EngineRuntime>,
+    /// Whether the page is in a private window, which lists only private downloads.
+    private: bool,
     _downloads: Subscription,
 }
 
@@ -33,6 +35,7 @@ impl DownloadsPage {
     fn new(context: PageContext, cx: &mut Context<Self>) -> Self {
         Self {
             runtime: context.runtime,
+            private: context.private,
             _downloads: cx.observe_global::<Downloads>(|_, cx| cx.notify()),
         }
     }
@@ -146,7 +149,7 @@ impl DownloadsPage {
 impl Render for DownloadsPage {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = palette(window, cx);
-        let downloads = Downloads::list(cx);
+        let downloads: Vec<_> = Downloads::list(self.private, cx).collect();
         let has_inactive = downloads
             .iter()
             .any(|download| !download.status.is_active());
@@ -178,6 +181,7 @@ impl Render for DownloadsPage {
                 .into_any_element()
         } else {
             let runtime = self.runtime.clone();
+            let private = self.private;
             group(palette)
                 .p(px(0.))
                 .h_full()
@@ -188,7 +192,8 @@ impl Render for DownloadsPage {
                         move |range, _window, app| {
                             range
                                 .map(|index| {
-                                    let Some(download) = Downloads::list(app).get(index) else {
+                                    let Some(download) = Downloads::list(private, app).nth(index)
+                                    else {
                                         return div().into_any_element();
                                     };
                                     DownloadsPage::row(&runtime, download, palette)

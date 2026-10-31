@@ -25,6 +25,8 @@ use super::BrowserWindow;
 struct PopoverActions {
     close: Rc<dyn Fn(&mut App)>,
     show_all: Rc<dyn Fn(&mut App)>,
+    /// Whether the window is private, which lists only private downloads.
+    private: bool,
 }
 
 impl BrowserWindow {
@@ -35,7 +37,7 @@ impl BrowserWindow {
             self.dismiss_downloads_popover(cx);
             return;
         }
-        Downloads::mark_seen(cx);
+        Downloads::mark_seen(self.private, cx);
         // Below its button where the sidebar shows it, else where it was asked for.
         let anchor = self.downloads_button_bounds.unwrap_or_else(|| {
             gpui::Bounds::new(window.mouse_position(), gpui::size(px(0.0), px(0.0)))
@@ -68,7 +70,11 @@ impl BrowserWindow {
                 });
             });
         });
-        PopoverActions { close, show_all }
+        PopoverActions {
+            close,
+            show_all,
+            private: self.private,
+        }
     }
 
     /// The popover, drawn in the window above its button. Its height follows
@@ -83,7 +89,7 @@ impl BrowserWindow {
         let actions = self.downloads_popover_actions(window, cx);
         let viewport = window.viewport_size();
         let width = metrics::DOWNLOADS_POPOVER_WIDTH;
-        let height = popover_height(Downloads::list(cx).len());
+        let height = popover_height(Downloads::list(self.private, cx).count());
         let inset = metrics::PAGE_INSET;
         let left = (f32::from(anchor.center().x) - width / 2.0).clamp(
             inset,
@@ -146,7 +152,9 @@ fn popover_content(
     palette: ThemeColors,
     cx: &App,
 ) -> AnyElement {
-    let downloads = Downloads::list(cx);
+    let downloads: Vec<_> = Downloads::list(actions.private, cx)
+        .take(metrics::DOWNLOADS_POPOVER_MAX_ROWS)
+        .collect();
     let close = actions.close.clone();
     let header = h_stack()
         .h(px(metrics::DOWNLOADS_POPOVER_HEADER_HEIGHT))
@@ -185,7 +193,6 @@ fn popover_content(
     } else {
         downloads
             .iter()
-            .take(metrics::DOWNLOADS_POPOVER_MAX_ROWS)
             .map(|download| download_row(runtime, download, palette).into_any_element())
             .collect()
     };
