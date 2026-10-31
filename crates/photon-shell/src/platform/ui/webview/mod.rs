@@ -354,7 +354,9 @@ impl PhotonWebView {
     /// Lets pages follow the shell theme. Runs before the first viewport
     /// update, so the startup page loads with the right scheme.
     pub(super) fn update_color_scheme(&mut self, appearance: WindowAppearance) {
-        let dark = crate::platform::is_dark_appearance(appearance);
+        // A private window is dark whatever the settings, and asks its pages
+        // to be too.
+        let dark = self.session.is_private() || crate::platform::is_dark_appearance(appearance);
         if self.sent_dark_color_scheme != Some(dark) {
             self.session.set_dark_color_scheme(dark);
             self.sent_dark_color_scheme = Some(dark);

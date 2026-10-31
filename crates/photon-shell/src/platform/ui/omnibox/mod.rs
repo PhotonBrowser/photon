@@ -69,6 +69,8 @@ pub(super) struct Omnibox {
     input: Entity<EditableTextState>,
     /// The active tab's web view; `None` while it shows one of Photon's pages.
     webview: Option<Entity<PhotonWebView>>,
+    /// In a private window, searches typed here are not remembered.
+    pub(super) private: bool,
     /// The address of the active tab's Photon page, if it shows one.
     page_address: Option<String>,
     /// The address the field shows for the page: short while idle, full
@@ -197,6 +199,7 @@ impl Omnibox {
         let mut omnibox = Self {
             input,
             webview: None,
+            private: false,
             page_address: None,
             current_url: String::new(),
             invalid: false,
@@ -408,7 +411,9 @@ impl Omnibox {
     fn open(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
         match resolve_with(text, &Settings::search_engines(cx)) {
             Ok(target) => {
-                if let OmniboxTarget::Search { query, .. } = &target {
+                if let OmniboxTarget::Search { query, .. } = &target
+                    && !self.private
+                {
                     BrowsingHistory::record_search(query, cx);
                 }
                 self.close_suggestions(cx);

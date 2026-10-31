@@ -426,13 +426,15 @@ impl BrowserWindow {
     /// its debug details; then how the sidebar and chrome show.
     fn browser_menu_items(&self, cx: &Context<Self>) -> Vec<MenuItem> {
         use crate::platform::shortcuts::{
-            FindInPage, NewTab, NewWindow, OpenSettings, ResetZoom, ShowKeyboardShortcuts,
-            ToggleDebugInfo, ToggleSidebarIcons, ToggleZenMode, ZoomIn, ZoomOut,
+            FindInPage, NewPrivateWindow, NewTab, NewWindow, OpenSettings, ResetZoom,
+            ShowKeyboardShortcuts, ToggleDebugInfo, ToggleSidebarIcons, ToggleZenMode, ZoomIn,
+            ZoomOut,
         };
 
         let mut items = vec![
             MenuItem::action("New Tab", NewTab),
             MenuItem::action("New Window", NewWindow),
+            MenuItem::action("New Private Window", NewPrivateWindow),
             MenuItem::separator(),
         ];
         if let Some(webview) = self.active_webview() {
@@ -447,6 +449,14 @@ impl BrowserWindow {
                 MenuItem::action("Debug Info", ToggleDebugInfo).checked(debug_info),
                 MenuItem::separator(),
             ]);
+        }
+        // A private window is disposable and cannot change how Photon is set up.
+        if self.private {
+            items.push(MenuItem::action(
+                "Keyboard Shortcuts",
+                ShowKeyboardShortcuts,
+            ));
+            return items;
         }
         if self.layout(cx).has_sidebar() {
             let icons = self.sidebar.docked() && self.sidebar.collapsed();

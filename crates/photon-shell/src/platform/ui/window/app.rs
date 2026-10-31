@@ -1,6 +1,6 @@
 //! App startup: key bindings, the Engine runtime and the first window.
 
-use crate::platform::shortcuts::{NewWindow, browser_shortcuts};
+use crate::platform::shortcuts::{NewPrivateWindow, NewWindow, browser_shortcuts};
 use crate::platform::termination;
 #[cfg(all(
     not(feature = "ui-only"),
@@ -42,6 +42,33 @@ struct LoadedProfileState {
     settings_revision: Option<u64>,
     history: History,
     session: Session,
+}
+
+/// Opens a new window, private or not, from the active browser window when
+/// there is one, which places it, or on its own when no window is open.
+fn open_new_window(runtime: &Rc<EngineRuntime>, private: bool, cx: &mut App) {
+    cx.activate(true);
+    let command = if private {
+        Command::NewPrivateWindow
+    } else {
+        Command::NewWindow
+    };
+    if let Some(window) = cx
+        .active_window()
+        .and_then(|window| window.downcast::<BrowserWindow>())
+    {
+        cx.defer(move |cx| {
+            window
+                .update(cx, |browser, window, cx| {
+                    browser.execute_command(command, window, cx);
+                })
+                .ok();
+        });
+    } else if let Err(error) =
+        open_browser_window(runtime.clone(), launch_address(), false, false, private, cx)
+    {
+        crate::platform::trace(format_args!("new window: {error:#}"));
+    }
 }
 
 pub fn run() {
@@ -156,33 +183,17 @@ pub fn run() {
                 #[cfg(not(feature = "ui-only"))]
                 announce_service_restarts(&runtime, cx);
 
-                let new_window_runtime = runtime.clone();
                 #[cfg(all(target_os = "macos", not(feature = "ui-only")))]
                 if !automation_mode {
                     *reopen_runtime.borrow_mut() = Some(runtime.clone());
                 }
+                let new_window_runtime = runtime.clone();
                 cx.on_action(move |_: &NewWindow, cx| {
-                    cx.activate(true);
-                    if let Some(window) = cx
-                        .active_window()
-                        .and_then(|window| window.downcast::<BrowserWindow>())
-                    {
-                        cx.defer(move |cx| {
-                            window
-                                .update(cx, |browser, window, cx| {
-                                    browser.execute_command(Command::NewWindow, window, cx);
-                                })
-                                .ok();
-                        });
-                    } else if let Err(error) = open_browser_window(
-                        new_window_runtime.clone(),
-                        launch_address(),
-                        false,
-                        false,
-                        cx,
-                    ) {
-                        crate::platform::trace(format_args!("new window: {error:#}"));
-                    }
+                    open_new_window(&new_window_runtime, false, cx);
+                });
+                let private_window_runtime = runtime.clone();
+                cx.on_action(move |_: &NewPrivateWindow, cx| {
+                    open_new_window(&private_window_runtime, true, cx);
                 });
                 cx.on_action(|item: &RunMenuCommand, cx| {
                     let command = item.clone();
@@ -229,6 +240,7 @@ pub fn run() {
                     Some(photon_core::internal_page_url("newtab")),
                     false,
                     false,
+                    false,
                     cx,
                 )
                 .expect("open UI-only Photon window");
@@ -238,7 +250,7 @@ pub fn run() {
                     // come back, or a new one opens.
                     let address = initial_address();
                     if address.is_some() || !restore_session(&saved_session, &runtime, cx) {
-                        open_browser_window(runtime, address, true, false, cx)
+                        open_browser_window(runtime, address, true, false, false, cx)
                             .expect("open GPUI-CE Photon window");
                     }
                 }

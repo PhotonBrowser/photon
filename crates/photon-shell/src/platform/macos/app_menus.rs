@@ -5,11 +5,11 @@
 
 use crate::platform::shortcuts::{
     CloseTab, FindInPage, FindNext, FindPrevious, GoBack, GoForward, HideApp, HideOtherApps,
-    MinimizeWindow, NewTab, NewWindow, NextSpace, OpenCommandPalette, OpenDownloads, OpenHistory,
-    OpenSettings, OpenTaskManager, PreviousSpace, Quit, Reload, ReopenClosedTab, ResetZoom,
-    SelectNextTab, SelectPreviousTab, ShowAllApps, ShowKeyboardShortcuts, StopLoading,
-    ToggleSidebar, ToggleSidebarIcons, ToggleZenMode, ZoomIn, ZoomOut, ZoomWindow,
-    shortcut_name_for_action,
+    MinimizeWindow, NewPrivateWindow, NewTab, NewWindow, NextSpace, OpenCommandPalette,
+    OpenDownloads, OpenHistory, OpenSettings, OpenTaskManager, PreviousSpace, Quit, Reload,
+    ReopenClosedTab, ResetZoom, SelectNextTab, SelectPreviousTab, ShowAllApps,
+    ShowKeyboardShortcuts, StopLoading, ToggleSidebar, ToggleSidebarIcons, ToggleZenMode, ZoomIn,
+    ZoomOut, ZoomWindow, shortcut_name_for_action,
 };
 use gpui::{App, Global, Menu, MenuItem, OsAction, SystemMenuType};
 use gpui_elements::editable_text::actions::{Copy, Cut, Paste, Redo, SelectAll, Undo};
@@ -98,6 +98,7 @@ fn menu_bar(state: MenuBarState) -> Vec<Menu> {
         Menu::new("File").items([
             MenuItem::action(label(&NewTab), NewTab),
             MenuItem::action(label(&NewWindow), NewWindow),
+            MenuItem::action(label(&NewPrivateWindow), NewPrivateWindow),
             MenuItem::action(label(&ReopenClosedTab), ReopenClosedTab)
                 .disabled(!commands.allows(Command::ReopenClosedTab)),
             MenuItem::separator(),
@@ -182,6 +183,7 @@ mod tests {
                 shows_spaces: true,
                 has_next_space: true,
                 has_previous_space: true,
+                private: false,
             },
             ..MenuBarState::default()
         });

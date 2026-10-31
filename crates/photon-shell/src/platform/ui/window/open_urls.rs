@@ -90,5 +90,12 @@ fn open_fresh_window(
     cx: &mut App,
 ) -> anyhow::Result<WindowHandle<BrowserWindow>> {
     super::session::forget_closed_windows(cx);
-    open_browser_window(runtime.clone(), Some(url.to_owned()), false, false, cx)
+    open_browser_window(
+        runtime.clone(),
+        Some(url.to_owned()),
+        false,
+        false,
+        false,
+        cx,
+    )
 }

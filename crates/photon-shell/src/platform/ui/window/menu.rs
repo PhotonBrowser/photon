@@ -28,6 +28,17 @@ pub(super) enum MenuCommand {
     ClearCookies,
 }
 
+impl MenuCommand {
+    /// Whether the command changes how Photon is set up, which a private
+    /// window may not do.
+    fn customises(&self) -> bool {
+        matches!(
+            self,
+            Self::EditSpace(_) | Self::EditTheme(_) | Self::DeleteSpace(_)
+        )
+    }
+}
+
 /// Runs a context menu's command.
 #[derive(Clone, PartialEq, gpui::Action)]
 #[action(namespace = photon, no_json)]
@@ -47,6 +58,10 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // A private window is disposable and cannot change how Photon is set up.
+        if self.private && item.command.customises() {
+            return;
+        }
         match item.command.clone() {
             MenuCommand::ReloadTab(tab) => self.reload_tab(tab, window, cx),
             MenuCommand::DuplicateTab(tab) => self.duplicate_tab(tab, window, cx),

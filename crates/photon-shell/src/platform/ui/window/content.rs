@@ -134,7 +134,14 @@ impl BrowserWindow {
     }
 
     pub(super) fn new_page(&self, page: &'static PageDefinition, cx: &mut App) -> TabContent {
-        TabContent::Page(InternalPage::open(page, &self.runtime, cx))
+        // A private window cannot change how Photon is set up, however settings
+        // are asked for, so it shows a New Tab page instead.
+        let page = if self.private && page.is(super::super::pages::SETTINGS) {
+            super::super::pages::NEW_TAB
+        } else {
+            page
+        };
+        TabContent::Page(InternalPage::open(page, &self.runtime, self.private, cx))
     }
 
     pub(super) fn show_empty_new_tab_page(
@@ -170,7 +177,9 @@ impl BrowserWindow {
             match find_page(url) {
                 Some(page) => self.insert_page(self.new_tab_index(cx), page, window, cx),
                 None => {
-                    if let Some(webview) = create_webview(cx, self.runtime.clone(), url) {
+                    if let Some(webview) =
+                        create_webview(cx, self.runtime.clone(), url, self.private)
+                    {
                         self.insert_webview(
                             self.new_tab_index(cx),
                             webview,
@@ -198,7 +207,7 @@ impl BrowserWindow {
             cx.notify();
             return;
         }
-        let Some(webview) = create_webview(cx, self.runtime.clone(), url) else {
+        let Some(webview) = create_webview(cx, self.runtime.clone(), url, self.private) else {
             return;
         };
         self.replace_active_content(TabContent::Web(webview), window, cx);
@@ -255,7 +264,8 @@ impl BrowserWindow {
         };
         let state = sleeping.state.clone();
         let favicon = sleeping.favicon.clone();
-        let Some(webview) = create_webview(cx, self.runtime.clone(), &state.url) else {
+        let Some(webview) = create_webview(cx, self.runtime.clone(), &state.url, self.private)
+        else {
             return false;
         };
         webview.update(cx, |view, _| {
@@ -358,14 +368,16 @@ pub(super) fn create_webview(
     cx: &mut App,
     runtime: Rc<EngineRuntime>,
     address: &str,
+    private: bool,
 ) -> Option<Entity<PhotonWebView>> {
-    let session = match EngineSession::create(runtime.clone(), 1200, 760, 1.0, Some(address)) {
-        Ok(session) => session,
-        Err(error) => {
-            trace(format_args!("could not open {address}: {error:#}"));
-            return None;
-        }
-    };
+    let session =
+        match EngineSession::create(runtime.clone(), 1200, 760, 1.0, Some(address), private) {
+            Ok(session) => session,
+            Err(error) => {
+                trace(format_args!("could not open {address}: {error:#}"));
+                return None;
+            }
+        };
     let webview = create_webview_from_session(cx, runtime, session);
     webview.update(cx, |view, _| {
         view.requested = Some(photon_core::Shortcut {

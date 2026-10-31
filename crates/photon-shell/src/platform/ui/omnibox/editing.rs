@@ -201,10 +201,12 @@ impl Omnibox {
         let Some(suggestion) = self.suggestions.get(index).cloned() else {
             return;
         };
-        if matches!(
-            suggestion.kind,
-            SuggestionKind::Search { .. } | SuggestionKind::PastSearch
-        ) {
+        if !self.private
+            && matches!(
+                suggestion.kind,
+                SuggestionKind::Search { .. } | SuggestionKind::PastSearch
+            )
+        {
             BrowsingHistory::record_search(&suggestion.text, cx);
         }
         self.close_suggestions(cx);

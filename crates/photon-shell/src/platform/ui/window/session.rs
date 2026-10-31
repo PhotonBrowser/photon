@@ -129,7 +129,7 @@ pub(super) fn restore_session(
         .iter()
         .filter(|window| !window.tabs.is_empty())
     {
-        let window = match open_browser_window(runtime.clone(), None, !opened, true, cx) {
+        let window = match open_browser_window(runtime.clone(), None, !opened, true, false, cx) {
             Ok(window) => window,
             Err(error) => {
                 trace(format_args!("restoring window: {error:#}"));
@@ -167,7 +167,7 @@ pub(super) fn reopen_session(runtime: &Rc<EngineRuntime>, cx: &mut App) {
         saved
     });
     if !restore_session(&saved, runtime, cx) {
-        let _ = open_browser_window(runtime.clone(), None, true, false, cx);
+        let _ = open_browser_window(runtime.clone(), None, true, false, false, cx);
     }
 }
 
@@ -180,6 +180,10 @@ impl BrowserWindow {
 
     /// Records `state` as this window's tabs, saving it when it changed.
     pub(super) fn record_session_state(&self, state: WindowSession, cx: &mut Context<Self>) {
+        // A private window is not reopened next time.
+        if self.private {
+            return;
+        }
         let key = cx.entity_id().as_u64();
         cx.update_global::<BrowsingSession, _>(|session, cx| {
             match session
@@ -277,7 +281,9 @@ impl BrowserWindow {
                     );
                 }
                 None => {
-                    let Some(webview) = create_webview(cx, self.runtime.clone(), &tab.url) else {
+                    let Some(webview) =
+                        create_webview(cx, self.runtime.clone(), &tab.url, self.private)
+                    else {
                         continue;
                     };
                     webview.update(cx, |view, _| {

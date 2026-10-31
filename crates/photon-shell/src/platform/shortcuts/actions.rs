@@ -9,6 +9,8 @@ gpui::actions!(
         OpenCommandPalette,
         /// Open a new browser window.
         NewWindow,
+        /// Open a window that keeps no history, cookies or session.
+        NewPrivateWindow,
         /// Close the active tab, or the window with its last tab.
         CloseTab,
         /// Reopen the most recently closed tab in this window.

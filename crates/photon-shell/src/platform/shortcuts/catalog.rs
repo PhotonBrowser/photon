@@ -31,6 +31,7 @@ pub(super) enum ShortcutAction {
     NewTab,
     OpenCommandPalette,
     NewWindow,
+    NewPrivateWindow,
     CloseTab,
     ReopenClosedTab,
     SelectNextTab,
@@ -77,6 +78,7 @@ impl ShortcutAction {
             Self::NewTab => Box::new(NewTab),
             Self::OpenCommandPalette => Box::new(OpenCommandPalette),
             Self::NewWindow => Box::new(NewWindow),
+            Self::NewPrivateWindow => Box::new(NewPrivateWindow),
             Self::CloseTab => Box::new(CloseTab),
             Self::ReopenClosedTab => Box::new(ReopenClosedTab),
             Self::SelectNextTab => Box::new(SelectNextTab),
@@ -284,6 +286,12 @@ const SHORTCUTS: &[ShortcutSpec] = &[
         label: ShortcutLabel::Command(Command::NewWindow),
         keys: &["secondary-n"],
         action: ShortcutAction::NewWindow,
+    },
+    ShortcutSpec {
+        group: "Window",
+        label: ShortcutLabel::Command(Command::NewPrivateWindow),
+        keys: &["secondary-shift-n"],
+        action: ShortcutAction::NewPrivateWindow,
     },
     ShortcutSpec {
         group: "Window",

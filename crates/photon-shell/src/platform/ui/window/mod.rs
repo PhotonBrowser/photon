@@ -84,6 +84,9 @@ pub use alerts::show_alert;
 pub use app::run;
 
 pub(in crate::platform) struct BrowserWindow {
+    /// Whether the window browses privately: its pages share a session that
+    /// keeps nothing once they close, and it records no history or session.
+    private: bool,
     tabs: Vec<BrowserTab>,
     /// One per tab, in `tabs` order: follows its web view or page.
     tab_subscriptions: Vec<Option<Subscription>>,
@@ -467,12 +470,14 @@ impl BrowserWindow {
     ) {
         match command {
             BrowserCommand::NewTab => self.open_tab(window, cx),
-            BrowserCommand::NewWindow => {
+            BrowserCommand::NewWindow | BrowserCommand::NewPrivateWindow => {
+                let private = command == BrowserCommand::NewPrivateWindow;
                 if let Err(error) = open_browser_window(
                     self.runtime.clone(),
                     app::launch_address(),
                     false,
                     false,
+                    private,
                     cx,
                 ) {
                     trace(format_args!("new window: {error:#}"));
@@ -525,6 +530,7 @@ fn open_browser_window(
     startup_address: Option<String>,
     restore_pinned_tabs: bool,
     restoring_session: bool,
+    private: bool,
     cx: &mut App,
 ) -> anyhow::Result<WindowHandle<BrowserWindow>> {
     // A page's address opens that page; any other address a web page.
@@ -532,14 +538,18 @@ fn open_browser_window(
     let initial_webview = startup_address
         .as_deref()
         .filter(|_| startup_page.is_none())
-        .and_then(|address| create_webview(cx, runtime.clone(), address));
+        .and_then(|address| create_webview(cx, runtime.clone(), address, private));
     let animations = Settings::get(cx).animations;
     let options = window_settings::options(cx);
     let handle = cx.open_window(options, move |window, cx| {
         window_settings::configure_renderer_memory(window);
         window_settings::configure_native_controls(window, &animations);
         window.set_window_title(photon_brand::NAME);
-        let omnibox = cx.new(|cx| Omnibox::new(window, cx));
+        let omnibox = cx.new(|cx| {
+            let mut omnibox = Omnibox::new(window, cx);
+            omnibox.private = private;
+            omnibox
+        });
         cx.new(move |cx: &mut Context<BrowserWindow>| {
             let appearance_subscription =
                 cx.observe_window_appearance(window, |this: &mut BrowserWindow, window, cx| {
@@ -681,6 +691,7 @@ fn open_browser_window(
                 omnibox,
                 _omnibox_subscription: omnibox_subscription,
                 runtime,
+                private,
                 find_bar_presence: Presence::default(),
                 page_fullscreen: None,
                 peek: PeekState::default(),
@@ -745,6 +756,9 @@ fn open_browser_window(
             };
             let space = browser.current_space(cx);
             super::window_space::set_window_space(registry_window_id, space, cx);
+            if private {
+                super::window_space::set_window_private(registry_window_id, cx);
+            }
             browser.bind_tab_reorder_groups(cx);
             match (initial_webview, startup_page) {
                 (Some(webview), _) => {

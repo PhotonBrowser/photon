@@ -52,6 +52,8 @@ impl EventEmitter<PageEvent> for PageEvents {}
 pub(super) struct PageContext {
     events: Entity<PageEvents>,
     pub(super) runtime: Rc<EngineRuntime>,
+    /// Whether the page is in a private window.
+    pub(super) private: bool,
 }
 
 impl PageContext {
@@ -80,12 +82,14 @@ impl InternalPage {
     pub(super) fn open(
         definition: &'static PageDefinition,
         runtime: &Rc<EngineRuntime>,
+        private: bool,
         cx: &mut App,
     ) -> Self {
         let events = cx.new(|_| PageEvents);
         let context = PageContext {
             events: events.clone(),
             runtime: runtime.clone(),
+            private,
         };
         Self {
             definition,

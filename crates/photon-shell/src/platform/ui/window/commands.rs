@@ -16,9 +16,16 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // A private window is disposable and cannot change how Photon is set up.
+        if self.private && command.customises() {
+            return;
+        }
         match command {
             Command::NewTab => self.open_tab(window, cx),
             Command::NewWindow => self.dispatch_command(BrowserCommand::NewWindow, window, cx),
+            Command::NewPrivateWindow => {
+                self.dispatch_command(BrowserCommand::NewPrivateWindow, window, cx)
+            }
             Command::ReopenClosedTab => self.reopen_closed_tab(window, cx),
             Command::CloseTab => {
                 if let Some(active_tab) = self.active_tab {
@@ -93,6 +100,7 @@ impl BrowserWindow {
                 && spaces.neighbour_of(self.current_space(cx), 1).is_some(),
             has_previous_space: shows_spaces
                 && spaces.neighbour_of(self.current_space(cx), -1).is_some(),
+            private: self.private,
         }
     }
 }

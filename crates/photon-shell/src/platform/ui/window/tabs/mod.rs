@@ -322,7 +322,7 @@ impl BrowserWindow {
         cx: &mut Context<Self>,
     ) {
         if let Some(address) = address {
-            if let Some(webview) = create_webview(cx, self.runtime.clone(), address) {
+            if let Some(webview) = create_webview(cx, self.runtime.clone(), address, self.private) {
                 self.insert_webview(index, webview, None, true, window, cx);
             }
         } else {
@@ -365,6 +365,10 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // A private window cannot change how Photon is set up.
+        if self.private && page.is(super::super::pages::SETTINGS) {
+            return;
+        }
         let open = page
             .single_tab
             .then(|| {
@@ -401,7 +405,7 @@ impl BrowserWindow {
             .iter()
             .position(|tab| tab.content.webview().as_ref() == Some(opener))
             .map_or(self.tabs.len(), |index| index + 1);
-        if let Some(webview) = create_webview(cx, self.runtime.clone(), address) {
+        if let Some(webview) = create_webview(cx, self.runtime.clone(), address, self.private) {
             webview.update(cx, |view, _| view.opened_by_page = true);
             self.insert_webview(index, webview, None, activate, window, cx);
         }

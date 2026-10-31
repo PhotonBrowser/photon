@@ -19,7 +19,8 @@ impl PhotonWebView {
     /// and icon up to date afterwards.
     pub(in super::super) fn record_history(&mut self, cx: &mut Context<Self>) {
         let url = &self.state.url;
-        if url.is_empty() {
+        // A private page leaves no history, titles or icons behind.
+        if url.is_empty() || self.session.is_private() {
             return;
         }
         let current = Recorded {
