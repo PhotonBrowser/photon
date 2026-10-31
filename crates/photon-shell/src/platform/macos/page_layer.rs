@@ -268,6 +268,7 @@ impl PageLayer {
                 size,
                 f64::from(placement.corner_radius),
                 f64::from(placement.corner_smoothing),
+                1.0 / f64::from(placement.scale_factor.max(1.0)),
             );
             // SAFETY: the mask is a layer of its own, used by no other.
             unsafe { layer.setMask(Some(&self.mask)) };
@@ -553,7 +554,18 @@ type CornerMap = fn(f64, f64) -> (f64, f64);
 /// draws it: each corner is the superellipse |x|^n + |y|^n = 1 spanning
 /// `radius * (1 + smoothing)`, with `n` chosen so its diagonal sits where the
 /// shader puts it. The shape is symmetric, so flipping does not change it.
-fn set_squircle_path(mask: &CAShapeLayer, size: (f64, f64), radius: f64, smoothing: f64) {
+///
+/// Each corner bulges `bleed` (one device pixel) past that curve. Both edges
+/// are antialiased, and where two half-covered edges stack the window shows
+/// through between them as a light arc; the bleed keeps the page opaque under
+/// the cutout's soft edge, where GPUI-CE's own drawing hides the excess.
+fn set_squircle_path(
+    mask: &CAShapeLayer,
+    size: (f64, f64),
+    radius: f64,
+    smoothing: f64,
+    bleed: f64,
+) {
     const DIAGONAL_INSET: f64 = 0.292_893_218_813_452_4;
     let smoothing = smoothing.clamp(0.0, 1.0);
     let power = -(2.0_f64.ln()) / (1.0 - DIAGONAL_INSET / (1.0 + smoothing)).ln();
@@ -576,7 +588,8 @@ fn set_squircle_path(mask: &CAShapeLayer, size: (f64, f64), radius: f64, smoothi
             let a = angle.cos().max(0.0).powf(2.0 / power);
             let b = angle.sin().max(0.0).powf(2.0 / power);
             let (dx, dy) = map(a, b);
-            let (x, y) = (cx + extent * dx, cy + extent * dy);
+            let reach = extent + bleed;
+            let (x, y) = (cx + reach * dx, cy + reach * dy);
             // SAFETY: a null transform is allowed, and the path is live.
             unsafe {
                 if first {
