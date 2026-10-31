@@ -276,6 +276,7 @@ pub(super) mod embedder {
             height: i32,
             dpr: f64,
             callbacks: *const ViewCallbacks,
+            is_private: bool,
         ) -> *mut c_void;
         pub fn photon_view_create_for_traversable(
             runtime: *mut c_void,

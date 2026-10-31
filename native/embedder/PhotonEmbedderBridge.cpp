@@ -347,13 +347,13 @@ extern "C" void photon_runtime_pump(void* runtime)
 }
 
 extern "C" void* photon_view_create(void* runtime, int width, int height,
-    double dpr, PhotonViewCallbacks const* callbacks)
+    double dpr, PhotonViewCallbacks const* callbacks, bool is_private)
 {
     if (!runtime || !callbacks)
         return nullptr;
     auto handle = std::make_unique<ViewHandle>();
     auto view = static_cast<RuntimeHandle*>(runtime)->runtime->create_view(
-        width, height, dpr, make_view_callbacks(*callbacks, runtime, handle.get()));
+        width, height, dpr, make_view_callbacks(*callbacks, runtime, handle.get()), is_private);
     if (!view)
         return nullptr;
     handle->view = std::move(view);

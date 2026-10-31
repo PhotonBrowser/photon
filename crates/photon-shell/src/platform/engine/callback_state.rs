@@ -33,6 +33,8 @@ pub(super) struct PageDetails {
 }
 
 pub(super) struct CallbackState {
+    /// Whether the page is in the private session, as pages it opens are.
+    pub(super) private: bool,
     /// Lets a frame's GPU-completion wakeup reach this state.
     pub(super) self_ref: Weak<CallbackState>,
     pub(super) task_id: u64,

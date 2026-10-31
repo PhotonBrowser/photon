@@ -239,8 +239,9 @@ void photon_runtime_pump(void* runtime);
 // Copy and paste through the macOS pasteboard.
 void photon_runtime_use_system_clipboard(void* runtime);
 #endif
+// A private view keeps nothing once it and the other private views close.
 void* photon_view_create(void* runtime, int width, int height, double dpr,
-    PhotonViewCallbacks const* callbacks);
+    PhotonViewCallbacks const* callbacks, bool is_private);
 void* photon_view_create_for_traversable(void* runtime, void* parent_view,
     void* traversable, int width, int height, double dpr,
     PhotonViewCallbacks const* callbacks);

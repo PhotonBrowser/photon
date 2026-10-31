@@ -414,6 +414,7 @@ pub(super) unsafe extern "C" fn on_engine_new_web_view(
         viewport_width,
         viewport_height,
         1.0,
+        callbacks.private,
     ) {
         Ok(session) => session,
         Err(error) => {

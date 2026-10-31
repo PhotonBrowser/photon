@@ -46,6 +46,8 @@ pub(in crate::platform) struct EngineSession {
     display: Option<u64>,
     pub(in crate::platform) shutdown_started: bool,
     finished: bool,
+    /// Whether the page is in the private session, which keeps nothing.
+    private: bool,
 }
 
 pub(in crate::platform) struct RequestedWebView {
@@ -59,6 +61,10 @@ pub(in crate::platform) struct RequestedWebView {
 impl EngineSession {
     pub(in crate::platform) fn runtime(&self) -> &Rc<EngineRuntime> {
         &self.runtime
+    }
+
+    pub(in crate::platform) fn is_private(&self) -> bool {
+        self.private
     }
 
     pub(in crate::platform) fn release_hidden_memory(&self) {
@@ -232,12 +238,13 @@ impl EngineSession {
         height: i32,
         dpr: f64,
         startup_address: Option<&str>,
+        private: bool,
     ) -> anyhow::Result<Self> {
         let startup_url = startup_address
             .map(|address| resolve_address(address).context("invalid startup URL"))
             .transpose()?;
-        Self::create_with_native_view(runtime, startup_url, |runtime, callbacks| unsafe {
-            embedder::photon_view_create(runtime, width, height, dpr, callbacks)
+        Self::create_with_native_view(runtime, startup_url, private, |runtime, callbacks| unsafe {
+            embedder::photon_view_create(runtime, width, height, dpr, callbacks, private)
         })
     }
 
@@ -248,8 +255,10 @@ impl EngineSession {
         width: i32,
         height: i32,
         dpr: f64,
+        private: bool,
     ) -> anyhow::Result<Self> {
-        Self::create_with_native_view(runtime, None, move |runtime, callbacks| unsafe {
+        // Engine keeps a page its opener's session; this records it for the shell.
+        Self::create_with_native_view(runtime, None, private, move |runtime, callbacks| unsafe {
             embedder::photon_view_create_for_traversable(
                 runtime,
                 parent_view,
@@ -265,6 +274,7 @@ impl EngineSession {
     fn create_with_native_view(
         runtime: Rc<EngineRuntime>,
         startup_url: Option<CString>,
+        private: bool,
         create_native_view: impl FnOnce(*mut c_void, *const embedder::ViewCallbacks) -> *mut c_void,
     ) -> anyhow::Result<Self> {
         anyhow::ensure!(
@@ -299,6 +309,7 @@ impl EngineSession {
         // Shared with Engine callbacks through a raw context pointer; the weak
         // self-reference lets a frame's GPU-completion wakeup outlive no view.
         let callbacks = Arc::new_cyclic(|self_ref| CallbackState {
+            private,
             self_ref: self_ref.clone(),
             task_id: NEXT_PERFORMANCE_TASK_ID.fetch_add(1, Ordering::Relaxed),
             presentation: presentation.clone(),
@@ -384,6 +395,7 @@ impl EngineSession {
             display: None,
             shutdown_started: false,
             finished: false,
+            private,
         };
         if let Err(error) = presentation.activate() {
             drop(session);
@@ -465,7 +477,9 @@ impl EngineSession {
             BrowserCommand::StopLoading => unsafe { embedder::photon_view_stop_loading(self.view) },
             BrowserCommand::Back => unsafe { embedder::photon_view_go_back(self.view) },
             BrowserCommand::Forward => unsafe { embedder::photon_view_go_forward(self.view) },
-            BrowserCommand::NewTab | BrowserCommand::NewWindow => {
+            BrowserCommand::NewTab
+            | BrowserCommand::NewWindow
+            | BrowserCommand::NewPrivateWindow => {
                 anyhow::bail!("browser-level command sent to a page session")
             }
         }
