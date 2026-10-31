@@ -37,22 +37,17 @@ pub(super) fn security_page(
     )));
     summary.setSelectable(false);
 
-    // Disabled until the Engine reports certificates; see Documentation/Omnibox.md.
-    // SAFETY: a button without a target or action sends nothing.
-    let certificate = unsafe {
-        NSButton::buttonWithTitle_target_action(
-            &NSString::from_str(VIEW_CERTIFICATE_LABEL),
-            None,
-            None,
-            mtm,
-        )
-    };
-    certificate.setBezelStyle(NSBezelStyle::Glass);
-    certificate.setEnabled(false);
+    // The certificate's details, filled once Engine reports them.
+    let certificate = NSTextField::wrappingLabelWithString(&NSString::new(), mtm);
+    certificate.setFont(Some(&NSFont::systemFontOfSize(
+        metrics::MENU_FONT_SIZE as f64,
+    )));
+    certificate.setTextColor(Some(&NSColor::secondaryLabelColor()));
+    certificate.setSelectable(true);
+    certificate.setHidden(true);
 
     let view = page(mtm);
-    fill(&view, [&header, &identity, &summary]);
-    view.addArrangedSubview(&certificate);
+    fill(&view, [&header, &identity, &summary, &certificate]);
     (
         view,
         SecurityPage {
@@ -60,6 +55,7 @@ pub(super) fn security_page(
             title,
             site,
             summary,
+            certificate,
         },
         header,
     )

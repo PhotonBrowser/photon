@@ -1,11 +1,17 @@
 //! What the site information popover shows, shared by the native AppKit
 //! popover and the GPUI one so both list the same controls, words and states.
 
+use crate::platform::engine::Certificate;
+
 /// What the popover shows about the active site.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct SiteInfo {
     pub(crate) site: String,
     pub(crate) connection_secure: Option<bool>,
+    /// Whether the person chose to continue past this site's certificate error.
+    pub(crate) certificate_error_ignored: bool,
+    /// The certificate the site presented, once Engine has reported it.
+    pub(crate) certificate: Option<Certificate>,
     /// Whether the page may play sound; `None` before it has a page.
     pub(crate) sound_on: Option<bool>,
     /// Whether the site may use the microphone; `None` without a site.
@@ -94,22 +100,31 @@ impl SiteDetail {
 pub(crate) enum ConnectionStatus {
     Secure,
     NotSecure,
+    /// HTTPS whose certificate the person chose to trust although it failed
+    /// verification.
+    Unverified,
     Unknown,
 }
 
 impl ConnectionStatus {
     pub(crate) fn of(info: &SiteInfo) -> Self {
         match info.connection_secure {
+            _ if info.certificate_error_ignored => Self::Unverified,
             Some(true) => Self::Secure,
             Some(false) => Self::NotSecure,
             None => Self::Unknown,
         }
     }
 
+    /// Whether the connection is one to warn about.
+    pub(crate) fn is_insecure(self) -> bool {
+        matches!(self, Self::NotSecure | Self::Unverified)
+    }
+
     pub(crate) fn label(self) -> &'static str {
         match self {
             Self::Secure => "Secure",
-            Self::NotSecure => "Not secure",
+            Self::NotSecure | Self::Unverified => "Not secure",
             Self::Unknown => "No details",
         }
     }
@@ -119,6 +134,7 @@ impl ConnectionStatus {
         match self {
             Self::Secure => "Connection is secure",
             Self::NotSecure => "Connection is not secure",
+            Self::Unverified => "Certificate not verified",
             Self::Unknown => "No connection details",
         }
     }
@@ -133,6 +149,10 @@ impl ConnectionStatus {
                 "This page was loaded over HTTP. Don't enter passwords or payment details here: \
                  others on the network could see them."
             }
+            Self::Unverified => {
+                "You chose to continue although this site's certificate couldn't be verified, so \
+                 someone on the network could be reading or changing what you send it."
+            }
             Self::Unknown => {
                 "This page didn't come from the network, so it has no connection to check."
             }
@@ -141,15 +161,35 @@ impl ConnectionStatus {
 
     pub(crate) fn symbol(self) -> &'static str {
         match self {
-            Self::NotSecure => "lock.open",
+            Self::NotSecure | Self::Unverified => "lock.open",
             Self::Secure | Self::Unknown => "lock",
         }
     }
 }
 
 pub(crate) const TITLE: &str = "Site information";
-pub(crate) const CLOSE_LABEL: &str = "Close";
+pub(crate) const OPTIONS_LABEL: &str = "Site information options";
 pub(crate) const BACK_LABEL: &str = "Back";
-/// Disabled until the Engine reports certificates; see
-/// `Documentation/Omnibox.md`.
-pub(crate) const VIEW_CERTIFICATE_LABEL: &str = "View certificate";
+pub(crate) const CERTIFICATE_HEADING: &str = "Certificate";
+
+/// The certificate's details as labelled rows, leaving out what it does not say.
+pub(crate) fn certificate_rows(certificate: &Certificate) -> Vec<(&'static str, &str)> {
+    [
+        ("Issued to", certificate.subject_common_name.as_str()),
+        ("Organization", certificate.subject_organization.as_str()),
+        ("Issued by", certificate.issuer_common_name.as_str()),
+        (
+            "Issuer organization",
+            certificate.issuer_organization.as_str(),
+        ),
+        ("Valid from", certificate.valid_from.as_str()),
+        ("Valid until", certificate.valid_until.as_str()),
+        (
+            "SHA-256 fingerprint",
+            certificate.sha256_fingerprint.as_str(),
+        ),
+    ]
+    .into_iter()
+    .filter(|(_, value)| !value.is_empty())
+    .collect()
+}

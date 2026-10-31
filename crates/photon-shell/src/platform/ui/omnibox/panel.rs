@@ -75,9 +75,18 @@ impl Omnibox {
                 palette,
                 Box::new(
                     cx.listener(move |this, event: &gpui::ClickEvent, window, cx| {
-                        this.toggle_site_info(event.position(), window, cx);
+                        // The popover points at the button, not where it was pressed.
+                        let anchor = this.site_info_button_bounds.unwrap_or_else(|| {
+                            gpui::Bounds::new(event.position(), gpui::size(px(1.0), px(1.0)))
+                        });
+                        this.toggle_site_info(anchor, window, cx);
                     }),
                 ),
+            )
+            .on_prepaint(
+                cx.listener(|this, event: &gpui::InteractivityPrepaint, _, _| {
+                    this.site_info_button_bounds = Some(event.bounds);
+                }),
             )
             .group("site-info-button")
             .hover_style(|style| style.bg(rgba(palette.hover_surface)))
@@ -180,10 +189,11 @@ impl Omnibox {
     /// Opens or closes the popover: AppKit's own on macOS, GPUI's elsewhere.
     fn toggle_site_info(
         &mut self,
-        anchor: gpui::Point<gpui::Pixels>,
+        anchor: gpui::Bounds<gpui::Pixels>,
         window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) {
+        self.fetch_site_certificate(cx);
         #[cfg(target_os = "macos")]
         if let Some(popover) = &self.site_info_native {
             let guard = std::time::Duration::from_millis(metrics::POPOVER_REOPEN_GUARD_MS);
@@ -297,9 +307,56 @@ impl Omnibox {
         }
     }
 
+    /// The secure page's host, which has a certificate to show.
+    fn certificate_host(&self, cx: &Context<Self>) -> Option<String> {
+        let url = self.page_url(cx);
+        url.starts_with("https://")
+            .then(|| photon_core::url_host(&url).map(str::to_owned))
+            .flatten()
+    }
+
+    /// Asks Engine for the certificate the page's host presented, to show in
+    /// the popover.
+    fn fetch_site_certificate(&mut self, cx: &mut Context<Self>) {
+        let (Some(host), Some(webview)) = (self.certificate_host(cx), self.webview.as_ref()) else {
+            return;
+        };
+        let runtime = webview.read(cx).session.runtime().clone();
+        let this = cx.entity().downgrade();
+        let app = cx.to_async();
+        let asked = host.clone();
+        runtime.peer_certificate(&host, move |certificate| {
+            let Some(certificate) = certificate else {
+                return;
+            };
+            app.spawn(async move |cx| {
+                this.update(cx, |this, cx| {
+                    this.site_certificate = Some((asked, certificate));
+                    cx.notify();
+                })
+                .ok();
+            })
+            .detach();
+        });
+    }
+
     fn site_info(&self, cx: &Context<Self>) -> crate::platform::site_info::SiteInfo {
         let webview = self.webview.as_ref().map(|webview| webview.read(cx));
+        let host = self.certificate_host(cx);
         crate::platform::site_info::SiteInfo {
+            certificate_error_ignored: host.as_deref().zip(webview).is_some_and(
+                |(host, webview)| {
+                    webview
+                        .session
+                        .runtime()
+                        .allows_certificate_errors_for(host)
+                },
+            ),
+            certificate: self
+                .site_certificate
+                .as_ref()
+                .filter(|(known, _)| host.as_deref() == Some(known.as_str()))
+                .map(|(_, certificate)| certificate.clone()),
             site: Some(photon_core::display_domain(&self.page_url(cx)))
                 .filter(|site| !site.is_empty())
                 .unwrap_or_else(|| "Photon".to_owned()),
@@ -328,14 +385,16 @@ impl Omnibox {
                     .ok();
             })
         };
+        let menu = this.clone();
         super::site_info::SiteInfoActions {
+            menu: Box::new(move |_, _, cx| {
+                menu.update(cx, |_, cx| cx.emit(super::OmniboxEvent::SiteInfoMenu))
+                    .ok();
+            }),
             toggle_microphone: toggle(SiteControl::Microphone),
             toggle_sound: toggle(SiteControl::Sound),
             show_security: page(true),
             back: page(false),
-            close: Box::new(move |_, _, cx| {
-                this.update(cx, |this, cx| this.close_site_info(cx)).ok();
-            }),
         }
     }
 

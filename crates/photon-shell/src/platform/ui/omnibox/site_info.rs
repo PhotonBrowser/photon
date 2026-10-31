@@ -3,10 +3,10 @@
 
 use gpui::{AnyElement, FontWeight, Role, SharedString, div, prelude::*, px, rgb, rgba};
 
-use super::super::button::{ButtonKind, ButtonSize, button, icon_button};
+use super::super::button::icon_button;
 use super::super::controls::toggled;
 use super::super::icons::{
-    audio_icon, back_icon, camera_off_icon, close_icon, cookie_icon, lock_icon, microphone_icon,
+    audio_icon, back_icon, camera_off_icon, cookie_icon, lock_icon, microphone_icon, more_icon,
     pop_out_icon, settings_icon,
 };
 use super::super::layout::{h_stack, v_stack};
@@ -14,14 +14,15 @@ use super::super::menu::{menu_separator, popover_surface};
 use super::super::motion::{Edge, Transition, pressable};
 use super::super::tooltip::label_tooltip;
 use super::super::{ClickHandler, metrics, theme::ThemeColors};
+use crate::platform::engine::Certificate;
 use crate::platform::site_info::{
-    BACK_LABEL, CLOSE_LABEL, ConnectionStatus, SiteControl, SiteDetail, SiteInfo, TITLE,
-    VIEW_CERTIFICATE_LABEL,
+    BACK_LABEL, CERTIFICATE_HEADING, ConnectionStatus, OPTIONS_LABEL, SiteControl, SiteDetail,
+    SiteInfo, TITLE, certificate_rows,
 };
 use gpui_motion::PressScaleElement;
 
 pub(super) struct SiteInfoActions {
-    pub(super) close: ClickHandler,
+    pub(super) menu: ClickHandler,
     pub(super) toggle_sound: ClickHandler,
     pub(super) toggle_microphone: ClickHandler,
     /// Opens the connection's page, and returns from it.
@@ -67,7 +68,7 @@ fn site(
 ) -> impl IntoElement {
     let motion = super::super::settings::Settings::motion(cx);
     let SiteInfoActions {
-        close,
+        menu,
         toggle_sound,
         toggle_microphone,
         show_security,
@@ -142,13 +143,13 @@ fn site(
         .child(connection)
         .child(
             icon_button(
-                "site-info-close",
-                CLOSE_LABEL,
+                "site-info-menu",
+                OPTIONS_LABEL,
                 true,
                 metrics::SITE_INFO_FOOTER_HEIGHT,
-                close_icon(ink, icon_size),
+                more_icon(ink, icon_size),
                 palette,
-                close,
+                menu,
             )
             .bg(rgba(palette.surface)),
         );
@@ -197,23 +198,48 @@ fn security(info: &SiteInfo, back: ClickHandler, palette: ThemeColors) -> impl I
                 .text_color(rgb(palette.text_primary))
                 .child(status.summary()),
         )
-        // Disabled until the Engine reports certificates; see
-        // Documentation/Omnibox.md.
-        .child(button(
-            "site-info-certificate",
-            VIEW_CERTIFICATE_LABEL,
-            ButtonKind::Secondary,
-            false,
-            ButtonSize::Regular,
-            palette,
-            Box::new(|_, _, _| {}),
-        ))
+        .children(
+            info.certificate
+                .as_ref()
+                .map(|certificate| certificate_details(certificate, palette)),
+        )
+}
+
+/// The certificate the site presented, one labelled row per detail.
+fn certificate_details(certificate: &Certificate, palette: ThemeColors) -> impl IntoElement {
+    v_stack()
+        .id("site-info-certificate")
+        .role(Role::Group)
+        .aria_label(CERTIFICATE_HEADING)
+        .w_full()
+        .gap(px(metrics::MENU_ITEM_GAP))
+        .child(heading(CERTIFICATE_HEADING, palette))
+        .children(
+            certificate_rows(certificate)
+                .into_iter()
+                .map(|(label, value)| {
+                    v_stack()
+                        .w_full()
+                        .child(
+                            div()
+                                .text_size(px(metrics::HISTORY_ROW_DETAIL_FONT_SIZE))
+                                .text_color(rgb(palette.text_secondary))
+                                .child(label),
+                        )
+                        .child(
+                            div()
+                                .w_full()
+                                .text_color(rgb(palette.text_primary))
+                                .child(value.to_owned()),
+                        )
+                }),
+        )
 }
 
 fn status_color(status: ConnectionStatus, palette: ThemeColors) -> u32 {
     match status {
         ConnectionStatus::Secure => palette.secure,
-        ConnectionStatus::NotSecure => palette.error,
+        ConnectionStatus::NotSecure | ConnectionStatus::Unverified => palette.error,
         ConnectionStatus::Unknown => palette.text_secondary,
     }
 }
@@ -222,7 +248,7 @@ fn connection_icon(status: ConnectionStatus, palette: ThemeColors) -> impl IntoE
     lock_icon(
         status_color(status, palette),
         metrics::SITE_INFO_TILE_ICON_SIZE,
-        status != ConnectionStatus::NotSecure,
+        !status.is_insecure(),
     )
 }
 

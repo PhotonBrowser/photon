@@ -79,6 +79,11 @@ pub(super) struct Omnibox {
     site_info_open: bool,
     /// The GPUI popover shows the connection's page rather than the site's.
     site_info_security: bool,
+    /// The certificate of the host the popover last opened for, once known.
+    site_certificate: Option<(String, crate::platform::engine::Certificate)>,
+    /// Where the site information button was last drawn, which its popover
+    /// points at.
+    site_info_button_bounds: Option<gpui::Bounds<gpui::Pixels>>,
     /// Keeps the site information popover drawn while it animates away.
     site_info_presence: super::motion::Presence<()>,
     field_hovered: bool,
@@ -123,6 +128,8 @@ pub(super) struct Omnibox {
 pub(super) enum OmniboxEvent {
     /// Load this address in the active tab.
     Navigate(String),
+    /// Open the active site's data menu.
+    SiteInfoMenu,
 }
 
 impl EventEmitter<OmniboxEvent> for Omnibox {}
@@ -195,13 +202,15 @@ impl Omnibox {
             invalid: false,
             site_info_open: false,
             site_info_security: false,
+            site_certificate: None,
+            site_info_button_bounds: None,
             site_info_presence: Default::default(),
             field_hovered: false,
             floating_surface: None,
             #[cfg(target_os = "macos")]
             site_info_native: {
                 let toggle = cx.entity().downgrade();
-                let close = toggle.clone();
+                let menu = toggle.clone();
                 crate::platform::AppKitSiteInfoPopover::new(
                     cx.to_async(),
                     move |control, cx| {
@@ -210,7 +219,8 @@ impl Omnibox {
                             .ok();
                     },
                     move |cx| {
-                        close.update(cx, |this, cx| this.close_site_info(cx)).ok();
+                        menu.update(cx, |_, cx| cx.emit(OmniboxEvent::SiteInfoMenu))
+                            .ok();
                     },
                 )
             },

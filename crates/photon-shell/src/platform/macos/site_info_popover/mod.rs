@@ -8,7 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use gpui::{App, AsyncApp, Pixels, Point, Window};
+use gpui::{App, AsyncApp, Bounds, Pixels, Window};
 use objc2::{
     DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, rc::Retained,
     runtime::ProtocolObject, sel,
@@ -32,8 +32,8 @@ use super::appkit::{NativeControlActionTarget, appkit_host_view};
 mod views;
 use crate::platform::metrics;
 use crate::platform::site_info::{
-    BACK_LABEL, CLOSE_LABEL, ConnectionStatus, SiteControl, SiteDetail, SiteInfo, TITLE,
-    VIEW_CERTIFICATE_LABEL,
+    BACK_LABEL, CERTIFICATE_HEADING, ConnectionStatus, OPTIONS_LABEL, SiteControl, SiteDetail,
+    SiteInfo, TITLE, certificate_rows,
 };
 use views::*;
 
@@ -70,6 +70,11 @@ impl Pages {
     /// size and cross-fades its content. The fade is a layer transition so
     /// glass controls never render at partial opacity, which turns them black.
     fn show(&self, page: &NSView) {
+        // Resize at once, then swap: animating the size while the new page is
+        // already in place lays it out at the old size, clipping it.
+        let animates = self.popover.animates();
+        self.popover.setAnimates(false);
+        self.popover.setContentSize(page.fittingSize());
         // SAFETY: the page's superview is the popover's live content view,
         // read on the main thread.
         let container = unsafe { self.controller.view().superview() };
@@ -83,7 +88,7 @@ impl Pages {
             layer.addAnimation_forKey(&fade, None);
         }
         self.controller.setView(page);
-        self.popover.setContentSize(page.fittingSize());
+        self.popover.setAnimates(animates);
     }
 }
 
@@ -93,15 +98,16 @@ struct SecurityPage {
     title: Retained<NSTextField>,
     site: Retained<NSTextField>,
     summary: Retained<NSTextField>,
+    certificate: Retained<NSTextField>,
 }
 
 impl AppKitSiteInfoPopover {
-    /// `on_toggle` turns a control on or off; `on_close` follows the close
-    /// button. Returns `None` off the AppKit main thread.
+    /// `on_toggle` changes a control; `on_menu` opens the site's data menu.
+    /// Returns `None` off the AppKit main thread.
     pub fn new(
         app: AsyncApp,
         on_toggle: impl FnMut(SiteControl, &mut App) + 'static,
-        mut on_close: impl FnMut(&mut App) + 'static,
+        on_menu: impl FnMut(&mut App) + 'static,
     ) -> Option<Self> {
         let mtm = MainThreadMarker::new()?;
         let on_toggle = Rc::new(RefCell::new(on_toggle));
@@ -168,23 +174,22 @@ impl AppKitSiteInfoPopover {
             unsafe { NSFontWeightSemibold },
         )));
         set_height(&connection, metrics::SITE_INFO_FOOTER_HEIGHT);
-        let (close, close_target) =
-            glass_button(CLOSE_LABEL, in_app(&app, move |cx| on_close(cx)), mtm);
-        round(&close, "xmark", CLOSE_LABEL);
+        let (menu, menu_target) = glass_button(OPTIONS_LABEL, in_app(&app, on_menu), mtm);
+        round(&menu, "ellipsis", OPTIONS_LABEL);
         let footer = stack(
             NSUserInterfaceLayoutOrientation::Horizontal,
             metrics::SITE_INFO_GAP,
             mtm,
         );
         footer.addView_inGravity(&connection, NSStackViewGravity::Leading);
-        footer.addView_inGravity(&close, NSStackViewGravity::Trailing);
+        footer.addView_inGravity(&menu, NSStackViewGravity::Trailing);
 
         let show_site = pages.clone();
         let (back, back_target) =
             glass_button(BACK_LABEL, move || show_site.show(&show_site.site), mtm);
         round(&back, "chevron.left", BACK_LABEL);
         security_header.insertArrangedSubview_atIndex(&back, 0);
-        targets.extend([connection_target, close_target, back_target]);
+        targets.extend([connection_target, menu_target, back_target]);
 
         let separator = NSBox::new(mtm);
         separator.setBoxType(NSBoxType::Separator);
@@ -211,24 +216,26 @@ impl AppKitSiteInfoPopover {
     }
 
     /// Opens the popover on its site page, pointing at `anchor` in `window`.
-    pub fn show(&self, window: &Window, anchor: Point<Pixels>) {
+    pub fn show(&self, window: &Window, anchor: Bounds<Pixels>) {
         let Some(host) = appkit_host_view(window) else {
             return;
         };
         // SAFETY: the window handle gives its live AppKit view on the main thread.
         let host = unsafe { host.as_ref() };
-        let x = f32::from(anchor.x) as f64;
-        let y = f32::from(anchor.y) as f64;
+        let x = f32::from(anchor.origin.x) as f64;
+        let width = f32::from(anchor.size.width) as f64;
+        let height = f32::from(anchor.size.height) as f64;
+        let top = f32::from(anchor.origin.y) as f64;
         // Prefer the edge that sits visually below the anchor, so resizing
         // between pages never makes AppKit flip the popover to the other side.
         let (y, below) = if host.isFlipped() {
-            (y, NSRectEdge::MaxY)
+            (top, NSRectEdge::MaxY)
         } else {
-            (host.bounds().size.height - y, NSRectEdge::MinY)
+            (host.bounds().size.height - top - height, NSRectEdge::MinY)
         };
         self.inner.pages.show(&self.inner.pages.site);
         self.inner.popover.showRelativeToRect_ofView_preferredEdge(
-            NSRect::new(NSPoint::new(x, y), NSSize::new(1.0, 1.0)),
+            NSRect::new(NSPoint::new(x, y), NSSize::new(width, height)),
             host,
             below,
         );
@@ -274,7 +281,7 @@ impl AppKitSiteInfoPopover {
         let status = ConnectionStatus::of(info);
         let tint = match status {
             ConnectionStatus::Secure => NSColor::systemGreenColor(),
-            ConnectionStatus::NotSecure => NSColor::systemRedColor(),
+            ConnectionStatus::NotSecure | ConnectionStatus::Unverified => NSColor::systemRedColor(),
             ConnectionStatus::Unknown => NSColor::secondaryLabelColor(),
         };
         let image = symbol(status.symbol(), status.label());
@@ -294,6 +301,25 @@ impl AppKitSiteInfoPopover {
         security
             .summary
             .setStringValue(&NSString::from_str(status.summary()));
+        let details = info.certificate.as_ref().map(|certificate| {
+            std::iter::once(CERTIFICATE_HEADING.to_owned())
+                .chain(
+                    certificate_rows(certificate)
+                        .into_iter()
+                        .map(|(label, value)| format!("{label}: {value}")),
+                )
+                .collect::<Vec<_>>()
+                .join("\n")
+        });
+        security
+            .certificate
+            .setStringValue(&NSString::from_str(details.as_deref().unwrap_or_default()));
+        security.certificate.setHidden(details.is_none());
+        // Details arriving while the connection page is open change its height.
+        let pages = &self.inner.pages;
+        if pages.popover.isShown() && std::ptr::eq(&*pages.controller.view(), &*pages.security) {
+            pages.popover.setContentSize(pages.security.fittingSize());
+        }
         *self.inner.shown.borrow_mut() = Some(info.clone());
     }
 }
