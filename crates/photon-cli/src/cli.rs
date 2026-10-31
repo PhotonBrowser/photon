@@ -4,6 +4,10 @@ use clap::{Args, ColorChoice, Parser, Subcommand};
 
 use crate::commands;
 use crate::commands::deps::Dependency;
+#[cfg(target_os = "macos")]
+use crate::commands::ios::{
+    BuildConfiguration as IosBuildConfiguration, DeviceKind as IosDeviceKind,
+};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -115,6 +119,84 @@ enum Command {
         #[command(subcommand)]
         command: Option<EngineCommand>,
     },
+    /// Build, launch, and inspect the native iOS app.
+    #[cfg(target_os = "macos")]
+    Ios {
+        #[command(subcommand)]
+        command: IosCommand,
+    },
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Debug, Subcommand)]
+enum IosCommand {
+    /// List installed iPhone simulator models and devices known to Xcode.
+    Devices {
+        /// Choose which iPhone inventory to display.
+        #[arg(long, value_enum, default_value = "all")]
+        kind: IosDeviceKind,
+        /// Show paired physical iPhones only.
+        #[arg(long)]
+        paired: bool,
+        /// Show booted simulators and connected physical iPhones only.
+        #[arg(long)]
+        connected: bool,
+    },
+    /// Build the iOS app without launching it.
+    Build {
+        #[command(flatten)]
+        target: IosTargetArgs,
+        #[command(flatten)]
+        build: IosBuildArgs,
+    },
+    /// Install and launch a previously built iOS app.
+    Launch {
+        #[command(flatten)]
+        target: IosTargetArgs,
+        /// Xcode build configuration to launch.
+        #[arg(long, value_enum, default_value = "debug")]
+        configuration: IosBuildConfiguration,
+    },
+    /// Build, install, and launch the iOS app.
+    Run {
+        #[command(flatten)]
+        target: IosTargetArgs,
+        #[command(flatten)]
+        build: IosBuildArgs,
+    },
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Debug, Args)]
+struct IosTargetArgs {
+    /// Select an existing simulator or a paired physical iPhone by name or UDID.
+    #[arg(long, value_name = "NAME_OR_UDID", conflicts_with = "model")]
+    device: Option<String>,
+    /// Select an iPhone simulator model. Creates a simulator if one does not exist.
+    #[arg(
+        long,
+        visible_alias = "iphone",
+        value_name = "MODEL",
+        conflicts_with = "device"
+    )]
+    model: Option<String>,
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Debug, Args)]
+struct IosBuildArgs {
+    /// Xcode build configuration.
+    #[arg(long, value_enum, default_value = "debug")]
+    configuration: IosBuildConfiguration,
+    /// Apple Developer Team ID for signing a physical-device build.
+    #[arg(long, value_name = "TEAM_ID")]
+    team_id: Option<String>,
+    /// Allow Xcode to update signing profiles from the Apple Developer account.
+    #[arg(long)]
+    allow_provisioning_updates: bool,
+    /// Allow Xcode to register the target iPhone with the Apple Developer account.
+    #[arg(long, requires = "allow_provisioning_updates")]
+    allow_device_registration: bool,
 }
 
 #[derive(Debug, Subcommand)]
@@ -319,6 +401,46 @@ pub fn run() -> Result<(), String> {
                 }
             }
         },
+        #[cfg(target_os = "macos")]
+        Some(Command::Ios { command }) => match command {
+            IosCommand::Devices {
+                kind,
+                paired,
+                connected,
+            } => commands::ios::list_devices(&root, kind, paired, connected),
+            IosCommand::Build { target, build } => commands::ios::build(
+                &root,
+                target.into_selection(),
+                build.configuration,
+                build.team_id.as_deref(),
+                build.allow_provisioning_updates,
+                build.allow_device_registration,
+                verbose,
+            ),
+            IosCommand::Launch {
+                target,
+                configuration,
+            } => commands::ios::launch(&root, target.into_selection(), configuration, verbose),
+            IosCommand::Run { target, build } => commands::ios::run(
+                &root,
+                target.into_selection(),
+                build.configuration,
+                build.team_id.as_deref(),
+                build.allow_provisioning_updates,
+                build.allow_device_registration,
+                verbose,
+            ),
+        },
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl IosTargetArgs {
+    fn into_selection(self) -> commands::ios::DeviceSelection {
+        commands::ios::DeviceSelection {
+            device: self.device,
+            model: self.model,
+        }
     }
 }
 
