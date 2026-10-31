@@ -89,6 +89,13 @@ impl NativePanel {
         self.window = window.ok();
     }
 
+    /// Redraws the open popover's content, as when what it shows changed.
+    pub(super) fn refresh(&self, cx: &mut App) {
+        if let Some(window) = self.window {
+            let _ = window.update(cx, |_, window, _| window.refresh());
+        }
+    }
+
     /// Closes the popover, which AppKit animates away.
     pub(super) fn close(&mut self, cx: &mut App) {
         if let Some(window) = self.window.take() {

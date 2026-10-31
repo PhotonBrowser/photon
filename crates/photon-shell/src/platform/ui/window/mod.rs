@@ -11,6 +11,7 @@ mod command_palette;
 mod commands;
 mod content;
 mod context_menu;
+mod downloads_popover;
 mod favourites;
 mod find;
 mod fullscreen;
@@ -110,6 +111,13 @@ pub(in crate::platform) struct BrowserWindow {
     /// The theme picker in a native popover, on macOS.
     #[cfg(target_os = "macos")]
     theme_picker_panel: super::native_panel::NativePanel,
+    /// Where the downloads popover was opened from, while it is open.
+    downloads_popover: Option<Point<Pixels>>,
+    /// The downloads popover in a native popover, on macOS.
+    #[cfg(target_os = "macos")]
+    downloads_panel: super::native_panel::NativePanel,
+    /// Redraws the downloads button, popover and notices as downloads change.
+    _downloads_subscription: Subscription,
     tab_focus_handles: Vec<FocusHandle>,
     /// Closes today's tabs left unused, when the setting asks.
     _archive_task: Task<()>,
@@ -496,6 +504,7 @@ impl BrowserWindow {
             .size_full()
             .children(self.peek_overlay(palette, window, cx))
             .children(self.theme_picker_popup_overlay(window, cx))
+            .children(self.downloads_popover_overlay(window, cx))
             .children(self.space_editor_overlay(palette, cx))
             .children(self.shortcuts_dialog_overlay(palette, cx))
             .children(self.command_palette_overlay(window, cx))
@@ -561,6 +570,14 @@ fn open_browser_window(
                 cx.set_global(AlertCenter::default());
             }
             let alert_subscription = cx.observe_global::<AlertCenter>(|_, cx| cx.notify());
+            let downloads_subscription =
+                cx.observe_global::<super::downloads::Downloads>(|this: &mut BrowserWindow, cx| {
+                    this.chrome.update(cx, |_, cx| cx.notify());
+                    this.overlays.update(cx, |_, cx| cx.notify());
+                    #[cfg(target_os = "macos")]
+                    this.downloads_panel.refresh(cx);
+                    cx.notify();
+                });
             let backdrop = cx.new(|_| workspace::WindowBackdrop);
             let preview_subscription = cx.observe_global_in::<AppearancePreview>(
                 window,
@@ -638,6 +655,10 @@ fn open_browser_window(
                 theme_picker_presence: Presence::default(),
                 #[cfg(target_os = "macos")]
                 theme_picker_panel: Default::default(),
+                downloads_popover: None,
+                #[cfg(target_os = "macos")]
+                downloads_panel: Default::default(),
+                _downloads_subscription: downloads_subscription,
                 tab_focus_handles: Vec::new(),
                 _archive_task: BrowserWindow::archive_unused_tabs_regularly(window, cx),
                 tab_sleep_waker,

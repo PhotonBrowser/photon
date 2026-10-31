@@ -1,0 +1,376 @@
+//! The downloads popover, opened from the sidebar's downloads button: the
+//! latest downloads, their progress, and the way to the full list.
+
+use gpui::{
+    AnyElement, App, Context, ElementId, KeyDownEvent, MouseButton, Pixels, Point, Role, Window,
+    div, prelude::*, px, relative, rgb, rgba,
+};
+use std::rc::Rc;
+
+use super::super::super::engine::{Download, DownloadStatus, EngineRuntime};
+use super::super::button::icon_button;
+use super::super::controls::OwnsClicks;
+use super::super::downloads::{Downloads, FileKind, file_name, progress_fraction, status_text};
+use super::super::glass::glass;
+use super::super::icons::{close_icon, file_icon, folder_open_icon, open_in_tab_icon};
+use super::super::layout::{h_stack, v_stack};
+use super::super::motion::{Edge, SurfaceFade, theme_picker_entrance};
+use super::super::pages::DOWNLOADS;
+use super::super::settings::Settings;
+use super::super::{metrics, theme::ThemeColors, theme::palette};
+use super::BrowserWindow;
+
+/// What the popover's controls ask the window to do.
+#[derive(Clone)]
+struct PopoverActions {
+    close: Rc<dyn Fn(&mut App)>,
+    show_all: Rc<dyn Fn(&mut App)>,
+}
+
+impl BrowserWindow {
+    /// Opens the downloads popover above the pointer, which is on the
+    /// sidebar's downloads button, or closes it when it is open.
+    pub(super) fn toggle_downloads_popover(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.downloads_popover.is_some() {
+            self.dismiss_downloads_popover(cx);
+            return;
+        }
+        Downloads::mark_seen(cx);
+        let anchor = window.mouse_position();
+        self.downloads_popover = Some(anchor);
+        #[cfg(target_os = "macos")]
+        if super::super::glass::glass_available(cx) {
+            self.open_downloads_panel(anchor, window, cx);
+            return;
+        }
+        cx.notify();
+    }
+
+    pub(super) fn dismiss_downloads_popover(&mut self, cx: &mut Context<Self>) {
+        if self.downloads_popover.take().is_some() {
+            #[cfg(target_os = "macos")]
+            self.downloads_panel.close(cx);
+            cx.notify();
+        }
+    }
+
+    fn downloads_popover_actions(&self, window: &Window, cx: &Context<Self>) -> PopoverActions {
+        let browser = cx.entity().downgrade();
+        let browser_window = window.window_handle();
+        let close = {
+            let browser = browser.clone();
+            Rc::new(move |cx: &mut App| {
+                let _ = browser.update(cx, |this, cx| this.dismiss_downloads_popover(cx));
+            })
+        };
+        let show_all = Rc::new(move |cx: &mut App| {
+            let browser = browser.clone();
+            let _ = browser_window.update(cx, |_, window, cx| {
+                let _ = browser.update(cx, |this, cx| {
+                    this.dismiss_downloads_popover(cx);
+                    this.open_page_tab(DOWNLOADS, window, cx);
+                });
+            });
+        });
+        PopoverActions { close, show_all }
+    }
+
+    /// Opens the popover as a native `NSPopover`, whose material refracts the
+    /// browser behind it.
+    #[cfg(target_os = "macos")]
+    fn open_downloads_panel(
+        &mut self,
+        anchor: Point<Pixels>,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) {
+        let actions = self.downloads_popover_actions(window, cx);
+        let runtime = self.runtime.clone();
+        let content_actions = actions.clone();
+        let content: super::super::native_panel::PanelContent = Rc::new(move |window, cx| {
+            let palette = palette(window, cx);
+            popover_content(&runtime, &content_actions, palette, cx)
+        });
+        let close = actions.close.clone();
+        self.downloads_panel.open(
+            window,
+            super::super::native_panel::PanelOptions {
+                anchor: gpui::Bounds::new(anchor, gpui::size(px(1.0), px(1.0))),
+                side: Edge::Top,
+                size: gpui::size(
+                    px(metrics::DOWNLOADS_POPOVER_WIDTH),
+                    px(popover_height(Downloads::list(cx).len())),
+                ),
+                arrow: true,
+                content,
+                on_dismiss: Rc::new(move |cx| close(cx)),
+            },
+            cx,
+        );
+    }
+
+    /// The popover drawn in the window, where there is no native popover.
+    pub(super) fn downloads_popover_overlay(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        #[cfg(target_os = "macos")]
+        if self.downloads_panel.is_open() {
+            return None;
+        }
+        let anchor = self.downloads_popover?;
+        let palette = palette(window, cx);
+        let actions = self.downloads_popover_actions(window, cx);
+        let viewport = window.viewport_size();
+        let width = metrics::DOWNLOADS_POPOVER_WIDTH;
+        let height = popover_height(Downloads::list(cx).len());
+        let inset = metrics::PAGE_INSET;
+        let left = (f32::from(anchor.x) - width / 2.0).clamp(
+            inset,
+            (f32::from(viewport.width) - width - inset).max(inset),
+        );
+        let top = (f32::from(anchor.y) - height - metrics::PAGE_CHROME_GAP).clamp(
+            inset,
+            (f32::from(viewport.height) - height - inset).max(inset),
+        );
+        let motion = theme_picker_entrance(Edge::Bottom, height);
+        let panel = glass("downloads-popover-surface")
+            .rounded(px(metrics::theme_accent_panel_radius()))
+            .motion(motion, super::super::motion::Transition::Enter)
+            .child(popover_content(&self.runtime, &actions, palette, cx))
+            .absolute()
+            .left(px(left))
+            .top(px(top))
+            .w(px(width));
+        let close = actions.close.clone();
+        let close_on_key = actions.close.clone();
+        let _ = Settings::motion(cx);
+        Some(
+            div()
+                .id("downloads-popover-overlay")
+                .absolute()
+                .inset_0()
+                .occlude()
+                .on_mouse_down(MouseButton::Left, move |_, _, cx| close(cx))
+                .capture_key_down(move |event: &KeyDownEvent, _, cx| {
+                    if event.keystroke.key.as_str() == "escape"
+                        && !event.keystroke.modifiers.modified()
+                    {
+                        cx.stop_propagation();
+                        close_on_key(cx);
+                    }
+                })
+                .child(panel)
+                .into_any_element(),
+        )
+    }
+}
+
+/// The popover's height for `count` downloads, showing at most a few.
+fn popover_height(count: usize) -> f32 {
+    let rows = count.clamp(1, metrics::DOWNLOADS_POPOVER_MAX_ROWS) as f32;
+    metrics::DOWNLOADS_POPOVER_HEADER_HEIGHT
+        + rows * metrics::DOWNLOADS_POPOVER_ROW_HEIGHT
+        + metrics::DOWNLOADS_POPOVER_FOOTER_HEIGHT
+        + metrics::DOWNLOADS_POPOVER_PADDING * 2.0
+}
+
+fn popover_content(
+    runtime: &Rc<EngineRuntime>,
+    actions: &PopoverActions,
+    palette: ThemeColors,
+    cx: &App,
+) -> AnyElement {
+    let downloads = Downloads::list(cx);
+    let close = actions.close.clone();
+    let header = h_stack()
+        .h(px(metrics::DOWNLOADS_POPOVER_HEADER_HEIGHT))
+        .flex_shrink_0()
+        .items_center()
+        .justify_between()
+        .px(px(metrics::LIST_ROW_PADDING))
+        .child(
+            div()
+                .text_size(px(metrics::DOWNLOADS_POPOVER_TITLE_FONT_SIZE))
+                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .text_color(rgb(palette.text_primary))
+                .child("Recent downloads"),
+        )
+        .child(icon_button(
+            "downloads-popover-close",
+            "Close",
+            true,
+            metrics::CHIP_CLOSE_SIZE,
+            close_icon(palette.text_secondary, metrics::CHIP_CLOSE_ICON_SIZE),
+            palette,
+            Box::new(move |_, _, cx| close(cx)),
+        ));
+    let rows: Vec<AnyElement> = if downloads.is_empty() {
+        vec![
+            div()
+                .h(px(metrics::DOWNLOADS_POPOVER_ROW_HEIGHT))
+                .flex()
+                .items_center()
+                .px(px(metrics::LIST_ROW_PADDING))
+                .text_size(px(metrics::MENU_FONT_SIZE))
+                .text_color(rgb(palette.text_secondary))
+                .child("Files you download appear here.")
+                .into_any_element(),
+        ]
+    } else {
+        downloads
+            .iter()
+            .take(metrics::DOWNLOADS_POPOVER_MAX_ROWS)
+            .map(|download| download_row(runtime, download, palette).into_any_element())
+            .collect()
+    };
+    let show_all = actions.show_all.clone();
+    let footer = h_stack()
+        .id("downloads-popover-show-all")
+        .role(Role::Link)
+        .aria_label("Full download history")
+        .h(px(metrics::DOWNLOADS_POPOVER_FOOTER_HEIGHT))
+        .flex_shrink_0()
+        .items_center()
+        .justify_between()
+        .px(px(metrics::LIST_ROW_PADDING))
+        .rounded(px(metrics::control_radius()))
+        .surface_fade()
+        .hover_style(|style| style.bg(rgba(palette.hover_surface)))
+        .owns_clicks()
+        .on_click(move |_, _, cx| show_all(cx))
+        .text_size(px(metrics::MENU_FONT_SIZE))
+        .text_color(rgb(palette.text_primary))
+        .child("Full download history")
+        .child(open_in_tab_icon(
+            palette.text_secondary,
+            metrics::CHIP_ICON_SIZE,
+        ));
+    v_stack()
+        .id("downloads-popover")
+        .role(Role::Dialog)
+        .aria_label("Recent downloads")
+        .size_full()
+        .p(px(metrics::DOWNLOADS_POPOVER_PADDING))
+        .owns_clicks()
+        .child(header)
+        .child(v_stack().flex_1().min_h(px(0.)).children(rows))
+        .child(footer)
+        .into_any_element()
+}
+
+fn download_row(
+    runtime: &Rc<EngineRuntime>,
+    download: &Download,
+    palette: ThemeColors,
+) -> impl IntoElement {
+    let id = download.id;
+    let name = file_name(download);
+    let completed = download.status == DownloadStatus::Completed;
+    let active = download.status.is_active();
+    let path = download.path.clone();
+    let trailing: Option<AnyElement> = if completed {
+        let path = download.path.clone();
+        Some(
+            icon_button(
+                "download-reveal",
+                "Show in folder",
+                true,
+                metrics::CHIP_CLOSE_SIZE,
+                folder_open_icon(palette.text_secondary, metrics::CHIP_CLOSE_ICON_SIZE),
+                palette,
+                Box::new(move |_, _, cx| {
+                    cx.stop_propagation();
+                    cx.reveal_path(&path);
+                }),
+            )
+            .into_any_element(),
+        )
+    } else if active {
+        let runtime = runtime.clone();
+        Some(
+            icon_button(
+                "download-cancel",
+                "Cancel download",
+                true,
+                metrics::CHIP_CLOSE_SIZE,
+                close_icon(palette.text_secondary, metrics::CHIP_CLOSE_ICON_SIZE),
+                palette,
+                Box::new(move |_, _, cx| {
+                    cx.stop_propagation();
+                    runtime.cancel_download(id);
+                }),
+            )
+            .into_any_element(),
+        )
+    } else {
+        None
+    };
+    let progress = active.then(|| {
+        div()
+            .w_full()
+            .h(px(metrics::DOWNLOAD_PROGRESS_HEIGHT))
+            .rounded_full()
+            .bg(rgba(palette.menu_border))
+            .child(
+                div()
+                    .h_full()
+                    .w(relative(progress_fraction(download).unwrap_or(0.0)))
+                    .rounded_full()
+                    .bg(rgb(palette.chosen)),
+            )
+    });
+    let mut row = h_stack()
+        .id(ElementId::Name(format!("download-row-{id}").into()))
+        .role(if completed {
+            Role::Button
+        } else {
+            Role::ListItem
+        })
+        .aria_label(format!("{name}, {}", status_text(download)))
+        .h(px(metrics::DOWNLOADS_POPOVER_ROW_HEIGHT))
+        .flex_shrink_0()
+        .items_center()
+        .gap(px(metrics::LIST_ROW_GAP))
+        .px(px(metrics::LIST_ROW_PADDING))
+        .rounded(px(metrics::control_radius()))
+        .child(
+            file_icon(
+                FileKind::of(download),
+                palette.text_secondary,
+                metrics::DOWNLOADS_POPOVER_FILE_ICON_SIZE,
+            )
+            .flex_shrink_0(),
+        )
+        .child(
+            v_stack()
+                .flex_1()
+                .min_w_0()
+                .gap(px(metrics::MENU_ITEM_GAP))
+                .child(
+                    div()
+                        .truncate()
+                        .text_size(px(metrics::MENU_FONT_SIZE))
+                        .text_color(rgb(palette.text_primary))
+                        .child(name),
+                )
+                .children(progress)
+                .child(
+                    div()
+                        .truncate()
+                        .text_size(px(metrics::HISTORY_ROW_DETAIL_FONT_SIZE))
+                        .text_color(rgb(palette.text_secondary))
+                        .child(status_text(download)),
+                ),
+        )
+        .children(trailing);
+    if completed {
+        row = row
+            .surface_fade()
+            .hover_style(|style| style.bg(rgba(palette.hover_surface)))
+            .owns_clicks()
+            .on_click(move |_, _, cx| cx.open_with_system(&path));
+    }
+    row
+}
