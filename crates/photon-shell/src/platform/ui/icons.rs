@@ -246,6 +246,26 @@ pub(super) fn download_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("download"), color, size)
 }
 
+/// A page with a folded corner, drawn for the kind of file a download is.
+pub(super) fn file_icon(kind: super::downloads::FileKind, color: u32, size: f32) -> gpui::Svg {
+    use super::downloads::FileKind;
+    let data: &'static [u8] = match kind {
+        FileKind::Document => lucide!("file-text"),
+        FileKind::Image => lucide!("file-image"),
+        FileKind::Video => lucide!("file-video"),
+        FileKind::Audio => lucide!("file-audio"),
+        FileKind::Archive => lucide!("file-archive"),
+        FileKind::Code => lucide!("file-code"),
+        FileKind::Other => lucide!("file"),
+    };
+    icon(data, color, size)
+}
+
+/// An open folder, for showing a file where it was saved.
+pub(super) fn folder_open_icon(color: u32, size: f32) -> impl IntoElement {
+    icon(lucide!("folder-open"), color, size)
+}
+
 /// A clock with a turning-back arrow, for past searches.
 pub(super) fn history_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("history"), color, size)
