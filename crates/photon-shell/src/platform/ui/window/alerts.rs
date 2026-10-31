@@ -9,7 +9,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+use super::super::super::engine::DownloadStatus;
 use super::super::super::engine::ZoomStep;
+use super::super::downloads::{DownloadEvent, Downloads, file_name, progress_fraction};
 use super::super::motion::{Speed, Transition, toast};
 use super::super::settings::{ConfigReloadNotice, Settings};
 use super::super::status_chip::{CHIP_MOTION, ChipIcon, status_chip};
@@ -36,6 +38,8 @@ pub(super) enum EngineNotice {
 const RECOVERED_NOTICE_DURATION: Duration = Duration::from_secs(3);
 /// How long the zoom chip stays up after the last zoom change.
 const ZOOM_NOTICE_DURATION: Duration = Duration::from_secs(2);
+/// How long the chip for a finished or failed download stays up.
+const DOWNLOAD_NOTICE_DURATION: Duration = Duration::from_secs(6);
 
 /// One transient notice requested by a shell feature.
 #[derive(Clone)]
@@ -165,7 +169,7 @@ pub fn show_alert(cx: &mut App, message: impl Into<SharedString>) -> bool {
 }
 
 /// What a chip's button does.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum NoticeAction {
     /// Reload the page; the chip can also be dismissed.
     Reload,
@@ -173,6 +177,10 @@ enum NoticeAction {
     RestartPage,
     /// Return the page to 100%.
     ResetZoom,
+    /// Open a downloaded file.
+    OpenDownload(std::path::PathBuf),
+    /// Show the downloads popover.
+    ShowDownloads,
 }
 
 /// A chip's content.
@@ -331,39 +339,100 @@ impl BrowserWindow {
                 }
             }
             None if zoom_notice.is_some() => zoom_notice?,
-            None => match webview.as_ref()?.read(cx).crash_notice.as_ref() {
-                Some(CrashNotice::Reloading) => Notice {
-                    id: ElementId::Name("page-reloading".into()),
-                    icon: ChipIcon::Working(step),
-                    message: SharedString::new_static("This page crashed. Reloading…"),
-                    expires_at: None,
-                    action: None,
-                },
-                Some(CrashNotice::Reloaded(at)) => Notice {
-                    id: ElementId::Name("page-reloaded".into()),
-                    icon: ChipIcon::Done,
-                    message: SharedString::new_static("Page reloaded"),
-                    expires_at: Some(*at + RECOVERED_NOTICE_DURATION),
-                    action: None,
-                },
-                Some(CrashNotice::KeepsCrashing { .. }) => return None,
-                None => {
-                    // The Engine's error is for the log; the chip says it plainly.
-                    webview.as_ref()?.read(cx).state.error.as_ref()?;
-                    Notice {
-                        id: ElementId::Name("page-error".into()),
-                        icon: ChipIcon::Problem,
-                        message: SharedString::new_static("This page couldn't be shown"),
-                        expires_at: None,
-                        action: Some(NoticeAction::Reload),
-                    }
-                }
+            None => match self.page_notice(webview.as_ref(), cx) {
+                Some(notice) => notice,
+                None => self.download_notice(cx)?,
             },
         };
         let expired = notice
             .expires_at
             .is_some_and(|deadline| Instant::now() >= deadline);
         (!expired).then_some(notice)
+    }
+
+    /// The active page's crash or error, if it has one.
+    fn page_notice(
+        &self,
+        webview: Option<&gpui::Entity<super::super::PhotonWebView>>,
+        cx: &Context<Self>,
+    ) -> Option<Notice> {
+        let step = self.spinner_step;
+        Some(match webview?.read(cx).crash_notice.as_ref() {
+            Some(CrashNotice::Reloading) => Notice {
+                id: ElementId::Name("page-reloading".into()),
+                icon: ChipIcon::Working(step),
+                message: SharedString::new_static("This page crashed. Reloading…"),
+                expires_at: None,
+                action: None,
+            },
+            Some(CrashNotice::Reloaded(at)) => Notice {
+                id: ElementId::Name("page-reloaded".into()),
+                icon: ChipIcon::Done,
+                message: SharedString::new_static("Page reloaded"),
+                expires_at: Some(*at + RECOVERED_NOTICE_DURATION),
+                action: None,
+            },
+            Some(CrashNotice::KeepsCrashing { .. }) => return None,
+            None => {
+                // The Engine's error is for the log; the chip says it plainly.
+                webview.as_ref()?.read(cx).state.error.as_ref()?;
+                Notice {
+                    id: ElementId::Name("page-error".into()),
+                    icon: ChipIcon::Problem,
+                    message: SharedString::new_static("This page couldn't be shown"),
+                    expires_at: None,
+                    action: Some(NoticeAction::Reload),
+                }
+            }
+        })
+    }
+
+    /// The download in progress, or the one that just finished or failed.
+    /// The popover shows downloads itself, so no chip shows while it is open.
+    fn download_notice(&self, cx: &Context<Self>) -> Option<Notice> {
+        if self.downloads_popover.is_some() {
+            return None;
+        }
+        let (event, at) = Downloads::latest_event(cx)?;
+        let id = match event {
+            DownloadEvent::Started(id)
+            | DownloadEvent::Finished(id)
+            | DownloadEvent::Failed(id) => id,
+        };
+        let download = Downloads::get(id, cx)?;
+        let name = file_name(download);
+        Some(match download.status {
+            DownloadStatus::InProgress | DownloadStatus::Paused => {
+                let message = match progress_fraction(download) {
+                    Some(fraction) => {
+                        format!("Downloading {name} · {}%", (fraction * 100.0) as u32)
+                    }
+                    None => format!("Downloading {name}"),
+                };
+                Notice {
+                    id: ElementId::Name(format!("download-active-{id}").into()),
+                    icon: ChipIcon::Working(self.spinner_step),
+                    message: message.into(),
+                    expires_at: None,
+                    action: Some(NoticeAction::ShowDownloads),
+                }
+            }
+            DownloadStatus::Completed => Notice {
+                id: ElementId::Name(format!("download-done-{id}").into()),
+                icon: ChipIcon::Done,
+                message: format!("Downloaded {name}").into(),
+                expires_at: Some(at + DOWNLOAD_NOTICE_DURATION),
+                action: Some(NoticeAction::OpenDownload(download.path.clone())),
+            },
+            DownloadStatus::Failed => Notice {
+                id: ElementId::Name(format!("download-failed-{id}").into()),
+                icon: ChipIcon::Problem,
+                message: format!("Couldn't download {name}").into(),
+                expires_at: Some(at + DOWNLOAD_NOTICE_DURATION),
+                action: Some(NoticeAction::ShowDownloads),
+            },
+            DownloadStatus::Canceled => return None,
+        })
     }
 
     /// The chip for the current notice, if any.
@@ -452,6 +521,20 @@ impl BrowserWindow {
                     }
                 }));
                 (Some(("Restart", restart)), None)
+            }
+            Some(NoticeAction::OpenDownload(path)) => {
+                let open: ClickHandler = Box::new(move |_, _, cx| {
+                    cx.stop_propagation();
+                    cx.open_with_system(&path);
+                });
+                (Some(("Open", open)), None)
+            }
+            Some(NoticeAction::ShowDownloads) => {
+                let show: ClickHandler = Box::new(cx.listener(|this, _, window, cx| {
+                    cx.stop_propagation();
+                    this.toggle_downloads_popover(window, cx);
+                }));
+                (Some(("Show", show)), None)
             }
             None => (None, None),
         };
