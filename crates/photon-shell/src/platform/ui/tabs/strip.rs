@@ -8,6 +8,7 @@ use super::super::icons::add_icon;
 use super::super::layout::h_stack;
 use super::super::motion::ReorderGroup;
 use super::super::motion::SurfaceFade;
+use super::super::tooltip::label_tooltip;
 use super::super::{ClickHandler, metrics, theme::ThemeColors};
 use super::{
     DraggedTab, TabDragAxis, TabDragMove, TabDrop, TabItem, TabParts, TabPrepaint,
@@ -156,11 +157,14 @@ fn strip_tab(
             .h(px(metrics::TAB_HEIGHT))
             .rounded(px(metrics::control_radius()));
         let tab = if parts.active {
-            tab.bg(rgba(palette.selected_surface))
+            tab.surface_fade().bg(rgba(palette.selected_surface))
         } else {
             tab.surface_fade()
                 .hover_style(|style| style.bg(rgba(palette.hover_surface)))
         };
+        let tooltip =
+            (!parts.suppress_tooltips).then(|| label_tooltip(parts.label.clone(), palette));
+        let tab = tab.when_some(tooltip, |tab, tooltip| tab.tooltip(tooltip));
         let tab = animate_tab_motion(
             tab.child(parts.icon),
             motion,
@@ -191,15 +195,26 @@ fn strip_tab(
         .rounded(px(metrics::control_radius()))
         .text_size(px(metrics::TAB_FONT_SIZE));
     let tab = if parts.active {
-        tab.bg(rgba(palette.selected_surface))
+        tab.surface_fade().bg(rgba(palette.selected_surface))
     } else {
         tab.surface_fade()
             .hover_style(|style| style.bg(rgba(palette.hover_surface)))
     };
+    let tooltip = (!parts.suppress_tooltips).then(|| label_tooltip(parts.label.clone(), palette));
+    let tab = tab.when_some(tooltip, |tab, tooltip| tab.tooltip(tooltip));
+    let close = if parts.active {
+        parts.close
+    } else {
+        parts
+            .close
+            .tab_stop(false)
+            .opacity(0.0)
+            .group_hover_style(parts.group, |style| style.opacity(1.0))
+    };
     let tab = animate_tab_motion(
         tab.child(parts.icon)
             .child(div().flex_1().min_w_0().truncate().child(parts.label))
-            .child(parts.close),
+            .child(close),
         motion,
         TabDragAxis::Horizontal,
         position_offset,

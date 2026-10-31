@@ -192,11 +192,13 @@ fn tab_row(parts: TabParts, palette: ThemeColors, reorder: &ReorderGroup<u64>) -
         .rounded(px(metrics::sidebar_item_radius()))
         .text_size(px(metrics::SIDEBAR_FONT_SIZE));
     let row = if parts.active {
-        row.bg(rgba(palette.selected_surface))
+        row.surface_fade().bg(rgba(palette.selected_surface))
     } else {
         row.surface_fade()
             .hover_style(|style| style.bg(rgba(palette.hover_surface)))
     };
+    let tooltip = (!parts.suppress_tooltips).then(|| label_tooltip(parts.label.clone(), palette));
+    let row = row.when_some(tooltip, |row, tooltip| row.tooltip(tooltip));
     let row = row
         .scale(if parts.active {
             metrics::SIDEBAR_TAB_SELECTED_SCALE
@@ -244,7 +246,7 @@ fn tab_tile(parts: TabParts, palette: ThemeColors, reorder: &ReorderGroup<u64>) 
         .justify_center()
         .when_some(tooltip, |tile, tooltip| tile.tooltip(tooltip));
     let tile = if parts.active {
-        tile.bg(rgba(palette.selected_surface))
+        tile.surface_fade().bg(rgba(palette.selected_surface))
     } else {
         tile.surface_fade()
             .hover_style(|style| style.bg(rgba(palette.hover_surface)))
