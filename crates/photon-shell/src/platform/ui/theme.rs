@@ -629,10 +629,22 @@ pub(super) fn contrasting_text(background: Rgba) -> u32 {
 }
 
 /// Internal pages retain the window material and choose ink for the composited tint.
+/// The colour an internal page's translucent surface shows over the window,
+/// which its text contrasts with. A page drawn over web content, which would
+/// show through instead, paints this beneath itself.
+pub(super) fn page_backdrop(window: &Window, cx: &App) -> u32 {
+    let result = palette(window, cx);
+    to_rgb_token(page_backdrop_color(&result))
+}
+
+fn page_backdrop_color(result: &ThemeColors) -> gpui::Rgba {
+    let surface = rgba(result.page_surface);
+    mix_colors(surface, result.background_average(), surface.alpha)
+}
+
 pub(super) fn page_palette(window: &Window, cx: &App) -> ThemeColors {
     let mut result = palette(window, cx);
-    let surface = rgba(result.page_surface);
-    let background = mix_colors(surface, result.background_average(), surface.alpha);
+    let background = page_backdrop_color(&result);
     let ink = contrasting_text(background);
     let opacity = &crate::platform::theme_config::theme().opacity;
     result.text_primary = ink;

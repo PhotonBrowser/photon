@@ -236,6 +236,8 @@ pub(super) const INTERNAL_PAGE_INSET: f32 = 32.0;
 pub(super) const INTERNAL_PAGE_MAX_WIDTH: f32 = 620.0;
 pub(super) const INTERNAL_PAGE_SECTION_GAP: f32 = 28.0;
 pub(super) const INTERNAL_PAGE_GROUP_GAP: f32 = 12.0;
+/// The symbol above a full-page notice, such as a certificate warning.
+pub(super) const INTERNAL_PAGE_ICON_SIZE: f32 = 40.0;
 pub(super) const FORM_FIELD_GAP: f32 = 4.0;
 pub(super) const INTERNAL_PAGE_SECTION_SIZE: f32 = 18.0;
 pub(super) const INTERNAL_PAGE_BODY_SIZE: f32 = 14.0;
@@ -286,7 +288,7 @@ pub(super) const SETTINGS_SIDEBAR_ICON_SIZE: f32 = 14.0;
 
 // The sidebar: navigation, address field, favourites, tabs and its footer.
 /// Width of the hit area centred on the sidebar's resize edge.
-pub(super) const SIDEBAR_RESIZE_HANDLE_WIDTH: f32 = 36.0;
+pub(super) const SIDEBAR_RESIZE_HANDLE_WIDTH: f32 = 12.0;
 /// Distance used to dampen a temporary stretch beyond the sidebar's maximum.
 pub(super) const SIDEBAR_RESIZE_RUBBERBAND_RANGE: f32 = 56.0;
 /// Resistance applied as the sidebar is pulled beyond its maximum width.

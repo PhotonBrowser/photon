@@ -64,6 +64,7 @@ impl PhotonWebView {
     pub(super) fn crash_overlay(
         &self,
         palette: ThemeColors,
+        backdrop: u32,
         radius: f32,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
@@ -128,6 +129,9 @@ impl PhotonWebView {
             div()
                 .absolute()
                 .inset_0()
+                // The page frame is translucent, and the crashed page's last frame is beneath.
+                .rounded(px(radius))
+                .bg(gpui::rgb(backdrop))
                 .child(page_frame(
                     v_stack()
                         .id("page-crash-recovery")

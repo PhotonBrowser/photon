@@ -5,7 +5,7 @@ use super::input::{EditCommand, WebViewInput};
 use super::{
     metrics,
     settings::Settings,
-    theme::{page_palette, palette},
+    theme::{page_backdrop, page_palette, palette},
 };
 use gpui::{
     AnyWindowHandle, Context, CursorStyle, EventEmitter, FocusHandle, InteractiveElement,
@@ -30,6 +30,7 @@ const RESIZE_SETTLE_DELAY: Duration = Duration::from_millis(120);
 
 #[cfg(unix)]
 mod automation;
+mod certificate;
 mod context_menu;
 mod crashes;
 mod dialogs;
@@ -140,6 +141,8 @@ pub(in crate::platform) struct PhotonWebView {
     /// stands for the page until it loads, as for a tab reopened in the
     /// background that has not been shown yet.
     pub(in crate::platform) requested: Option<photon_core::Shortcut>,
+    /// The warning shown in place of a page whose certificate could not be verified.
+    pub(in crate::platform) certificate_warning: Option<certificate::CertificateWarning>,
     /// Whether a page opened this tab, by a link or script, rather than the user.
     pub(in crate::platform) opened_by_page: bool,
 }
@@ -226,7 +229,19 @@ impl PhotonWebView {
         cx.notify();
     }
 
-    pub(in crate::platform) fn set_state(&mut self, state: BrowserState, cx: &mut Context<Self>) {
+    pub(in crate::platform) fn set_state(
+        &mut self,
+        mut state: BrowserState,
+        cx: &mut Context<Self>,
+    ) {
+        // Engine marks every https page secure; one whose certificate error the
+        // user chose to ignore is not.
+        if state.connection_secure == Some(true)
+            && photon_core::url_host(&state.url)
+                .is_some_and(|host| self.session.runtime().allows_certificate_errors_for(host))
+        {
+            state.connection_secure = Some(false);
+        }
         if self.state == state {
             return;
         }
@@ -462,6 +477,7 @@ impl PhotonWebView {
             last_viewport: None,
             requested: None,
             opened_by_page: false,
+            certificate_warning: None,
             sent_dark_color_scheme: None,
             sent_force_dark_mode: None,
             hovered_link: None,
@@ -594,6 +610,7 @@ impl PhotonWebView {
                 | BrowserCommand::Back
                 | BrowserCommand::Forward
         ) {
+            self.dismiss_certificate_warning();
             let reply = self.dialogs.navigation_started();
             self.send_dialog_reply(reply, cx);
         }
@@ -861,7 +878,13 @@ impl Render for PhotonWebView {
                 palette.performance_palette,
             ));
         }
-        if let Some(overlay) = self.crash_overlay(page_palette(window, cx), radius, cx) {
+        let backdrop = page_backdrop(window, cx);
+        if let Some(overlay) = self.crash_overlay(page_palette(window, cx), backdrop, radius, cx) {
+            webview = webview.child(overlay);
+        }
+        if let Some(overlay) =
+            self.certificate_overlay(page_palette(window, cx), backdrop, radius, cx)
+        {
             webview = webview.child(overlay);
         }
         #[cfg(not(target_os = "macos"))]
