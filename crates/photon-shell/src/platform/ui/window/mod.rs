@@ -523,6 +523,20 @@ impl BrowserWindow {
     }
 }
 
+/// Opens a link in a new window, private or not, as a page's context menu asks.
+fn open_link_in_new_window(runtime: &Rc<EngineRuntime>, url: &str, private: bool, cx: &mut App) {
+    if let Err(error) = open_browser_window(
+        runtime.clone(),
+        Some(url.to_owned()),
+        false,
+        false,
+        private,
+        cx,
+    ) {
+        trace(format_args!("opening link in new window: {error:#}"));
+    }
+}
+
 /// Opens a browser window showing `startup_address`, or a New Tab page when
 /// the horizontal layout needs a tab. Session restoration fills tabs afterward.
 fn open_browser_window(

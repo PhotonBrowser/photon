@@ -83,6 +83,9 @@ pub(super) fn open_minimal_window(
                         WebViewEvent::FullscreenChanged(false) => {}
                         // A site window opened only for a download has nothing left to show.
                         WebViewEvent::DownloadReplacedInitialDocument => window.remove_window(),
+                        WebViewEvent::OpenInNewWindow { url, private } => {
+                            super::open_link_in_new_window(&this.runtime, url, *private, cx);
+                        }
                         WebViewEvent::ContextMenuRequested
                         | WebViewEvent::SelectDropdownRequested
                         | WebViewEvent::OpenInNewTab { .. }

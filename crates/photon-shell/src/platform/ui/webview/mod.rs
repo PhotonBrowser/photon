@@ -159,6 +159,11 @@ pub(in crate::platform) enum WebViewEvent {
         url: String,
         activate: bool,
     },
+    /// A context menu action opened a link in a new window.
+    OpenInNewWindow {
+        url: String,
+        private: bool,
+    },
     /// A link was shift-clicked, to show in a preview over the page.
     Peek(String),
     /// The page asked the shell to show a styled `<select>` popup.

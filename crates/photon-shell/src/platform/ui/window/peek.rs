@@ -65,6 +65,9 @@ impl BrowserWindow {
                 WebViewEvent::OpenInNewTab { url, activate } => {
                     this.open_tab_beside(webview, url, *activate, window, cx);
                 }
+                WebViewEvent::OpenInNewWindow { url, private } => {
+                    super::open_link_in_new_window(&this.runtime, url, *private, cx);
+                }
                 // The preview shows none of its page's state but its dialogs,
                 // and its page reports state many times while loading: each
                 // redraw of the window would rebuild the chrome and menu bar

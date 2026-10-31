@@ -337,6 +337,9 @@ impl BrowserWindow {
                 WebViewEvent::OpenInNewTab { url, activate } => {
                     this.open_tab_beside(webview, url, *activate, window, cx);
                 }
+                WebViewEvent::OpenInNewWindow { url, private } => {
+                    super::open_link_in_new_window(&this.runtime, url, *private, cx);
+                }
                 WebViewEvent::Peek(url) => this.open_peek(url, window, cx),
                 WebViewEvent::FullscreenChanged(fullscreen) => {
                     this.page_fullscreen_changed(webview, *fullscreen, window, cx);
