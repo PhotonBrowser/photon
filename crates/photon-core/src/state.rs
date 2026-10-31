@@ -68,6 +68,22 @@ impl BrowserState {
     }
 }
 
+/// The host of an absolute URL, without credentials or port, as Engine names
+/// it: `https://user@[::1]:8443/a` gives `[::1]`.
+pub fn url_host(url: &str) -> Option<&str> {
+    let (_, rest) = url.split_once("://")?;
+    let authority = rest.split(['/', '?', '#']).next()?;
+    let authority = authority
+        .rsplit_once('@')
+        .map_or(authority, |(_, host)| host);
+    let host = if authority.starts_with('[') {
+        authority.split_inclusive(']').next()?
+    } else {
+        authority.split(':').next()?
+    };
+    (!host.is_empty()).then_some(host)
+}
+
 /// Resolves omnibox text into the address the engine loads.
 ///
 /// Address-shaped text opens an address. Anything else is a search query, which
@@ -84,6 +100,17 @@ pub fn normalize_url(input: &str) -> Result<String, &'static str> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn url_host_drops_credentials_and_port() {
+        assert_eq!(
+            url_host("https://user:pw@example.org:8443/a?b"),
+            Some("example.org")
+        );
+        assert_eq!(url_host("https://[::1]:8443/"), Some("[::1]"));
+        assert_eq!(url_host("https://127.0.0.1"), Some("127.0.0.1"));
+        assert_eq!(url_host("about:blank"), None);
+    }
     use super::*;
 
     #[test]

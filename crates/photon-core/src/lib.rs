@@ -45,7 +45,7 @@ pub use sidebar::{
 pub use spaces::{
     MAX_FAVOURITES, MAX_SPACE_COLORS, Space, SpaceColors, SpaceId, SpaceTint, Spaces,
 };
-pub use state::{BrowserCommand, BrowserState, EngineEvent, normalize_url};
+pub use state::{BrowserCommand, BrowserState, EngineEvent, normalize_url, url_host};
 pub use tab_sleep::{
     MemoryPressure, TabSleepMode, active_idle_timeout, idle_discard_delay, idle_timeout,
 };
