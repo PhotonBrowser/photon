@@ -87,6 +87,21 @@ using PhotonOpenInNewTabCallback = void (*)(void*, char const*, bool);
 using PhotonPeekCallback = void (*)(void*, char const*);
 // Called with the hovered link's URL, or an empty string when none is hovered.
 using PhotonLinkHoverCallback = void (*)(void*, char const*);
+// The focused editable's state for platform input methods. Offsets count
+// UTF-16 code units; the strings are UTF-8 and live only during the call.
+struct PhotonInputMethodState {
+    bool enabled;
+    int32_t cursor_position;
+    int32_t anchor_position;
+    char const* text_before_cursor;
+    char const* text_after_cursor;
+    bool has_caret_rect;
+    double caret_x;
+    double caret_y;
+    double caret_width;
+    double caret_height;
+};
+using PhotonInputMethodStateCallback = void (*)(void*, PhotonInputMethodState const*);
 // Called when the page enters (true) or leaves (false) element fullscreen.
 using PhotonFullscreenCallback = void (*)(void*, bool);
 struct PhotonNewWebViewRequest {
@@ -169,6 +184,7 @@ struct PhotonViewCallbacks {
     PhotonPermissionCallback permission_callback;
     PhotonPermissionCancelledCallback permission_cancelled_callback;
     PhotonPageBackgroundCallback page_background_callback;
+    PhotonInputMethodStateCallback input_method_state_callback;
 #if defined(__APPLE__)
     bool native_metal_presentation;
     PhotonNativeBackingCallback native_backing_callback;
@@ -293,6 +309,14 @@ void photon_view_pointer(void* view, int kind, double x, double y, int button,
 void photon_view_key(void* view, uint16_t key, bool pressed,
     uint32_t code_point, bool shift, bool control, bool alt,
     bool meta, bool repeat, bool insert_text);
+// Platform input method composition. `text` is UTF-8. Marked text replaces
+// the previous marked text, and an empty string ends the composition.
+void photon_view_set_marked_text(void* view, char const* text);
+// Replaces the marked text, or the range `replacement_start` UTF-16 code units
+// from the cursor and `replacement_length` long, with `text`.
+void photon_view_commit_text(void* view, char const* text,
+    int32_t replacement_start, int32_t replacement_length);
+void photon_view_unmark_text(void* view);
 void photon_view_shutdown(void* view);
 void photon_view_destroy(void* view);
 #if defined(__APPLE__)

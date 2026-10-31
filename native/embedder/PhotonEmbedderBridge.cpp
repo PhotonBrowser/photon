@@ -62,6 +62,7 @@ Photon::ViewCallbacks make_view_callbacks(
     auto file_picker_callback = callbacks.file_picker_callback;
     auto permission_callback = callbacks.permission_callback;
     auto permission_cancelled_callback = callbacks.permission_cancelled_callback;
+    auto input_method_state_callback = callbacks.input_method_state_callback;
 
     Photon::ViewCallbacks result;
     result.state_changed = [=](Photon::ViewState const& state) {
@@ -252,6 +253,23 @@ Photon::ViewCallbacks make_view_callbacks(
     result.link_hovered = [=](std::string const& url) {
         if (link_hover_callback)
             link_hover_callback(callback_data, url.c_str());
+    };
+    result.input_method_state_changed = [=](Photon::InputMethodState const& state) {
+        if (!input_method_state_callback)
+            return;
+        PhotonInputMethodState native_state {
+            .enabled = state.enabled,
+            .cursor_position = state.cursor_position,
+            .anchor_position = state.anchor_position,
+            .text_before_cursor = state.text_before_cursor.c_str(),
+            .text_after_cursor = state.text_after_cursor.c_str(),
+            .has_caret_rect = state.has_caret_rect,
+            .caret_x = state.caret_x,
+            .caret_y = state.caret_y,
+            .caret_width = state.caret_width,
+            .caret_height = state.caret_height,
+        };
+        input_method_state_callback(callback_data, &native_state);
     };
     result.fullscreen_requested = [=](bool fullscreen) {
         if (fullscreen_callback)
@@ -847,6 +865,25 @@ extern "C" void photon_view_key(void* view, uint16_t key, bool pressed,
         static_cast<ViewHandle*>(view)->view->send_key_event(
             static_cast<Photon::Key>(key), pressed, code_point, shift, control, alt,
             meta, repeat, insert_text);
+}
+
+extern "C" void photon_view_set_marked_text(void* view, char const* text)
+{
+    if (view && text)
+        static_cast<ViewHandle*>(view)->view->set_marked_text(text);
+}
+
+extern "C" void photon_view_commit_text(void* view, char const* text,
+    int32_t replacement_start, int32_t replacement_length)
+{
+    if (view && text)
+        static_cast<ViewHandle*>(view)->view->commit_text(text, replacement_start, replacement_length);
+}
+
+extern "C" void photon_view_unmark_text(void* view)
+{
+    if (view)
+        static_cast<ViewHandle*>(view)->view->unmark_text();
 }
 
 extern "C" void photon_view_shutdown(void* view)

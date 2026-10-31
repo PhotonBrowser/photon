@@ -69,8 +69,8 @@ pub(in crate::platform) fn window_background_style(
 }
 
 pub(in crate::platform) use webview::{
-    CrashNotice, Favicon, FindResult, PageMenuItem, PhotonWebView, SelectDropdown, SelectItem,
-    WebViewEvent,
+    CrashNotice, Favicon, FindResult, InputMethodState, PageMenuItem, PhotonWebView,
+    SelectDropdown, SelectItem, WebViewEvent,
 };
 pub use window::run;
 pub use window::show_alert;

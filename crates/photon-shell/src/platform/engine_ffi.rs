@@ -180,6 +180,8 @@ pub(super) mod embedder {
         pub permission_cancelled_callback:
             Option<unsafe extern "C" fn(*mut c_void, u64, *const c_char)>,
         pub page_background_callback: Option<unsafe extern "C" fn(*mut c_void, u32)>,
+        pub input_method_state_callback:
+            Option<unsafe extern "C" fn(*mut c_void, *const InputMethodState)>,
         #[cfg(target_os = "macos")]
         pub native_metal_presentation: bool,
         #[cfg(target_os = "macos")]
@@ -188,6 +190,23 @@ pub(super) mod embedder {
         #[cfg(target_os = "macos")]
         pub native_frame_callback:
             Option<unsafe extern "C" fn(*mut c_void, u64, u64, u64, u64, i32, i32, f64)>,
+    }
+
+    /// The focused editable's state for platform input methods, matching
+    /// `PhotonInputMethodState`. Offsets count UTF-16 code units; the strings
+    /// are UTF-8 and live only during the callback.
+    #[repr(C)]
+    pub struct InputMethodState {
+        pub enabled: bool,
+        pub cursor_position: i32,
+        pub anchor_position: i32,
+        pub text_before_cursor: *const c_char,
+        pub text_after_cursor: *const c_char,
+        pub has_caret_rect: bool,
+        pub caret_x: f64,
+        pub caret_y: f64,
+        pub caret_width: f64,
+        pub caret_height: f64,
     }
 
     unsafe extern "C" {
@@ -381,6 +400,14 @@ pub(super) mod embedder {
             repeat: bool,
             insert_text: bool,
         );
+        pub fn photon_view_set_marked_text(view: *mut c_void, text: *const c_char);
+        pub fn photon_view_commit_text(
+            view: *mut c_void,
+            text: *const c_char,
+            replacement_start: i32,
+            replacement_length: i32,
+        );
+        pub fn photon_view_unmark_text(view: *mut c_void);
         #[cfg(target_os = "macos")]
         pub fn photon_view_release_native_frame(
             view: *mut c_void,

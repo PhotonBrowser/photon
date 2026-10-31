@@ -21,7 +21,9 @@ use super::{EngineSession, RequestedWebView};
 use crate::platform::engine_ffi::embedder;
 use crate::platform::permission_coordinator::PermissionRequest;
 use crate::platform::trace;
-use crate::platform::ui::{Favicon, FindResult, PageMenuItem, SelectDropdown, SelectItem};
+use crate::platform::ui::{
+    Favicon, FindResult, InputMethodState, PageMenuItem, SelectDropdown, SelectItem,
+};
 use photon_core::PopupPolicy;
 
 static NEXT_WINDOW_HANDLE: AtomicU64 = AtomicU64::new(1);
@@ -312,6 +314,46 @@ pub(super) unsafe extern "C" fn on_engine_link_hover(context: *mut c_void, url: 
         .into_owned();
     unsafe { &*(context.cast::<CallbackState>()) }
         .update_webview(move |view, cx| view.set_hovered_link(url, cx));
+}
+
+pub(super) unsafe extern "C" fn on_engine_input_method_state(
+    context: *mut c_void,
+    state: *const embedder::InputMethodState,
+) {
+    if context.is_null() || state.is_null() {
+        return;
+    }
+    let state = unsafe { &*state };
+    let text = |text: *const c_char| {
+        if text.is_null() {
+            String::new()
+        } else {
+            unsafe { CStr::from_ptr(text) }
+                .to_string_lossy()
+                .into_owned()
+        }
+    };
+    let state = InputMethodState {
+        enabled: state.enabled,
+        cursor: state.cursor_position.max(0) as usize,
+        anchor: state.anchor_position.max(0) as usize,
+        text_before_cursor: text(state.text_before_cursor),
+        text_after_cursor: text(state.text_after_cursor),
+        caret: state.has_caret_rect.then(|| {
+            gpui::Bounds::new(
+                gpui::point(
+                    gpui::px(state.caret_x as f32),
+                    gpui::px(state.caret_y as f32),
+                ),
+                gpui::size(
+                    gpui::px(state.caret_width as f32),
+                    gpui::px(state.caret_height as f32),
+                ),
+            )
+        }),
+    };
+    unsafe { &*(context.cast::<CallbackState>()) }
+        .update_webview(move |view, cx| view.set_input_method_state(state, cx));
 }
 
 pub(super) unsafe extern "C" fn on_engine_fullscreen(context: *mut c_void, fullscreen: bool) {

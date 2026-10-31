@@ -344,6 +344,7 @@ impl EngineSession {
             permission_callback: Some(on_engine_permission_request),
             permission_cancelled_callback: Some(on_engine_permission_cancelled),
             page_background_callback: Some(on_engine_page_background),
+            input_method_state_callback: Some(on_engine_input_method_state),
             #[cfg(target_os = "macos")]
             native_metal_presentation: true,
             #[cfg(target_os = "macos")]
@@ -745,6 +746,42 @@ impl EngineSession {
                 insert_text,
             )
         }
+    }
+
+    /// Shows `text` as the input method's in-progress composition, replacing
+    /// the previous one; an empty string ends the composition.
+    pub(in crate::platform) fn set_marked_text(&mut self, text: &str) {
+        let Ok(text) = CString::new(text.replace('\0', "")) else {
+            return;
+        };
+        unsafe { embedder::photon_view_set_marked_text(self.view, text.as_ptr()) }
+    }
+
+    /// Inserts text the input method finished composing, replacing the
+    /// marked text or the range given relative to the cursor in UTF-16 units.
+    pub(in crate::platform) fn commit_text(
+        &mut self,
+        text: &str,
+        replacement_start: i32,
+        replacement_length: i32,
+    ) {
+        let Ok(text) = CString::new(text.replace('\0', "")) else {
+            return;
+        };
+        self.callbacks.mark_input();
+        unsafe {
+            embedder::photon_view_commit_text(
+                self.view,
+                text.as_ptr(),
+                replacement_start,
+                replacement_length,
+            )
+        }
+    }
+
+    /// Ends the composition, keeping the marked text as typed.
+    pub(in crate::platform) fn unmark_text(&mut self) {
+        unsafe { embedder::photon_view_unmark_text(self.view) }
     }
 
     pub(in crate::platform) fn drain_releases(&mut self) {

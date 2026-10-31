@@ -41,6 +41,7 @@ mod history;
 mod history_swipe;
 mod link_status;
 mod permissions;
+mod text_input;
 mod zoom;
 
 pub(in crate::platform) use context_menu::{PageMenu, PageMenuItem};
@@ -48,6 +49,7 @@ pub(in crate::platform) use crashes::CrashNotice;
 pub(in crate::platform) use favicon::Favicon;
 pub(in crate::platform) use find::FindResult;
 pub(in crate::platform) use form_controls::{SelectDropdown, SelectItem};
+pub(in crate::platform) use text_input::InputMethodState;
 
 static MOUSE_MOVE_TRACE_COUNT: AtomicUsize = AtomicUsize::new(0);
 
@@ -128,6 +130,8 @@ pub(in crate::platform) struct PhotonWebView {
     /// chrome around it moves, so Engine lays it out once, not every frame.
     layout_growth: gpui::Size<f32>,
     input: WebViewInput,
+    /// Text from the platform's input methods, such as accents and CJK input.
+    text_input: text_input::TextInput,
     history_swipe: history_swipe::HistorySwipe,
     pub(super) _quit_subscription: Option<Subscription>,
     focus_subscriptions: Vec<Subscription>,
@@ -456,6 +460,7 @@ impl PhotonWebView {
             tab_switch_on_top: false,
             layout_growth: gpui::Size::default(),
             input: WebViewInput::default(),
+            text_input: text_input::TextInput::default(),
             history_swipe: history_swipe::HistorySwipe::default(),
             _quit_subscription: None,
             focus_subscriptions: Vec::new(),
@@ -489,6 +494,7 @@ impl PhotonWebView {
                 this.sync_engine_focus(window)
             }),
             cx.on_blur(&self.focus_handle, window, |this, window, cx| {
+                this.end_composition();
                 this.sync_engine_focus(window);
                 this.reset_history_swipe(true);
                 cx.notify();
@@ -793,7 +799,13 @@ impl Render for PhotonWebView {
                     cx.stop_propagation();
                     return;
                 }
+                if let Some(text) = text_input::TextInput::text_for_key(event) {
+                    this.session.commit_text(text, 0, 0);
+                    cx.stop_propagation();
+                    return;
+                }
                 let should_consume = this.input.key_down(&mut this.session, event);
+                this.text_input.key_pressed(event);
                 // Consume commands after forwarding so editing keys such as Backspace
                 // are not replayed by the native text input system.
                 if should_consume {
@@ -801,6 +813,7 @@ impl Render for PhotonWebView {
                 }
             }))
             .on_key_up(cx.listener(|this, event: &KeyUpEvent, _, _| {
+                this.text_input.key_released();
                 this.input.key_up(&mut this.session, event);
             }));
         webview = webview
@@ -820,6 +833,10 @@ impl Render for PhotonWebView {
                     .record_navigation_surface_rendered(navigation_id);
             }
         }
+        webview = webview.child(text_input::input_handler_element(
+            self.focus_handle.clone(),
+            cx.entity(),
+        ));
         if let Some(status) = self.link_status(palette) {
             webview = webview.child(status);
         }
