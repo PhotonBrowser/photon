@@ -105,19 +105,28 @@ Both read one model,
 for their controls, states and wording, and both change the site through the
 omnibox's `toggle_site_control`, so a change to one belongs in the other.
 
+### Certificates
+
+A page whose certificate fails verification shows a full-page warning
+(`webview/certificate.rs`) with **Go Back** and, under **Details**, a way to
+continue. Continuing lets that host load without verification until Photon
+quits: `RequestServerManager` sends the host to every RequestServer, which
+skips verification for it. The site is then **Not secure**, with its own
+explanation on the connection page.
+
+Each RequestServer remembers the certificate every HTTPS host last presented
+(`CertificateStore`). Opening the popover on an HTTPS page asks for the host's
+certificate, and the connection page lists who it was issued to and by, its
+validity and its SHA-256 fingerprint.
+
+"Secure" still starts from the page's scheme (`notify_state` in
+`LibPhotonEmbedder`); the shell overrides it for hosts whose certificate errors
+were ignored. The full chain and TLS version are not shown yet.
+
 ### Not yet implemented
 
 These show dimmed until the Engine can do them:
 
-- **Certificates.** The connection page has a disabled "View certificate"
-  button. "Secure" means only that the page's address is `https`
-  (`notify_state` in `LibPhotonEmbedder`); RequestServer does not keep the
-  peer certificate or TLS details. Showing a certificate needs RequestServer to
-  record the main document's chain, the Engine to carry it through
-  `LibPhotonEmbedder` and `photon-ffi` into page state, and the popover to
-  show it: `SFCertificatePanel` on macOS and a GPUI view elsewhere. Security
-  should then come from the TLS result rather than the scheme. Check how the
-  Engine's Qt and AppKit UIs treat connection security first.
 - **Camera** and **pop out view**, which have no Engine support.
 - **Data and cookies** and **Permissions**, which have no pages to open.
 

@@ -11,8 +11,8 @@ documented in the guides linked from the [README](../README.md).
 - Improve tab and toolbar interactions, including copying the current address,
   background audio controls, and spring motion.
 
-- Show site certificates and TLS details from the Engine, replacing the
-  address-scheme check behind “Secure”. See [Omnibox](Omnibox.md#not-yet-implemented).
+- Show the full certificate chain and TLS version, and take “Secure” from the
+  TLS result rather than the address scheme. See [Omnibox](Omnibox.md#certificates).
 
 ## Later
 
