@@ -201,6 +201,18 @@ impl BrowserWindow {
         self.show_context_menu(window, items, cx);
     }
 
+    /// Opens the site's cache and cookie actions from its info popover.
+    pub(super) fn show_site_info_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.show_context_menu(
+            window,
+            vec![
+                command_item("Clear Cache", MenuCommand::ClearCache),
+                command_item("Clear Cookies", MenuCommand::ClearCookies),
+            ],
+            cx,
+        );
+    }
+
     /// Builds the custom in-window menu over browser chrome and page content.
     pub(super) fn context_menu_overlay(
         &mut self,

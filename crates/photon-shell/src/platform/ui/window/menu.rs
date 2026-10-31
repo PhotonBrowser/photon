@@ -2,8 +2,8 @@
 //! space. A menu item carries its command in a [`RunMenuCommand`] action,
 //! which the window runs when the item is chosen.
 
-use gpui::{Context, MenuItem, SharedString, Window};
-use photon_core::{Shortcut, SpaceId};
+use gpui::{App, Context, MenuItem, SharedString, Window};
+use photon_core::{ClearBrowsingData, Shortcut, SpaceId};
 
 use super::BrowserWindow;
 
@@ -22,6 +22,8 @@ pub(super) enum MenuCommand {
     EditSpace(SpaceId),
     EditTheme(SpaceId),
     DeleteSpace(SpaceId),
+    ClearCache,
+    ClearCookies,
 }
 
 /// Runs a context menu's command.
@@ -55,7 +57,35 @@ impl BrowserWindow {
             MenuCommand::EditSpace(space) => self.edit_space(Some(space), window, cx),
             MenuCommand::EditTheme(space) => self.show_theme_picker(space, window, cx),
             MenuCommand::DeleteSpace(space) => self.delete_space(space, window, cx),
+            MenuCommand::ClearCache => self.clear_data(
+                ClearBrowsingData {
+                    cache: true,
+                    ..ClearBrowsingData::default()
+                },
+                "Cache cleared",
+                cx,
+            ),
+            MenuCommand::ClearCookies => self.clear_data(
+                ClearBrowsingData {
+                    site_data: true,
+                    ..ClearBrowsingData::default()
+                },
+                "Cookies and site data cleared",
+                cx,
+            ),
         }
+    }
+
+    fn clear_data(&self, request: ClearBrowsingData, message: &'static str, cx: &mut App) {
+        let runtime = self.runtime.clone();
+        super::super::history::BrowsingHistory::clear(
+            request,
+            &runtime,
+            move |cx| {
+                super::super::show_alert(cx, message);
+            },
+            cx,
+        );
     }
 
     pub(super) fn toggle_performance_overlay(&mut self, cx: &mut Context<Self>) {

@@ -116,6 +116,17 @@ pub(super) fn settings_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("settings"), color, size)
 }
 
+/// Horizontal ellipsis for a contextual options menu.
+pub(super) fn more_icon(color: u32, size: f32) -> impl IntoElement {
+    let dot = size / 5.0;
+    gpui::div()
+        .flex()
+        .items_center()
+        .justify_center()
+        .gap(px(size / 8.0))
+        .children((0..3).map(|_| gpui::div().size(px(dot)).rounded_full().bg(rgb(color))))
+}
+
 /// A circle half filled, for appearance.
 pub(super) fn appearance_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("contrast"), color, size)
