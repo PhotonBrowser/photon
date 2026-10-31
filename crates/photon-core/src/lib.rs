@@ -26,7 +26,7 @@ pub use commands::{
     CommandRegistry, CommandRequirement,
 };
 pub use crashes::{CrashResponse, EngineService, PageCrashes};
-pub use dialogs::{DialogKind, DialogReply, DialogRequest, PageDialogs};
+pub use dialogs::{Credentials, DialogInput, DialogKind, DialogReply, DialogRequest, PageDialogs};
 pub use history::{HISTORY_MAX_PAGES, HISTORY_MAX_SEARCHES, History, HistoryEntry, SearchEntry};
 pub use history_days::{day_heading, local_day, time_of_day};
 pub use internal_pages::{internal_page_name, internal_page_url};

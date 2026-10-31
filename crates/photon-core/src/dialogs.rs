@@ -1,4 +1,5 @@
-//! JavaScript `alert`, `confirm` and `prompt` dialogs for one page.
+//! JavaScript `alert`, `confirm` and `prompt` dialogs for one page, and the
+//! sign-in dialog a server asks for with HTTP authentication.
 //!
 //! The page waits for an answer to every dialog it opens. These rules decide
 //! when a dialog is shown and what the page receives when it is closed or
@@ -9,7 +10,29 @@
 pub enum DialogKind {
     Alert,
     Confirm,
-    Prompt { default_text: String },
+    Prompt {
+        default_text: String,
+    },
+    /// A server asked for a username and password.
+    SignIn {
+        request_id: u64,
+    },
+}
+
+/// What the user entered when accepting a dialog.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct DialogInput {
+    /// A prompt's response, or a sign-in's username.
+    pub text: String,
+    /// A sign-in's password.
+    pub password: String,
+}
+
+/// A username and password entered to sign in.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Credentials {
+    pub username: String,
+    pub password: String,
 }
 
 /// A dialog a page asked to show.
@@ -28,15 +51,27 @@ pub enum DialogReply {
     Confirm(bool),
     /// The entered text, or `None` when the prompt was cancelled.
     Prompt(Option<String>),
+    /// The entered credentials, or `None` when signing in was cancelled.
+    SignIn {
+        request_id: u64,
+        credentials: Option<Credentials>,
+    },
 }
 
 impl DialogKind {
-    /// The reply for accepting with OK, using `text` for a prompt.
-    pub fn accepted(&self, text: String) -> DialogReply {
+    /// The reply for accepting with OK, using what was entered.
+    pub fn accepted(&self, input: DialogInput) -> DialogReply {
         match self {
             Self::Alert => DialogReply::Alert,
             Self::Confirm => DialogReply::Confirm(true),
-            Self::Prompt { .. } => DialogReply::Prompt(Some(text)),
+            Self::Prompt { .. } => DialogReply::Prompt(Some(input.text)),
+            Self::SignIn { request_id } => DialogReply::SignIn {
+                request_id: *request_id,
+                credentials: Some(Credentials {
+                    username: input.text,
+                    password: input.password,
+                }),
+            },
         }
     }
 
@@ -46,6 +81,10 @@ impl DialogKind {
             Self::Alert => DialogReply::Alert,
             Self::Confirm => DialogReply::Confirm(false),
             Self::Prompt { .. } => DialogReply::Prompt(None),
+            Self::SignIn { request_id } => DialogReply::SignIn {
+                request_id: *request_id,
+                credentials: None,
+            },
         }
     }
 }
@@ -76,8 +115,8 @@ impl PageDialogs {
     }
 
     /// Closes the open dialog with OK, returning the reply for the page.
-    pub fn accept(&mut self, text: String) -> Option<DialogReply> {
-        self.open.take().map(|request| request.kind.accepted(text))
+    pub fn accept(&mut self, input: DialogInput) -> Option<DialogReply> {
+        self.open.take().map(|request| request.kind.accepted(input))
     }
 
     /// Closes the open dialog with Cancel, returning the reply for the page.
@@ -127,15 +166,50 @@ mod tests {
         assert_eq!(dialogs.request(request(prompt())), None);
         assert_eq!(dialogs.open().unwrap().message, "Hello");
         assert_eq!(
-            dialogs.accept("typed".into()),
+            dialogs.accept(text("typed")),
             Some(DialogReply::Prompt(Some("typed".into())))
         );
         assert!(dialogs.open().is_none());
 
         dialogs.request(request(DialogKind::Confirm));
         assert_eq!(
-            dialogs.accept(String::new()),
+            dialogs.accept(DialogInput::default()),
             Some(DialogReply::Confirm(true))
+        );
+    }
+
+    fn text(text: &str) -> DialogInput {
+        DialogInput {
+            text: text.into(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn sign_in_answers_with_credentials_or_none() {
+        let sign_in = DialogKind::SignIn { request_id: 7 };
+        let mut dialogs = PageDialogs::default();
+        dialogs.request(request(sign_in.clone()));
+        assert_eq!(
+            dialogs.accept(DialogInput {
+                text: "ada".into(),
+                password: "secret".into(),
+            }),
+            Some(DialogReply::SignIn {
+                request_id: 7,
+                credentials: Some(Credentials {
+                    username: "ada".into(),
+                    password: "secret".into(),
+                }),
+            })
+        );
+        dialogs.request(request(sign_in));
+        assert_eq!(
+            dialogs.navigation_started(),
+            Some(DialogReply::SignIn {
+                request_id: 7,
+                credentials: None,
+            })
         );
     }
 
