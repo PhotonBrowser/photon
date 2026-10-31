@@ -29,7 +29,8 @@ pub(in super::super) struct FooterActions {
     /// Told where the downloads button is drawn, which its popover points at.
     pub(in super::super) downloads_drawn: PrepaintHandler,
     pub(in super::super) menu: ClickHandler,
-    pub(in super::super) new_space: ClickHandler,
+    /// Adds a space; `None` in a private window, which cannot.
+    pub(in super::super) new_space: Option<ClickHandler>,
 }
 
 /// A space, shown as a dot of its colour.
@@ -75,6 +76,8 @@ pub(in super::super) fn footer(
                 0,
                 actions.downloads_state,
                 palette,
+                window,
+                cx,
                 actions.downloads,
             ),
         ));
@@ -83,7 +86,7 @@ pub(in super::super) fn footer(
             .flex_shrink_0()
             .items_center()
             .pt(px(spacing.padding))
-            .pb(px(metrics::PAGE_INSET + spacing.padding))
+            .pb(px(metrics::PAGE_INSET))
             .gap(px(spacing.item_gap))
             .child(space_switcher(
                 v_stack(),
@@ -109,6 +112,8 @@ pub(in super::super) fn footer(
                 0,
                 actions.downloads_state,
                 palette,
+                window,
+                cx,
                 actions.downloads,
             )),
         )
@@ -123,23 +128,25 @@ pub(in super::super) fn footer(
                     focus,
                     RovingAxis::Horizontal,
                 ))
-                .child(toolbar_button(
-                    "sidebar-new-space",
-                    "New space",
-                    1,
-                    true,
-                    animated_icon(
+                .children(actions.new_space.map(|new_space| {
+                    toolbar_button(
                         "sidebar-new-space",
-                        plus(),
-                        palette.text_secondary,
-                        metrics::TOOLBAR_ICON_SIZE,
-                        window,
-                        cx,
+                        "New space",
+                        1,
+                        true,
+                        animated_icon(
+                            "sidebar-new-space",
+                            plus(),
+                            palette.text_secondary,
+                            metrics::TOOLBAR_ICON_SIZE,
+                            window,
+                            cx,
+                        )
+                        .size_full(),
+                        palette,
+                        new_space,
                     )
-                    .size_full(),
-                    palette,
-                    actions.new_space,
-                )),
+                })),
         )
         .child(menu)
         .into_any_element()

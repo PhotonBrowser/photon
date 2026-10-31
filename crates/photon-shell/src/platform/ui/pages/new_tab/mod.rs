@@ -16,8 +16,8 @@ use gpui::{
 };
 
 use super::super::history::BrowsingHistory;
-use super::super::icons::photon_logo;
-use super::super::layout::v_stack;
+use super::super::icons::{photon_logo, private_icon};
+use super::super::layout::{h_stack, v_stack};
 use super::super::motion::Presence;
 use super::super::settings::Settings;
 use super::super::{metrics, theme::page_palette as palette};
@@ -77,6 +77,10 @@ impl NewTabPage {
     /// Follows the pointer over the tiles. Leaving one tile and entering the
     /// next can arrive in either order.
     fn hover_tile(&mut self, index: usize, hovered: bool, cx: &mut Context<Self>) {
+        // A private window's shortcuts open sites but cannot be removed.
+        if self.context.private {
+            return;
+        }
         if hovered || self.hovered == Some(index) {
             self.hovered = hovered.then_some(index);
             cx.notify();
@@ -84,6 +88,9 @@ impl NewTabPage {
     }
 
     fn remove(&mut self, url: &str, cx: &mut Context<Self>) {
+        if self.context.private {
+            return;
+        }
         self.hovered = None;
         Settings::update(cx, |settings| settings.new_tab.remove(url));
         super::super::show_alert(cx, "Shortcut removed");
@@ -110,6 +117,10 @@ impl Render for NewTabPage {
                     .object_fit(ObjectFit::Contain),
             );
         }
+        let private = self.context.private;
+        if private {
+            content = content.child(private_note(palette));
+        }
         if layout.show_shortcuts {
             content = content.child(self.shortcut_grid(shortcuts, palette, cx));
         }
@@ -130,13 +141,49 @@ impl Render for NewTabPage {
                     .p(px(metrics::INTERNAL_PAGE_INSET))
                     .child(content),
             )
-            .child(
-                div()
-                    .absolute()
-                    .right(px(metrics::INTERNAL_PAGE_GROUP_GAP))
-                    .bottom(px(metrics::INTERNAL_PAGE_GROUP_GAP))
-                    .child(self.customise_button(palette, cx)),
-            )
+            .when(!private, |page| {
+                page.child(
+                    div()
+                        .absolute()
+                        .right(px(metrics::INTERNAL_PAGE_GROUP_GAP))
+                        .bottom(px(metrics::INTERNAL_PAGE_GROUP_GAP))
+                        .child(self.customise_button(palette, cx)),
+                )
+            })
             .children(self.shortcut_form(super::super::theme::palette(window, cx), cx))
     }
+}
+
+/// Says that the window is private and what that keeps.
+fn private_note(palette: super::super::theme::ThemeColors) -> impl IntoElement {
+    v_stack()
+        .id("new-tab-private-note")
+        .role(gpui::Role::Note)
+        .max_w(px(metrics::NEW_TAB_PRIVATE_NOTE_WIDTH))
+        .items_center()
+        .gap(px(metrics::MENU_ITEM_GAP))
+        .child(
+            h_stack()
+                .items_center()
+                .gap(px(metrics::MENU_ITEM_GAP * 2.0))
+                .text_size(px(metrics::MENU_FONT_SIZE))
+                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .text_color(gpui::rgb(palette.text_primary))
+                .child(private_icon(
+                    palette.text_primary,
+                    metrics::TOOLBAR_ICON_SIZE,
+                ))
+                .child("Private window"),
+        )
+        .child(
+            div()
+                .text_center()
+                .text_size(px(metrics::HISTORY_ROW_DETAIL_FONT_SIZE))
+                .text_color(gpui::rgb(palette.text_secondary))
+                .child(
+                    "Photon won\u{2019}t keep the pages you visit, your searches or cookies \
+                     from this window once you close it. Files you download are kept, and \
+                     sites you sign in to still know it\u{2019}s you.",
+                ),
+        )
 }

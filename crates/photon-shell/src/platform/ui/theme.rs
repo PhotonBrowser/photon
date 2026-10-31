@@ -87,6 +87,9 @@ impl AccentColor {
 /// The colors for `window`, in the appearance, transparency and window
 /// colour the settings choose.
 pub(super) fn palette(window: &Window, cx: &App) -> ThemeColors {
+    if super::window_space::is_private_window(window, cx) {
+        return private_palette();
+    }
     let settings = Settings::get(cx);
     let appearance = Settings::appearance(window.appearance(), cx);
     let preview = AppearancePreview::get(cx);
@@ -129,6 +132,25 @@ pub(super) fn palette(window: &Window, cx: &App) -> ThemeColors {
     }
 
     palette
+}
+
+/// A private window's fixed look: dark, solid and untinted, whatever the
+/// space, theme or transparency chosen elsewhere.
+fn private_palette() -> ThemeColors {
+    ThemeColors::for_appearance(WindowAppearance::Dark, private_style())
+}
+
+/// A private window's style: solid and in dark's own window colour. Without a
+/// tint the window would take its colour's preset, which is light.
+fn private_style() -> WindowStyle {
+    WindowStyle {
+        transparency: Transparency::Off,
+        color: WindowColor::System,
+        gradient: false,
+        tint: Some(default_tint(WindowAppearance::Dark)),
+        colors: None,
+        transparency_percent: None,
+    }
 }
 
 /// What decides a palette besides the appearance.
@@ -671,12 +693,9 @@ pub(super) fn chrome_palette(window: &Window, cx: &App) -> ThemeColors {
         ));
     let settings = Settings::get(cx);
     let space = super::window_space::window_space(window, cx);
-    let chrome = ThemeColors::for_appearance(
-        if dark {
-            WindowAppearance::Dark
-        } else {
-            WindowAppearance::Light
-        },
+    let style = if super::window_space::is_private_window(window, cx) {
+        private_style()
+    } else {
         WindowStyle {
             transparency: settings.transparency,
             color: space.color,
@@ -684,7 +703,15 @@ pub(super) fn chrome_palette(window: &Window, cx: &App) -> ThemeColors {
             tint: space.tint,
             colors: space.colors,
             transparency_percent: Some(AppearancePreview::transparency_in(space, cx)),
+        }
+    };
+    let chrome = ThemeColors::for_appearance(
+        if dark {
+            WindowAppearance::Dark
+        } else {
+            WindowAppearance::Light
         },
+        style,
     );
     result.text_primary = ink;
     result.text_secondary = to_rgb_token(mix_colors(

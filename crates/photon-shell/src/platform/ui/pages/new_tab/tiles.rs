@@ -29,7 +29,8 @@ impl NewTabPage {
     ) -> impl IntoElement {
         let layout = &Settings::get(cx).new_tab;
         let (limit, columns) = (layout.shortcut_limit(), layout.shortcut_columns());
-        let room_left = shortcuts.len() < limit;
+        // A private window cannot add shortcuts.
+        let room_left = shortcuts.len() < limit && !self.context.private;
         let tiles: Vec<AnyElement> = shortcuts
             .into_iter()
             .enumerate()

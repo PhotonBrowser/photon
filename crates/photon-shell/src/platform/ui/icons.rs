@@ -127,6 +127,11 @@ pub(super) fn more_icon(color: u32, size: f32) -> impl IntoElement {
         .children((0..3).map(|_| gpui::div().size(px(dot)).rounded_full().bg(rgb(color))))
 }
 
+/// A mask, for private browsing.
+pub(super) fn private_icon(color: u32, size: f32) -> impl IntoElement {
+    icon(lucide!("venetian-mask"), color, size)
+}
+
 /// A circle half filled, for appearance.
 pub(super) fn appearance_icon(color: u32, size: f32) -> impl IntoElement {
     icon(lucide!("contrast"), color, size)

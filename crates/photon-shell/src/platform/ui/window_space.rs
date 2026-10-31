@@ -3,7 +3,7 @@
 //! or the settings page in it, follow that window's space. Windows without
 //! one recorded show the space new windows open in.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use gpui::{App, Global, Window};
 use photon_core::{Space, SpaceId};
@@ -14,6 +14,26 @@ use super::settings::Settings;
 struct WindowSpaces(HashMap<u64, SpaceId>);
 
 impl Global for WindowSpaces {}
+
+/// The private windows, which look the same whatever the space or settings.
+#[derive(Default)]
+struct PrivateWindows(HashSet<u64>);
+
+impl Global for PrivateWindows {}
+
+/// Records that the window `window_id` browses privately.
+pub(super) fn set_window_private(window_id: u64, cx: &mut App) {
+    cx.default_global::<PrivateWindows>().0.insert(window_id);
+}
+
+/// Whether `window` browses privately.
+pub(super) fn is_private_window(window: &Window, cx: &App) -> bool {
+    cx.try_global::<PrivateWindows>().is_some_and(|windows| {
+        windows
+            .0
+            .contains(&window.window_handle().window_id().as_u64())
+    })
+}
 
 /// `space` while it still exists, otherwise the space new windows open in.
 pub(super) fn resolve_space(space: SpaceId, cx: &App) -> &Space {
@@ -46,6 +66,11 @@ pub(super) fn set_window_space(window_id: u64, space: SpaceId, cx: &mut App) {
 
 /// Forgets the window `window_id` as it closes.
 pub(super) fn forget_window_space(window_id: u64, cx: &mut App) {
+    if let Some(windows) = cx.try_global::<PrivateWindows>()
+        && windows.0.contains(&window_id)
+    {
+        cx.global_mut::<PrivateWindows>().0.remove(&window_id);
+    }
     if let Some(spaces) = cx.try_global::<WindowSpaces>()
         && spaces.0.contains_key(&window_id)
     {

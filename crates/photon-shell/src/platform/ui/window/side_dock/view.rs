@@ -9,8 +9,8 @@ use photon_core::{Command, DockRegion, MAX_FAVOURITES};
 use super::super::super::button::toolbar_button;
 use super::super::super::download_button::DownloadsButton;
 use super::super::super::downloads::Downloads;
-use super::super::super::icons::sidebar_icon;
-use super::super::super::layout::{Elevated, Elevation, Raised, v_stack};
+use super::super::super::icons::{private_icon, sidebar_icon};
+use super::super::super::layout::{Elevated, Elevation, Raised, h_stack, v_stack};
 use super::super::super::motion::{AnimateIn, Edge, slide_in, translated};
 use super::super::super::settings::Settings;
 use super::super::super::sidebar::{
@@ -286,6 +286,10 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
+        // A private window is disposable: no favourites to open or add.
+        if self.private {
+            return None;
+        }
         let space = resolve_space(self.current_space(cx), cx);
         let (space_id, saved, hint_dismissed) = (
             space.id,
@@ -402,6 +406,12 @@ impl BrowserWindow {
                 .child(tabs)
                 .animate_in(("space-tabs", space as usize), slide_in(edge), &motion)
                 .into_any_element(),
+            None if self.private => v_stack()
+                .w_full()
+                .gap(px(metrics::SidebarSpacing::new(collapsed).item_gap))
+                .child(incognito_row(collapsed, palette))
+                .child(tabs)
+                .into_any_element(),
             None => tabs.into_any_element(),
         }
     }
@@ -413,8 +423,14 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        // A private window stays in one space and cannot add another.
+        let spaces = if self.private {
+            Vec::new()
+        } else {
+            self.space_dots(palette, cx)
+        };
         footer(
-            self.space_dots(palette, cx),
+            spaces,
             FooterActions {
                 downloads: Box::new(cx.listener(|this, _, window, cx| {
                     cx.stop_propagation();
@@ -434,9 +450,11 @@ impl BrowserWindow {
                     cx.stop_propagation();
                     this.show_browser_menu(window, cx);
                 })),
-                new_space: Box::new(cx.listener(|this, _, window, cx| {
-                    this.edit_space(None, window, cx);
-                })),
+                new_space: (!self.private).then(|| -> ClickHandler {
+                    Box::new(cx.listener(|this, _, window, cx| {
+                        this.edit_space(None, window, cx);
+                    }))
+                }),
             },
             collapsed,
             palette,
@@ -470,6 +488,32 @@ fn should_show_favourites_guidance(hint_dismissed: bool) -> bool {
 
 fn should_show_favourites_drag_label(hint_dismissed: bool, dragging_over_favourites: bool) -> bool {
     !hint_dismissed || dragging_over_favourites
+}
+
+/// Marks a private window above its tabs; collapsed, only the mask.
+fn incognito_row(collapsed: bool, palette: ThemeColors) -> AnyElement {
+    let spacing = metrics::SidebarSpacing::new(collapsed);
+    let row = h_stack()
+        .id("private-window-indicator")
+        .role(gpui::Role::Note)
+        .aria_label("Incognito: this window keeps no history")
+        .items_center()
+        .text_size(px(metrics::SIDEBAR_FONT_SIZE))
+        .font_weight(gpui::FontWeight::SEMIBOLD)
+        .text_color(gpui::rgb(palette.text_secondary))
+        .child(private_icon(palette.text_secondary, spacing.icon_size));
+    if collapsed {
+        return collapsed_tile(row)
+            .justify_center()
+            .tooltip(label_tooltip("Incognito", palette))
+            .into_any_element();
+    }
+    row.w_full()
+        .gap(px(metrics::SIDEBAR_TAB_ICON_GAP))
+        .h(px(metrics::SIDEBAR_TAB_HEIGHT))
+        .px(px(metrics::SIDEBAR_TAB_PADDING))
+        .child("Incognito")
+        .into_any_element()
 }
 
 #[cfg(test)]

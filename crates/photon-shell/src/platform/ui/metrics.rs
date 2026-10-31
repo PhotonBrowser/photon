@@ -215,6 +215,8 @@ pub(super) const DOWNLOAD_RING_STROKE: f32 = 2.0;
 pub(super) const DOWNLOAD_RING_INSET: f32 = 3.0;
 pub(super) const DOWNLOAD_BADGE_SIZE: f32 = 7.0;
 pub(super) const DOWNLOAD_BADGE_INSET: f32 = 3.0;
+/// The hover translation of the Downloads sidebar icon's arrow.
+pub(super) const DOWNLOAD_ARROW_HOVER_OFFSET: f32 = 2.0;
 /// How long one turn of the ring takes while a download's size is unknown.
 pub(super) const DOWNLOAD_RING_SPIN_MS: u64 = 1_200;
 /// The share of the ring drawn while a download's size is unknown.
@@ -238,6 +240,8 @@ pub(super) const INTERNAL_PAGE_SECTION_GAP: f32 = 28.0;
 pub(super) const INTERNAL_PAGE_GROUP_GAP: f32 = 12.0;
 /// The symbol above a full-page notice, such as a certificate warning.
 pub(super) const INTERNAL_PAGE_ICON_SIZE: f32 = 40.0;
+/// How wide the New Tab page's note about a private window wraps.
+pub(super) const NEW_TAB_PRIVATE_NOTE_WIDTH: f32 = 360.0;
 pub(super) const FORM_FIELD_GAP: f32 = 4.0;
 pub(super) const INTERNAL_PAGE_SECTION_SIZE: f32 = 18.0;
 pub(super) const INTERNAL_PAGE_BODY_SIZE: f32 = 14.0;
