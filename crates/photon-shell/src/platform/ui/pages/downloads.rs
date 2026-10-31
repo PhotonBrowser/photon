@@ -4,12 +4,11 @@
 use gpui::{
     Context, Render, Subscription, Window, div, prelude::*, px, relative, rgb, rgba, uniform_list,
 };
-use photon_performance::{format_bytes, format_rate};
 use std::rc::Rc;
 
 use super::super::super::engine::{Download, DownloadStatus, EngineRuntime};
 use super::super::button::{ButtonKind, ButtonSize, button};
-use super::super::downloads::Downloads;
+use super::super::downloads::{Downloads, file_name, progress_fraction, status_text};
 use super::super::icons::download_icon;
 use super::super::layout::{h_stack, v_stack};
 use super::super::{metrics, theme::ThemeColors, theme::page_palette as palette};
@@ -39,48 +38,11 @@ impl DownloadsPage {
     }
 }
 
-/// What the row says under the file's name.
-fn status_text(download: &Download) -> String {
-    let received = format_bytes(download.received_bytes);
-    let size = download.total_bytes.map(format_bytes);
-    match download.status {
-        DownloadStatus::InProgress => {
-            let progress = size.map_or(received.clone(), |size| format!("{received} of {size}"));
-            match download.bytes_per_second {
-                Some(rate) => format!("{progress} · {}", format_rate(rate)),
-                None => progress,
-            }
-        }
-        DownloadStatus::Paused => size.map_or_else(
-            || format!("Paused · {received}"),
-            |size| format!("Paused · {received} of {size}"),
-        ),
-        DownloadStatus::Completed => size.unwrap_or(received),
-        DownloadStatus::Canceled => "Cancelled".into(),
-        DownloadStatus::Failed => match &download.error {
-            Some(error) => format!("Failed · {error}"),
-            None => "Failed".into(),
-        },
-    }
-}
-
-fn file_name(download: &Download) -> String {
-    download
-        .path
-        .file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_else(|| download.url.clone())
-}
-
 fn progress_bar(download: &Download, palette: ThemeColors) -> impl IntoElement {
     if !download.status.is_active() {
         return div().h(px(metrics::DOWNLOAD_PROGRESS_HEIGHT));
     }
-    let fraction = download
-        .total_bytes
-        .filter(|total| *total > 0)
-        .map_or(0.0, |total| download.received_bytes as f32 / total as f32)
-        .clamp(0.0, 1.0);
+    let fraction = progress_fraction(download).unwrap_or(0.0);
     div()
         .w_full()
         .h(px(metrics::DOWNLOAD_PROGRESS_HEIGHT))
