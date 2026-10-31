@@ -1,4 +1,5 @@
-//! A page's JavaScript alert, confirm or prompt, shown over the page.
+//! A page's JavaScript alert, confirm or prompt, or a server's sign-in
+//! request, shown over the page.
 
 use gpui::{
     AnyElement, App, Context, Entity, FocusHandle, Focusable, KeyDownEvent, Render, Role,
@@ -6,14 +7,15 @@ use gpui::{
 };
 use gpui_elements::editable_text::{
     EditableTextState, StringStorage,
-    actions::{Enter, Escape},
+    actions::{Enter, Escape, Tab},
     text_input,
 };
-use photon_core::{DialogKind, DialogRequest};
+use photon_core::{DialogInput, DialogKind, DialogRequest};
 
 use super::button::{ButtonKind, ButtonSize, button};
 use super::controls::text_field;
 use super::layout::h_stack;
+use super::masked_text::{MaskedText, masked_input};
 use super::modal::{MODAL_MOTION, dialog_title, modal, modal_panel};
 use super::motion::{Presence, Transition};
 use super::settings::Settings;
@@ -79,12 +81,17 @@ impl DialogHost {
 pub(super) struct JavaScriptDialog {
     webview: Entity<PhotonWebView>,
     request: DialogRequest,
-    /// The prompt's text field; alerts and confirms have none.
+    /// The prompt's text field, or a sign-in's username; alerts and confirms
+    /// have none.
     input: Option<Entity<EditableTextState>>,
+    /// A sign-in's password field, which shows marks, and the password.
+    password: Option<Entity<EditableTextState>>,
+    secret: MaskedText,
     focus_handle: FocusHandle,
     /// Whether the dialog is open or closing after being answered.
     transition: Transition,
     _input_subscription: Option<Subscription>,
+    _password_subscription: Option<Subscription>,
 }
 
 impl JavaScriptDialog {
@@ -102,7 +109,18 @@ impl JavaScriptDialog {
                 input.emplace(default_text, cx);
                 input
             })),
+            DialogKind::SignIn { .. } => {
+                Some(cx.new(|cx| EditableTextState::new(StringStorage::default(), cx)))
+            }
             DialogKind::Alert | DialogKind::Confirm => None,
+        };
+        let (password, password_subscription) = match request.kind {
+            DialogKind::SignIn { .. } => {
+                let (password, subscription) =
+                    masked_input(|dialog: &mut Self| &mut dialog.secret, cx);
+                (Some(password), Some(subscription))
+            }
+            _ => (None, None),
         };
         // The window draws the dialog only when a view inside it is notified.
         let input_subscription = input
@@ -112,9 +130,12 @@ impl JavaScriptDialog {
             webview,
             request,
             input,
+            password,
+            secret: MaskedText::default(),
             focus_handle: cx.focus_handle(),
             transition: Transition::Enter,
             _input_subscription: input_subscription,
+            _password_subscription: password_subscription,
         }
     }
 
@@ -137,18 +158,41 @@ impl JavaScriptDialog {
         self.focus_handle.contains_focused(window, cx)
             || self
                 .input
-                .as_ref()
-                .is_some_and(|input| input.focus_handle(cx).is_focused(window))
+                .iter()
+                .chain(&self.password)
+                .any(|input| input.focus_handle(cx).is_focused(window))
     }
 
     fn close(&mut self, accepted: bool, cx: &mut Context<Self>) {
-        let text = self
-            .input
-            .as_ref()
-            .map(|input| input.read(cx).as_str().to_owned())
-            .unwrap_or_default();
+        let input = DialogInput {
+            text: self
+                .input
+                .as_ref()
+                .map(|input| input.read(cx).as_str().to_owned())
+                .unwrap_or_default(),
+            password: std::mem::take(&mut self.secret).secret().to_owned(),
+        };
         self.webview
-            .update(cx, |view, cx| view.close_dialog(accepted, text, cx));
+            .update(cx, |view, cx| view.close_dialog(accepted, input, cx));
+    }
+
+    /// Moves between a sign-in's username and password with Tab, rather than
+    /// typing a tab character.
+    fn next_field(&mut self, _: &Tab, window: &mut Window, cx: &mut Context<Self>) {
+        cx.stop_propagation();
+        let fields = [&self.input, &self.password];
+        let Some(next) = fields
+            .iter()
+            .position(|field| {
+                field
+                    .as_ref()
+                    .is_some_and(|field| field.focus_handle(cx).is_focused(window))
+            })
+            .and_then(|index| fields[(index + 1) % fields.len()].as_ref())
+        else {
+            return;
+        };
+        window.focus(&next.focus_handle(cx), cx);
     }
 
     fn accept_from_field(&mut self, _: &Enter, _: &mut Window, cx: &mut Context<Self>) {
@@ -166,6 +210,7 @@ impl Render for JavaScriptDialog {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = palette(window, cx);
         let is_alert = self.request.kind == DialogKind::Alert;
+        let is_sign_in = matches!(self.request.kind, DialogKind::SignIn { .. });
 
         let mut buttons = h_stack()
             .items_center()
@@ -187,7 +232,7 @@ impl Render for JavaScriptDialog {
         }
         buttons = buttons.child(button(
             "javascript-dialog-ok",
-            "OK",
+            if is_sign_in { "Sign In" } else { "OK" },
             ButtonKind::Primary,
             true,
             ButtonSize::Regular,
@@ -229,18 +274,33 @@ impl Render for JavaScriptDialog {
                     .child(self.request.message.clone()),
             );
 
-        if let Some(input) = &self.input {
+        let fields = [
+            (
+                &self.input,
+                "javascript-dialog-input",
+                if is_sign_in { "Username" } else { "Response" },
+            ),
+            (&self.password, "javascript-dialog-password", "Password"),
+        ];
+        for (input, id, label) in fields {
+            let Some(input) = input else {
+                continue;
+            };
+            let mut field = text_input(id)
+                .state(input.downgrade())
+                .track_focus(&input.focus_handle(cx))
+                .aria_label(label);
+            if is_sign_in {
+                field = field.placeholder(label);
+            }
             panel = panel.child(
-                text_field(
-                    text_input("javascript-dialog-input")
-                        .state(input.downgrade())
-                        .track_focus(&input.focus_handle(cx))
-                        .aria_label("Response"),
-                    palette,
-                )
-                .text_size(px(metrics::MENU_FONT_SIZE))
-                .capture_action(cx.listener(Self::accept_from_field))
-                .capture_action(cx.listener(Self::cancel_from_field)),
+                text_field(field, palette)
+                    .text_size(px(metrics::MENU_FONT_SIZE))
+                    .capture_action(cx.listener(Self::accept_from_field))
+                    .capture_action(cx.listener(Self::cancel_from_field))
+                    .when(is_sign_in, |field| {
+                        field.capture_action(cx.listener(Self::next_field))
+                    }),
             );
         }
 
