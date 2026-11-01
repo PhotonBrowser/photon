@@ -799,6 +799,17 @@ extern "C" void photon_runtime_clear_browsing_data(void* runtime,
         });
 }
 
+extern "C" void photon_runtime_clear_site_data(void* runtime, char const* host,
+    void* callback_data, PhotonBrowsingDataClearedCallback callback)
+{
+    if (!runtime || !host)
+        return;
+    static_cast<RuntimeHandle*>(runtime)->runtime->clear_site_data(host, [=] {
+        if (callback)
+            callback(callback_data);
+    });
+}
+
 #if defined(__APPLE__)
 extern "C" void photon_runtime_use_system_clipboard(void* runtime)
 {

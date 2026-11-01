@@ -3,7 +3,9 @@
 //! which the window runs when the item is chosen.
 
 use gpui::{App, Context, MenuItem, SharedString, Window};
-use photon_core::{ClearBrowsingData, Shortcut, SpaceId};
+use photon_core::{Shortcut, SpaceId};
+
+use crate::platform::app_update::update_app;
 
 use super::BrowserWindow;
 
@@ -14,18 +16,22 @@ pub(super) enum MenuCommand {
     ReloadTab(usize),
     DuplicateTab(usize),
     TogglePin(usize),
-    AddFavourite { tab: usize, shortcut: Shortcut },
-    RemoveFavourite { url: String, space: SpaceId },
+    AddFavourite {
+        tab: usize,
+        shortcut: Shortcut,
+    },
+    RemoveFavourite {
+        url: String,
+        space: SpaceId,
+    },
     CloseTab(usize),
     CloseOtherTabs(usize),
     CloseTabsToRight(usize),
     EditSpace(SpaceId),
     EditTheme(SpaceId),
     DeleteSpace(SpaceId),
-    // TODO: Scope these to the site whose info popover opened the menu;
-    // clear_browsing_data currently clears data for the whole profile.
-    ClearCache,
-    ClearCookies,
+    /// Deletes the cookies and localStorage of the site with this host.
+    ClearSiteData(String),
 }
 
 impl MenuCommand {
@@ -34,7 +40,7 @@ impl MenuCommand {
     fn customises(&self) -> bool {
         matches!(
             self,
-            Self::EditSpace(_) | Self::EditTheme(_) | Self::DeleteSpace(_)
+            Self::EditSpace(_) | Self::EditTheme(_) | Self::DeleteSpace(_) | Self::ClearSiteData(_)
         )
     }
 }
@@ -74,35 +80,21 @@ impl BrowserWindow {
             MenuCommand::EditSpace(space) => self.edit_space(Some(space), window, cx),
             MenuCommand::EditTheme(space) => self.show_theme_picker(space, window, cx),
             MenuCommand::DeleteSpace(space) => self.delete_space(space, window, cx),
-            MenuCommand::ClearCache => self.clear_data(
-                ClearBrowsingData {
-                    cache: true,
-                    ..ClearBrowsingData::default()
-                },
-                "Cache cleared",
-                cx,
-            ),
-            MenuCommand::ClearCookies => self.clear_data(
-                ClearBrowsingData {
-                    site_data: true,
-                    ..ClearBrowsingData::default()
-                },
-                "Cookies and site data cleared",
-                cx,
-            ),
+            MenuCommand::ClearSiteData(host) => self.clear_site_data(&host, cx),
         }
     }
 
-    fn clear_data(&self, request: ClearBrowsingData, message: &'static str, cx: &mut App) {
-        let runtime = self.runtime.clone();
-        super::super::history::BrowsingHistory::clear(
-            request,
-            &runtime,
-            move |cx| {
-                super::super::show_alert(cx, message);
-            },
-            cx,
-        );
+    fn clear_site_data(&self, host: &str, cx: &mut App) {
+        let app = cx.to_async();
+        self.runtime.clear_site_data(host, move || {
+            app.spawn(async move |cx| {
+                update_app(cx, |cx| {
+                    super::super::show_alert(cx, "Cookies and site data cleared")
+                })
+                .await
+            })
+            .detach();
+        });
     }
 
     pub(super) fn toggle_performance_overlay(&mut self, cx: &mut Context<Self>) {

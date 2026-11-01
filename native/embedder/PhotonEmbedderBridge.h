@@ -244,6 +244,9 @@ void photon_runtime_allow_certificate_errors_for_host(void* runtime, char const*
 void photon_runtime_clear_browsing_data(void* runtime,
     int64_t since_unix_seconds, bool cache, bool site_data, void* callback_data,
     PhotonBrowsingDataClearedCallback callback);
+// Deletes the cookies and localStorage of `host` in the default profile.
+void photon_runtime_clear_site_data(void* runtime, char const* host,
+    void* callback_data, PhotonBrowsingDataClearedCallback callback);
 #if defined(__APPLE__)
 void photon_runtime_set_native_release_drain_callback(
     void* runtime, void* callback_data,

@@ -472,6 +472,28 @@ impl EngineRuntime {
             );
         }
     }
+
+    /// Deletes the cookies and localStorage of one site, then calls `done`
+    /// on the main thread. `done` must not update GPUI entities synchronously.
+    pub(in crate::platform) fn clear_site_data(&self, host: &str, done: impl FnOnce() + 'static) {
+        let Ok(host) = std::ffi::CString::new(host) else {
+            done();
+            return;
+        };
+        if !self.is_available() {
+            done();
+            return;
+        }
+        let done: Box<BrowsingDataCleared> = Box::new(Box::new(done));
+        unsafe {
+            embedder::photon_runtime_clear_site_data(
+                self.runtime,
+                host.as_ptr(),
+                Box::into_raw(done).cast(),
+                Some(on_engine_browsing_data_cleared),
+            );
+        }
+    }
 }
 
 impl Drop for EngineRuntime {

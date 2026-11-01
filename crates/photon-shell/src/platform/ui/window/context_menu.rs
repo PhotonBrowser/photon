@@ -201,14 +201,23 @@ impl BrowserWindow {
         self.show_context_menu(window, items, cx);
     }
 
-    /// Opens the site's cache and cookie actions from its info popover.
+    /// Opens the site's data actions from its info popover. A private
+    /// window keeps no site data in the profile, so it has none.
     pub(super) fn show_site_info_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.private {
+            return;
+        }
+        let Some(host) = self.active_webview().and_then(|webview| {
+            photon_core::url_host(&webview.read(cx).omnibox_url()).map(str::to_owned)
+        }) else {
+            return;
+        };
         self.show_context_menu(
             window,
-            vec![
-                command_item("Clear Cache", MenuCommand::ClearCache),
-                command_item("Clear Cookies", MenuCommand::ClearCookies),
-            ],
+            vec![command_item(
+                "Clear Cookies and Site Data",
+                MenuCommand::ClearSiteData(host),
+            )],
             cx,
         );
     }

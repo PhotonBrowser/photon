@@ -263,6 +263,12 @@ pub(super) mod embedder {
             callback_data: *mut c_void,
             callback: Option<unsafe extern "C" fn(*mut c_void)>,
         );
+        pub fn photon_runtime_clear_site_data(
+            runtime: *mut c_void,
+            host: *const c_char,
+            callback_data: *mut c_void,
+            callback: Option<unsafe extern "C" fn(*mut c_void)>,
+        );
         #[cfg(target_os = "macos")]
         pub fn photon_runtime_set_native_release_drain_callback(
             runtime: *mut c_void,
