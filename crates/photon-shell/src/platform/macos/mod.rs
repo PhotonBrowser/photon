@@ -4,6 +4,8 @@ pub(crate) mod app_menus;
 pub(crate) mod appkit;
 pub(crate) mod default_browser;
 pub(crate) mod display;
+#[cfg(not(feature = "ui-only"))]
+pub(crate) mod external_apps;
 pub(crate) mod glass_backdrop;
 pub(crate) mod idle;
 pub(crate) mod memory_pressure;

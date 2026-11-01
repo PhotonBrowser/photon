@@ -2,6 +2,8 @@
 
 pub(crate) mod app_menus;
 pub(crate) mod default_browser;
+#[cfg(not(feature = "ui-only"))]
+pub(crate) mod external_apps;
 pub(crate) mod motion_observer;
 pub(crate) mod renderer;
 pub(crate) mod termination;

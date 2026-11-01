@@ -78,6 +78,13 @@ pub(crate) use windows::{
     supports_elastic_scroll, window_observer, window_settings,
 };
 
+#[cfg(all(target_os = "linux", not(feature = "ui-only")))]
+pub(crate) use linux::external_apps;
+#[cfg(all(target_os = "macos", not(feature = "ui-only")))]
+pub(crate) use macos::external_apps;
+#[cfg(all(target_os = "windows", not(feature = "ui-only")))]
+pub(crate) use windows::external_apps;
+
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 pub(crate) use ui::run;
 #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
