@@ -1,5 +1,5 @@
-//! The certificates sites presented, and the hosts whose certificate errors
-//! the user chose to ignore.
+//! The certificates sites presented, and letting the user proceed past a
+//! host's certificate error.
 
 use std::ffi::{CString, c_void};
 
@@ -19,6 +19,12 @@ pub(crate) struct Certificate {
     pub(in crate::platform) sha256_fingerprint: String,
     /// False once the user chose to proceed past a certificate error.
     pub(in crate::platform) verified: bool,
+    /// The connection's protocol and cipher, such as `TLSv1.3`.
+    pub(in crate::platform) protocol: String,
+    pub(in crate::platform) cipher: String,
+    /// Who each certificate the server sent is issued to, from the site's
+    /// own towards its root.
+    pub(in crate::platform) chain: Vec<String>,
 }
 
 type CertificateReceived = Box<dyn FnOnce(Option<Certificate>)>;
@@ -43,6 +49,16 @@ unsafe extern "C" fn on_engine_certificate(
             valid_until: text(certificate.valid_until),
             sha256_fingerprint: text(certificate.sha256_fingerprint),
             verified: certificate.verified,
+            protocol: text(certificate.protocol),
+            cipher: text(certificate.cipher),
+            chain: if certificate.chain.is_null() {
+                Vec::new()
+            } else {
+                unsafe { std::slice::from_raw_parts(certificate.chain, certificate.chain_count) }
+                    .iter()
+                    .map(|&name| text(name))
+                    .collect()
+            },
         }
     });
     done(certificate);
@@ -55,23 +71,12 @@ impl EngineRuntime {
         if !self.is_available() {
             return;
         }
-        let Ok(c_host) = CString::new(host) else {
+        let Ok(host) = CString::new(host) else {
             return;
         };
-        self.certificate_exceptions
-            .borrow_mut()
-            .insert(host.to_owned());
         unsafe {
-            embedder::photon_runtime_allow_certificate_errors_for_host(
-                self.runtime,
-                c_host.as_ptr(),
-            );
+            embedder::photon_runtime_allow_certificate_errors_for_host(self.runtime, host.as_ptr());
         }
-    }
-
-    /// Whether the user chose to proceed to `host` past a certificate error.
-    pub(in crate::platform) fn allows_certificate_errors_for(&self, host: &str) -> bool {
-        self.certificate_exceptions.borrow().contains(host)
     }
 
     /// Calls `done` on the main thread with the certificate `host` last

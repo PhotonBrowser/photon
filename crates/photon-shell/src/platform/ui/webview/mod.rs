@@ -234,19 +234,7 @@ impl PhotonWebView {
         cx.notify();
     }
 
-    pub(in crate::platform) fn set_state(
-        &mut self,
-        mut state: BrowserState,
-        cx: &mut Context<Self>,
-    ) {
-        // Engine marks every https page secure; one whose certificate error the
-        // user chose to ignore is not.
-        if state.connection_secure == Some(true)
-            && photon_core::url_host(&state.url)
-                .is_some_and(|host| self.session.runtime().allows_certificate_errors_for(host))
-        {
-            state.connection_secure = Some(false);
-        }
+    pub(in crate::platform) fn set_state(&mut self, state: BrowserState, cx: &mut Context<Self>) {
         if self.state == state {
             return;
         }

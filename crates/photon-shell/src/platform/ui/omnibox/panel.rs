@@ -344,14 +344,7 @@ impl Omnibox {
         let webview = self.webview.as_ref().map(|webview| webview.read(cx));
         let host = self.certificate_host(cx);
         crate::platform::site_info::SiteInfo {
-            certificate_error_ignored: host.as_deref().zip(webview).is_some_and(
-                |(host, webview)| {
-                    webview
-                        .session
-                        .runtime()
-                        .allows_certificate_errors_for(host)
-                },
-            ),
+            https: host.is_some(),
             certificate: self
                 .site_certificate
                 .as_ref()

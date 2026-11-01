@@ -8,8 +8,9 @@ use crate::platform::engine::Certificate;
 pub(crate) struct SiteInfo {
     pub(crate) site: String,
     pub(crate) connection_secure: Option<bool>,
-    /// Whether the person chose to continue past this site's certificate error.
-    pub(crate) certificate_error_ignored: bool,
+    /// Whether the page came over HTTPS. Such a page that is not secure is one
+    /// whose certificate error the person chose to ignore.
+    pub(crate) https: bool,
     /// The certificate the site presented, once Engine has reported it.
     pub(crate) certificate: Option<Certificate>,
     /// Whether the page may play sound; `None` before it has a page.
@@ -109,7 +110,7 @@ pub(crate) enum ConnectionStatus {
 impl ConnectionStatus {
     pub(crate) fn of(info: &SiteInfo) -> Self {
         match info.connection_secure {
-            _ if info.certificate_error_ignored => Self::Unverified,
+            Some(false) if info.https => Self::Unverified,
             Some(true) => Self::Secure,
             Some(false) => Self::NotSecure,
             None => Self::Unknown,
@@ -173,21 +174,28 @@ pub(crate) const BACK_LABEL: &str = "Back";
 pub(crate) const CERTIFICATE_HEADING: &str = "Certificate";
 
 /// The certificate's details as labelled rows, leaving out what it does not say.
-pub(crate) fn certificate_rows(certificate: &Certificate) -> Vec<(&'static str, &str)> {
+pub(crate) fn certificate_rows(certificate: &Certificate) -> Vec<(&'static str, String)> {
+    let connection = [certificate.protocol.as_str(), certificate.cipher.as_str()]
+        .into_iter()
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" \u{b7} ");
     [
-        ("Issued to", certificate.subject_common_name.as_str()),
-        ("Organization", certificate.subject_organization.as_str()),
-        ("Issued by", certificate.issuer_common_name.as_str()),
+        ("Issued to", certificate.subject_common_name.clone()),
+        ("Organization", certificate.subject_organization.clone()),
+        ("Issued by", certificate.issuer_common_name.clone()),
         (
             "Issuer organization",
-            certificate.issuer_organization.as_str(),
+            certificate.issuer_organization.clone(),
         ),
-        ("Valid from", certificate.valid_from.as_str()),
-        ("Valid until", certificate.valid_until.as_str()),
+        ("Valid from", certificate.valid_from.clone()),
+        ("Valid until", certificate.valid_until.clone()),
         (
             "SHA-256 fingerprint",
-            certificate.sha256_fingerprint.as_str(),
+            certificate.sha256_fingerprint.clone(),
         ),
+        ("Connection", connection),
+        ("Certificate chain", certificate.chain.join(" \u{203a} ")),
     ]
     .into_iter()
     .filter(|(_, value)| !value.is_empty())
