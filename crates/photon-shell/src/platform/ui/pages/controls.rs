@@ -1,8 +1,6 @@
 //! Settings rows for Photon's own pages: a label with a switch or checkbox,
 //!
 
-// TODO: whole row should not be clickable, this was unintended :(
-
 use gpui::{
     ElementId, Role, SharedString, Stateful, StatefulInteractiveElement, prelude::*, px, rgb, rgba,
 };
@@ -24,13 +22,8 @@ pub(super) fn switch_row(
     on_toggle: ClickHandler,
 ) -> impl IntoElement {
     let on_toggle = Rc::new(on_toggle);
-    let activated = Rc::new(Cell::new(false));
-    let row_toggle = haptic_switch_toggle(on_toggle.clone(), activated.clone());
-    let switch_toggle = row_toggle.clone();
-    let dragged = Rc::new(Cell::new(false));
-    let row_dragged_on_down = dragged.clone();
-    let row_dragged_on_click = dragged.clone();
-    let row_activated_on_down = activated;
+    // Only the switch toggles; the label and the rest of the row do not.
+    let switch_toggle = haptic_switch_toggle(on_toggle.clone(), Rc::new(Cell::new(false)));
     h_stack()
         .id(ElementId::Name(format!("{id}-row").into()))
         .items_center()
@@ -39,21 +32,8 @@ pub(super) fn switch_row(
         .w_full()
         .h(px(metrics::SETTINGS_ROW_HEIGHT))
         .px(px(metrics::MENU_ITEM_HORIZONTAL_PADDING))
-        .rounded(px(metrics::control_radius()))
         .text_size(px(metrics::INTERNAL_PAGE_BODY_SIZE))
         .text_color(rgb(palette.text_primary))
-        .owns_clicks()
-        .on_mouse_down_all(move |event, phase, _, _, _| {
-            if phase == gpui::DispatchPhase::Capture && event.button == gpui::MouseButton::Left {
-                row_dragged_on_down.set(false);
-                row_activated_on_down.set(false);
-            }
-        })
-        .on_click(move |event, window, cx| {
-            if !row_dragged_on_click.replace(false) {
-                row_toggle(event, window, cx);
-            }
-        })
         .child(
             gpui::div()
                 .id(ElementId::Name(format!("{id}-label").into()))
@@ -67,7 +47,7 @@ pub(super) fn switch_row(
             Some(label),
             on_toggle,
             switch_toggle,
-            dragged,
+            Rc::new(Cell::new(false)),
         ))
 }
 
