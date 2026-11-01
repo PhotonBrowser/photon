@@ -11,8 +11,6 @@ documented in the guides linked from the [README](../README.md).
 - Improve tab and toolbar interactions, including copying the current address,
   background audio controls, and spring motion.
 
-- Show the full certificate chain and TLS version, and take “Secure” from the
-  TLS result rather than the address scheme. See [Omnibox](Omnibox.md#certificates).
 
 ## Later
 

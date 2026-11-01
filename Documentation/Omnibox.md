@@ -114,14 +114,16 @@ quits: `RequestServerManager` sends the host to every RequestServer, which
 skips verification for it. The site is then **Not secure**, with its own
 explanation on the connection page.
 
-Each RequestServer remembers the certificate every HTTPS host last presented
-(`CertificateStore`). Opening the popover on an HTTPS page asks for the host's
-certificate, and the connection page lists who it was issued to and by, its
-validity and its SHA-256 fingerprint.
+Each RequestServer remembers the certificate every HTTPS host presented on its
+latest new connection (`CertificateStore`). Opening the popover on an HTTPS page
+asks for the host's certificate, and the connection page lists who it was
+issued to and by, its validity, its SHA-256 fingerprint, the TLS protocol and
+cipher, and the chain the server sent.
 
-"Secure" still starts from the page's scheme (`notify_state` in
-`LibPhotonEmbedder`); the shell overrides it for hosts whose certificate errors
-were ignored. The full chain and TLS version are not shown yet.
+An HTTPS page is "Secure" because RequestServer verified its certificate;
+`notify_state` in `LibPhotonEmbedder` reports it not secure once the user chose
+to continue past its host's certificate error, and the popover then explains
+that the certificate was not verified.
 
 ### Not yet implemented
 
