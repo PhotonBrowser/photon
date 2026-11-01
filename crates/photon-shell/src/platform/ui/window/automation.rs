@@ -76,6 +76,11 @@ struct Request {
     command: Command,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
+struct ListTabsParams {
+    window_id: Option<u64>,
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(tag = "command", content = "params", rename_all = "snake_case")]
 enum Command {
@@ -83,9 +88,8 @@ enum Command {
     GetVersion,
     ListWindows,
     ListProcesses,
-    ListTabs {
-        window_id: Option<u64>,
-    },
+    /// `params` is optional: every field in it is.
+    ListTabs(Option<ListTabsParams>),
     NewTab {
         window_id: u64,
         url: String,
@@ -558,7 +562,7 @@ fn dispatch(request: Request, cx: &mut App) -> Response {
         })),
         Command::ListWindows => Ok(list_windows(cx)),
         Command::ListProcesses => list_processes(cx),
-        Command::ListTabs { window_id } => list_tabs(window_id, cx),
+        Command::ListTabs(params) => list_tabs(params.unwrap_or_default().window_id, cx),
         Command::NewTab { window_id, url } => new_tab(window_id, &url, cx),
         Command::CloseTab { tab_id } => close_tab(tab_id, cx),
         Command::ActivateTab { tab_id } => activate_tab(tab_id, cx),
@@ -1511,6 +1515,29 @@ mod tests {
             serde_json::to_value(application_unavailable("request-29".to_owned())).unwrap();
         assert_eq!(response["request_id"], "request-29");
         assert_eq!(response["error"]["code"], "application_unavailable");
+    }
+
+    #[test]
+    fn list_tabs_params_are_optional() {
+        let token = "a".repeat(64);
+        let decode = |params: &str| {
+            let body = format!(
+                r#"{{"protocol_version":1,"request_id":"1","authentication":"{token}","command":"list_tabs"{params}}}"#
+            );
+            decode_authenticated_request(body.as_bytes(), &token)
+                .ok()
+                .unwrap()
+                .command
+        };
+        assert_eq!(decode(""), Command::ListTabs(None));
+        assert_eq!(
+            decode(r#","params":{}"#),
+            Command::ListTabs(Some(super::ListTabsParams::default()))
+        );
+        assert_eq!(
+            decode(r#","params":{"window_id":7}"#),
+            Command::ListTabs(Some(super::ListTabsParams { window_id: Some(7) }))
+        );
     }
 
     #[test]
