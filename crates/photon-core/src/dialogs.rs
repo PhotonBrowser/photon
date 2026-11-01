@@ -1,5 +1,6 @@
-//! JavaScript `alert`, `confirm` and `prompt` dialogs for one page, and the
-//! sign-in dialog a server asks for with HTTP authentication.
+//! JavaScript `alert`, `confirm` and `prompt` dialogs for one page, the
+//! sign-in dialog a server asks for with HTTP authentication, and the question
+//! before a link opens in another app.
 //!
 //! The page waits for an answer to every dialog it opens. These rules decide
 //! when a dialog is shown and what the page receives when it is closed or
@@ -15,6 +16,10 @@ pub enum DialogKind {
     },
     /// A server asked for a username and password.
     SignIn {
+        request_id: u64,
+    },
+    /// A page asked to open a link, such as `mailto:`, in another app.
+    OpenInApp {
         request_id: u64,
     },
 }
@@ -56,6 +61,11 @@ pub enum DialogReply {
         request_id: u64,
         credentials: Option<Credentials>,
     },
+    /// Whether to open the link in its app.
+    OpenInApp {
+        request_id: u64,
+        open: bool,
+    },
 }
 
 impl DialogKind {
@@ -72,6 +82,10 @@ impl DialogKind {
                     password: input.password,
                 }),
             },
+            Self::OpenInApp { request_id } => DialogReply::OpenInApp {
+                request_id: *request_id,
+                open: true,
+            },
         }
     }
 
@@ -84,6 +98,10 @@ impl DialogKind {
             Self::SignIn { request_id } => DialogReply::SignIn {
                 request_id: *request_id,
                 credentials: None,
+            },
+            Self::OpenInApp { request_id } => DialogReply::OpenInApp {
+                request_id: *request_id,
+                open: false,
             },
         }
     }
@@ -144,6 +162,25 @@ impl PageDialogs {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn opening_in_an_app_needs_the_user() {
+        let kind = DialogKind::OpenInApp { request_id: 7 };
+        assert_eq!(
+            kind.accepted(DialogInput::default()),
+            DialogReply::OpenInApp {
+                request_id: 7,
+                open: true
+            }
+        );
+        assert_eq!(
+            kind.dismissed(),
+            DialogReply::OpenInApp {
+                request_id: 7,
+                open: false
+            }
+        );
+    }
     use super::*;
 
     fn request(kind: DialogKind) -> DialogRequest {
