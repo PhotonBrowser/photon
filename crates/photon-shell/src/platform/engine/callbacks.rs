@@ -619,6 +619,25 @@ pub(super) unsafe extern "C" fn on_engine_open_in_new_window(
     unsafe { &*(context.cast::<CallbackState>()) }.open_in_new_window(url, private);
 }
 
+pub(super) unsafe extern "C" fn on_engine_external_url(
+    context: *mut c_void,
+    request_id: u64,
+    url: *const c_char,
+    app_name: *const c_char,
+) {
+    if context.is_null() {
+        return;
+    }
+    let text = |value: *const c_char| unsafe { engine_string(value) }.unwrap_or_default();
+    let url = text(url);
+    let app_name = text(app_name);
+    unsafe { &*(context.cast::<CallbackState>()) }.request_page_dialog(DialogRequest {
+        kind: DialogKind::OpenInApp { request_id },
+        title: format!("Open \u{201c}{app_name}\u{201d}?"),
+        message: format!("This page wants to open {url} in {app_name}."),
+    });
+}
+
 pub(super) unsafe extern "C" fn on_engine_download_path(
     context: *mut c_void,
     request_id: u64,

@@ -93,6 +93,9 @@ using PhotonOpenInNewWindowCallback = void (*)(void*, char const*, bool);
 // Called with a request ID and a suggested file name when saving a link or image
 // asks where to. Answer with photon_view_download_path_chosen, also when cancelled.
 using PhotonDownloadPathCallback = void (*)(void*, uint64_t, char const*);
+// Called with a request ID, a link and the app to open it in when a page asks to
+// open it there. Answer with photon_view_external_url_answered, also when cancelled.
+using PhotonExternalURLCallback = void (*)(void*, uint64_t, char const*, char const*);
 // Called with a URL a context menu action opens in a new tab, and whether to
 // switch to it.
 using PhotonOpenInNewTabCallback = void (*)(void*, char const*, bool);
@@ -203,6 +206,7 @@ struct PhotonViewCallbacks {
     PhotonCertificateErrorCallback certificate_error_callback;
     PhotonOpenInNewWindowCallback open_in_new_window_callback;
     PhotonDownloadPathCallback download_path_callback;
+    PhotonExternalURLCallback external_url_callback;
 #if defined(__APPLE__)
     bool native_metal_presentation;
     PhotonNativeBackingCallback native_backing_callback;
@@ -224,6 +228,11 @@ struct PhotonCertificate {
     char const* valid_until;
     char const* sha256_fingerprint;
     bool verified;
+    char const* protocol;
+    char const* cipher;
+    // Who each certificate the server sent is issued to, from the site's own towards its root.
+    char const* const* chain;
+    size_t chain_count;
 };
 // Called with the certificate, or null when Engine has not connected to the host.
 using PhotonCertificateCallback = void (*)(void*, PhotonCertificate const*);
@@ -246,6 +255,14 @@ void photon_runtime_pump(void* runtime);
 #if defined(__APPLE__)
 // Copy and paste through the macOS pasteboard.
 void photon_runtime_use_system_clipboard(void* runtime);
+// Names the app that opens a link the browser cannot load, writing it to
+// `name` and returning true, or returns false when no app does.
+using PhotonExternalAppNameCallback = bool (*)(void*, char const* url, char* name, size_t capacity);
+// Opens a link in its app, returning whether it could.
+using PhotonExternalAppOpenCallback = bool (*)(void*, char const* url);
+// Opens links such as mailto: and tel: in other apps.
+void photon_runtime_set_external_apps(void* runtime, void* callback_data,
+    PhotonExternalAppNameCallback app_name, PhotonExternalAppOpenCallback open_url);
 #endif
 // A private view keeps nothing once it and the other private views close.
 void* photon_view_create(void* runtime, int width, int height, double dpr,
@@ -294,6 +311,8 @@ void photon_view_select_dropdown_closed(void* view, bool chosen, uint32_t id);
 // Answers the open file picker with the chosen files' paths; none when it was
 // cancelled.
 void photon_view_file_picker_closed(void* view, char const* const* paths, size_t count);
+// Answers an external URL request: whether to open the link in its app.
+void photon_view_external_url_answered(void* view, uint64_t request_id, bool open);
 // Answers a download path request; a null or empty path cancels the save.
 void photon_view_download_path_chosen(void* view, uint64_t request_id, char const* path);
 void photon_view_permission_decided(void* view, uint64_t request_id, char const* document_id, bool granted);

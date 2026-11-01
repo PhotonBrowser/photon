@@ -76,6 +76,10 @@ pub(super) mod embedder {
         pub valid_until: *const c_char,
         pub sha256_fingerprint: *const c_char,
         pub verified: bool,
+        pub protocol: *const c_char,
+        pub cipher: *const c_char,
+        pub chain: *const *const c_char,
+        pub chain_count: usize,
     }
 
     #[repr(C)]
@@ -204,6 +208,8 @@ pub(super) mod embedder {
         pub open_in_new_window_callback:
             Option<unsafe extern "C" fn(*mut c_void, *const c_char, bool)>,
         pub download_path_callback: Option<unsafe extern "C" fn(*mut c_void, u64, *const c_char)>,
+        pub external_url_callback:
+            Option<unsafe extern "C" fn(*mut c_void, u64, *const c_char, *const c_char)>,
         #[cfg(target_os = "macos")]
         pub native_metal_presentation: bool,
         #[cfg(target_os = "macos")]
@@ -274,6 +280,16 @@ pub(super) mod embedder {
         #[cfg(target_os = "macos")]
         #[cfg(not(feature = "ui-only"))]
         pub fn photon_runtime_use_system_clipboard(runtime: *mut c_void);
+        #[cfg(not(feature = "ui-only"))]
+        pub fn photon_runtime_set_external_apps(
+            runtime: *mut c_void,
+            callback_data: *mut c_void,
+            app_name: Option<
+                unsafe extern "C" fn(*mut c_void, *const c_char, *mut c_char, usize) -> bool,
+            >,
+            open_url: Option<unsafe extern "C" fn(*mut c_void, *const c_char) -> bool>,
+        );
+        pub fn photon_view_external_url_answered(view: *mut c_void, request_id: u64, open: bool);
         pub fn photon_view_create(
             runtime: *mut c_void,
             width: i32,

@@ -364,6 +364,7 @@ impl EngineSession {
             certificate_error_callback: Some(on_engine_certificate_error),
             open_in_new_window_callback: Some(on_engine_open_in_new_window),
             download_path_callback: Some(on_engine_download_path),
+            external_url_callback: Some(on_engine_external_url),
             download_replaced_initial_document_callback: Some(
                 on_engine_download_replaced_initial_document,
             ),
@@ -531,6 +532,10 @@ impl EngineSession {
                 request_id,
                 credentials,
             } => return self.reply_sign_in(request_id, credentials),
+            DialogReply::OpenInApp { request_id, open } => {
+                unsafe { embedder::photon_view_external_url_answered(self.view, request_id, open) };
+                return;
+            }
         };
         let text_ptr = text.as_ref().map_or(std::ptr::null(), |text| text.as_ptr());
         unsafe { embedder::photon_view_close_dialog(self.view, dialog_type, accepted, text_ptr) }

@@ -68,6 +68,7 @@ Photon::ViewCallbacks make_view_callbacks(
     auto certificate_error_callback = callbacks.certificate_error_callback;
     auto open_in_new_window_callback = callbacks.open_in_new_window_callback;
     auto download_path_callback = callbacks.download_path_callback;
+    auto external_url_callback = callbacks.external_url_callback;
 
     Photon::ViewCallbacks result;
     result.state_changed = [=](Photon::ViewState const& state) {
@@ -251,6 +252,11 @@ Photon::ViewCallbacks make_view_callbacks(
     if (open_in_new_window_callback) {
         result.open_in_new_window_requested = [=](std::string const& url, bool is_private) {
             open_in_new_window_callback(callback_data, url.c_str(), is_private);
+        };
+    }
+    if (external_url_callback) {
+        result.external_url_requested = [=](uint64_t request_id, std::string const& url, std::string const& app_name) {
+            external_url_callback(callback_data, request_id, url.c_str(), app_name.c_str());
         };
     }
     if (download_path_callback) {
@@ -608,6 +614,12 @@ extern "C" void photon_view_select_dropdown_closed(void* view, bool chosen, uint
             chosen ? std::optional<uint32_t> { id } : std::nullopt);
 }
 
+extern "C" void photon_view_external_url_answered(void* view, uint64_t request_id, bool open)
+{
+    if (view)
+        static_cast<ViewHandle*>(view)->view->external_url_answered(request_id, open);
+}
+
 extern "C" void photon_view_download_path_chosen(void* view, uint64_t request_id, char const* path)
 {
     if (view)
@@ -747,6 +759,9 @@ extern "C" void photon_runtime_peer_certificate(void* runtime, char const* host,
                 callback(callback_data, nullptr);
                 return;
             }
+            std::vector<char const*> chain;
+            for (auto const& name : info->chain)
+                chain.push_back(name.c_str());
             PhotonCertificate certificate {
                 info->subject_common_name.c_str(),
                 info->subject_organization.c_str(),
@@ -756,6 +771,10 @@ extern "C" void photon_runtime_peer_certificate(void* runtime, char const* host,
                 info->valid_until.c_str(),
                 info->sha256_fingerprint.c_str(),
                 info->verified,
+                info->protocol.c_str(),
+                info->cipher.c_str(),
+                chain.data(),
+                chain.size(),
             };
             callback(callback_data, &certificate);
         });
@@ -799,6 +818,22 @@ extern "C" void photon_runtime_use_system_clipboard(void* runtime)
     });
 }
 #endif
+
+extern "C" void photon_runtime_set_external_apps(void* runtime, void* callback_data,
+    PhotonExternalAppNameCallback app_name, PhotonExternalAppOpenCallback open_url)
+{
+    if (!runtime || !app_name || !open_url)
+        return;
+    static_cast<RuntimeHandle*>(runtime)->runtime->set_external_apps({
+        .app_for_url = [=](std::string const& url) -> std::optional<std::string> {
+            std::array<char, 256> name { };
+            if (!app_name(callback_data, url.c_str(), name.data(), name.size()))
+                return std::nullopt;
+            return std::string(name.data());
+        },
+        .open_url = [=](std::string const& url) { return open_url(callback_data, url.c_str()); },
+    });
+}
 
 extern "C" void photon_runtime_set_service_callback(void* runtime,
     void* callback_data, PhotonServiceCallback callback)

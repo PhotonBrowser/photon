@@ -112,7 +112,7 @@ impl JavaScriptDialog {
             DialogKind::SignIn { .. } => {
                 Some(cx.new(|cx| EditableTextState::new(StringStorage::default(), cx)))
             }
-            DialogKind::Alert | DialogKind::Confirm => None,
+            DialogKind::Alert | DialogKind::Confirm | DialogKind::OpenInApp { .. } => None,
         };
         let (password, password_subscription) = match request.kind {
             DialogKind::SignIn { .. } => {
@@ -232,7 +232,11 @@ impl Render for JavaScriptDialog {
         }
         buttons = buttons.child(button(
             "javascript-dialog-ok",
-            if is_sign_in { "Sign In" } else { "OK" },
+            match self.request.kind {
+                DialogKind::SignIn { .. } => "Sign In",
+                DialogKind::OpenInApp { .. } => "Open",
+                _ => "OK",
+            },
             ButtonKind::Primary,
             true,
             ButtonSize::Regular,

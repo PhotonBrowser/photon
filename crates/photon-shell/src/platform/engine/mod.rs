@@ -5,6 +5,8 @@ mod callback_state;
 mod callbacks;
 mod certificates;
 mod downloads;
+#[cfg(not(feature = "ui-only"))]
+mod external_apps;
 pub(super) mod navigation_timing;
 mod session;
 
@@ -79,8 +81,6 @@ pub(in crate::platform) struct EngineRuntime {
     service_callback: RefCell<Option<Box<ServiceCallback>>>,
     download_callback: RefCell<Option<Box<downloads::DownloadCallback>>>,
     popup_policy: AtomicU8,
-    /// Hosts the user chose to reach past a certificate error, this run.
-    certificate_exceptions: RefCell<std::collections::HashSet<String>>,
     performance_dashboard_users: Cell<usize>,
 }
 
@@ -126,6 +126,14 @@ impl EngineRuntime {
         unsafe {
             embedder::photon_runtime_use_system_clipboard(runtime);
         }
+        unsafe {
+            embedder::photon_runtime_set_external_apps(
+                runtime,
+                std::ptr::null_mut(),
+                Some(external_apps::on_engine_external_app_name),
+                Some(external_apps::on_engine_open_external_url),
+            );
+        }
         #[cfg(target_os = "macos")]
         unsafe {
             embedder::photon_runtime_set_native_release_drain_callback(
@@ -143,7 +151,6 @@ impl EngineRuntime {
             service_callback: RefCell::default(),
             download_callback: RefCell::default(),
             popup_policy: AtomicU8::new(PopupPolicy::Ask as u8),
-            certificate_exceptions: RefCell::default(),
             performance_dashboard_users: Cell::new(0),
         })
     }
@@ -160,7 +167,6 @@ impl EngineRuntime {
             }),
             download_callback: RefCell::default(),
             popup_policy: AtomicU8::new(PopupPolicy::Ask as u8),
-            certificate_exceptions: RefCell::default(),
             performance_dashboard_users: Cell::new(0),
         }
     }
