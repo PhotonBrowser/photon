@@ -1,12 +1,12 @@
 //! Keyboard shortcuts and Escape handling for the browser window.
 
 use crate::platform::shortcuts::{
-    CloseTab, FindInPage, FindNext, FindPrevious, FocusOmnibox, GoBack, GoForward, MinimizeWindow,
-    NewTab, NextSpace, OpenCommandPalette, OpenDownloads, OpenHistory, OpenSettings,
-    OpenTaskManager, PreviousSpace, Reload, ReopenClosedTab, ResetZoom, SelectLastTab,
-    SelectNextTab, SelectPreviousTab, SelectTab1, SelectTab2, SelectTab3, SelectTab4, SelectTab5,
-    SelectTab6, SelectTab7, SelectTab8, ShowKeyboardShortcuts, StopLoading, ToggleDebugInfo,
-    ToggleSidebar, ToggleSidebarIcons, ToggleZenMode, ZoomIn, ZoomOut, ZoomWindow,
+    CloseTab, CopyAddress, FindInPage, FindNext, FindPrevious, FocusOmnibox, GoBack, GoForward,
+    MinimizeWindow, NewTab, NextSpace, OpenCommandPalette, OpenDownloads, OpenHistory,
+    OpenSettings, OpenTaskManager, PreviousSpace, Reload, ReopenClosedTab, ResetZoom,
+    SelectLastTab, SelectNextTab, SelectPreviousTab, SelectTab1, SelectTab2, SelectTab3,
+    SelectTab4, SelectTab5, SelectTab6, SelectTab7, SelectTab8, ShowKeyboardShortcuts, StopLoading,
+    ToggleDebugInfo, ToggleSidebar, ToggleSidebarIcons, ToggleZenMode, ZoomIn, ZoomOut, ZoomWindow,
 };
 use gpui::{Context, Div, KeyDownEvent, Window, prelude::*};
 use photon_core::Command;
@@ -61,6 +61,9 @@ impl BrowserWindow {
             }))
             .on_action(cx.listener(|this, _: &FindInPage, window, cx| {
                 this.execute_command(Command::FindInPage, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &CopyAddress, window, cx| {
+                this.execute_command(Command::CopyAddress, window, cx);
             }))
             .on_action(cx.listener(|this, _: &FindNext, window, cx| {
                 this.find_step(true, window, cx);

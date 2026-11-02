@@ -41,7 +41,10 @@ impl BrowserWindow {
             Command::CopyAddress => {
                 if let Some(webview) = self.active_webview() {
                     let url = webview.read(cx).state.url.clone();
-                    cx.write_to_clipboard(ClipboardItem::new_string(url));
+                    if !url.is_empty() {
+                        cx.write_to_clipboard(ClipboardItem::new_string(url));
+                        super::super::show_alert(cx, "Address copied");
+                    }
                 }
             }
             Command::ToggleSidebar | Command::ToggleSidebarIcons | Command::ToggleZenMode => {

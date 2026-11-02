@@ -53,6 +53,7 @@ pub(super) enum ShortcutAction {
     FindInPage,
     FindNext,
     FindPrevious,
+    CopyAddress,
     ZoomIn,
     ZoomOut,
     ResetZoom,
@@ -100,6 +101,7 @@ impl ShortcutAction {
             Self::FindInPage => Box::new(FindInPage),
             Self::FindNext => Box::new(FindNext),
             Self::FindPrevious => Box::new(FindPrevious),
+            Self::CopyAddress => Box::new(CopyAddress),
             Self::ZoomIn => Box::new(ZoomIn),
             Self::ZoomOut => Box::new(ZoomOut),
             Self::ResetZoom => Box::new(ResetZoom),
@@ -262,6 +264,12 @@ const SHORTCUTS: &[ShortcutSpec] = &[
         label: ShortcutLabel::Text("Find Previous"),
         keys: &["secondary-shift-g"],
         action: ShortcutAction::FindPrevious,
+    },
+    ShortcutSpec {
+        group: "Page",
+        label: ShortcutLabel::Command(Command::CopyAddress),
+        keys: &["secondary-shift-c"],
+        action: ShortcutAction::CopyAddress,
     },
     ShortcutSpec {
         group: "Page",

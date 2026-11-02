@@ -4,10 +4,10 @@
 //! follows the frontmost window: its checkmarks, and Reload or Stop.
 
 use crate::platform::shortcuts::{
-    CloseTab, FindInPage, FindNext, FindPrevious, GoBack, GoForward, HideApp, HideOtherApps,
-    MinimizeWindow, NewPrivateWindow, NewTab, NewWindow, NextSpace, OpenCommandPalette,
-    OpenDownloads, OpenHistory, OpenSettings, OpenTaskManager, PreviousSpace, Quit, Reload,
-    ReopenClosedTab, ResetZoom, SelectNextTab, SelectPreviousTab, ShowAllApps,
+    CloseTab, CopyAddress, FindInPage, FindNext, FindPrevious, GoBack, GoForward, HideApp,
+    HideOtherApps, MinimizeWindow, NewPrivateWindow, NewTab, NewWindow, NextSpace,
+    OpenCommandPalette, OpenDownloads, OpenHistory, OpenSettings, OpenTaskManager, PreviousSpace,
+    Quit, Reload, ReopenClosedTab, ResetZoom, SelectNextTab, SelectPreviousTab, ShowAllApps,
     ShowKeyboardShortcuts, StopLoading, ToggleSidebar, ToggleSidebarIcons, ToggleZenMode, ZoomIn,
     ZoomOut, ZoomWindow, shortcut_name_for_action,
 };
@@ -112,6 +112,9 @@ fn menu_bar(state: MenuBarState) -> Vec<Menu> {
             MenuItem::os_action("Copy", Copy, OsAction::Copy),
             MenuItem::os_action("Paste", Paste, OsAction::Paste),
             MenuItem::os_action("Select All", SelectAll, OsAction::SelectAll),
+            MenuItem::separator(),
+            MenuItem::action(label(&CopyAddress), CopyAddress)
+                .disabled(!commands.allows(Command::CopyAddress)),
             MenuItem::separator(),
             MenuItem::action(label(&FindInPage), FindInPage)
                 .disabled(!commands.allows(Command::FindInPage)),

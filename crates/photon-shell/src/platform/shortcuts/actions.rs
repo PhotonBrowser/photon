@@ -46,6 +46,8 @@ gpui::actions!(
         FindNext,
         /// Go to the previous find-in-page match.
         FindPrevious,
+        /// Copy the active page's address.
+        CopyAddress,
         /// Zoom the page in a step.
         ZoomIn,
         /// Zoom the page out a step.

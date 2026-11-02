@@ -435,7 +435,7 @@ impl BrowserWindow {
     /// its debug details; then how the sidebar and chrome show.
     fn browser_menu_items(&self, cx: &Context<Self>) -> Vec<MenuItem> {
         use crate::platform::shortcuts::{
-            FindInPage, NewPrivateWindow, NewTab, NewWindow, OpenSettings, ResetZoom,
+            CopyAddress, FindInPage, NewPrivateWindow, NewTab, NewWindow, OpenSettings, ResetZoom,
             ShowKeyboardShortcuts, ToggleDebugInfo, ToggleSidebarIcons, ToggleZenMode, ZoomIn,
             ZoomOut,
         };
@@ -449,6 +449,7 @@ impl BrowserWindow {
         if let Some(webview) = self.active_webview() {
             let debug_info = webview.read(cx).performance_overlay_enabled;
             items.extend([
+                MenuItem::action("Copy Address", CopyAddress),
                 MenuItem::action("Find in Page…", FindInPage),
                 MenuItem::submenu(Menu::new("Zoom").items([
                     MenuItem::action("Zoom In", ZoomIn),
