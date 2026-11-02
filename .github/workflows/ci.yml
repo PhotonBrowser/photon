@@ -13,8 +13,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  checks:
-    name: Photon checks
+  lint:
+    name: Photon lint and compile
     runs-on: ubuntu-24.04
     steps:
       - name: Check out Photon and pinned submodules
@@ -68,6 +68,8 @@ jobs:
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: checks
 
       - name: Check Photon
         run: ./photon check --verbose
@@ -78,5 +80,84 @@ jobs:
           ./photon doctor
           ./photon deps status
 
+  tests:
+    name: Photon tests
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out Photon and pinned submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Check contributor acknowledgments
+        if: github.event_name == 'pull_request'
+        env:
+          PULL_REQUEST_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if ! printf '%s\n' "$PULL_REQUEST_BODY" | grep -Eiq '^[[:space:]]*-[[:space:]]*\[x\] I read the AI-assisted work guidance'; then
+            echo "Check the AI-assisted work acknowledgment in the PR template."
+            exit 1
+          fi
+          if ! printf '%s\n' "$PULL_REQUEST_BODY" | grep -Eiq '^[[:space:]]*-[[:space:]]*\[x\] I resolved merge conflicts and will review and address applicable CodeRabbit'; then
+            echo "Check the automated review and conflict acknowledgment in the PR template."
+            exit 1
+          fi
+
+      - name: Install native build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential \
+            clang \
+            cmake \
+            ninja-build \
+            python3 \
+            pkg-config \
+            libasound2-dev \
+            libfontconfig1-dev \
+            libfreetype6-dev \
+            libx11-dev \
+            libxkbcommon-dev \
+            libxkbcommon-x11-dev \
+            libwayland-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            libxcb-randr0-dev \
+            libxcb-xinput-dev \
+            libegl1-mesa-dev \
+            libgles2-mesa-dev \
+            libglib2.0-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@1.99.0
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: checks
+
       - name: Test Photon
         run: ./photon test
+
+  checks:
+    name: Photon checks
+    if: always()
+    needs:
+      - lint
+      - tests
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require all validation jobs to pass
+        env:
+          LINT_RESULT: ${{ needs.lint.result }}
+          TEST_RESULT: ${{ needs.tests.result }}
+        run: |
+          if [[ "$LINT_RESULT" == "success" && "$TEST_RESULT" == "success" ]]; then
+            echo "All Photon validation jobs passed."
+          else
+            echo "Photon lint and compile job: $LINT_RESULT"
+            echo "Photon test job: $TEST_RESULT"
+            exit 1
+          fi
