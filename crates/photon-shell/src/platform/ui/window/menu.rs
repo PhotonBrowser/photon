@@ -30,7 +30,7 @@ pub(super) enum MenuCommand {
     EditSpace(SpaceId),
     EditTheme(SpaceId),
     DeleteSpace(SpaceId),
-    /// Deletes the cookies and localStorage of the site with this host.
+    /// Deletes the cookies and web storage of the site with this host.
     ClearSiteData(String),
 }
 

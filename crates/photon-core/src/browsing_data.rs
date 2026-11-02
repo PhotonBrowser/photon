@@ -14,7 +14,7 @@ pub struct ClearBrowsingData {
     pub searches: bool,
     /// The Engine's network cache.
     pub cache: bool,
-    /// Cookies and site storage such as localStorage and IndexedDB.
+    /// Cookies and web storage such as localStorage.
     pub site_data: bool,
 }
 

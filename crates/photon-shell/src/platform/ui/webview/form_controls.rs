@@ -57,6 +57,7 @@ impl PhotonWebView {
     pub(in crate::platform) fn open_file_picker(
         &mut self,
         allow_multiple: bool,
+        file_types: Vec<gpui::SharedString>,
         cx: &mut Context<Self>,
     ) {
         let request = NEXT_FILE_PICKER_REQUEST.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -67,6 +68,7 @@ impl PhotonWebView {
             directories: false,
             multiple: allow_multiple,
             prompt: None,
+            file_types,
         });
         cx.spawn(async move |this, cx| {
             let paths = chosen

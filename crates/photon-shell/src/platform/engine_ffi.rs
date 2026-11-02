@@ -140,6 +140,14 @@ pub(super) mod embedder {
         u64,
     );
 
+    #[cfg(target_os = "linux")]
+    #[repr(C)]
+    pub(crate) struct PhotonClipboardEntry {
+        pub mime_type: *const c_char,
+        pub data: *const u8,
+        pub data_size: usize,
+    }
+
     #[repr(C)]
     pub(crate) struct ViewCallbacks {
         pub callback_data: *mut c_void,
@@ -183,7 +191,8 @@ pub(super) mod embedder {
         pub link_hover_callback: Option<unsafe extern "C" fn(*mut c_void, *const c_char)>,
         pub fullscreen_callback: Option<unsafe extern "C" fn(*mut c_void, bool)>,
         pub select_dropdown_callback: Option<SelectDropdownCallback>,
-        pub file_picker_callback: Option<unsafe extern "C" fn(*mut c_void, bool)>,
+        pub file_picker_callback:
+            Option<unsafe extern "C" fn(*mut c_void, bool, *const *const c_char, usize)>,
         pub permission_callback: Option<
             unsafe extern "C" fn(
                 *mut c_void,
@@ -286,6 +295,19 @@ pub(super) mod embedder {
         #[cfg(target_os = "macos")]
         #[cfg(not(feature = "ui-only"))]
         pub fn photon_runtime_use_system_clipboard(runtime: *mut c_void);
+        #[cfg(all(target_os = "linux", not(feature = "ui-only")))]
+        pub fn photon_runtime_set_system_clipboard_callbacks(
+            runtime: *mut c_void,
+            callback_data: *mut c_void,
+            read: Option<
+                unsafe extern "C" fn(
+                    *mut c_void,
+                    unsafe extern "C" fn(*mut c_void, *const c_char, *const u8, usize),
+                    *mut c_void,
+                ),
+            >,
+            write: Option<unsafe extern "C" fn(*mut c_void, *const PhotonClipboardEntry, usize)>,
+        );
         #[cfg(not(feature = "ui-only"))]
         pub fn photon_runtime_set_external_apps(
             runtime: *mut c_void,

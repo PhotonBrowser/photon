@@ -76,9 +76,10 @@ struct PhotonSelectItem {
 // photon_view_select_dropdown_closed, also when it is dismissed.
 using PhotonSelectDropdownCallback = void (*)(void*, double, double, double,
     PhotonSelectItem const*, size_t);
-// Called when a file input asks for files, with whether it takes several.
+// Called when a file input asks for files, with whether it takes several and
+// the kinds it accepts (".pdf", "image/png", "image/*"; none takes any file).
 // Answer with photon_view_file_picker_closed, also when it is cancelled.
-using PhotonFilePickerCallback = void (*)(void*, bool);
+using PhotonFilePickerCallback = void (*)(void*, bool, char const* const*, size_t);
 using PhotonPermissionCallback = void (*)(void*, uint64_t, char const*, char const*, char const*, char const*);
 // A server asked the user to sign in: request ID, URL, origin and realm, the
 // last possibly empty. Answer with photon_view_http_credentials_provided.
@@ -244,9 +245,27 @@ void photon_runtime_allow_certificate_errors_for_host(void* runtime, char const*
 void photon_runtime_clear_browsing_data(void* runtime,
     int64_t since_unix_seconds, bool cache, bool site_data, void* callback_data,
     PhotonBrowsingDataClearedCallback callback);
-// Deletes the cookies and localStorage of `host` in the default profile.
+// Deletes the cookies and web storage of `host` and its subdomains in the
+// default profile.
 void photon_runtime_clear_site_data(void* runtime, char const* host,
     void* callback_data, PhotonBrowsingDataClearedCallback callback);
+#if defined(__linux__)
+struct PhotonClipboardEntry {
+    char const* mime_type;
+    std::uint8_t const* data;
+    size_t data_size;
+};
+using PhotonClipboardAddEntryCallback = void (*)(void*, char const*,
+    std::uint8_t const*, size_t);
+using PhotonClipboardReadCallback = void (*)(void*,
+    PhotonClipboardAddEntryCallback, void*);
+using PhotonClipboardWriteCallback = void (*)(void*,
+    PhotonClipboardEntry const*, size_t);
+// Connect Engine clipboard requests to the host's system clipboard.
+void photon_runtime_set_system_clipboard_callbacks(void* runtime,
+    void* callback_data, PhotonClipboardReadCallback read,
+    PhotonClipboardWriteCallback write);
+#endif
 #if defined(__APPLE__)
 void photon_runtime_set_native_release_drain_callback(
     void* runtime, void* callback_data,

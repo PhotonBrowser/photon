@@ -233,8 +233,12 @@ Photon::ViewCallbacks make_view_callbacks(
         };
     }
     if (file_picker_callback) {
-        result.file_picker_requested = [=](bool allow_multiple) {
-            file_picker_callback(callback_data, allow_multiple);
+        result.file_picker_requested = [=](bool allow_multiple, std::vector<std::string> const& accept) {
+            std::vector<char const*> kinds;
+            kinds.reserve(accept.size());
+            for (auto const& kind : accept)
+                kinds.push_back(kind.c_str());
+            file_picker_callback(callback_data, allow_multiple, kinds.data(), kinds.size());
         };
     }
     if (permission_callback) {
@@ -826,6 +830,42 @@ extern "C" void photon_runtime_use_system_clipboard(void* runtime)
             for (auto const& entry : entries)
                 contents.emplace_back(entry.mime_type, entry.data);
             photon_system_clipboard_write(contents); },
+    });
+}
+#endif
+
+#if defined(__linux__)
+extern "C" void photon_runtime_set_system_clipboard_callbacks(
+    void* runtime, void* callback_data, PhotonClipboardReadCallback read,
+    PhotonClipboardWriteCallback write)
+{
+    if (!runtime || !read || !write)
+        return;
+    static_cast<RuntimeHandle*>(runtime)->runtime->set_clipboard({
+        .read = [=] {
+            std::vector<Photon::ClipboardEntry> entries;
+            read(callback_data,
+                [](void* context, char const* mime_type,
+                    std::uint8_t const* data, size_t data_size) {
+                    if (!context || !mime_type || (!data && data_size > 0))
+                        return;
+                    std::string bytes;
+                    if (data_size > 0)
+                        bytes.assign(reinterpret_cast<char const*>(data), data_size);
+                    static_cast<std::vector<Photon::ClipboardEntry>*>(context)->push_back({
+                        mime_type, std::move(bytes) });
+                },
+                &entries);
+            return entries; },
+        .write = [=](std::vector<Photon::ClipboardEntry> const& entries) {
+            std::vector<PhotonClipboardEntry> bridge_entries;
+            bridge_entries.reserve(entries.size());
+            for (auto const& entry : entries) {
+                bridge_entries.push_back({ entry.mime_type.c_str(),
+                    reinterpret_cast<std::uint8_t const*>(entry.data.data()),
+                    entry.data.size() });
+            }
+            write(callback_data, bridge_entries.data(), bridge_entries.size()); },
     });
 }
 #endif

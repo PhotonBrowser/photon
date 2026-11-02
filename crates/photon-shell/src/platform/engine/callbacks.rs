@@ -283,11 +283,26 @@ pub(super) unsafe extern "C" fn on_engine_select_dropdown(
         .update_webview(move |view, cx| view.show_select_dropdown(dropdown, cx));
 }
 
-pub(super) unsafe extern "C" fn on_engine_file_picker(context: *mut c_void, allow_multiple: bool) {
-    if !context.is_null() {
-        unsafe { &*(context.cast::<CallbackState>()) }
-            .update_webview(move |view, cx| view.open_file_picker(allow_multiple, cx));
+pub(super) unsafe extern "C" fn on_engine_file_picker(
+    context: *mut c_void,
+    allow_multiple: bool,
+    accept: *const *const c_char,
+    accept_count: usize,
+) {
+    if context.is_null() {
+        return;
     }
+    let accept: Vec<gpui::SharedString> = if accept.is_null() {
+        Vec::new()
+    } else {
+        unsafe { std::slice::from_raw_parts(accept, accept_count) }
+            .iter()
+            .filter_map(|&kind| unsafe { engine_string(kind) })
+            .map(Into::into)
+            .collect()
+    };
+    unsafe { &*(context.cast::<CallbackState>()) }
+        .update_webview(move |view, cx| view.open_file_picker(allow_multiple, accept, cx));
 }
 
 pub(super) unsafe extern "C" fn on_engine_open_in_new_tab(

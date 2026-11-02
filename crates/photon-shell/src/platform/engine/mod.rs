@@ -7,11 +7,15 @@ mod certificates;
 mod downloads;
 #[cfg(not(feature = "ui-only"))]
 mod external_apps;
+#[cfg(target_os = "linux")]
+mod linux_clipboard;
 pub(super) mod navigation_timing;
 mod session;
 
 #[cfg(not(feature = "ui-only"))]
 use anyhow::Context as _;
+#[cfg(all(target_os = "linux", not(feature = "ui-only")))]
+use gpui::ClipboardHandle;
 use gpui::{AsyncApp, WeakEntity};
 use photon_core::{ClearBrowsingData, PopupPolicy};
 use photon_performance::PerformanceTask;
@@ -74,6 +78,8 @@ pub(in crate::platform) struct UiWake {
 
 pub(in crate::platform) struct EngineRuntime {
     runtime: *mut c_void,
+    #[cfg(target_os = "linux")]
+    system_clipboard: Option<Box<linux_clipboard::SystemClipboard>>,
     #[cfg(target_os = "macos")]
     reduced_motion_observer: *mut c_void,
     callbacks: Box<RuntimeCallbacks>,
@@ -144,6 +150,8 @@ impl EngineRuntime {
         }
         Ok(Self {
             runtime,
+            #[cfg(target_os = "linux")]
+            system_clipboard: None,
             #[cfg(target_os = "macos")]
             reduced_motion_observer,
             callbacks,
@@ -160,6 +168,8 @@ impl EngineRuntime {
     pub(in crate::platform) fn without_engine() -> Self {
         Self {
             runtime: std::ptr::null_mut(),
+            #[cfg(target_os = "linux")]
+            system_clipboard: None,
             #[cfg(target_os = "macos")]
             reduced_motion_observer: std::ptr::null_mut(),
             callbacks: Box::new(RuntimeCallbacks {
@@ -173,6 +183,26 @@ impl EngineRuntime {
 
     pub(in crate::platform) fn is_available(&self) -> bool {
         !self.runtime.is_null()
+    }
+
+    #[cfg(all(target_os = "linux", not(feature = "ui-only")))]
+    pub(in crate::platform) fn use_system_clipboard(&mut self, handle: ClipboardHandle) {
+        if !self.is_available() {
+            return;
+        }
+        self.system_clipboard = Some(Box::new(linux_clipboard::SystemClipboard::new(handle)));
+        let Some(clipboard) = self.system_clipboard.as_deref_mut() else {
+            return;
+        };
+        let context = std::ptr::from_mut(clipboard).cast::<c_void>();
+        unsafe {
+            embedder::photon_runtime_set_system_clipboard_callbacks(
+                self.runtime,
+                context,
+                Some(linux_clipboard::read),
+                Some(linux_clipboard::write),
+            );
+        }
     }
 
     /// Services Engine callbacks on targets whose embedder runtime is pumped
@@ -473,7 +503,7 @@ impl EngineRuntime {
         }
     }
 
-    /// Deletes the cookies and localStorage of one site, then calls `done`
+    /// Deletes the cookies and web storage of one site and its subdomains, then calls `done`
     /// on the main thread. `done` must not update GPUI entities synchronously.
     pub(in crate::platform) fn clear_site_data(&self, host: &str, done: impl FnOnce() + 'static) {
         let Ok(host) = std::ffi::CString::new(host) else {

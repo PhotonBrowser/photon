@@ -164,15 +164,21 @@ pub fn run() {
                 #[cfg(feature = "ui-only")]
                 let runtime = Rc::new(EngineRuntime::without_engine());
                 #[cfg(not(feature = "ui-only"))]
-                let runtime = Rc::new(
-                    EngineRuntime::create(
-                        profile
-                            .as_ref()
-                            .map(|profile| profile.engine_dir())
-                            .as_deref(),
-                    )
-                    .unwrap_or_else(|error| panic!("could not start Photon Engine: {error:#}")),
-                );
+                let runtime = EngineRuntime::create(
+                    profile
+                        .as_ref()
+                        .map(|profile| profile.engine_dir())
+                        .as_deref(),
+                )
+                .unwrap_or_else(|error| panic!("could not start Photon Engine: {error:#}"));
+                #[cfg(all(target_os = "linux", not(feature = "ui-only")))]
+                let runtime = {
+                    let mut runtime = runtime;
+                    runtime.use_system_clipboard(cx.clipboard_handle());
+                    runtime
+                };
+                #[cfg(not(feature = "ui-only"))]
+                let runtime = Rc::new(runtime);
                 #[cfg(all(
                     not(feature = "ui-only"),
                     any(target_os = "linux", target_os = "windows")
