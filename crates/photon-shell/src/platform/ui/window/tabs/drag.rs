@@ -1177,12 +1177,11 @@ impl BrowserWindow {
             id: format!("browser-new-tab-position-{id}"),
             from,
             duration,
-            position: super::super::TabPositionAnimation::with_curve(
+            position: super::super::TabPositionAnimation::new(
                 TabDragAxis::Vertical,
                 from,
                 duration,
                 settings,
-                super::super::super::motion::TweenCurve::EaseOut,
             ),
         });
     }

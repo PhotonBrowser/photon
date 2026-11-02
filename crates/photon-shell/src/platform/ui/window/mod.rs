@@ -62,7 +62,7 @@ use super::command_palette::CommandPalette;
 use super::find_bar::FindBar;
 use super::history::BrowsingHistory;
 use super::js_dialog::DialogHost;
-use super::motion::{Presence, Tween, TweenCurve};
+use super::motion::{Presence, Tween, tab_move_curve};
 use super::omnibox::{Omnibox, OmniboxEvent};
 use super::pages::find_page;
 use super::settings::Settings;
@@ -308,23 +308,14 @@ struct NewTabButtonAnimation {
 }
 
 impl TabPositionAnimation {
+    /// Moves a tab from `from` back to its place on [`tab_move_curve`].
     fn new(
         axis: TabDragAxis,
         from: f32,
         duration: Duration,
         settings: &super::motion::MotionConfig,
     ) -> Self {
-        Self::with_curve(axis, from, duration, settings, TweenCurve::SmoothStep)
-    }
-
-    fn with_curve(
-        axis: TabDragAxis,
-        from: f32,
-        duration: Duration,
-        settings: &super::motion::MotionConfig,
-        curve: TweenCurve,
-    ) -> Self {
-        let mut tween = Tween::at_with_curve(from, curve);
+        let mut tween = Tween::at_with_curve(from, tab_move_curve(duration));
         tween.animate_to_for(0.0, duration, settings);
         Self { axis, tween }
     }

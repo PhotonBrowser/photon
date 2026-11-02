@@ -8,8 +8,6 @@ documented in the guides linked from the [README](../README.md).
 - Finish onboarding with a choice of workspace preset.
 - Add split view for multiple tabs.
 - Add folders for pinned tabs.
-- Improve tab and toolbar interactions, including copying the current address,
-  background audio controls, and spring motion.
 - Limit the file upload panel to the types a page's file input accepts.
 - Clear a site's IndexedDB and its storage on non-default ports from its info
   menu.

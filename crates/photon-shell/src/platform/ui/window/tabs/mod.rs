@@ -269,13 +269,7 @@ impl BrowserWindow {
                 0.0
             };
             let animation = if animate && at_top {
-                super::TabPositionAnimation::with_curve(
-                    TabDragAxis::Vertical,
-                    from,
-                    duration,
-                    &settings,
-                    super::super::motion::TweenCurve::EaseOut,
-                )
+                super::TabPositionAnimation::new(TabDragAxis::Vertical, from, duration, &settings)
             } else {
                 super::TabPositionAnimation::new(
                     TabDragAxis::Vertical,
@@ -293,13 +287,7 @@ impl BrowserWindow {
             let from = -shift;
             self.tab_position_animations.insert(
                 id,
-                super::TabPositionAnimation::with_curve(
-                    TabDragAxis::Vertical,
-                    from,
-                    duration,
-                    &settings,
-                    super::super::motion::TweenCurve::EaseOut,
-                ),
+                super::TabPositionAnimation::new(TabDragAxis::Vertical, from, duration, &settings),
             );
         }
 
