@@ -1,6 +1,6 @@
 # Contributor setup
 
-Photon's primary development platform is macOS. Linux support is experimental: Ubuntu 24.04 CI validates workspace checks, CLI smoke commands, and tests in the [latest passing run](https://github.com/PhotonBrowser/photon/actions/runs/40202068735), but a full interactive browser run is not currently validated in CI.
+Photon's primary development platform is macOS. Linux support is experimental: Ubuntu 24.04 CI validates workspace checks, CLI smoke commands, and tests; the workflow includes a desktop-entry installation smoke check. A full interactive browser run is not currently validated in CI.
 
 ## Bootstrap prerequisites
 
@@ -51,7 +51,7 @@ photon build
 photon run
 ```
 
-Setup does not install Linux packages. `photon check` and `photon test` pass in Ubuntu CI. `photon build` and full `photon run` use the portable Linux Engine and GPUI paths, but need a working graphical session and have not yet been verified as end-to-end runtime paths by CI. `photon run --ui` launches the shell without the Engine and cannot load web pages.
+Setup does not install Linux packages. Full `photon setup` installs the CLI and then registers the per-user desktop launcher and HTTP/HTTPS handlers; `photon setup --ui-only` does not install or update desktop integration. `photon install` installs or refreshes only the CLI, while `photon desktop install` and `photon desktop uninstall` manage the launcher separately. Photon is not selected as the default browser automatically. `photon check` and `photon test` pass in Ubuntu CI. `photon build` and full `photon run` use the portable Linux Engine and GPUI paths, but need a working graphical session and have not yet been verified as end-to-end runtime paths by CI. `photon run --ui` launches the shell without the Engine and cannot load web pages.
 
 ## Recover an existing checkout
 

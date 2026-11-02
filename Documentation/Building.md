@@ -8,6 +8,7 @@ Use the `photon` CLI for setup, formatting, linting, building, and running Photo
 | --- | --- | --- |
 | `photon setup` | Implemented but unverified | Full setup is implemented but unverified; Linux system packages are manual |
 | `photon setup --ui-only` | Implemented; Engine setup is skipped | Initializes GPUI and prepares the shell without Engine or Ladybird build prerequisites |
+| `photon desktop install` / `uninstall` | Not applicable | Installs or removes the per-user launcher, icon, and URL-handler registration |
 | `photon check` | Verified working in the current macOS checkout | Verified working by Ubuntu 24.04 CI |
 | `photon test` | Verified working in the current macOS checkout | Verified working by Ubuntu 24.04 CI |
 | `photon build` | Implemented but unverified; Engine build was not run in this audit | Partially implemented; Linux Engine build path exists, but full Engine build is not verified here or by CI |
@@ -30,7 +31,9 @@ photon build
 photon run
 ```
 
-- `photon setup` checks required tools, initializes missing pinned dependencies, prepares Rust formatting/lint tools and clang-format 22, and installs or refreshes the `photon` command in Cargo's bin directory. On macOS, add `--install-system-deps` to install the required Homebrew packages. On Linux, install packages from Ladybird's guide first. Setup preserves initialized dependency branches and does not advance root pins. The pinned clang-format 22.1.8 stays under the ignored `build/tools/` directory.
+- `photon setup` checks required tools, initializes missing pinned dependencies, prepares Rust formatting/lint tools and clang-format 22, and installs or refreshes the `photon` command in Cargo's bin directory. Full Linux setup also installs the per-user desktop launcher, icon, and URL handlers. `photon setup --ui-only` does not install or update desktop integration. On macOS, add `--install-system-deps` to install the required Homebrew packages. On Linux, install packages from Ladybird's guide first. Setup preserves initialized dependency branches and does not advance root pins. The pinned clang-format 22.1.8 stays under the ignored `build/tools/` directory.
+- `photon install` installs or refreshes only the `photon` and `ph` CLI binaries in Cargo's bin directory. It does not install desktop files.
+- Full Linux `photon setup` installs desktop integration automatically; no separate command is needed. `photon desktop install` and `photon desktop uninstall` are maintenance commands for refreshing or removing Linux's per-user desktop entry, icon, and HTTP/HTTPS handler declarations. The CLI must already be installed. Choose another default browser in desktop settings before uninstalling Photon if it is currently selected.
 - `photon setup --ui-only` initializes the pinned GPUI-CE checkout and installs the CLI while skipping the Engine submodule, C++ compiler, Python, CMake, Ninja, and clang-format setup. It supports `photon run --ui`; it does not prepare `photon build`, full `photon check`, or web-page loading. The mode preserves any existing Engine checkout.
 - `photon doctor` reports tool versions, Rust components, dependency revisions, and build directories. `photon setup` is the strict prerequisite check.
 - `photon format` formats Rust and Photon-owned native code, including the Engine embedder with its matching style version.
@@ -38,7 +41,7 @@ photon run
 - `photon check` runs linting, compiles the Cargo workspace, and verifies architecture and dependency checkout rules.
 - `photon test` runs the Rust workspace tests.
 - `photon build` builds the Engine and the GPUI-CE application. It requires initialized Engine and GPUI-CE submodules and a full set of Ladybird build prerequisites; it can take a long time on the first run. Pass `--debug` for an unoptimized build.
-- `photon run` builds and launches the native app in release mode by default. Use `--debug` for an unoptimized build, `--url URL` to choose the initial page, or `--shutdown-after-seconds N` to quit after a fixed interval. `--verbose` prints output from the underlying build tools.
+- `photon run` builds and launches the native app in release mode by default. Use `--debug` for an unoptimized build, `--url URL` or a positional `URL` to choose the initial page, or `--shutdown-after-seconds N` to quit after a fixed interval. `--verbose` prints output from the underlying build tools.
 - `photon run --ui` builds and launches the shared browser window with the New Tab page, without building, linking, or starting Photon Engine. Shell-owned pages remain available; web pages cannot be opened in this mode. The path is available on macOS, Linux, and Windows.
 - Browser context menus and page `<select>` controls use the shared GPUI menu surface and work without platform-native menu hooks. They inherit the semantic theme roles, menu metrics, and motion used by Photon popovers.
 - `photon clean` removes generated build trees and stops the checkout-specific presentation broker.

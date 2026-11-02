@@ -166,10 +166,16 @@ pub(crate) fn setup(
         clang_format(root, CLANG_FORMAT_VERSION)?;
     }
     crate::commands::install::install(root, verbose)?;
+    #[cfg(target_os = "linux")]
+    if !ui_only {
+        crate::commands::linux_desktop::install(root)?;
+    }
     if ui_only {
         println!("UI-only setup ready. Existing dependency worktrees were preserved.");
         println!("Run `photon run --ui` to build and launch the GPUI shell.");
         println!("Photon Engine was not initialized; web pages require the full setup.");
+        #[cfg(target_os = "linux")]
+        println!("Linux desktop integration was left unchanged.");
     } else {
         println!("Setup ready. Existing dependency worktrees were preserved.");
         println!("Rust formatting, Clippy, and native formatting tools are ready.");

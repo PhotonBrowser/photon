@@ -30,8 +30,12 @@ packages listed in [contributor setup](CONTRIBUTOR_SETUP.md), then run
 `./photon setup`. Follow the platform-specific build and run guidance there
 before launching Photon.
 
-Setup installs or refreshes the `photon` command and `ph` alias in Cargo's bin directory. Make
-sure `~/.cargo/bin` is on your `PATH` to use `photon` without the `./` prefix.
+Setup installs or refreshes the `photon` command and `ph` alias in Cargo's bin
+directory. Full Linux setup also registers a per-user desktop launcher and web
+URL handlers; UI-only setup does not install or update them. `photon install`
+refreshes only the CLI.
+Make sure `~/.cargo/bin` is on your `PATH` to use `photon` without the `./`
+prefix.
 
 To work on the GPUI shell on Linux without setting up Ladybird Engine, clone
 without submodules and use the UI-only path:

@@ -46,6 +46,7 @@ jobs:
             ninja-build \
             python3 \
             pkg-config \
+            desktop-file-utils \
             libasound2-dev \
             libfontconfig1-dev \
             libfreetype6-dev \
@@ -82,6 +83,33 @@ jobs:
           ./photon --help
           ./photon doctor
           ./photon deps status
+          ./photon run --help
+          ./photon desktop --help
+
+      - name: Verify Linux desktop integration
+        run: |
+          temp_root="$(mktemp -d)"
+          trap 'rm -rf "$temp_root"' EXIT
+          CARGO_INSTALL_ROOT="$temp_root/cargo" \
+          XDG_DATA_HOME="$temp_root/share" \
+            ./photon install
+          desktop_file="$temp_root/share/applications/org.photonbrowser.photon.desktop"
+          icon_file="$temp_root/share/icons/hicolor/1024x1024/apps/org.photonbrowser.photon.png"
+          test ! -e "$desktop_file"
+          CARGO_INSTALL_ROOT="$temp_root/cargo" \
+          XDG_DATA_HOME="$temp_root/share" \
+            ./photon desktop install
+          desktop-file-validate "$desktop_file"
+          test -x "$temp_root/cargo/bin/photon"
+          test -s "$icon_file"
+          grep -F "x-scheme-handler/http=org.photonbrowser.photon.desktop;" "$temp_root/share/applications/mimeinfo.cache"
+          grep -F "x-scheme-handler/https=org.photonbrowser.photon.desktop;" "$temp_root/share/applications/mimeinfo.cache"
+          CARGO_INSTALL_ROOT="$temp_root/cargo" \
+          XDG_DATA_HOME="$temp_root/share" \
+            ./photon desktop uninstall
+          test ! -e "$desktop_file"
+          test ! -e "$icon_file"
+          test -x "$temp_root/cargo/bin/photon"
 
   tests:
     name: Photon tests

@@ -47,8 +47,14 @@ enum Command {
         #[arg(long)]
         ui_only: bool,
     },
-    /// Install this checkout's Photon command in Cargo's bin directory.
+    /// Install this checkout's Photon CLI in Cargo's bin directory.
     Install,
+    /// Install or remove Linux desktop integration.
+    #[cfg(target_os = "linux")]
+    Desktop {
+        #[command(subcommand)]
+        command: DesktopCommand,
+    },
     /// Report tool versions, installed Rust tools, and dependency checkout state.
     Doctor,
     /// Report Rust editor metadata.
@@ -70,8 +76,11 @@ enum Command {
         #[arg(long)]
         ui: bool,
         /// Navigate the PhotonWebView to this URL after launch.
-        #[arg(long)]
+        #[arg(long, conflicts_with = "url_argument")]
         url: Option<String>,
+        /// URL to open. Used by the Linux desktop entry for web links.
+        #[arg(value_name = "URL", conflicts_with = "url")]
+        url_argument: Option<String>,
         /// Quit after this many seconds (for shutdown and lease-drain verification).
         #[arg(long)]
         shutdown_after_seconds: Option<u64>,
@@ -205,6 +214,15 @@ enum IdeCommand {
     Setup,
 }
 
+#[cfg(target_os = "linux")]
+#[derive(Debug, Subcommand)]
+enum DesktopCommand {
+    /// Install Photon’s launcher, icon, and web URL handlers.
+    Install,
+    /// Remove Photon’s launcher and icon without uninstalling the CLI.
+    Uninstall,
+}
+
 #[derive(Debug, Subcommand)]
 enum GpuiCommand {
     /// Switch GPUI-CE to its persistent Photon development branch.
@@ -310,6 +328,11 @@ pub fn run() -> Result<(), String> {
             ui_only,
         }) => commands::setup::setup(&root, verbose, install_system_deps, ui_only),
         Some(Command::Install) => commands::install::install(&root, verbose),
+        #[cfg(target_os = "linux")]
+        Some(Command::Desktop { command }) => match command {
+            DesktopCommand::Install => commands::linux_desktop::install(&root),
+            DesktopCommand::Uninstall => commands::linux_desktop::uninstall(),
+        },
         Some(Command::Doctor) => commands::setup::doctor(&root),
         Some(Command::Ide { command }) => match command {
             IdeCommand::Setup => commands::ide::setup(&root, verbose),
@@ -321,11 +344,13 @@ pub fn run() -> Result<(), String> {
             profile,
             ui,
             url,
+            url_argument,
             shutdown_after_seconds,
         }) => {
             commands::build::warn_if_dependencies_are_behind(&root);
+            let url = url.or(url_argument);
             if ui && url.is_some() {
-                return Err("--url cannot be used with --ui".into());
+                return Err("a URL cannot be used with --ui".into());
             }
             if ui {
                 commands::build::run_ui(&root, profile.release(), verbose, shutdown_after_seconds)

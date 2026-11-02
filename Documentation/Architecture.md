@@ -68,7 +68,7 @@ provide tab/session management or profile persistence.
 | `Engine/` | Ladybird and Photon’s embedder API for creating and controlling web views. |
 | `native/embedder/` | Bridges the C++ embedder API to the private C ABI used by Rust. |
 | `photon-ffi` | Exposes selected browser-model operations through a separate C ABI; it does not start the Engine. |
-| `photon-cli` | Provides setup, build, run, and development commands. |
+| `photon-cli` | Provides setup, build, run, and development commands. Cargo CLI installation stays separate from the Linux desktop integration commands that manage XDG launcher files. |
 | `ios/` | Native app host with a Rust `photon-ffi` adapter and WebKit page surface; it is separate from the desktop Engine path. |
 
 Other focused packages provide branding, performance diagnostics, sound,

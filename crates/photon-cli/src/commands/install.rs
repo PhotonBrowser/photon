@@ -16,6 +16,6 @@ pub(crate) fn install(root: &Path, verbose: bool) -> Result<(), String> {
         root,
         verbose,
     )?;
-    success("Photon is installed; run `photon` or `ph` from this checkout");
+    success("Photon CLI is installed; run `photon` or `ph`");
     Ok(())
 }

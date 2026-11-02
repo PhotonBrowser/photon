@@ -16,6 +16,7 @@
 | Component | Responsibility | Boundary |
 | --- | --- | --- |
 | `photon-core` | Browser state, commands, address/search rules, tab-sleep policy, and application logic | Must remain independent of UI frameworks, native handles, and Ladybird classes. |
+| `photon-cli` | Developer setup, build, run, dependency, and CLI installation commands | `photon install` installs the Cargo CLI only; keep OS desktop integration in its own platform-specific command module. |
 | `photon-ffi` | Exported Rust C ABI | Keep C ABI adaptation here rather than in core. |
 | `photon-shell` | Shared GPUI views, browser/window lifecycle, Engine adapter, and target OS adapters | Shell calls the explicit Engine embedder API; keep target OS behavior under `platform/<target>/`. |
 | `photon-presentation-ipc` | Presentation XPC transport | Owns transport, not browser policy. |
@@ -48,12 +49,18 @@ For GPUI-CE work, read the [GPUI-CE documentation](https://gpui-ce.github.io/gpu
 
 ## Checkout and dependency setup
 
-1. When setting up a checkout, run **`photon setup`**. It initializes pinned submodules and activates persistent Photon development branches.
+1. When setting up a checkout, run **`photon setup`**. It initializes pinned submodules, activates persistent Photon development branches, and installs the CLI. Full Linux setup also installs the per-user desktop entry; `photon setup --ui-only` does not install or update it.
 2. Read [`Documentation/Upstream.md`](Documentation/Upstream.md) **before any Engine or GPUI-CE upstream sync**. Its documented branch and remote arrangements are authoritative.
 3. Use `vendor/gpui-ce/main` for ordinary GPUI work. Use the other persistent Photon dependency branches documented in `Documentation/Upstream.md` for routine edits and upstream syncs; **do not create a new branch for each change**.
 4. Keep `origin` pointed at the **Photon-owned repository** and `upstream` pointed at **Ladybird** or **`gpui-ce/gpui-ce`**, as appropriate.
 5. Photon root records **exact tested dependency commit IDs**, even when local submodule worktrees are on branches. Never casually advance dependencies with `git submodule update --remote`.
 6. Never switch or update `Engine/` while CMake or Ninja is building from that checkout. Allow the build to finish or stop it cleanly first.
+
+### CLI and desktop installation
+
+- `photon install` installs or refreshes only the `photon` and `ph` CLI binaries in Cargo's bin directory. Do not attach OS application registration to this command.
+- Linux launcher, icon, and URL-handler files belong to `photon desktop install` and `photon desktop uninstall`, implemented in `crates/photon-cli/src/commands/linux_desktop.rs`. These are maintenance commands; full `photon setup` invokes the installer automatically after installing the CLI. `--ui-only` leaves existing desktop files untouched and does not install them.
+- Keep these semantics aligned in `crates/photon-cli/AGENTS.md`, `Documentation/Building.md`, and `Documentation/Linux.md`.
 
 ## Upstream synchronization and conflict resolution
 
