@@ -15,7 +15,7 @@ where
 {
     let motion = Motion::new(Target::default().y(0.0))
         .initial(Target::default().y(from))
-        .transition(tab_move_transition(duration));
+        .transition(TweenCurve::EaseOut.transition(duration));
     MotionElement::new(id, element, motion)
         .map(|element: E, frame: Frame| element.top(gpui::px(frame.target().y_px())))
         .into_any_element()
@@ -136,26 +136,6 @@ pub(in super::super) enum TweenCurve {
     #[default]
     EaseInOutCubic,
     Spring(SpringConfig),
-}
-
-/// Tabs moving to a new place: settling after a drop, making room for a new
-/// tab, and the new-tab button following them. Nearly critically damped, so a
-/// tab lands without wobbling but keeps its momentum when it is turned back.
-pub(in super::super) const TAB_MOVE_SPRING: TweenCurve =
-    TweenCurve::Spring(SpringConfig::new(380.0, 34.0, 1.0));
-
-/// How a tab moves to a new place, or a jump when `duration` is zero.
-pub(in super::super) fn tab_move_curve(duration: Duration) -> TweenCurve {
-    if duration.is_zero() {
-        TweenCurve::Linear
-    } else {
-        TAB_MOVE_SPRING
-    }
-}
-
-/// [`tab_move_curve`] as an element transition.
-pub(in super::super) fn tab_move_transition(duration: Duration) -> gpui_motion::Transition {
-    tab_move_curve(duration).transition(duration)
 }
 
 pub(in super::super) const THEME_PICKER_SPRING: TweenCurve =

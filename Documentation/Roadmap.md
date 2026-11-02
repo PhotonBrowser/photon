@@ -8,6 +8,8 @@ documented in the guides linked from the [README](../README.md).
 - Finish onboarding with a choice of workspace preset.
 - Add split view for multiple tabs.
 - Add folders for pinned tabs.
+- Move tabs on springs when they open, close and settle after a drop, in step
+  with their height and fade animations.
 - Limit the file upload panel to the types a page's file input accepts.
 - Clear a site's IndexedDB and its storage on non-default ports from its info
   menu.

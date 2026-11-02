@@ -7,7 +7,6 @@ use gpui::{
 };
 
 use super::super::history::BrowsingHistory;
-use super::super::motion::{Speed, tab_move_transition};
 use super::super::pages::PageIcon;
 use super::super::settings::Settings;
 use super::super::tabs::{TabIcon, TabItem, TabMotion};
@@ -177,7 +176,7 @@ impl BrowserWindow {
                 let reorder_transition = if suppress_motion || position_animation {
                     gpui_motion::Transition::Instant
                 } else {
-                    tab_move_transition(motion_settings.duration(Speed::Quick))
+                    gpui_motion::Transition::default()
                 };
                 let icon_appearing = self.icon_appearing(stable_id, &icon, &motion_settings);
                 let insertion_before = self.incoming_tab_drag.as_ref().and_then(|incoming| {

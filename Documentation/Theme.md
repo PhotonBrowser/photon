@@ -192,9 +192,7 @@ softer `Curve::SMOOTH`. Springs leave on an ease-out of the entrance's exit
 duration, so `Presence` can unmount them on time. The sidebar opens, closes,
 collapses and tucks away for Zen mode on `SIDEBAR_LAYOUT_SPRING`, which is
 critically damped so the page beside it never overshoots. The sidebar revealed
-over the page uses the quicker, slightly livelier `SIDEBAR_REVEAL_SPRING`. Tabs
-moving to a new place, as they reorder, settle after a drop or make room for a
-new tab, and the new-tab button following them, share `TAB_MOVE_SPRING`. A
+over the page uses the quicker, slightly livelier `SIDEBAR_REVEAL_SPRING`. A
 spring ignores the quick, standard and gentle durations, but still jumps
 straight to rest when motion is off or reduced.
 
