@@ -2,14 +2,13 @@ use gpui::{
     ClipboardEntry, ClipboardHandle, ClipboardItem, ClipboardString, ExternalPaths, Image,
     ImageFormat,
 };
-use smallvec::SmallVec;
 use std::{
     ffi::{CStr, c_char, c_void},
     path::PathBuf,
 };
 use url::Url;
 
-use super::engine_ffi::embedder::PhotonClipboardEntry;
+use crate::platform::engine_ffi::embedder::PhotonClipboardEntry;
 
 pub(super) struct SystemClipboard {
     handle: ClipboardHandle,
@@ -119,7 +118,9 @@ pub(super) unsafe extern "C" fn write(
                     if !has_paths {
                         if let Some(paths) = parse_file_uri_list(bytes) {
                             item.entries
-                                .push(ClipboardEntry::ExternalPaths(ExternalPaths(paths)));
+                                .push(ClipboardEntry::ExternalPaths(ExternalPaths(
+                                    paths.into_iter().collect(),
+                                )));
                             has_paths = true;
                         }
                     }
@@ -164,12 +165,12 @@ fn file_uri_list(paths: &ExternalPaths) -> String {
         })
 }
 
-fn parse_file_uri_list(bytes: &[u8]) -> Option<SmallVec<[PathBuf; 2]>> {
+fn parse_file_uri_list(bytes: &[u8]) -> Option<Vec<PathBuf>> {
     let text = std::str::from_utf8(bytes).ok()?;
     let paths = text
         .lines()
         .filter(|line| !line.is_empty() && !line.starts_with('#'))
         .filter_map(|line| Url::parse(line).ok()?.to_file_path().ok())
-        .collect::<SmallVec<[PathBuf; 2]>>();
+        .collect::<Vec<_>>();
     (!paths.is_empty()).then_some(paths)
 }
