@@ -22,6 +22,12 @@ pub(crate) fn supports_elastic_scroll() -> bool {
     true
 }
 
+/// Whether popovers and menus can sharpen out of a blur as they appear.
+/// GPUI blurs at half resolution, which Retina displays hide.
+pub(crate) fn supports_entrance_blur() -> bool {
+    true
+}
+
 pub(crate) fn keyboard_notation() -> super::KeyboardNotation {
     super::KeyboardNotation {
         mac_symbols: true,

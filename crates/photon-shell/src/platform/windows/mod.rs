@@ -14,6 +14,13 @@ pub(crate) fn supports_elastic_scroll() -> bool {
     false
 }
 
+/// Whether popovers and menus can sharpen out of a blur as they appear. GPUI
+/// blurs at half resolution: on the 1x displays common here, content
+/// animating through it snaps to a coarse grid and pops sharp at the end.
+pub(crate) fn supports_entrance_blur() -> bool {
+    false
+}
+
 pub(crate) fn keyboard_notation() -> super::KeyboardNotation {
     super::KeyboardNotation {
         mac_symbols: false,

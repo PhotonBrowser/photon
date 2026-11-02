@@ -57,7 +57,7 @@ pub(crate) use windows::termination;
 #[allow(unused_imports)]
 pub(crate) use linux::{
     app_menus, default_browser, is_dark_appearance, keyboard_notation, motion_observer, renderer,
-    supports_elastic_scroll, window_observer, window_settings,
+    supports_elastic_scroll, supports_entrance_blur, window_observer, window_settings,
 };
 #[cfg(target_os = "macos")]
 pub use macos::appkit::{
@@ -70,12 +70,12 @@ pub use macos::site_info_popover::AppKitSiteInfoPopover;
 #[cfg(target_os = "macos")]
 pub(crate) use macos::{
     app_menus, default_browser, is_dark_appearance, keyboard_notation, motion_observer, renderer,
-    supports_elastic_scroll, window_observer, window_settings,
+    supports_elastic_scroll, supports_entrance_blur, window_observer, window_settings,
 };
 #[cfg(target_os = "windows")]
 pub(crate) use windows::{
     app_menus, default_browser, is_dark_appearance, keyboard_notation, motion_observer, renderer,
-    supports_elastic_scroll, window_observer, window_settings,
+    supports_elastic_scroll, supports_entrance_blur, window_observer, window_settings,
 };
 
 #[cfg(all(target_os = "linux", not(feature = "ui-only")))]

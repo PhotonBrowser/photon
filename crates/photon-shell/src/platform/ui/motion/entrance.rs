@@ -208,7 +208,9 @@ impl Entrance {
         (
             shown,
             hidden,
-            self.blur_from.map(|radius| radius * strength),
+            self.blur_from
+                .filter(|_| crate::platform::supports_entrance_blur())
+                .map(|radius| radius * strength),
         )
     }
 }

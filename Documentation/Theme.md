@@ -187,7 +187,10 @@ call and lets the parts drift apart.
 Photon's motion leans on springs, as Arc's does. A spring can be turned back
 midway and keeps its momentum, where a fixed-length curve restarts from rest.
 Menus and popovers (`popover`) and the find bar spring in on `Curve::SNAPPY`,
-with a slight scale, drop and blur. Toasts, peeks and spaces arriving use the
+with a slight scale, drop and blur. The blur is left out where the platform
+adapter's `supports_entrance_blur` says so: GPUI blurs at half resolution, and
+on the 1x displays common on Linux and Windows, content animating through it
+jitters and pops sharp as it settles. Toasts, peeks and spaces arriving use the
 softer `Curve::SMOOTH`. Springs leave on an ease-out of the entrance's exit
 duration, so `Presence` can unmount them on time. The sidebar opens, closes,
 collapses and tucks away for Zen mode on `SIDEBAR_LAYOUT_SPRING`, which is
