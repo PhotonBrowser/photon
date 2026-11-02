@@ -104,35 +104,31 @@ pub(super) unsafe extern "C" fn write(
             };
             match mime_type {
                 "text/plain" | "text/plain;charset=utf-8" | "UTF8_STRING" => {
-                    if !has_text {
-                        if let Ok(text) = std::str::from_utf8(bytes) {
-                            item.entries
-                                .push(ClipboardEntry::String(ClipboardString::new(
-                                    text.to_owned(),
-                                )));
-                            has_text = true;
-                        }
+                    if !has_text && let Ok(text) = std::str::from_utf8(bytes) {
+                        item.entries
+                            .push(ClipboardEntry::String(ClipboardString::new(
+                                text.to_owned(),
+                            )));
+                        has_text = true;
                     }
                 }
                 "text/uri-list" => {
-                    if !has_paths {
-                        if let Some(paths) = parse_file_uri_list(bytes) {
-                            item.entries
-                                .push(ClipboardEntry::ExternalPaths(ExternalPaths(
-                                    paths.into_iter().collect(),
-                                )));
-                            has_paths = true;
-                        }
+                    if !has_paths && let Some(paths) = parse_file_uri_list(bytes) {
+                        item.entries
+                            .push(ClipboardEntry::ExternalPaths(ExternalPaths(
+                                paths.into_iter().collect(),
+                            )));
+                        has_paths = true;
                     }
                 }
                 _ => {
-                    if let Some(format) = ImageFormat::from_mime_type(mime_type) {
-                        if image_formats.insert(format) {
-                            item.entries.push(ClipboardEntry::Image(Image::from_bytes(
-                                format,
-                                bytes.to_vec(),
-                            )));
-                        }
+                    if let Some(format) = ImageFormat::from_mime_type(mime_type)
+                        && image_formats.insert(format)
+                    {
+                        item.entries.push(ClipboardEntry::Image(Image::from_bytes(
+                            format,
+                            bytes.to_vec(),
+                        )));
                     }
                 }
             }
