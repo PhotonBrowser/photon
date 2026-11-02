@@ -103,6 +103,10 @@ pub(in super::super) fn tab_list(
         div()
             .id("browser-tab-divider")
             .w_full()
+            // The list's gaps would add to the divider's own margin, so it
+            // takes them back: a separator is the same height everywhere,
+            // while its margin still catches a drop.
+            .my(px(-spacing.item_gap))
             .py(px(spacing.separator_margin))
             .px(px(if collapsed {
                 spacing.padding
@@ -135,7 +139,9 @@ pub(in super::super) fn tab_list(
         }
         None => new_tab.into_any_element(),
     };
-    let today = section("browser-tab-list", "Browser tabs", today, false);
+    // With no tabs of today, the empty list would add a gap of its own.
+    let today =
+        (!today.is_empty()).then(|| section("browser-tab-list", "Browser tabs", today, false));
     let list = v_stack()
         .id("sidebar-tab-list-drag-target")
         .w_full()
@@ -154,9 +160,9 @@ pub(in super::super) fn tab_list(
         })
         .children(divider);
     let list = if new_tab_at_end {
-        list.child(today).child(new_tab)
+        list.children(today).child(new_tab)
     } else {
-        list.child(new_tab).child(today)
+        list.child(new_tab).children(today)
     };
     list.on_mouse_move_all(move |event, phase, hitbox, window, cx| {
         on_drag_move(event, phase, hitbox, window, cx);
