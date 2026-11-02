@@ -10,15 +10,13 @@ documented in the guides linked from the [README](../README.md).
 - Add folders for pinned tabs.
 - Improve tab and toolbar interactions, including copying the current address,
   background audio controls, and spring motion.
-
+- Limit the file upload panel to the types a page's file input accepts.
+- Clear a site's IndexedDB and its storage on non-default ports from its info
+  menu.
 
 ## Later
 
 - Add a bookmark manager and import bookmarks and history from other browsers.
-- Add a history page and a download manager.
-- Add native file upload pickers and permission prompts through explicit Engine
-  and platform APIs.
-- Add full-screen pages and video, and show link destinations on hover.
 - Add optional local notes and time reports tied to browsing activity.
 - Add native ad and tracker blocking with per-site controls and explicit Engine
   APIs.
