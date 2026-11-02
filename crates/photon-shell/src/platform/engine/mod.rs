@@ -7,7 +7,7 @@ mod certificates;
 mod downloads;
 #[cfg(not(feature = "ui-only"))]
 mod external_apps;
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(feature = "ui-only")))]
 mod linux_clipboard;
 pub(super) mod navigation_timing;
 mod session;
@@ -78,7 +78,7 @@ pub(in crate::platform) struct UiWake {
 
 pub(in crate::platform) struct EngineRuntime {
     runtime: *mut c_void,
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", not(feature = "ui-only")))]
     system_clipboard: Option<Box<linux_clipboard::SystemClipboard>>,
     #[cfg(target_os = "macos")]
     reduced_motion_observer: *mut c_void,
@@ -150,7 +150,7 @@ impl EngineRuntime {
         }
         Ok(Self {
             runtime,
-            #[cfg(target_os = "linux")]
+            #[cfg(all(target_os = "linux", not(feature = "ui-only")))]
             system_clipboard: None,
             #[cfg(target_os = "macos")]
             reduced_motion_observer,
@@ -168,7 +168,7 @@ impl EngineRuntime {
     pub(in crate::platform) fn without_engine() -> Self {
         Self {
             runtime: std::ptr::null_mut(),
-            #[cfg(target_os = "linux")]
+            #[cfg(all(target_os = "linux", not(feature = "ui-only")))]
             system_clipboard: None,
             #[cfg(target_os = "macos")]
             reduced_motion_observer: std::ptr::null_mut(),

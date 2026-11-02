@@ -19,7 +19,16 @@ fn main() {
         .canonicalize()
         .unwrap();
     let ui_only = env::var_os("CARGO_FEATURE_UI_ONLY").is_some();
-    if !ui_only {
+    if ui_only {
+        let stubs = root.join("native/embedder/PhotonEmbedderUiOnlyStubs.cpp");
+        println!("cargo:rerun-if-changed={}", stubs.display());
+        cc::Build::new()
+            .cpp(true)
+            .std("c++20")
+            .file(&stubs)
+            .include(root.join("native/embedder"))
+            .compile("photon_embedder_ui_only_stubs");
+    } else {
         let engine_build = env::var_os("PHOTON_ENGINE_BUILD_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|| root.join("build/engine-release"));

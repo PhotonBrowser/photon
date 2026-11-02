@@ -140,7 +140,7 @@ pub(super) mod embedder {
         u64,
     );
 
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", not(feature = "ui-only")))]
     #[repr(C)]
     pub(crate) struct PhotonClipboardEntry {
         pub mime_type: *const c_char,

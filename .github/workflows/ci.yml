@@ -74,6 +74,9 @@ jobs:
       - name: Check Photon
         run: ./photon check --verbose
 
+      - name: Build Linux UI-only shell
+        run: cargo build --release -p photon-app --bin Photon --features ui-only
+
       - name: Smoke test CLI
         run: |
           ./photon --help
