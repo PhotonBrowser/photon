@@ -30,6 +30,10 @@ pub(super) enum MenuCommand {
     EditSpace(SpaceId),
     EditTheme(SpaceId),
     DeleteSpace(SpaceId),
+    /// Switches to the tab, and to its space.
+    ActivateTab(usize),
+    /// Mutes or unmutes the tab's sound.
+    ToggleTabAudio(usize),
     /// Deletes the cookies and web storage of the site with this host.
     ClearSiteData(String),
 }
@@ -70,6 +74,12 @@ impl BrowserWindow {
         }
         match item.command.clone() {
             MenuCommand::ReloadTab(tab) => self.reload_tab(tab, window, cx),
+            MenuCommand::ActivateTab(tab) => self.activate_tab(tab, true, window, cx),
+            MenuCommand::ToggleTabAudio(tab) => {
+                if let Some(webview) = self.tabs.get(tab).and_then(|tab| tab.content.webview()) {
+                    webview.update(cx, |view, cx| view.toggle_audio_mute(cx));
+                }
+            }
             MenuCommand::DuplicateTab(tab) => self.duplicate_tab(tab, window, cx),
             MenuCommand::TogglePin(tab) => self.toggle_pin(tab, cx),
             MenuCommand::AddFavourite { tab, shortcut } => self.add_favourite(tab, shortcut, cx),

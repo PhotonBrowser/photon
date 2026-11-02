@@ -1,6 +1,6 @@
-//! The sidebar's footer: downloads at the left, the spaces in the middle,
-//! and the browser menu at the right. Collapsed to icons, the spaces stack
-//! above downloads and the browser menu.
+//! The sidebar's footer: downloads, and sound from tabs out of view, at the
+//! left, the spaces in the middle, and the browser menu at the right.
+//! Collapsed to icons, the spaces stack above the rest.
 
 use gpui::{App, MouseButton, Orientation, Role, Window, div, prelude::*, px, rgb, rgba};
 
@@ -9,6 +9,7 @@ use super::super::button::{menu_button, toolbar_button};
 use super::super::controls::{FocusRing, RovingAxis, RovingFocus};
 use super::super::controls::{OwnsClicks, Pressable};
 use super::super::download_button::{DownloadsButton, downloads_button};
+use super::super::icons::audio_icon;
 use super::super::layout::{h_stack, v_stack};
 use super::super::motion::SurfaceFade;
 use super::super::tooltip::label_tooltip;
@@ -31,6 +32,40 @@ pub(in super::super) struct FooterActions {
     pub(in super::super) menu: ClickHandler,
     /// Adds a space; `None` in a private window, which cannot.
     pub(in super::super) new_space: Option<ClickHandler>,
+    /// Sound from tabs other than the one shown; `None` while there is none.
+    pub(in super::super) background_audio: Option<BackgroundAudio>,
+}
+
+/// Tabs out of view that are playing sound.
+pub(in super::super) struct BackgroundAudio {
+    /// Whether every one of them is muted.
+    pub(in super::super) muted: bool,
+    /// Opens a menu to go to or mute each of them.
+    pub(in super::super) on_click: ClickHandler,
+}
+
+fn background_audio_button(
+    audio: BackgroundAudio,
+    palette: ThemeColors,
+    cx: &App,
+) -> gpui_motion::PressScaleElement<gpui::Stateful<gpui::Div>> {
+    let animations = super::super::settings::Settings::motion(cx);
+    toolbar_button(
+        "sidebar-background-audio",
+        "Tabs playing sound",
+        0,
+        true,
+        audio_icon(
+            "sidebar-background-audio-icon",
+            palette.text_secondary,
+            metrics::TOOLBAR_ICON_SIZE,
+            audio.muted,
+            &animations,
+        ),
+        palette,
+        audio.on_click,
+    )
+    .tooltip(label_tooltip("Tabs playing sound", palette))
 }
 
 /// A space, shown as a dot of its colour.
@@ -104,6 +139,9 @@ pub(in super::super) fn footer(
         let new_space = new_space.map(|button| {
             super::collapsed_tile(button.tooltip(label_tooltip("New space", palette)))
         });
+        let background_audio = actions
+            .background_audio
+            .map(|audio| super::collapsed_tile(background_audio_button(audio, palette, cx)));
         return v_stack()
             .w_full()
             .flex_shrink_0()
@@ -119,6 +157,7 @@ pub(in super::super) fn footer(
                 RovingAxis::Vertical,
             ))
             .children(new_space)
+            .children(background_audio)
             .child(downloads)
             .child(menu)
             .into_any_element();
@@ -131,15 +170,24 @@ pub(in super::super) fn footer(
         .justify_between()
         .px(px(metrics::SIDEBAR_PADDING))
         .child(
-            downloads_anchor(actions.downloads_drawn).child(downloads_button(
-                "sidebar-downloads",
-                0,
-                actions.downloads_state,
-                palette,
-                window,
-                cx,
-                actions.downloads,
-            )),
+            h_stack()
+                .items_center()
+                .child(
+                    downloads_anchor(actions.downloads_drawn).child(downloads_button(
+                        "sidebar-downloads",
+                        0,
+                        actions.downloads_state,
+                        palette,
+                        window,
+                        cx,
+                        actions.downloads,
+                    )),
+                )
+                .children(
+                    actions
+                        .background_audio
+                        .map(|audio| background_audio_button(audio, palette, cx)),
+                ),
         )
         .child(
             h_stack()

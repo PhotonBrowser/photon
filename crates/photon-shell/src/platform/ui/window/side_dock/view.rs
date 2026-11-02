@@ -14,8 +14,8 @@ use super::super::super::layout::{Elevated, Elevation, Raised, h_stack, v_stack}
 use super::super::super::motion::{AnimateIn, Edge, slide_in, translated};
 use super::super::super::settings::Settings;
 use super::super::super::sidebar::{
-    FooterActions, SidebarSection, collapsed_tile, favourites_empty_state, favourites_grid, footer,
-    navigation_bar, navigation_column, sidebar,
+    BackgroundAudio, FooterActions, SidebarSection, collapsed_tile, favourites_empty_state,
+    favourites_grid, footer, navigation_bar, navigation_column, sidebar,
 };
 use super::super::super::tabs::{TabDragAxis, TabDragMove, tab_list};
 use super::super::super::titlebar::window_drag_area;
@@ -455,6 +455,15 @@ impl BrowserWindow {
                         this.edit_space(None, window, cx);
                     }))
                 }),
+                background_audio: self
+                    .background_audio_muted(cx)
+                    .map(|muted| BackgroundAudio {
+                        muted,
+                        on_click: Box::new(cx.listener(|this, _, window, cx| {
+                            cx.stop_propagation();
+                            this.show_background_audio_menu(window, cx);
+                        })),
+                    }),
             },
             collapsed,
             palette,

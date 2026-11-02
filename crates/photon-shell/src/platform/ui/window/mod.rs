@@ -6,6 +6,7 @@ mod alerts;
 mod app;
 #[cfg(unix)]
 mod automation;
+mod background_audio;
 mod chrome;
 mod command_palette;
 mod commands;

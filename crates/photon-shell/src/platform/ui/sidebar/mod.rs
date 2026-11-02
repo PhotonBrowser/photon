@@ -20,7 +20,7 @@ use gpui::{AnyElement, div, prelude::*, px, rgba};
 use super::layout::{h_stack, v_stack};
 use super::{metrics, theme::ThemeColors};
 pub(super) use favourites::{FavouriteTile, favourites_empty_state, favourites_grid};
-pub(super) use footer::{FooterActions, SpaceDot, footer};
+pub(super) use footer::{BackgroundAudio, FooterActions, SpaceDot, footer};
 pub(super) use navigation::{navigation_bar, navigation_column};
 
 /// Shapes a button, tab or favourite as one of the collapsed sidebar's
