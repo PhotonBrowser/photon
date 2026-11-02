@@ -277,6 +277,7 @@ void photon_runtime_pump(void* runtime);
 #if defined(__APPLE__)
 // Copy and paste through the macOS pasteboard.
 void photon_runtime_use_system_clipboard(void* runtime);
+#endif
 // Names the app that opens a link the browser cannot load, writing it to
 // `name` and returning true, or returns false when no app does.
 using PhotonExternalAppNameCallback = bool (*)(void*, char const* url, char* name, size_t capacity);
@@ -285,7 +286,6 @@ using PhotonExternalAppOpenCallback = bool (*)(void*, char const* url);
 // Opens links such as mailto: and tel: in other apps.
 void photon_runtime_set_external_apps(void* runtime, void* callback_data,
     PhotonExternalAppNameCallback app_name, PhotonExternalAppOpenCallback open_url);
-#endif
 // A private view keeps nothing once it and the other private views close.
 void* photon_view_create(void* runtime, int width, int height, double dpr,
     PhotonViewCallbacks const* callbacks, bool is_private);
