@@ -2,6 +2,7 @@
 
 use gpui::{App, ClipboardItem, Context, Window};
 use photon_core::{BrowserCommand, Command, CommandAvailability, WindowSession};
+use std::time::Instant;
 
 use super::super::super::engine::ZoomStep;
 use super::super::pages::{DOWNLOADS, HISTORY, SETTINGS};
@@ -9,6 +10,27 @@ use super::super::settings::Settings;
 use super::BrowserWindow;
 
 impl BrowserWindow {
+    /// Whether the close shortcut may close the tab at `index`. A pinned tab
+    /// is easy to close by accident, so the first press only asks for a
+    /// second; its close button closes it at once.
+    fn confirms_pinned_close(&mut self, index: usize, cx: &mut Context<Self>) -> bool {
+        let Some(tab) = self.tabs.get(index).filter(|tab| tab.pin.is_some()) else {
+            return true;
+        };
+        // A second press counts while the notice asking for it shows.
+        let now = Instant::now();
+        if self.pinned_close_request.take().is_some_and(|(id, at)| {
+            id == tab.id && now.duration_since(at) <= super::alerts::ALERT_DURATION
+        }) {
+            return true;
+        }
+        self.pinned_close_request = Some((tab.id, now));
+        let keys = super::super::kbd::action_keys(&crate::platform::shortcuts::CloseTab, cx)
+            .unwrap_or_else(|| "the shortcut".to_owned());
+        super::super::show_alert(cx, format!("Press {keys} again to close this pinned tab"));
+        false
+    }
+
     /// Runs a registered browser command from a shortcut, menu or control.
     pub(super) fn execute_command(
         &mut self,
@@ -29,7 +51,9 @@ impl BrowserWindow {
             Command::ReopenClosedTab => self.reopen_closed_tab(window, cx),
             Command::CloseTab => {
                 if let Some(active_tab) = self.active_tab {
-                    self.close_tab(active_tab, window, cx);
+                    if self.confirms_pinned_close(active_tab, cx) {
+                        self.close_tab(active_tab, window, cx);
+                    }
                 } else if self.tabs.is_empty() && !Self::closes_with_last_tab(window, cx) {
                     // Closes this window only; other windows stay open.
                     self.record_session_state(WindowSession::default(), cx);

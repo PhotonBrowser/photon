@@ -140,6 +140,9 @@ pub(in crate::platform) struct BrowserWindow {
     tab_container_bounds: Option<Bounds<Pixels>>,
     /// Moves the sidebar's trailing New Tab row as tabs are added or removed.
     new_tab_button_animation: Option<NewTabButtonAnimation>,
+    /// The pinned tab a first close shortcut asked to close, and when; a
+    /// second press soon after closes it.
+    pinned_close_request: Option<(u64, Instant)>,
     tab_strip_scroll: ScrollHandle,
     tab_auto_scroll_at: Option<Instant>,
     favourites_bounds: Option<Bounds<Pixels>>,
@@ -694,6 +697,7 @@ fn open_browser_window(
                 tab_geometry: HashMap::new(),
                 tab_container_bounds: None,
                 new_tab_button_animation: None,
+                pinned_close_request: None,
                 tab_strip_scroll: ScrollHandle::new(),
                 tab_auto_scroll_at: None,
                 favourites_bounds: None,

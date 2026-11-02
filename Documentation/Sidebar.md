@@ -104,6 +104,9 @@ were pinned as until they load; if several windows pin tabs, the one changed
 last is what is saved. In the horizontal strip they show only their icons, at
 the start.
 
+⌘W asks to be pressed again before it closes a pinned tab, so one is not
+closed by accident; its close button and menu close it at once.
+
 Dragging a tab among the pinned tabs pins it, and among today's tabs, onto the
 divider or onto "+ New Tab" unpins it. Settings → Tabs can close today's tabs
 left unused for twelve hours; pinned tabs and the tab in use stay, and closed

@@ -22,7 +22,7 @@ use super::BrowserWindowRegistry;
 use crate::platform::app_update::update_app;
 
 /// How long a general-purpose notice stays visible.
-const ALERT_DURATION: Duration = Duration::from_secs(3);
+pub(super) const ALERT_DURATION: Duration = Duration::from_secs(3);
 /// Maximum number of general-purpose alerts shown in the corner stack.
 const ALERT_STACK_LIMIT: usize = 3;
 
