@@ -74,6 +74,10 @@ impl BrowserWindow {
         }
         if self.active_tab != Some(index) {
             self.finish_tab_page_transition(cx);
+            // Within a split both pages stay shown; leaving one hides the
+            // page that was beside the active tab.
+            let beside = self.split_partner_of(index);
+            let previous_partner = self.split_partner().filter(|&partner| partner != index);
             let animations = Settings::motion(cx);
             let outgoing = self
                 .active_tab
@@ -82,6 +86,8 @@ impl BrowserWindow {
             let incoming = self.tabs[index].content.webview();
             let mut page_transition = None;
             if animations.allows_motion()
+                && beside.is_none()
+                && previous_partner.is_none()
                 && let (Some(outgoing), Some(incoming)) = (&outgoing, &incoming)
                 && outgoing.read(cx).external.is_some()
                 && incoming.read(cx).external.is_some()
@@ -105,17 +111,21 @@ impl BrowserWindow {
                 }
                 if let Some(previous) = outgoing {
                     let keeps_layer = page_transition.is_some();
+                    let stays_shown = beside == Some(previous_index);
                     previous.update(cx, |view, cx| {
                         view.reset_history_swipe(true);
                         if keeps_layer {
                             view.pause_page_for_transition();
-                        } else {
+                        } else if !stays_shown {
                             view.set_page_visible(false);
                         }
                         view.session.set_focus(false);
                         cx.notify();
                     });
                 }
+            }
+            if let Some(partner) = previous_partner {
+                self.hide_tab_page(partner, cx);
             }
             self.active_tab = Some(index);
             self.tab_page_transition = page_transition;
@@ -161,6 +171,7 @@ impl BrowserWindow {
         if focus_internal_page {
             window.focus(&self.root_focus, cx);
         }
+        self.show_split_partner(window, cx);
         self.sync_dialog(window, cx);
         cx.notify();
         self.wake_tab_sleep_scheduler();

@@ -89,6 +89,7 @@ Errors use a stable code and explanatory message:
 | `new_tab` | `window_id`, `url` | The ID of a real Photon tab |
 | `close_tab` | `tab_id` | Accepted closing state, using ordinary tab lifecycle logic |
 | `activate_tab` | `tab_id` | Activates an existing tab and requests foreground activation of its native app/window |
+| `split_tab` | `tab_id` | Shows the tab in split view beside its window's active tab |
 | `navigate` | `tab_id`, `url` | Navigation request ID and requested state |
 | `reload` | `tab_id` | Reloads the current page through Photon's navigation command |
 | `get_tab_status` | `tab_id` | Current URL, loading/error state, crash status, engine load-finished state, document generation, and window/tab counts |

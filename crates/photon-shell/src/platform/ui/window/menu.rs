@@ -34,6 +34,10 @@ pub(super) enum MenuCommand {
     ActivateTab(usize),
     /// Mutes or unmutes the tab's sound.
     ToggleTabAudio(usize),
+    /// Shows the tab beside the active one.
+    SplitWithTab(usize),
+    /// Shows the split's tabs one at a time again.
+    CloseSplitView,
     /// Deletes the cookies and web storage of the site with this host.
     ClearSiteData(String),
 }
@@ -90,6 +94,8 @@ impl BrowserWindow {
             MenuCommand::EditSpace(space) => self.edit_space(Some(space), window, cx),
             MenuCommand::EditTheme(space) => self.show_theme_picker(space, window, cx),
             MenuCommand::DeleteSpace(space) => self.delete_space(space, window, cx),
+            MenuCommand::SplitWithTab(tab) => self.split_with_tab(tab, window, cx),
+            MenuCommand::CloseSplitView => self.close_split_view(true, cx),
             MenuCommand::ClearSiteData(host) => self.clear_site_data(&host, cx),
         }
     }

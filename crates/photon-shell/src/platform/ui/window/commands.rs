@@ -78,6 +78,7 @@ impl BrowserWindow {
                     _ => self.toggle_zen_mode(cx),
                 }
             }
+            Command::ToggleSplitView => self.toggle_split_view(window, cx),
             Command::NewSpace => self.edit_space(None, window, cx),
             Command::NextSpace => self.switch_space_by(1, cx),
             Command::PreviousSpace => self.switch_space_by(-1, cx),
@@ -116,6 +117,7 @@ impl BrowserWindow {
             .map(|webview| &webview.read(cx).state);
         CommandAvailability {
             has_page: active_webview.is_some(),
+            has_tab: self.active_tab.is_some(),
             has_multiple_tabs: self.listed_tabs(cx).len() > 1,
             has_closed_tabs: !self.closed_tabs.is_empty(),
             can_go_back: page_state.is_some_and(|state| state.can_go_back),

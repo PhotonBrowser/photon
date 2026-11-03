@@ -100,6 +100,9 @@ enum Command {
     ActivateTab {
         tab_id: u64,
     },
+    SplitTab {
+        tab_id: u64,
+    },
     Navigate {
         tab_id: u64,
         url: String,
@@ -558,7 +561,7 @@ fn dispatch(request: Request, cx: &mut App) -> Response {
         Command::GetVersion => Ok(json!({
             "application_version": env!("CARGO_PKG_VERSION"),
             "protocol_version": PROTOCOL_VERSION,
-            "capabilities": ["ping", "get_version", "list_windows", "list_processes", "list_tabs", "new_tab", "close_tab", "activate_tab", "navigate", "reload", "get_tab_status", "probe_speedometer_result", "probe_jetstream_result", "request_jetstream_start", "performance_diagnostics_v1", "performance_frame_timing_v1", "performance_drawable_presentation_events_v1", "performance_gpu_sampling_correlation_v1", "memory_pressure_test_v1"]
+            "capabilities": ["ping", "get_version", "list_windows", "list_processes", "list_tabs", "new_tab", "close_tab", "activate_tab", "split_tab", "navigate", "reload", "get_tab_status", "probe_speedometer_result", "probe_jetstream_result", "request_jetstream_start", "performance_diagnostics_v1", "performance_frame_timing_v1", "performance_drawable_presentation_events_v1", "performance_gpu_sampling_correlation_v1", "memory_pressure_test_v1"]
         })),
         Command::ListWindows => Ok(list_windows(cx)),
         Command::ListProcesses => list_processes(cx),
@@ -566,6 +569,7 @@ fn dispatch(request: Request, cx: &mut App) -> Response {
         Command::NewTab { window_id, url } => new_tab(window_id, &url, cx),
         Command::CloseTab { tab_id } => close_tab(tab_id, cx),
         Command::ActivateTab { tab_id } => activate_tab(tab_id, cx),
+        Command::SplitTab { tab_id } => split_tab(tab_id, cx),
         Command::Navigate { tab_id, url } => navigate(tab_id, &url, &request_id, cx),
         Command::Reload { tab_id } => reload(tab_id, cx),
         Command::GetTabStatus { tab_id } => tab_status(tab_id, cx),
@@ -1066,6 +1070,17 @@ fn activate_tab(tab_id: u64, cx: &mut App) -> DispatchResult {
         })
         .map_err(|error| ("window_unavailable", error.to_string()))??;
     Ok(json!({"tab_id": tab_id, "active": true}))
+}
+
+fn split_tab(tab_id: u64, cx: &mut App) -> DispatchResult {
+    let (handle, index) = find_tab(tab_id, cx)?;
+    handle
+        .update(cx, |browser, window, cx| {
+            browser.split_with_tab(index, window, cx);
+            Ok::<_, (&'static str, String)>(())
+        })
+        .map_err(|error| ("window_unavailable", error.to_string()))??;
+    Ok(json!({"tab_id": tab_id, "split": true}))
 }
 
 fn navigate(tab_id: u64, url: &str, navigation_id: &str, cx: &mut App) -> DispatchResult {

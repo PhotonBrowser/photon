@@ -29,6 +29,8 @@ impl BrowserWindow {
                 webview.update(cx, |view, _| view.exit_page_fullscreen());
                 return;
             }
+            // The page fills the window alone.
+            self.close_split_view(false, cx);
             let window_was_fullscreen = window.is_fullscreen();
             if !window_was_fullscreen {
                 window.toggle_fullscreen();

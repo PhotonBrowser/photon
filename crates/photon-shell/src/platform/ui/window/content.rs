@@ -98,7 +98,17 @@ impl BrowserWindow {
 
     /// The active tab's page or web view, or the New Tab page when empty.
     pub(super) fn active_view(&self, palette: ThemeColors, cx: &mut Context<Self>) -> AnyElement {
-        let Some(index) = self.active_tab else {
+        self.tab_view(self.active_tab, palette, cx)
+    }
+
+    /// The tab's page or web view, or the New Tab page for none.
+    pub(super) fn tab_view(
+        &self,
+        index: Option<usize>,
+        palette: ThemeColors,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let Some(index) = index else {
             return self
                 .empty_page
                 .as_ref()

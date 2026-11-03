@@ -31,6 +31,7 @@ mod session;
 mod side_dock;
 mod sleeping;
 mod spaces;
+mod split_view;
 mod tab_items;
 mod tab_menu;
 mod tab_summary;
@@ -134,6 +135,8 @@ pub(in crate::platform) struct BrowserWindow {
     active_tab: Option<usize>,
     /// Cross-fades a retained web page beneath the newly selected page.
     tab_page_transition: Option<TabPageTransition>,
+    /// Two tabs shown side by side, while either is active.
+    split_view: Option<split_view::SplitView>,
     /// The active tab drag, its measured geometry, and the temporary motion.
     tab_drag_layout: Option<TabDragLayout>,
     tab_geometry: HashMap<u64, Bounds<Pixels>>,
@@ -244,6 +247,7 @@ impl BrowserWindow {
             commands: self.command_availability(cx),
             sidebar_icons: self.sidebar.docked() && self.sidebar.collapsed(),
             zen: self.sidebar.zen(),
+            split_view: self.split_open(),
             loading: self
                 .active_webview()
                 .is_some_and(|webview| webview.read(cx).state.loading),
@@ -449,10 +453,13 @@ impl BrowserWindow {
                 if let Some(active_tab) = self.active_tab {
                     self.activate_tab(active_tab, false, window, cx);
                 }
-            } else if let Some(webview) = self.active_webview() {
-                webview.update(cx, |view, _| view.set_page_visible(false));
-                self.wake_tab_sleep_scheduler();
             } else {
+                if let Some(webview) = self.active_webview() {
+                    webview.update(cx, |view, _| view.set_page_visible(false));
+                }
+                if let Some(partner) = self.split_partner() {
+                    self.hide_tab_page(partner, cx);
+                }
                 self.wake_tab_sleep_scheduler();
             }
         }
@@ -693,6 +700,7 @@ fn open_browser_window(
                 tab_sleep_mode: Settings::get(cx).tab_sleep_mode,
                 active_tab: None,
                 tab_page_transition: None,
+                split_view: None,
                 tab_drag_layout: None,
                 tab_geometry: HashMap::new(),
                 tab_container_bounds: None,

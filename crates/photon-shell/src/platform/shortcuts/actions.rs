@@ -60,6 +60,8 @@ gpui::actions!(
         ToggleSidebarIcons,
         /// Hide all browser chrome around the page, or bring it back.
         ToggleZenMode,
+        /// Show a second tab beside the active one, or show one tab again.
+        ToggleSplitView,
         /// Open the browser's settings in a tab.
         OpenSettings,
         /// Open the history page in a tab.

@@ -169,6 +169,17 @@ impl BrowserWindow {
             ));
         }
         items.extend(self.favourite_item(index, cx));
+        if self.split_open() && self.split_partner_of(index).is_some() {
+            items.push(command_item(
+                "Close Split View",
+                MenuCommand::CloseSplitView,
+            ));
+        } else if self.active_tab.is_some_and(|active| active != index) {
+            items.push(command_item(
+                "Open in Split View",
+                MenuCommand::SplitWithTab(index),
+            ));
+        }
         items.push(MenuItem::separator());
         // ⌘W closes the active tab, so its item is that shortcut's action
         // and shows its keys.

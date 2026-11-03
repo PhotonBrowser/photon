@@ -65,6 +65,7 @@ pub(super) enum ShortcutAction {
     ToggleSidebar,
     ToggleSidebarIcons,
     ToggleZenMode,
+    ToggleSplitView,
     NextSpace,
     PreviousSpace,
 }
@@ -113,6 +114,7 @@ impl ShortcutAction {
             Self::ToggleSidebar => Box::new(ToggleSidebar),
             Self::ToggleSidebarIcons => Box::new(ToggleSidebarIcons),
             Self::ToggleZenMode => Box::new(ToggleZenMode),
+            Self::ToggleSplitView => Box::new(ToggleSplitView),
             Self::NextSpace => Box::new(NextSpace),
             Self::PreviousSpace => Box::new(PreviousSpace),
         }
@@ -324,6 +326,12 @@ const SHORTCUTS: &[ShortcutSpec] = &[
         label: ShortcutLabel::Command(Command::ToggleZenMode),
         keys: &["secondary-alt-z"],
         action: ShortcutAction::ToggleZenMode,
+    },
+    ShortcutSpec {
+        group: "Window",
+        label: ShortcutLabel::Command(Command::ToggleSplitView),
+        keys: &["secondary-\\"],
+        action: ShortcutAction::ToggleSplitView,
     },
     ShortcutSpec {
         group: "Window",

@@ -297,6 +297,11 @@ pub(super) const SETTINGS_SIDEBAR_ICON_SIZE: f32 = 14.0;
 // The sidebar: navigation, address field, favourites, tabs and its footer.
 /// Width of the hit area centred on the sidebar's resize edge.
 pub(super) const SIDEBAR_RESIZE_HANDLE_WIDTH: f32 = 12.0;
+/// The width of the split view divider's drag area, centred on the gap
+/// between its panes.
+pub(super) const SPLIT_VIEW_DIVIDER_WIDTH: f32 = 12.0;
+/// The smallest share of the width either split view pane keeps.
+pub(super) const SPLIT_VIEW_MIN_SHARE: f32 = 0.2;
 /// Distance used to dampen a temporary stretch beyond the sidebar's maximum.
 pub(super) const SIDEBAR_RESIZE_RUBBERBAND_RANGE: f32 = 56.0;
 /// Resistance applied as the sidebar is pulled beyond its maximum width.

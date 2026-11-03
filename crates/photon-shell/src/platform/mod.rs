@@ -97,6 +97,7 @@ pub(crate) struct MenuBarState {
     pub(crate) commands: CommandAvailability,
     pub(crate) sidebar_icons: bool,
     pub(crate) zen: bool,
+    pub(crate) split_view: bool,
     pub(crate) loading: bool,
 }
 

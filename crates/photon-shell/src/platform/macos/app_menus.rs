@@ -8,8 +8,8 @@ use crate::platform::shortcuts::{
     HideOtherApps, MinimizeWindow, NewPrivateWindow, NewTab, NewWindow, NextSpace,
     OpenCommandPalette, OpenDownloads, OpenHistory, OpenSettings, OpenTaskManager, PreviousSpace,
     Quit, Reload, ReopenClosedTab, ResetZoom, SelectNextTab, SelectPreviousTab, ShowAllApps,
-    ShowKeyboardShortcuts, StopLoading, ToggleSidebar, ToggleSidebarIcons, ToggleZenMode, ZoomIn,
-    ZoomOut, ZoomWindow, shortcut_name_for_action,
+    ShowKeyboardShortcuts, StopLoading, ToggleSidebar, ToggleSidebarIcons, ToggleSplitView,
+    ToggleZenMode, ZoomIn, ZoomOut, ZoomWindow, shortcut_name_for_action,
 };
 use gpui::{App, Global, Menu, MenuItem, OsAction, SystemMenuType};
 use gpui_elements::editable_text::actions::{Copy, Cut, Paste, Redo, SelectAll, Undo};
@@ -72,6 +72,9 @@ fn menu_bar(state: MenuBarState) -> Vec<Menu> {
     }
     view.extend([
         MenuItem::action(label(&ToggleZenMode), ToggleZenMode).checked(state.zen),
+        MenuItem::action(label(&ToggleSplitView), ToggleSplitView)
+            .checked(state.split_view)
+            .disabled(!commands.allows(Command::ToggleSplitView)),
         MenuItem::separator(),
         MenuItem::action(label(&ZoomIn), ZoomIn),
         MenuItem::action(label(&ZoomOut), ZoomOut),
@@ -177,6 +180,7 @@ mod tests {
         let available = menu_bar(MenuBarState {
             commands: CommandAvailability {
                 has_page: true,
+                has_tab: true,
                 has_multiple_tabs: true,
                 has_closed_tabs: true,
                 can_go_back: true,

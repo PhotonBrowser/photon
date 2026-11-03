@@ -487,14 +487,14 @@ impl BrowserWindow {
     }
 
     fn is_active_visible_tab(&self, index: usize) -> bool {
-        self.window_visible && self.active_tab == Some(index)
+        self.window_visible && self.shows_tab(index)
     }
 
     fn is_sleep_candidate(&self, index: usize) -> bool {
-        !self.window_visible || self.active_tab != Some(index)
+        !self.window_visible || !self.shows_tab(index)
     }
 
     fn is_pressure_candidate(&self, index: usize) -> bool {
-        self.active_tab != Some(index) || !self.window_visible
+        !self.shows_tab(index) || !self.window_visible
     }
 }

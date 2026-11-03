@@ -27,6 +27,7 @@ pub enum Command {
     ToggleSidebar,
     ToggleSidebarIcons,
     ToggleZenMode,
+    ToggleSplitView,
     NewSpace,
     NextSpace,
     PreviousSpace,
@@ -42,6 +43,7 @@ pub enum Command {
 pub enum CommandRequirement {
     Always,
     HasPage,
+    HasTab,
     HasMultipleTabs,
     HasClosedTabs,
     CanGoBack,
@@ -194,6 +196,12 @@ const BUILT_IN_COMMANDS: &[CommandDefinition] = &[
         requirement: CommandRequirement::Always,
     },
     CommandDefinition {
+        command: Command::ToggleSplitView,
+        name: "Split View",
+        keywords: "side by side two tabs panes",
+        requirement: CommandRequirement::HasTab,
+    },
+    CommandDefinition {
         command: Command::NewSpace,
         name: "New Space",
         keywords: "create add workspace",
@@ -298,6 +306,8 @@ impl Command {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct CommandAvailability {
     pub has_page: bool,
+    /// Whether the window has an active tab, whatever it shows.
+    pub has_tab: bool,
     pub has_multiple_tabs: bool,
     pub has_closed_tabs: bool,
     pub can_go_back: bool,
@@ -337,6 +347,7 @@ impl CommandAvailability {
         match COMMAND_REGISTRY.definition(command).requirement {
             CommandRequirement::Always => true,
             CommandRequirement::HasPage => self.has_page,
+            CommandRequirement::HasTab => self.has_tab,
             CommandRequirement::HasMultipleTabs => self.has_multiple_tabs,
             CommandRequirement::HasClosedTabs => self.has_closed_tabs,
             CommandRequirement::CanGoBack => self.can_go_back,
@@ -408,6 +419,7 @@ mod tests {
             Command::ToggleSidebar,
             Command::ToggleSidebarIcons,
             Command::ToggleZenMode,
+            Command::ToggleSplitView,
             Command::NewSpace,
             Command::NextSpace,
             Command::PreviousSpace,
@@ -424,6 +436,7 @@ mod tests {
     fn availability_uses_registered_requirements() {
         let availability = CommandAvailability {
             has_page: true,
+            has_tab: false,
             has_multiple_tabs: true,
             has_closed_tabs: true,
             can_go_back: true,
@@ -444,6 +457,7 @@ mod tests {
         assert!(availability.allows(Command::SelectNextTab));
         assert!(availability.allows(Command::NextSpace));
         assert!(!availability.allows(Command::PreviousSpace));
+        assert!(!availability.allows(Command::ToggleSplitView));
     }
 
     #[test]

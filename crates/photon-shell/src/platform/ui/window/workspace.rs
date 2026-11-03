@@ -112,7 +112,11 @@ impl Render for BrowserWindow {
                 view.set_layout_growth(layout_growth);
             });
         }
-        let active_view = self.active_view(palette, cx);
+        self.settle_split_view(cx);
+        let page_width = f32::from(window.viewport_size().width) - margins.left - margins.right;
+        let active_view = self
+            .split_view(page_width, layout_growth, palette, window, cx)
+            .unwrap_or_else(|| self.active_view(palette, cx));
         let page = div()
             .absolute()
             .inset_0()
