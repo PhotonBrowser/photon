@@ -88,6 +88,7 @@ jobs:
           echo "CCACHE_DIR=$RUNNER_TEMP/photon-ccache" >> "$GITHUB_ENV"
           echo "CCACHE_MAXSIZE=4G" >> "$GITHUB_ENV"
           echo "VCPKG_DEFAULT_BINARY_CACHE=$RUNNER_TEMP/photon-vcpkg-binary-cache" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/photon-ccache" "$RUNNER_TEMP/photon-vcpkg-binary-cache"
           echo "LIBGL_ALWAYS_SOFTWARE=1" >> "$GITHUB_ENV"
           echo "PHOTON_RENDER_SCREENSHOT=$RUNNER_TEMP/photon-linux-render-smoke.png" >> "$GITHUB_ENV"
           lvp_icd="$(find /usr/share/vulkan/icd.d -maxdepth 1 -name 'lvp_icd*.json' -print -quit)"
