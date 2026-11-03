@@ -80,21 +80,9 @@ impl PageLayer {
         );
         // SAFETY: NSNull is a valid CAAction that disables an animation.
         let _: () = unsafe { msg_send![&*layer, setActions: &*actions] };
-        // The Engine surface fades independently from the opaque backing.
-        let surface_keys = [
-            "opacity",
-            "contents",
-            "contentsRect",
-            "contentsScale",
-            "contentsGravity",
-        ]
-        .map(NSString::from_str);
-        let surface_actions = NSDictionary::from_slices(
-            &surface_keys.iter().map(|key| &**key).collect::<Vec<_>>(),
-            &vec![&*null; surface_keys.len()],
-        );
-        // SAFETY: NSNull is a valid CAAction that disables an animation.
-        let _: () = unsafe { msg_send![&*surface_layer, setActions: &*surface_actions] };
+        // The Engine surface moves and resizes with its backing in the same
+        // transaction, or Core Animation eases it there from a corner.
+        let _: () = unsafe { msg_send![&*surface_layer, setActions: &*actions] };
         // Rounds the page as GPUI-CE rounds its cutout: Core Animation's own
         // corners are a different curve, so the two edges never met.
         let mask = CAShapeLayer::layer();
