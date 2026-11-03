@@ -739,42 +739,6 @@ fn extract_metric_samples(report: &ResponsivenessBenchmarkReport) -> BTreeMap<St
                     "style_engine_transaction_setup_count",
                     "/style_and_layout/style_engine_transaction_setup_count",
                 ),
-                (
-                    "style_engine_transaction_count",
-                    "/style_and_layout/style_engine_transaction_count",
-                ),
-                (
-                    "style_unscoped_transaction_count",
-                    "/style_and_layout/style_unscoped_transaction_count",
-                ),
-                (
-                    "style_unscoped_transaction_reaction_entries",
-                    "/style_and_layout/style_unscoped_transaction_reaction_entries",
-                ),
-                (
-                    "style_broad_matching_batch_count",
-                    "/style_and_layout/style_broad_matching_batch_count",
-                ),
-                (
-                    "style_narrow_matching_batch_count",
-                    "/style_and_layout/style_narrow_matching_batch_count",
-                ),
-                (
-                    "style_broad_reaction_elements",
-                    "/style_and_layout/style_broad_reaction_elements",
-                ),
-                (
-                    "style_narrow_reaction_elements",
-                    "/style_and_layout/style_narrow_reaction_elements",
-                ),
-                (
-                    "style_broad_matching_apply_duration_ms",
-                    "/style_and_layout/style_broad_matching_apply_duration_ms",
-                ),
-                (
-                    "style_narrow_matching_apply_duration_ms",
-                    "/style_and_layout/style_narrow_matching_apply_duration_ms",
-                ),
                 ("full_layout_count", "/style_and_layout/full_layout_count"),
                 (
                     "partial_layout_count",

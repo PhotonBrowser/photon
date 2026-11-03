@@ -196,8 +196,8 @@ fn read_entries(connection: &Connection, format: Format) -> rusqlite::Result<Vec
             Format::Safari => (row.get::<_, f64>(3)? + SAFARI_EPOCH_OFFSET).max(0.0) as u64,
         };
         Ok(HistoryEntry {
-            url,
-            title,
+            url: url.into(),
+            title: title.into(),
             visit_count: visit_count.clamp(1, i64::from(u32::MAX)) as u32,
             last_visit,
         })
@@ -242,7 +242,7 @@ mod tests {
         );
         let pages = read_history(&sources[0]).unwrap();
         assert_eq!(pages.len(), 1);
-        assert_eq!(pages[0].url, "https://a.example/");
+        assert_eq!(&*pages[0].url, "https://a.example/");
         assert_eq!(pages[0].visit_count, 3);
         assert_eq!(pages[0].last_visit, 13_400_000_000 - CHROMIUM_EPOCH_OFFSET);
     }
@@ -272,6 +272,6 @@ mod tests {
         assert_eq!(sources[0].name, "Firefox");
         let pages = read_history(&sources[0]).unwrap();
         assert_eq!(pages[0].last_visit, 1_700_000_000);
-        assert_eq!(pages[0].title, "");
+        assert_eq!(&*pages[0].title, "");
     }
 }

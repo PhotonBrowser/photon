@@ -78,6 +78,9 @@ pub fn play_with(cx: &App, feedback: Feedback, channels: Channels) {
     }
 }
 
+/// How long the UI sound output stays open after the last sound.
+const AUDIO_IDLE_CLOSE: std::time::Duration = std::time::Duration::from_secs(5);
+
 fn play_sound(feedback: Feedback) {
     static PLAYER: OnceLock<mpsc::Sender<(Sound, f32)>> = OnceLock::new();
     let sender = PLAYER.get_or_init(|| {
@@ -85,8 +88,19 @@ fn play_sound(feedback: Feedback) {
         std::thread::Builder::new()
             .name("photon-ui-audio".into())
             .spawn(move || {
-                let mut player = None;
-                while let Ok((sound, pitch)) = receiver.recv() {
+                let mut player: Option<AudioPlayer> = None;
+                loop {
+                    let (sound, pitch) = match receiver.recv_timeout(AUDIO_IDLE_CLOSE) {
+                        Ok(message) => message,
+                        // Closing the stream lets the OS power the output device down.
+                        Err(mpsc::RecvTimeoutError::Timeout) => {
+                            if player.as_mut().is_some_and(AudioPlayer::idle) {
+                                player = None;
+                            }
+                            continue;
+                        }
+                        Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                    };
                     if player.is_none() {
                         player = AudioPlayer::new().ok();
                     }
@@ -129,6 +143,11 @@ impl AudioPlayer {
             handle,
             sinks: Vec::new(),
         })
+    }
+
+    fn idle(&mut self) -> bool {
+        self.sinks.retain(|sink| !sink.empty());
+        self.sinks.is_empty()
     }
 
     fn play(&mut self, samples: Vec<f32>, sample_rate: u32) {

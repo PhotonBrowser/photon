@@ -8,7 +8,10 @@ use gpui::{
 };
 use std::{
     f32::consts::TAU,
-    sync::OnceLock,
+    sync::{
+        OnceLock,
+        atomic::{AtomicBool, Ordering},
+    },
     time::{Duration, Instant},
 };
 
@@ -91,7 +94,7 @@ fn progress_ring(
     let ink = palette.chosen;
     canvas(
         |_, _, _| {},
-        move |bounds, _, window: &mut Window, _| {
+        move |bounds, _, window: &mut Window, cx: &mut App| {
             let radius = f32::from(bounds.size.width.min(bounds.size.height)) / 2.0
                 - metrics::DOWNLOAD_RING_INSET;
             if radius <= 0.0 {
@@ -103,7 +106,7 @@ fn progress_ring(
                 Some(fraction) => (0.0, fraction),
                 None => {
                     if animate {
-                        window.request_animation_frame();
+                        schedule_spin_step(window, cx);
                     }
                     (
                         spin_turn(animate),
@@ -116,6 +119,23 @@ fn progress_ring(
     )
     .absolute()
     .inset_0()
+}
+
+/// Repaints after one spin step instead of on every display frame, so an
+/// unsized download does not hold the window at full refresh rate.
+fn schedule_spin_step(window: &Window, cx: &App) {
+    static PENDING: AtomicBool = AtomicBool::new(false);
+    if PENDING.swap(true, Ordering::Relaxed) {
+        return;
+    }
+    let step = Duration::from_millis(metrics::DOWNLOAD_RING_STEP_MS);
+    window
+        .spawn(cx, async move |cx| {
+            cx.background_executor().timer(step).await;
+            PENDING.store(false, Ordering::Relaxed);
+            cx.update(|window, _| window.refresh()).ok();
+        })
+        .detach();
 }
 
 /// How far round the spinning arc has turned, as a share of a turn.

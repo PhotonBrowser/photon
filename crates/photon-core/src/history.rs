@@ -11,6 +11,8 @@ use crate::omnibox::{
 };
 
 use super::browsing_data::ClearBrowsingData;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 /// How many pages history and its profile file keep; the least recently
 /// visited go first.
@@ -20,9 +22,12 @@ pub const HISTORY_MAX_SEARCHES: usize = 1_000;
 
 /// A page in the history.
 #[derive(Clone, Debug, Eq, PartialEq)]
+///
+/// Text is shared, so cloning a history to change it copies pointers rather
+/// than every address and title.
 pub struct HistoryEntry {
-    pub url: String,
-    pub title: String,
+    pub url: Arc<str>,
+    pub title: Arc<str>,
     pub visit_count: u32,
     /// When the page was last visited, in Unix seconds.
     pub last_visit: u64,
@@ -30,8 +35,14 @@ pub struct HistoryEntry {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct PageSearchCache {
-    normalized_display_text: Option<String>,
-    normalized_title: Option<String>,
+    normalized_display_text: Option<Arc<str>>,
+    normalized_title: Option<Arc<str>>,
+}
+
+impl PageSearchCache {
+    fn set_title(&mut self, title: &str) {
+        self.normalized_title = normalized_match_text(title).map(Arc::from);
+    }
 }
 
 /// A query searched for from the omnibox.
@@ -49,16 +60,20 @@ pub struct History {
     pages: Vec<HistoryEntry>,
     searches: Vec<SearchEntry>,
     page_search_cache: Vec<PageSearchCache>,
+    /// Where each page sits in `pages`, by address.
+    page_index: HashMap<Arc<str>, usize>,
 }
 
 impl History {
     /// A history holding previously saved entries.
     pub fn from_parts(pages: Vec<HistoryEntry>, searches: Vec<SearchEntry>) -> Self {
         let page_search_cache = pages.iter().map(cache_page_search_text).collect();
+        let page_index = index_pages(&pages);
         Self {
             pages,
             searches,
             page_search_cache,
+            page_index,
         }
     }
 
@@ -75,28 +90,28 @@ impl History {
         if !is_web_page(url) {
             return;
         }
-        if let Some(index) = self.pages.iter().position(|entry| entry.url == url) {
+        if let Some(&index) = self.page_index.get(url) {
             let entry = &mut self.pages[index];
             entry.visit_count += 1;
             entry.last_visit = now;
-            if !title.is_empty() {
-                title.clone_into(&mut entry.title);
-                self.page_search_cache[index].normalized_title = normalized_match_text(title);
+            if !title.is_empty() && *entry.title != *title {
+                entry.title = title.into();
+                self.page_search_cache[index].set_title(title);
             }
             return;
         }
 
         let entry = HistoryEntry {
-            url: url.to_owned(),
-            title: title.to_owned(),
+            url: url.into(),
+            title: title.into(),
             visit_count: 1,
             last_visit: now,
         };
         self.page_search_cache.push(cache_page_search_text(&entry));
+        self.page_index.insert(entry.url.clone(), self.pages.len());
         self.pages.push(entry);
         if self.pages.len() > HISTORY_MAX_PAGES {
-            trim_oldest(&mut self.pages, HISTORY_MAX_PAGES, |entry| entry.last_visit);
-            self.rebuild_page_search_cache();
+            self.drop_least_recent_page();
         }
     }
 
@@ -105,18 +120,12 @@ impl History {
     /// count, and gains a title if it had none. Only web pages are kept, and
     /// the oldest are dropped past the limit.
     pub fn import_pages(&mut self, imported: impl IntoIterator<Item = HistoryEntry>) -> usize {
-        let mut index: std::collections::HashMap<String, usize> = self
-            .pages
-            .iter()
-            .enumerate()
-            .map(|(position, entry)| (entry.url.clone(), position))
-            .collect();
         let mut added = 0;
         for entry in imported {
             if !is_web_page(&entry.url) {
                 continue;
             }
-            match index.get(&entry.url) {
+            match self.page_index.get(&entry.url) {
                 Some(&position) => {
                     let existing = &mut self.pages[position];
                     existing.visit_count = existing.visit_count.max(entry.visit_count);
@@ -128,7 +137,7 @@ impl History {
                     }
                 }
                 None => {
-                    index.insert(entry.url.clone(), self.pages.len());
+                    self.page_index.insert(entry.url.clone(), self.pages.len());
                     self.pages.push(entry);
                     added += 1;
                 }
@@ -144,15 +153,15 @@ impl History {
     /// Updates the title of a page already in the history, returning
     /// whether it changed.
     pub fn set_title(&mut self, url: &str, title: &str) -> bool {
-        let Some(index) = self.pages.iter().position(|entry| entry.url == url) else {
+        let Some(&index) = self.page_index.get(url) else {
             return false;
         };
         let entry = &mut self.pages[index];
-        if entry.title == title {
+        if *entry.title == *title {
             return false;
         }
-        title.clone_into(&mut entry.title);
-        self.page_search_cache[index].normalized_title = normalized_match_text(title);
+        entry.title = title.into();
+        self.page_search_cache[index].set_title(title);
         true
     }
 
@@ -185,13 +194,14 @@ impl History {
         let mut pages = Vec::with_capacity(self.pages.len());
         let mut search_cache = Vec::with_capacity(self.page_search_cache.len());
         for (page, cached) in self.pages.drain(..).zip(self.page_search_cache.drain(..)) {
-            if page.url != url {
+            if *page.url != *url {
                 pages.push(page);
                 search_cache.push(cached);
             }
         }
         self.pages = pages;
         self.page_search_cache = search_cache;
+        self.rebuild_page_index();
     }
 
     /// Forgets a past search.
@@ -213,6 +223,7 @@ impl History {
             }
             self.pages = pages;
             self.page_search_cache = search_cache;
+            self.rebuild_page_index();
         }
         if request.searches {
             self.searches
@@ -266,16 +277,44 @@ impl History {
         suggest_with_indexed(input, engines, pages, searches)
     }
 
+    /// Drops the least recently visited page without reordering or
+    /// re-deriving the rest, as one visit past the limit needs.
+    fn drop_least_recent_page(&mut self) {
+        let Some(oldest) = (0..self.pages.len()).min_by_key(|&index| self.pages[index].last_visit)
+        else {
+            return;
+        };
+        let dropped = self.pages.swap_remove(oldest);
+        self.page_search_cache.swap_remove(oldest);
+        self.page_index.remove(&dropped.url);
+        if let Some(moved) = self.pages.get(oldest) {
+            self.page_index.insert(moved.url.clone(), oldest);
+        }
+    }
+
     fn rebuild_page_search_cache(&mut self) {
         self.page_search_cache = self.pages.iter().map(cache_page_search_text).collect();
+        self.rebuild_page_index();
+    }
+
+    fn rebuild_page_index(&mut self) {
+        self.page_index = index_pages(&self.pages);
     }
 }
 
 fn cache_page_search_text(page: &HistoryEntry) -> PageSearchCache {
     PageSearchCache {
-        normalized_display_text: normalized_display_address(&page.url),
-        normalized_title: normalized_match_text(&page.title),
+        normalized_display_text: normalized_display_address(&page.url).map(Arc::from),
+        normalized_title: normalized_match_text(&page.title).map(Arc::from),
     }
+}
+
+fn index_pages(pages: &[HistoryEntry]) -> HashMap<Arc<str>, usize> {
+    pages
+        .iter()
+        .enumerate()
+        .map(|(position, entry)| (entry.url.clone(), position))
+        .collect()
 }
 
 fn is_web_page(url: &str) -> bool {
@@ -302,7 +341,7 @@ mod tests {
         history.record_visit("https://example.com/", "", 20);
         let entry = &history.pages()[0];
         assert_eq!(entry.visit_count, 2);
-        assert_eq!(entry.title, "Example");
+        assert_eq!(&*entry.title, "Example");
         assert_eq!(entry.last_visit, 20);
     }
 
@@ -336,7 +375,7 @@ mod tests {
             history
                 .most_visited(2)
                 .iter()
-                .map(|page| page.url.as_str())
+                .map(|page| page.url.as_ref())
                 .collect::<Vec<_>>(),
             ["https://popular.example/", "https://recent.example/"]
         );
@@ -407,8 +446,8 @@ mod tests {
     fn suggests_one_and_two_character_inputs_from_a_full_history() {
         let pages = (0..HISTORY_MAX_PAGES)
             .map(|index| HistoryEntry {
-                url: format!("https://site{index}.example/home"),
-                title: "Example page".to_owned(),
+                url: format!("https://site{index}.example/home").into(),
+                title: "Example page".to_owned().into(),
                 visit_count: 1,
                 last_visit: index as u64,
             })
@@ -418,7 +457,7 @@ mod tests {
         for query in ["e", "ex"] {
             let suggestions = history.omnibox_suggestions(query);
             assert_eq!(suggestions.rows.len(), 8);
-            assert_eq!(suggestions.rows[1].url, "https://site9999.example/home");
+            assert_eq!(&*suggestions.rows[1].url, "https://site9999.example/home");
         }
     }
 
@@ -435,7 +474,7 @@ mod tests {
             ..ClearBrowsingData::default()
         });
         assert_eq!(history.pages().len(), 1);
-        assert_eq!(history.pages()[0].url, "https://old.example/");
+        assert_eq!(&*history.pages()[0].url, "https://old.example/");
         assert_eq!(history.searches().len(), 2);
         history.clear(&ClearBrowsingData::everything());
         assert!(history.pages().is_empty() && history.searches().is_empty());
@@ -469,7 +508,7 @@ mod tests {
         assert_eq!(history.pages().len(), 2);
         let known = &history.pages()[0];
         assert_eq!(
-            (known.title.as_str(), known.visit_count, known.last_visit),
+            (known.title.as_ref(), known.visit_count, known.last_visit),
             ("Known", 7, 50)
         );
         assert!(
@@ -490,6 +529,6 @@ mod tests {
         }
         let most = history.most_visited(1);
         assert_eq!(most.len(), 1);
-        assert_eq!(most[0].url, "https://b.example/");
+        assert_eq!(&*most[0].url, "https://b.example/");
     }
 }

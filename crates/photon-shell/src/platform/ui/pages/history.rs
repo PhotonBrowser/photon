@@ -300,12 +300,12 @@ impl HistoryPage {
         palette: ThemeColors,
         cx: &mut App,
     ) -> impl IntoElement {
-        let title = if entry.title.trim().is_empty() {
+        let title = gpui::SharedString::from(if entry.title.trim().is_empty() {
             entry.url.clone()
         } else {
             entry.title.clone()
-        };
-        let open_url = entry.url.clone();
+        });
+        let open_url = entry.url.to_string();
         let context = context.clone();
         let remove_url = entry.url.clone();
         let group_name: gpui::SharedString = format!("history-row-{index}").into();

@@ -86,8 +86,8 @@ impl NewTabSettings {
             }
             sites.push(site);
             shortcuts.push(Shortcut {
-                title: entry.title.clone(),
-                url: entry.url.clone(),
+                title: entry.title.to_string(),
+                url: entry.url.to_string(),
             });
         }
         shortcuts
@@ -161,8 +161,8 @@ mod tests {
 
     fn visited(url: &str, title: &str) -> HistoryEntry {
         HistoryEntry {
-            url: url.to_owned(),
-            title: title.to_owned(),
+            url: url.into(),
+            title: title.into(),
             visit_count: 1,
             last_visit: 1,
         }

@@ -147,8 +147,8 @@ pub(crate) fn decode(bytes: &[u8]) -> super::ProfileLoadOutcome<History> {
             continue;
         }
         pages.push(HistoryEntry {
-            url: page.url,
-            title: page.title,
+            url: page.url.into(),
+            title: page.title.into(),
             visit_count: page.visit_count,
             last_visit: page.last_visit,
         });
@@ -261,8 +261,8 @@ mod tests {
 
         let pages = (0..=HISTORY_MAX_PAGES)
             .map(|index| HistoryEntry {
-                url: format!("https://{index}.example/"),
-                title: String::new(),
+                url: format!("https://{index}.example/").into(),
+                title: String::new().into(),
                 visit_count: 1,
                 last_visit: index as u64,
             })
@@ -330,8 +330,8 @@ mod tests {
 
         let history = History::from_parts(
             vec![HistoryEntry {
-                url: "u".repeat(MAX_URL_BYTES + 1),
-                title: String::new(),
+                url: "u".repeat(MAX_URL_BYTES + 1).into(),
+                title: String::new().into(),
                 visit_count: 1,
                 last_visit: 1,
             }],

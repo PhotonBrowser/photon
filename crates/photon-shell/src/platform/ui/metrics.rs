@@ -221,6 +221,8 @@ pub(super) const DOWNLOAD_BADGE_INSET: f32 = 3.0;
 pub(super) const DOWNLOAD_ARROW_HOVER_OFFSET: f32 = 2.0;
 /// How long one turn of the ring takes while a download's size is unknown.
 pub(super) const DOWNLOAD_RING_SPIN_MS: u64 = 1_200;
+/// How often the unsized-download ring repaints while it spins.
+pub(super) const DOWNLOAD_RING_STEP_MS: u64 = 33;
 /// The share of the ring drawn while a download's size is unknown.
 pub(super) const DOWNLOAD_RING_INDETERMINATE_SWEEP: f32 = 0.25;
 /// The downloads popover, opened from the sidebar's downloads button.

@@ -28,3 +28,10 @@ gpui-ce = { path = "vendor/gpui-ce/crates/gpui" }
 edition = "2024"
 license = "BSD-2-Clause"
 version = "0.1.0"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"
+# Nothing outside tests catches unwinds, and panics cannot cross the C ABI.
+panic = "abort"

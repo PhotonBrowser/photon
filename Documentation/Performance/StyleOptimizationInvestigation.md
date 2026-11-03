@@ -1,5 +1,7 @@
 # Phase 10.2 — Style Optimization Investigation
 
+> Historical report based on the style engine that preceded Ladybird's differential style engine replacement (`8ea3ff332fa`). Its transaction scope and broad/narrow matching metrics are no longer emitted; retain this report only as evidence from the earlier implementation.
+
 **Reviewed:** 18 October 2026  
 **Photon checkout base:** `a950612155636c31fa06c6d5b0f702caf5f33caf` (dirty)  
 **Engine checkout base:** `c3e20b5e55c478b5630f06af910ad5784f1ecb22` (dirty)  

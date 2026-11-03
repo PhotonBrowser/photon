@@ -21,7 +21,14 @@ use crate::platform::app_update::update_app;
 
 /// How long after a change the history is saved, so a burst of changes
 /// saves once.
+/// How soon a removal or clear reaches disk, so forgotten pages leave the
+/// file promptly.
 const SAVE_DELAY: Duration = Duration::from_secs(2);
+/// How long visits and titles gather before the whole history file is
+/// rewritten. Quitting still saves whatever is pending.
+const ROUTINE_SAVE_DELAY: Duration = Duration::from_secs(30);
+/// How many decoded page icons stay in memory.
+const FAVICON_CACHE_LIMIT: usize = 512;
 
 struct MostVisitedPages {
     limit: usize,
@@ -41,8 +48,8 @@ pub(super) struct BrowsingHistory {
     /// Loads keyed by page address, so a redraw shares an in-flight read.
     favicon_loads: HashMap<String, u64>,
     next_favicon_load: u64,
-    /// The pending save.
-    save: Option<Task<()>>,
+    /// The pending save, and whether it is the prompt one.
+    save: Option<(Task<()>, bool)>,
     /// Orders icon saves against pruning, which run off the main thread.
     favicon_writes: Arc<FaviconWrites>,
 }
@@ -218,18 +225,18 @@ impl BrowsingHistory {
     }
 
     pub(super) fn record_visit(url: &str, title: &str, cx: &mut App) {
-        Self::change(cx, |history| {
+        Self::change_routine(cx, |history| {
             history.record_visit(url, title, now());
             true
         });
     }
 
     pub(super) fn set_title(url: &str, title: &str, cx: &mut App) {
-        Self::change(cx, |history| history.set_title(url, title));
+        Self::change_routine(cx, |history| history.set_title(url, title));
     }
 
     pub(super) fn record_search(query: &str, cx: &mut App) {
-        Self::change(cx, |history| {
+        Self::change_routine(cx, |history| {
             history.record_search(query, now());
             true
         });
@@ -243,9 +250,7 @@ impl BrowsingHistory {
             if known.is_some_and(|known| known.key == favicon.key) {
                 return;
             }
-            browsing
-                .favicons
-                .insert(url.to_owned(), Some(favicon.clone()));
+            browsing.cache_favicon(url, Some(favicon.clone()));
             let Some(profile) = browsing.profile.clone() else {
                 return;
             };
@@ -334,14 +339,33 @@ impl BrowsingHistory {
     /// Changes the history and, when `change` reports it changed, saves it
     /// shortly.
     fn change(cx: &mut App, change: impl FnOnce(&mut History) -> bool) {
+        Self::change_with(cx, true, change);
+    }
+
+    /// Changes the history as browsing does, saving it with the next batch.
+    fn change_routine(cx: &mut App, change: impl FnOnce(&mut History) -> bool) {
+        Self::change_with(cx, false, change);
+    }
+
+    fn change_with(cx: &mut App, prompt: bool, change: impl FnOnce(&mut History) -> bool) {
         Self::update(cx, |browsing, cx| {
             let changed = change(Arc::make_mut(&mut browsing.history));
             if changed {
                 *browsing.most_visited.get_mut() = None;
             }
-            if changed && browsing.profile.is_some() && browsing.save.is_none() {
-                browsing.save = Some(cx.spawn(async move |cx| {
-                    cx.background_executor().timer(SAVE_DELAY).await;
+            // A prompt save replaces a pending routine one, which it covers.
+            let scheduled = browsing
+                .save
+                .as_ref()
+                .is_some_and(|(_, pending_prompt)| *pending_prompt || !prompt);
+            if changed && browsing.profile.is_some() && !scheduled {
+                let delay = if prompt {
+                    SAVE_DELAY
+                } else {
+                    ROUTINE_SAVE_DELAY
+                };
+                let task = cx.spawn(async move |cx| {
+                    cx.background_executor().timer(delay).await;
                     let save = update_app(cx, |cx| {
                         cx.update_global::<Self, _>(|browsing, _| {
                             browsing.save = None;
@@ -357,7 +381,8 @@ impl BrowsingHistory {
                             .spawn(async move { write_history(&profile, &history, ticket) })
                             .detach();
                     }
-                }));
+                });
+                browsing.save = Some((task, prompt));
             }
         });
     }
@@ -400,6 +425,15 @@ impl BrowsingHistory {
         Some((profile, self.history.clone(), ticket))
     }
 
+    /// Keeps a decoded icon, starting over once the cache is full. Icons stay
+    /// on disk, so this only costs a reload of the ones still on screen.
+    fn cache_favicon(&mut self, url: &str, favicon: Option<Favicon>) {
+        if self.favicons.len() >= FAVICON_CACHE_LIMIT {
+            self.favicons.clear();
+        }
+        self.favicons.insert(url.to_owned(), favicon);
+    }
+
     fn reserve_favicon_load(&mut self, url: &str) -> Option<u64> {
         if self.favicon_loads.contains_key(url) {
             return None;
@@ -423,7 +457,7 @@ impl BrowsingHistory {
             return false;
         }
         owner.favicon_loads.remove(url);
-        owner.favicons.insert(url.to_owned(), favicon);
+        owner.cache_favicon(url, favicon);
         true
     }
 }
@@ -502,11 +536,11 @@ mod tests {
             assert_eq!(BrowsingHistory::most_visited(1, cx).len(), 1);
             assert_eq!(BrowsingHistory::most_visited(2, cx).len(), 2);
             BrowsingHistory::record_visit("https://b.example/", "B", cx);
-            assert_eq!(BrowsingHistory::most_visited(1, cx)[0].title, "B");
+            assert_eq!(&*BrowsingHistory::most_visited(1, cx)[0].title, "B");
             BrowsingHistory::set_title("https://b.example/", "Updated", cx);
-            assert_eq!(BrowsingHistory::most_visited(1, cx)[0].title, "Updated");
+            assert_eq!(&*BrowsingHistory::most_visited(1, cx)[0].title, "Updated");
             BrowsingHistory::remove_page("https://b.example/", cx);
-            assert_eq!(BrowsingHistory::most_visited(2, cx)[0].title, "A");
+            assert_eq!(&*BrowsingHistory::most_visited(2, cx)[0].title, "A");
             assert_eq!(BrowsingHistory::most_visited(2, cx).len(), 1);
             assert!(BrowsingHistory::most_visited(0, cx).is_empty());
         });

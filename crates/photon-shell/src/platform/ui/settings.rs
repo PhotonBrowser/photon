@@ -25,7 +25,7 @@ use super::workspace_layout::WorkspaceLayout;
 /// as while dragging the sidebar's edge, saves once.
 const SAVE_DELAY: Duration = Duration::from_millis(500);
 /// How often the profile config is checked for edits made outside Photon.
-const CONFIG_RELOAD_INTERVAL: Duration = Duration::from_millis(200);
+const CONFIG_RELOAD_INTERVAL: Duration = Duration::from_secs(1);
 /// Wait for an editor's write to settle before parsing its file.
 const CONFIG_RELOAD_SETTLE: Duration = Duration::from_millis(100);
 /// Keep the loading chip visible long enough to read on fast reloads.
@@ -136,6 +136,11 @@ fn normalize_settings(
     settings
 }
 
+fn file_stamp(path: &std::path::Path) -> Option<(std::time::SystemTime, u64)> {
+    let metadata = std::fs::metadata(path).ok()?;
+    Some((metadata.modified().ok()?, metadata.len()))
+}
+
 fn watch_settings(
     profile: Profile,
     mut revision: Option<u64>,
@@ -143,8 +148,21 @@ fn watch_settings(
     cx: &mut App,
 ) -> Task<()> {
     cx.spawn(async move |cx| {
+        let settings_path = profile.settings_path().to_path_buf();
+        let mut last_stamp = None;
         loop {
             cx.background_executor().timer(CONFIG_RELOAD_INTERVAL).await;
+            // A metadata check is far cheaper than reading and hashing the
+            // file, so only an mtime or size change leads to a full read.
+            let path = settings_path.clone();
+            let stamp = cx
+                .background_executor()
+                .spawn(async move { file_stamp(&path) })
+                .await;
+            if stamp.is_some() && stamp == last_stamp {
+                continue;
+            }
+            last_stamp = stamp;
             let profile_to_check = profile.clone();
             let Some(candidate) = cx
                 .background_executor()
