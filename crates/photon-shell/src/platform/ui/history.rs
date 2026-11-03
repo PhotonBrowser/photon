@@ -46,6 +46,9 @@ pub(super) struct BrowsingHistory {
     profile: Option<Profile>,
     /// Icons by page address. `None` records that the page has no saved icon.
     favicons: HashMap<String, Option<Favicon>>,
+    /// Icons the cache let go of, whose textures are freed once the update
+    /// that dropped them returns.
+    released_favicons: Vec<Favicon>,
     /// Loads keyed by page address, so a redraw shares an in-flight read.
     favicon_loads: HashMap<String, u64>,
     next_favicon_load: u64,
@@ -124,7 +127,20 @@ impl BrowsingHistory {
         if !cx.has_global::<Self>() {
             cx.set_global(Self::default());
         }
-        cx.update_global(update)
+        let result = cx.update_global(update);
+        Self::free_released_favicons(cx);
+        result
+    }
+
+    /// Frees the textures of icons the cache let go of. An icon a tab still
+    /// shows stays until that tab lets go of it too.
+    fn free_released_favicons(cx: &mut App) {
+        let released = cx.update_global(|browsing: &mut Self, _| {
+            std::mem::take(&mut browsing.released_favicons)
+        });
+        for favicon in released {
+            favicon.release(None, cx);
+        }
     }
 
     /// Every visited page, for the history page.
@@ -214,7 +230,7 @@ impl BrowsingHistory {
                     if !cx.has_global::<Self>() {
                         return;
                     }
-                    cx.update_global::<Self, _>(|browsing, _| {
+                    Self::update(cx, |browsing, _| {
                         Self::complete_favicon_load(Some(browsing), &url, request_id, favicon);
                     });
                 })
@@ -281,7 +297,7 @@ impl BrowsingHistory {
     /// Forgets a visited page and its icon.
     pub(super) fn remove_page(url: &str, cx: &mut App) {
         Self::update(cx, |browsing, _| {
-            browsing.favicons.remove(url);
+            browsing.forget_favicon(url);
             browsing.favicon_loads.remove(url);
             browsing.favicon_writes.forget(url);
         });
@@ -325,7 +341,7 @@ impl BrowsingHistory {
         });
         if request.history {
             Self::update(cx, |browsing, _| {
-                browsing.favicons.clear();
+                browsing.forget_all_favicons();
                 browsing.favicon_loads.clear();
             });
             Self::prune_favicons(true, cx);
@@ -430,9 +446,22 @@ impl BrowsingHistory {
     /// on disk, so this only costs a reload of the ones still on screen.
     fn cache_favicon(&mut self, url: &str, favicon: Option<Favicon>) {
         if self.favicons.len() >= FAVICON_CACHE_LIMIT {
-            self.favicons.clear();
+            self.forget_all_favicons();
         }
-        self.favicons.insert(url.to_owned(), favicon);
+        if let Some(Some(replaced)) = self.favicons.insert(url.to_owned(), favicon) {
+            self.released_favicons.push(replaced);
+        }
+    }
+
+    fn forget_favicon(&mut self, url: &str) {
+        if let Some(Some(favicon)) = self.favicons.remove(url) {
+            self.released_favicons.push(favicon);
+        }
+    }
+
+    fn forget_all_favicons(&mut self) {
+        self.released_favicons
+            .extend(self.favicons.drain().filter_map(|(_, favicon)| favicon));
     }
 
     fn reserve_favicon_load(&mut self, url: &str) -> Option<u64> {

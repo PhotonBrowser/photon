@@ -78,7 +78,13 @@ type GridKey = (u32, u32, u32, u32);
 type GridCache = VecDeque<(GridKey, Arc<RenderImage>)>;
 
 /// Cache only the decorative dot mask. The marker and all controls remain native geometry.
-fn field_grid(bounds: gpui::Size<Pixels>, scale: f32, ink: u32) -> Arc<RenderImage> {
+/// The mask a resize or a new ink colour replaces is freed from `window`'s atlas.
+fn field_grid(
+    bounds: gpui::Size<Pixels>,
+    scale: f32,
+    ink: u32,
+    window: &mut Window,
+) -> Arc<RenderImage> {
     thread_local! { static CACHE: RefCell<GridCache> = const { RefCell::new(VecDeque::new()) }; }
     let width = (f32::from(bounds.width) * scale).ceil().max(1.0) as u32;
     let height = (f32::from(bounds.height) * scale).ceil().max(1.0) as u32;
@@ -118,8 +124,10 @@ fn field_grid(bounds: gpui::Size<Pixels>, scale: f32, ink: u32) -> Arc<RenderIma
             }
         }
         let image = Arc::new(RenderImage::new([Frame::new(pixels)]));
-        if cache.len() == 2 {
-            cache.pop_front();
+        if cache.len() == 2
+            && let Some((_, evicted)) = cache.pop_front()
+        {
+            window.drop_image(evicted).ok();
         }
         cache.push_back((key, image.clone()));
         image
@@ -148,7 +156,7 @@ pub(super) fn paint_field(
             .corner_radii(px(corner))
             .background(rgb(ink).opacity(t.field_surface)),
     );
-    let texture = field_grid(bounds.size, window.scale_factor(), ink);
+    let texture = field_grid(bounds.size, window.scale_factor(), ink, window);
     window
         .paint_image(bounds, bounds, px(corner).into(), 0.0, texture, 0, false)
         .ok();

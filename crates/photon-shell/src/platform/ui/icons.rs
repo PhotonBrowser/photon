@@ -10,15 +10,26 @@
 //! hover are in `animated_icons`.
 
 use gpui::{
-    Image, ImageFormat, Transformation, hsla, hsla_to_rgba, prelude::*, px, radians, rgb,
-    rgb_to_hsla, rgba, svg,
+    App, Image, ImageFormat, ImageSource, RenderImage, SvgRenderer, Transformation, hsla,
+    hsla_to_rgba, prelude::*, px, radians, rgb, rgb_to_hsla, rgba, svg,
 };
-use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::f32::consts::TAU;
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::{Arc, LazyLock, Mutex, OnceLock};
 
 type LogoTint = (u32, u32);
-type LogoCache = Mutex<HashMap<LogoTint, Arc<Image>>>;
+/// The tinted logos, decoded, the most recently used last.
+type LogoCache = Mutex<VecDeque<(LogoTint, Arc<RenderImage>)>>;
+
+/// Tinted logos kept at once: enough for every window's space to show its own
+/// without each redraw tinting one again.
+const THEMED_LOGO_LIMIT: usize = 4;
+
+static THEMED_LOGOS: LogoCache = Mutex::new(VecDeque::new());
+/// Logos the cache let go of, whose textures the next chrome redraw frees.
+static RELEASED_LOGOS: Mutex<Vec<Arc<RenderImage>>> = Mutex::new(Vec::new());
+/// GPUI's SVG renderer, which tints logos where no `App` is at hand.
+static SVG_RENDERER: OnceLock<SvgRenderer> = OnceLock::new();
 
 /// A vendored Lucide icon's SVG, by its Lucide name.
 macro_rules! lucide {
@@ -48,35 +59,71 @@ pub(super) use {heroicon, lucide};
 
 /// The browser's logo. The original grey tones are tinted with the active
 /// window colour, including both ends of a window gradient.
-pub(super) fn photon_logo(theme_tint: Option<(u32, u32)>) -> Arc<Image> {
+pub(super) fn photon_logo(theme_tint: Option<(u32, u32)>) -> ImageSource {
     static LOGO: LazyLock<Arc<Image>> = LazyLock::new(|| {
         Arc::new(Image::from_bytes(
             ImageFormat::Svg,
             photon_brand::LOGO_SVG.to_vec(),
         ))
     });
-    let Some((start, end)) = theme_tint else {
-        return LOGO.clone();
+    let untinted = || ImageSource::Image(LOGO.clone());
+    let Some(tint) = theme_tint else {
+        return untinted();
     };
 
-    static THEMED_LOGOS: LazyLock<LogoCache> = LazyLock::new(|| Mutex::new(HashMap::new()));
     let mut logos = THEMED_LOGOS
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    logos
-        .entry((start, end))
-        .or_insert_with(|| {
-            let base = tinted_gradient("photon-logo-base", 0xacacac, start, end);
-            let highlight = tinted_gradient("photon-logo-highlight", 0xd5d5d5, start, end);
-            let shade = tinted_gradient("photon-logo-shade", 0x696969, start, end);
-            let svg = String::from_utf8_lossy(photon_brand::LOGO_SVG)
-                .replace("</defs>", &format!("{base}{highlight}{shade}</defs>"))
-                .replace("#ACACAC", "url(#photon-logo-base)")
-                .replace("#D5D5D5", "url(#photon-logo-highlight)")
-                .replace("#696969", "url(#photon-logo-shade)");
-            Arc::new(Image::from_bytes(ImageFormat::Svg, svg.into_bytes()))
-        })
-        .clone()
+    if let Some(index) = logos.iter().position(|(cached, _)| *cached == tint) {
+        let entry = logos.remove(index).expect("the position is in the cache");
+        let logo = entry.1.clone();
+        logos.push_back(entry);
+        return ImageSource::Render(logo);
+    }
+    // Until the first chrome redraw hands over the renderer, the logo is drawn
+    // untinted.
+    let Some(logo) = SVG_RENDERER
+        .get()
+        .and_then(|renderer| tinted_logo(tint).to_image_data(renderer.clone()).ok())
+    else {
+        return untinted();
+    };
+    if logos.len() == THEMED_LOGO_LIMIT
+        && let Some((_, evicted)) = logos.pop_front()
+    {
+        RELEASED_LOGOS
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .push(evicted);
+    }
+    logos.push_back((tint, logo.clone()));
+    ImageSource::Render(logo)
+}
+
+/// Lets later logos be tinted, and frees the textures of those the cache let
+/// go of. Called as the chrome redraws, which it does when the colours change.
+pub(super) fn maintain_logos(cx: &mut App) {
+    SVG_RENDERER.get_or_init(|| cx.svg_renderer());
+    let released = std::mem::take(
+        &mut *RELEASED_LOGOS
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()),
+    );
+    for logo in released {
+        cx.drop_image(logo, None);
+    }
+}
+
+fn tinted_logo((start, end): LogoTint) -> Image {
+    let base = tinted_gradient("photon-logo-base", 0xacacac, start, end);
+    let highlight = tinted_gradient("photon-logo-highlight", 0xd5d5d5, start, end);
+    let shade = tinted_gradient("photon-logo-shade", 0x696969, start, end);
+    let svg = String::from_utf8_lossy(photon_brand::LOGO_SVG)
+        .replace("</defs>", &format!("{base}{highlight}{shade}</defs>"))
+        .replace("#ACACAC", "url(#photon-logo-base)")
+        .replace("#D5D5D5", "url(#photon-logo-highlight)")
+        .replace("#696969", "url(#photon-logo-shade)");
+    Image::from_bytes(ImageFormat::Svg, svg.into_bytes())
 }
 
 fn tinted_gradient(name: &str, grey: u32, start: u32, end: u32) -> String {

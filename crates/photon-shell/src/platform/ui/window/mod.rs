@@ -363,6 +363,7 @@ struct BrowserChrome {
 
 impl Render for BrowserChrome {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        super::icons::maintain_logos(cx);
         self.browser
             .update(cx, |browser, cx| browser.render_chrome(window, cx))
             .unwrap_or_else(|_| div().into_any_element())
