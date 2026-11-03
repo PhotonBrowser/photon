@@ -309,6 +309,22 @@ impl PhotonWebView {
         self.session.restart_unresponsive_page();
     }
 
+    /// Whether this page must stay loaded rather than sleep or release
+    /// memory. A page that asks to confirm leaving holds off only a discard,
+    /// and only unless `allow_beforeunload`.
+    pub(super) fn holds_off_sleep(&self, discarding: bool, allow_beforeunload: bool) -> bool {
+        let loading_for = self.state.loading.then(|| {
+            self.loading_since
+                .map_or(Duration::ZERO, |since| since.elapsed())
+        });
+        !self.has_page()
+            || photon_core::load_blocks_sleep(loading_for)
+            || self.audio_playing
+            || self.page_unresponsive
+            || self.dialogs.open().is_some()
+            || (discarding && !allow_beforeunload && self.session.needs_beforeunload_check())
+    }
+
     /// Whether the tab should show a loading spinner instead of its icon.
     pub(super) fn shows_spinner(&self, animations: &photon_core::AnimationSettings) -> bool {
         // A failed load clears `loading` without a new state snapshot.

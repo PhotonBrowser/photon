@@ -47,7 +47,8 @@ pub use spaces::{
 };
 pub use state::{BrowserCommand, BrowserState, EngineEvent, normalize_url, url_host};
 pub use tab_sleep::{
-    MemoryPressure, TabSleepMode, active_idle_timeout, idle_discard_delay, idle_timeout,
+    MemoryPressure, STALLED_LOAD_TIMEOUT, TabSleepMode, active_idle_timeout, idle_discard_delay,
+    idle_timeout, load_blocks_sleep, may_discard_beforeunload_page,
 };
 pub use tabs::{ARCHIVE_AFTER, should_archive};
 pub use workspace::{

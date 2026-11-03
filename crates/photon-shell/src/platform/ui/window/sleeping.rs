@@ -194,12 +194,7 @@ fn relieve_memory_pressure(cx: &mut App) -> Option<Instant> {
         };
         attempted.push((candidate.window_id, candidate.tab_id));
         let _ = window.update(cx, |browser, window, cx| {
-            browser.release_tab_memory(
-                candidate.tab_id,
-                pressure.should_discard_hidden_tabs(),
-                window,
-                cx,
-            )
+            browser.release_tab_memory(candidate.tab_id, pressure, window, cx)
         });
     }
 
@@ -330,14 +325,7 @@ impl BrowserWindow {
                 let TabContent::Web(webview) = &tab.content else {
                     return None;
                 };
-                let view = webview.read(cx);
-                let safe_to_sleep = view.has_page()
-                    && !view.state.loading
-                    && !view.audio_playing
-                    && !view.page_unresponsive
-                    && !view.session.needs_beforeunload_check()
-                    && view.dialogs.open().is_none();
-                if !safe_to_sleep {
+                if webview.read(cx).holds_off_sleep(true, false) {
                     return None;
                 }
                 let delay = photon_core::idle_discard_delay(
@@ -378,7 +366,7 @@ impl BrowserWindow {
             {
                 continue;
             }
-            if self.discard_tab(index, window, cx) {
+            if self.discard_tab(index, false, window, cx) {
                 changed += 1;
             }
         }
@@ -398,13 +386,7 @@ impl BrowserWindow {
             .filter_map(|(_, tab)| {
                 let webview = tab.content.webview()?;
                 let view = webview.read(cx);
-                let safe = view.has_page()
-                    && !view.state.loading
-                    && !view.audio_playing
-                    && !view.page_unresponsive
-                    && !view.session.needs_beforeunload_check()
-                    && view.dialogs.open().is_none();
-                safe.then(|| {
+                (!view.holds_off_sleep(false, false)).then(|| {
                     (
                         tab.id,
                         view.diagnostics
@@ -421,7 +403,7 @@ impl BrowserWindow {
     fn release_tab_memory(
         &mut self,
         id: u64,
-        discard_if_safe: bool,
+        pressure: MemoryPressure,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
@@ -431,7 +413,14 @@ impl BrowserWindow {
         if !self.is_pressure_candidate(index) {
             return false;
         }
-        if discard_if_safe && self.is_sleep_candidate(index) && self.discard_tab(index, window, cx)
+        if pressure.should_discard_hidden_tabs()
+            && self.is_sleep_candidate(index)
+            && self.discard_tab(
+                index,
+                photon_core::may_discard_beforeunload_page(pressure),
+                window,
+                cx,
+            )
         {
             cx.notify();
             return true;
@@ -440,12 +429,7 @@ impl BrowserWindow {
             return false;
         };
         webview.update(cx, |view, _| {
-            if !view.has_page()
-                || view.state.loading
-                || view.audio_playing
-                || view.page_unresponsive
-                || view.dialogs.open().is_some()
-            {
+            if view.holds_off_sleep(false, false) {
                 return false;
             }
             view.session.release_hidden_memory();
@@ -453,19 +437,21 @@ impl BrowserWindow {
         })
     }
 
-    fn discard_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) -> bool {
+    /// Puts the page to sleep, keeping its tab. A page that asks to confirm
+    /// leaving is only discarded when `allow_beforeunload`.
+    fn discard_tab(
+        &mut self,
+        index: usize,
+        allow_beforeunload: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
         let Some(webview) = self.tabs.get(index).and_then(|tab| tab.content.webview()) else {
             return false;
         };
         let had_focus = webview.read(cx).focus_handle.is_focused(window);
         let snapshot = webview.update(cx, |view, _| {
-            if !view.has_page()
-                || view.state.loading
-                || view.audio_playing
-                || view.page_unresponsive
-                || view.session.needs_beforeunload_check()
-                || view.dialogs.open().is_some()
-            {
+            if view.holds_off_sleep(true, allow_beforeunload) {
                 return None;
             }
             view.set_page_visible(false);

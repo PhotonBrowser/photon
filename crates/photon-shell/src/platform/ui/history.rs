@@ -25,7 +25,8 @@ use crate::platform::app_update::update_app;
 /// file promptly.
 const SAVE_DELAY: Duration = Duration::from_secs(2);
 /// How long visits and titles gather before the whole history file is
-/// rewritten. Quitting still saves whatever is pending.
+/// rewritten. Quitting still saves whatever is pending, but a crash loses
+/// up to this much recent browsing; see `Documentation/Profile.md`.
 const ROUTINE_SAVE_DELAY: Duration = Duration::from_secs(30);
 /// How many decoded page icons stay in memory.
 const FAVICON_CACHE_LIMIT: usize = 512;

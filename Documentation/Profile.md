@@ -96,8 +96,11 @@ keeps one app-wide `BrowsingHistory`:
 
 - Tabs record a visit when their address changes, then keep its title and
   icon current, and only report what changed.
-- Changes save to the profile a moment later, off the main thread, and once
-  more on quit. Icons save as they arrive and load when first drawn.
+- Changes save to the profile off the main thread, and once more on quit.
+  Removals and clears save within 2 seconds. Visits, titles and searches are
+  batched for 30 seconds (`ROUTINE_SAVE_DELAY`) to avoid rewriting the whole
+  file while browsing. **Trade-off:** a crash, as opposed to a quit, can lose
+  up to the last 30 seconds of visits. Icons save as they arrive and load when first drawn.
 - `most_visited`, `measure_data_usage` and `clear` serve the new tab and
   settings pages.
 

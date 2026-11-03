@@ -44,6 +44,22 @@ pub enum TabSleepMode {
     Maximum,
 }
 
+/// How long a page may keep reporting that it is loading before sleep stops
+/// waiting for it. Long-poll and streaming pages never finish loading.
+pub const STALLED_LOAD_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+
+/// Whether a page that has been loading for `loading_for` still holds off
+/// sleep. `None` means the page is not loading.
+pub fn load_blocks_sleep(loading_for: Option<Duration>) -> bool {
+    loading_for.is_some_and(|elapsed| elapsed < STALLED_LOAD_TIMEOUT)
+}
+
+/// Whether a page that asks to confirm leaving may be discarded. Discarding
+/// can lose what the user typed, so only critical pressure justifies it.
+pub const fn may_discard_beforeunload_page(pressure: MemoryPressure) -> bool {
+    matches!(pressure, MemoryPressure::Critical)
+}
+
 const BALANCED_IDLE: Duration = Duration::from_secs(30);
 const MAXIMUM_IDLE: Duration = Duration::from_secs(5);
 const BALANCED_ACTIVE_IDLE: Duration = Duration::from_secs(5 * 60);
@@ -93,7 +109,8 @@ pub fn idle_discard_delay(
 #[cfg(test)]
 mod tests {
     use super::{
-        MemoryPressure, TabSleepMode, active_idle_timeout, idle_discard_delay, idle_timeout,
+        MemoryPressure, STALLED_LOAD_TIMEOUT, TabSleepMode, active_idle_timeout,
+        idle_discard_delay, idle_timeout, load_blocks_sleep, may_discard_beforeunload_page,
     };
     use std::time::Duration;
 
@@ -177,5 +194,19 @@ mod tests {
         assert!(!MemoryPressure::Normal.should_discard_hidden_tabs());
         assert!(!MemoryPressure::Warning.should_discard_hidden_tabs());
         assert!(MemoryPressure::Critical.should_discard_hidden_tabs());
+    }
+
+    #[test]
+    fn stalled_loads_stop_holding_off_sleep() {
+        assert!(!load_blocks_sleep(None));
+        assert!(load_blocks_sleep(Some(Duration::from_secs(1))));
+        assert!(!load_blocks_sleep(Some(STALLED_LOAD_TIMEOUT)));
+    }
+
+    #[test]
+    fn beforeunload_pages_are_discarded_only_under_critical_pressure() {
+        assert!(!may_discard_beforeunload_page(MemoryPressure::Normal));
+        assert!(!may_discard_beforeunload_page(MemoryPressure::Warning));
+        assert!(may_discard_beforeunload_page(MemoryPressure::Critical));
     }
 }
