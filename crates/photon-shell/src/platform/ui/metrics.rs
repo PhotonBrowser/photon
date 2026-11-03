@@ -96,6 +96,8 @@ pub(super) const MENU_ITEM_HEIGHT: f32 = 26.0;
 pub(super) const MENU_ITEM_HORIZONTAL_PADDING: f32 = 10.0;
 pub(super) const MENU_ITEM_GAP: f32 = 2.0;
 pub(super) const MENU_SEPARATOR_HEIGHT: f32 = 1.0;
+/// The longest a page title runs in a menu item before it is cut short.
+pub(super) const MENU_TITLE_MAX_CHARS: usize = 40;
 /// Space above and below a menu separator.
 pub(super) const MENU_SEPARATOR_MARGIN: f32 = 3.0;
 /// The shared weight of a one-pixel outline, used when deriving nested radii.

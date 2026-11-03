@@ -3,12 +3,10 @@
 
 use gpui::{Context, Menu, MenuItem, Window};
 
+use super::super::metrics::MENU_TITLE_MAX_CHARS;
 use super::BrowserWindow;
 use super::menu::{MenuCommand, command_item};
 use super::tab_summary::tab_summary;
-
-/// The longest a tab's title runs in the menu before it is cut short.
-const MAX_TITLE_CHARS: usize = 40;
 
 struct AudibleTab {
     index: usize,
@@ -83,23 +81,23 @@ fn tab_items(tab: &AudibleTab, named: bool) -> Vec<MenuItem> {
 
 fn short_title(title: &str) -> String {
     let title = title.trim();
-    if title.chars().count() <= MAX_TITLE_CHARS {
+    if title.chars().count() <= MENU_TITLE_MAX_CHARS {
         return title.to_owned();
     }
-    let cut: String = title.chars().take(MAX_TITLE_CHARS - 1).collect();
+    let cut: String = title.chars().take(MENU_TITLE_MAX_CHARS - 1).collect();
     format!("{}…", cut.trim_end())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::short_title;
+    use super::{MENU_TITLE_MAX_CHARS, short_title};
 
     #[test]
     fn long_titles_are_cut_short() {
         assert_eq!(short_title("  Radio  "), "Radio");
         let long = "a".repeat(60);
         let short = short_title(&long);
-        assert_eq!(short.chars().count(), super::MAX_TITLE_CHARS);
+        assert_eq!(short.chars().count(), MENU_TITLE_MAX_CHARS);
         assert!(short.ends_with('…'));
     }
 }
