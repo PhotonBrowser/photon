@@ -117,6 +117,20 @@ impl Render for BrowserWindow {
         let active_view = self
             .split_view(page_width, layout_growth, palette, window, cx)
             .unwrap_or_else(|| self.active_view(palette, cx));
+        // Measured for dropping a dragged tab into a split, and holding the
+        // indicator of where it would go.
+        let page_target = cx.entity().downgrade();
+        let active_view = div()
+            .id("page-drop-target")
+            .relative()
+            .size_full()
+            .on_prepaint(move |prepaint, _, cx| {
+                page_target
+                    .update(cx, |this, _| this.page_bounds = Some(prepaint.bounds))
+                    .ok();
+            })
+            .child(active_view)
+            .children(self.split_drop_indicator(palette, cx));
         let page = div()
             .absolute()
             .inset_0()

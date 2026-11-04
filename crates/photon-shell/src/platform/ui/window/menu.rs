@@ -38,6 +38,8 @@ pub(super) enum MenuCommand {
     SplitWithTab(usize),
     /// Shows the split's tabs one at a time again.
     CloseSplitView,
+    /// Opens an empty pane beside the tab, to choose what it shows.
+    CreateSplitView(usize),
     /// Deletes the cookies and web storage of the site with this host.
     ClearSiteData(String),
 }
@@ -96,6 +98,7 @@ impl BrowserWindow {
             MenuCommand::DeleteSpace(space) => self.delete_space(space, window, cx),
             MenuCommand::SplitWithTab(tab) => self.split_with_tab(tab, window, cx),
             MenuCommand::CloseSplitView => self.close_split_view(true, cx),
+            MenuCommand::CreateSplitView(tab) => self.create_split_view(tab, window, cx),
             MenuCommand::ClearSiteData(host) => self.clear_site_data(&host, cx),
         }
     }

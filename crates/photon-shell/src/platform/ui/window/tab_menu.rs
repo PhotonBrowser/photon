@@ -169,19 +169,21 @@ impl BrowserWindow {
             ));
         }
         items.extend(self.favourite_item(index, cx));
-        let closes_split = self.split_open()
-            && (self.split_partner_of(index).is_some()
-                || (self.split_selection_pending() && self.active_tab == Some(index)));
-        if closes_split {
+        let in_split = self.split_group_partner(index).is_some()
+            || (self.split_selection_pending() && self.active_tab == Some(index));
+        if in_split {
+            items.push(command_item("Separate Tabs", MenuCommand::CloseSplitView));
+        } else {
             items.push(command_item(
-                "Close Split View",
-                MenuCommand::CloseSplitView,
+                "Create Split View",
+                MenuCommand::CreateSplitView(index),
             ));
-        } else if self.active_tab.is_some_and(|active| active != index) {
-            items.push(command_item(
-                "Open in Split View",
-                MenuCommand::SplitWithTab(index),
-            ));
+            if self.active_tab.is_some_and(|active| active != index) {
+                items.push(command_item(
+                    "Split with Current Tab",
+                    MenuCommand::SplitWithTab(index),
+                ));
+            }
         }
         items.push(MenuItem::separator());
         // ⌘W closes the active tab, so its item is that shortcut's action

@@ -215,6 +215,12 @@ impl BrowserWindow {
         if let Some(layout) = self.tab_drag_layout.as_mut() {
             layout.pointer_position = position;
         }
+        // Any target other than the page clears its split indicator; the
+        // page sets it again below, redrawing only when its side changes.
+        let previous_split_drop = self.split_drop.take();
+        if previous_split_drop.is_some() && !self.tab_drag_over_page(position) {
+            cx.notify();
+        }
         let source_bounds = window.bounds();
         let source_content_origin = window.inner_window_bounds().get_bounds().origin;
         let global_position = source_content_origin + position;
@@ -298,6 +304,10 @@ impl BrowserWindow {
             return;
         }
 
+        self.split_drop = self.split_drop_side(dragged.id, position);
+        if self.split_drop != previous_split_drop {
+            cx.notify();
+        }
         self.set_tab_drag_phase(super::super::TabDragPhase::OutsideTarget, cx);
     }
 
@@ -1033,6 +1043,17 @@ impl BrowserWindow {
             return;
         }
 
+        // Released over the page beside a split indicator.
+        let split_drop = self.split_drop.take().and_then(|side| {
+            self.tab_drag_layout
+                .as_ref()
+                .filter(|drag| {
+                    drag.source_window == window.window_handle()
+                        && drag.phase == super::super::TabDragPhase::OutsideTarget
+                })
+                .map(|drag| (drag.id, side))
+        });
+
         // Released over the favourites' reach, which can lie outside the
         // drawn tiles that receive drops directly.
         let favourite_drop = self.tab_drag_layout.as_ref().and_then(|drag| {
@@ -1097,6 +1118,9 @@ impl BrowserWindow {
         }
         self.suppress_tab_click_until = Some(Instant::now() + Duration::from_millis(250));
         Self::notify_other_tab_drop_targets(cx, window.window_handle());
+        if let Some((id, side)) = split_drop {
+            self.drop_tab_in_split(id, side, window, cx);
+        }
         cx.notify();
         window.refresh();
     }

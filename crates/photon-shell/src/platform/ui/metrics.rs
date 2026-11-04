@@ -312,6 +312,14 @@ pub(super) const SPLIT_CHOOSER_CARD_PADDING: f32 = 12.0;
 pub(super) const SPLIT_CHOOSER_ICON_SIZE: f32 = 32.0;
 pub(super) const SPLIT_CHOOSER_TEXT_GAP: f32 = 2.0;
 pub(super) const SPLIT_CHOOSER_MAX_COLUMNS: usize = 3;
+/// How far the chooser's cards rise as they appear, and the delay between them.
+pub(super) const SPLIT_CHOOSER_CARD_RISE: f32 = 10.0;
+pub(super) const SPLIT_CHOOSER_CARD_STAGGER_MS: u64 = 35;
+/// Space around a dragged tab's split drop indicator.
+pub(super) const SPLIT_DROP_INDICATOR_INSET: f32 = 8.0;
+pub(super) const SPLIT_DROP_INDICATOR_BORDER: f32 = 2.0;
+/// The share of the page's width at either edge that a dropped tab splits.
+pub(super) const SPLIT_DROP_EDGE_SHARE: f32 = 0.5;
 /// Distance used to dampen a temporary stretch beyond the sidebar's maximum.
 pub(super) const SIDEBAR_RESIZE_RUBBERBAND_RANGE: f32 = 56.0;
 /// Resistance applied as the sidebar is pulled beyond its maximum width.

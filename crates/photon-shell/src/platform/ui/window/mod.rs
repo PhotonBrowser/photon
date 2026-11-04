@@ -137,6 +137,10 @@ pub(in crate::platform) struct BrowserWindow {
     tab_page_transition: Option<TabPageTransition>,
     /// Two tabs shown side by side, while either is active.
     split_view: Option<split_view::SplitView>,
+    /// The side of the page a dragged tab would split into, while over it.
+    split_drop: Option<split_view::SplitSide>,
+    /// Where the page area was last drawn, for dropping tabs into a split.
+    page_bounds: Option<Bounds<Pixels>>,
     /// The active tab drag, its measured geometry, and the temporary motion.
     tab_drag_layout: Option<TabDragLayout>,
     tab_geometry: HashMap<u64, Bounds<Pixels>>,
@@ -647,6 +651,10 @@ fn open_browser_window(
                 &omnibox,
                 window,
                 |this, _, event: &OmniboxEvent, window, cx| match event {
+                    // While a split's empty pane waits, what is entered opens there.
+                    OmniboxEvent::Navigate(url) if this.split_selection_pending() => {
+                        this.fill_split_pane(url, window, cx)
+                    }
                     OmniboxEvent::Navigate(url) => this.navigate_active(url, window, cx),
                     OmniboxEvent::SiteInfoMenu => this.show_site_info_menu(window, cx),
                 },
@@ -702,6 +710,8 @@ fn open_browser_window(
                 active_tab: None,
                 tab_page_transition: None,
                 split_view: None,
+                split_drop: None,
+                page_bounds: None,
                 tab_drag_layout: None,
                 tab_geometry: HashMap::new(),
                 tab_container_bounds: None,

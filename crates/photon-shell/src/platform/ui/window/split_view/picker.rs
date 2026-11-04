@@ -5,11 +5,22 @@ use gpui::{AnyElement, ElementId, FontWeight, Role, SharedString, div, prelude::
 use super::super::super::controls::FocusRing;
 use super::super::super::controls::{OwnsClicks, Pressable};
 use super::super::super::layout::{h_stack, secondary_text, v_stack};
-use super::super::super::motion::SurfaceFade;
+use super::super::super::motion::{AnimateIn, Entrance, MotionConfig, Speed, SurfaceFade};
 use super::super::super::{metrics, theme::ThemeColors};
 use super::SplitChoice;
 
-pub(super) fn view(choices: Vec<SplitChoice>, palette: ThemeColors, presence: f32) -> AnyElement {
+/// How each card rises in, one after another.
+const CARD_ENTRANCE: Entrance = Entrance::new()
+    .fade_from(0.0)
+    .slide_up(metrics::SPLIT_CHOOSER_CARD_RISE)
+    .scale_from(0.96)
+    .speed(Speed::Standard);
+
+pub(super) fn view(
+    choices: Vec<SplitChoice>,
+    palette: ThemeColors,
+    animations: &MotionConfig,
+) -> AnyElement {
     let has_choices = !choices.is_empty();
     let max_grid_width = metrics::SPLIT_CHOOSER_MAX_COLUMNS as f32
         * metrics::SPLIT_CHOOSER_CARD_WIDTH
@@ -28,11 +39,17 @@ pub(super) fn view(choices: Vec<SplitChoice>, palette: ThemeColors, presence: f3
         .flex_wrap()
         .justify_center()
         .gap(px(metrics::SPLIT_CHOOSER_GAP))
-        .children(
-            choices
-                .into_iter()
-                .map(|choice| choice_card(choice, palette)),
-        );
+        .children(choices.into_iter().enumerate().map(|(position, choice)| {
+            let id = format!("split-view-choice-{}-entrance", choice.id);
+            let delay = std::time::Duration::from_millis(
+                metrics::SPLIT_CHOOSER_CARD_STAGGER_MS * position.min(8) as u64,
+            );
+            div().child(choice_card(choice, palette)).animate_in(
+                id,
+                CARD_ENTRANCE.delay(delay),
+                animations,
+            )
+        }));
     let content = v_stack()
         .id("split-view-picker-content")
         .w_full()
@@ -48,9 +65,9 @@ pub(super) fn view(choices: Vec<SplitChoice>, palette: ThemeColors, presence: f3
                 .child(heading)
                 .child(secondary_text(
                     if has_choices {
-                        "Select an open tab to show it beside the current page."
+                        "Pick an open tab, or type an address above."
                     } else {
-                        "Open another tab and it will appear here."
+                        "Type an address above to open a page here."
                     },
                     palette,
                 )),
@@ -60,7 +77,6 @@ pub(super) fn view(choices: Vec<SplitChoice>, palette: ThemeColors, presence: f3
         .id("split-view-tab-picker")
         .size_full()
         .overflow_y_scroll()
-        .opacity(presence)
         .child(content)
         .into_any_element()
 }
