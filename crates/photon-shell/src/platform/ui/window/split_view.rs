@@ -780,15 +780,10 @@ impl BrowserWindow {
         palette: ThemeColors,
         cx: &mut Context<Self>,
     ) -> Vec<SplitChoice> {
-        // This space's tabs, and favourites' open tabs, which join whichever
-        // space they are shown in.
-        let space = self.shows_spaces(cx).then(|| self.current_space(cx));
-        self.tabs
-            .iter()
-            .filter(|tab| {
-                tab.id != leading_id
-                    && space.is_none_or(|space| tab.space == space || tab.favourite.is_some())
-            })
+        self.space_tabs(cx)
+            .into_iter()
+            .map(|index| &self.tabs[index])
+            .filter(|tab| tab.id != leading_id)
             .map(|tab| {
                 let summary = tab_summary(tab, cx);
                 let title = if summary.title.trim().is_empty() {

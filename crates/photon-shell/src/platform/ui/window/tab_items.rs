@@ -15,17 +15,28 @@ use super::content::TabContent;
 use std::time::Instant;
 
 impl BrowserWindow {
-    /// The tabs the layout lists, in order: in the sidebar, the space's own
-    /// tabs but not favourites' tabs, which show as tiles; in the strip,
-    /// every tab.
-    pub(super) fn listed_tabs(&self, cx: &App) -> Vec<usize> {
+    /// The tabs open in the space shown, in order: its own tabs and
+    /// favourites' tabs, which join whichever space shows them; every tab
+    /// while the layout shows no spaces.
+    pub(super) fn space_tabs(&self, cx: &App) -> Vec<usize> {
         let space = self.shows_spaces(cx).then(|| self.current_space(cx));
         (0..self.tabs.len())
             .filter(|&index| {
                 let tab = &self.tabs[index];
-                space.is_none_or(|space| tab.space == space && tab.favourite.is_none())
+                space.is_none_or(|space| tab.space == space || tab.favourite.is_some())
             })
             .collect()
+    }
+
+    /// The tabs the layout lists, in order: in the sidebar, the space's own
+    /// tabs but not favourites' tabs, which show as tiles; in the strip,
+    /// every tab.
+    pub(super) fn listed_tabs(&self, cx: &App) -> Vec<usize> {
+        let mut tabs = self.space_tabs(cx);
+        if self.shows_spaces(cx) {
+            tabs.retain(|&index| self.tabs[index].favourite.is_none());
+        }
+        tabs
     }
 
     /// The listed tab `offset` places from the tab at `index`, wrapping at
