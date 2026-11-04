@@ -55,14 +55,23 @@ pub(in super::super) fn tab_list(
         let Some(tab) = slots[index].take() else {
             continue;
         };
-        // A split's second tab joins the first's row, wherever it is listed.
-        let partner = tab.split_partner.and_then(|partner| {
-            let at = slots.iter().position(|slot| {
-                slot.as_ref()
-                    .is_some_and(|other| other.reorder_key == partner && other.pinned == tab.pinned)
-            })?;
-            Some((at, slots[at].take()?))
-        });
+        // A split's second tab joins the first's row when it is listed right
+        // after it. While either is dragged, each keeps a row of its own, so
+        // the drag shows where the tab will land.
+        let next = index + 1;
+        let joins = !tab.dragging
+            && slots
+                .get(next)
+                .and_then(Option::as_ref)
+                .is_some_and(|other| {
+                    tab.split_partner == Some(other.reorder_key)
+                        && other.pinned == tab.pinned
+                        && !other.dragging
+                });
+        let partner = joins
+            .then(|| slots[next].take())
+            .flatten()
+            .map(|partner| (next, partner));
         let is_pinned = tab.pinned;
         let section = if is_pinned { &mut pinned } else { &mut today };
         let reorder = if is_pinned {
