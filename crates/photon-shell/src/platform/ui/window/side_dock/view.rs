@@ -179,9 +179,7 @@ impl BrowserWindow {
                 .filter(|component| component.id.is_navigation_control())
                 .map(|component| (component.id, component.region))
                 .collect();
-            let has_reload = nav
-                .iter()
-                .any(|(id, _)| *id == ComponentId::ReloadButton);
+            let has_reload = nav.iter().any(|(id, _)| *id == ComponentId::ReloadButton);
             let has_menu = nav
                 .iter()
                 .any(|(id, _)| *id == ComponentId::BrowserMenuButton);
@@ -264,10 +262,7 @@ impl BrowserWindow {
     ) {
         let mut items = Vec::new();
         if fold_toggle {
-            items.push(MenuItem::action(
-                self.sidebar_toggle_label(),
-                ToggleSidebar,
-            ));
+            items.push(MenuItem::action(self.sidebar_toggle_label(), ToggleSidebar));
         }
         if fold_reload {
             let enabled = can_reload || loading;
