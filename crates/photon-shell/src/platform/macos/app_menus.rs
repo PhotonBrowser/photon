@@ -8,8 +8,8 @@ use crate::platform::shortcuts::{
     HideOtherApps, MinimizeWindow, NewPrivateWindow, NewTab, NewWindow, NextSpace,
     OpenCommandPalette, OpenDownloads, OpenHistory, OpenSettings, OpenTaskManager, PreviousSpace,
     Quit, Reload, ReopenClosedTab, ResetZoom, SelectNextTab, SelectPreviousTab, ShowAllApps,
-    ShowKeyboardShortcuts, StopLoading, ToggleSidebar, ToggleSidebarIcons, ToggleSplitView,
-    ToggleZenMode, ZoomIn, ZoomOut, ZoomWindow, shortcut_name_for_action,
+    ShowKeyboardShortcuts, StopLoading, SwitchSplitPane, ToggleSidebar, ToggleSidebarIcons,
+    ToggleSplitView, ToggleZenMode, ZoomIn, ZoomOut, ZoomWindow, shortcut_name_for_action,
 };
 use gpui::{App, Global, Menu, MenuItem, OsAction, SystemMenuType};
 use gpui_elements::editable_text::actions::{Copy, Cut, Paste, Redo, SelectAll, Undo};
@@ -75,6 +75,8 @@ fn menu_bar(state: MenuBarState) -> Vec<Menu> {
         MenuItem::action(label(&ToggleSplitView), ToggleSplitView)
             .checked(state.split_view)
             .disabled(!commands.allows(Command::ToggleSplitView)),
+        MenuItem::action(label(&SwitchSplitPane), SwitchSplitPane)
+            .disabled(!commands.allows(Command::SwitchSplitPane)),
         MenuItem::separator(),
         MenuItem::action(label(&ZoomIn), ZoomIn),
         MenuItem::action(label(&ZoomOut), ZoomOut),
@@ -190,6 +192,7 @@ mod tests {
                 shows_spaces: true,
                 has_next_space: true,
                 has_previous_space: true,
+                shows_split: true,
                 private: false,
             },
             ..MenuBarState::default()

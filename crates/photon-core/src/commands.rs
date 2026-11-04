@@ -28,6 +28,7 @@ pub enum Command {
     ToggleSidebarIcons,
     ToggleZenMode,
     ToggleSplitView,
+    SwitchSplitPane,
     NewSpace,
     NextSpace,
     PreviousSpace,
@@ -53,6 +54,7 @@ pub enum CommandRequirement {
     ShowsSpaces,
     HasNextSpace,
     HasPreviousSpace,
+    ShowsSplit,
 }
 
 /// Shared metadata for a browser command.
@@ -202,6 +204,12 @@ const BUILT_IN_COMMANDS: &[CommandDefinition] = &[
         requirement: CommandRequirement::HasTab,
     },
     CommandDefinition {
+        command: Command::SwitchSplitPane,
+        name: "Switch Split Pane",
+        keywords: "split view other pane side focus",
+        requirement: CommandRequirement::ShowsSplit,
+    },
+    CommandDefinition {
         command: Command::NewSpace,
         name: "New Space",
         keywords: "create add workspace",
@@ -317,6 +325,8 @@ pub struct CommandAvailability {
     pub shows_spaces: bool,
     pub has_next_space: bool,
     pub has_previous_space: bool,
+    /// Whether two tabs show side by side.
+    pub shows_split: bool,
     /// A private window is disposable: it cannot change settings, themes or
     /// spaces.
     pub private: bool,
@@ -357,6 +367,7 @@ impl CommandAvailability {
             CommandRequirement::ShowsSpaces => self.shows_spaces,
             CommandRequirement::HasNextSpace => self.shows_spaces && self.has_next_space,
             CommandRequirement::HasPreviousSpace => self.shows_spaces && self.has_previous_space,
+            CommandRequirement::ShowsSplit => self.shows_split,
         }
     }
 
@@ -420,6 +431,7 @@ mod tests {
             Command::ToggleSidebarIcons,
             Command::ToggleZenMode,
             Command::ToggleSplitView,
+            Command::SwitchSplitPane,
             Command::NewSpace,
             Command::NextSpace,
             Command::PreviousSpace,
@@ -446,6 +458,7 @@ mod tests {
             shows_spaces: true,
             has_next_space: true,
             has_previous_space: false,
+            shows_split: false,
             private: false,
         };
 
@@ -458,6 +471,14 @@ mod tests {
         assert!(availability.allows(Command::NextSpace));
         assert!(!availability.allows(Command::PreviousSpace));
         assert!(!availability.allows(Command::ToggleSplitView));
+        assert!(!availability.allows(Command::SwitchSplitPane));
+        assert!(
+            CommandAvailability {
+                shows_split: true,
+                ..availability
+            }
+            .allows(Command::SwitchSplitPane)
+        );
     }
 
     #[test]

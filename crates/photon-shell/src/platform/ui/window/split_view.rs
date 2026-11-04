@@ -183,6 +183,13 @@ impl BrowserWindow {
         }
     }
 
+    /// Moves to the other page of a split, focusing it.
+    pub(super) fn switch_split_pane(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(partner) = self.split_partner().filter(|_| self.split_open()) {
+            self.activate_tab(partner, true, window, cx);
+        }
+    }
+
     /// Makes the tab at `index` active and opens an empty pane beside it,
     /// whose chooser and address field pick what it shows.
     pub(super) fn create_split_view(

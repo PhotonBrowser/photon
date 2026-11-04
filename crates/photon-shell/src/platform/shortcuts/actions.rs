@@ -62,6 +62,8 @@ gpui::actions!(
         ToggleZenMode,
         /// Show a second tab beside the active one, or show one tab again.
         ToggleSplitView,
+        /// Move to the other page of a split.
+        SwitchSplitPane,
         /// Open the browser's settings in a tab.
         OpenSettings,
         /// Open the history page in a tab.

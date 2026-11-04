@@ -79,6 +79,7 @@ impl BrowserWindow {
                 }
             }
             Command::ToggleSplitView => self.toggle_split_view(window, cx),
+            Command::SwitchSplitPane => self.switch_split_pane(window, cx),
             Command::NewSpace => self.edit_space(None, window, cx),
             Command::NextSpace => self.switch_space_by(1, cx),
             Command::PreviousSpace => self.switch_space_by(-1, cx),
@@ -129,6 +130,7 @@ impl BrowserWindow {
                 && spaces.neighbour_of(self.current_space(cx), 1).is_some(),
             has_previous_space: shows_spaces
                 && spaces.neighbour_of(self.current_space(cx), -1).is_some(),
+            shows_split: self.split_partner().is_some() && self.split_open(),
             private: self.private,
         }
     }
