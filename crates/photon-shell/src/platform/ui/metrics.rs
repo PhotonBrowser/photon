@@ -190,6 +190,8 @@ pub(super) const OMNIBOX_TEXT_TRANSITION_OPACITY: f32 = 0.5;
 pub(super) const OMNIBOX_BORDER_WIDTH: f32 = 1.0;
 pub(super) const OMNIBOX_HORIZONTAL_PADDING: f32 = 12.0;
 pub(super) const OMNIBOX_GAP: f32 = 8.0;
+/// How far the resting address fades out where it is cut off.
+pub(super) const OMNIBOX_TEXT_FADE: f32 = 20.0;
 pub(super) const OMNIBOX_FONT_SIZE: f32 = 13.0;
 pub(super) const OMNIBOX_ICON_SIZE: f32 = 13.0;
 /// Space around the suggestion rows in the open omnibox.

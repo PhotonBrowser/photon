@@ -181,6 +181,12 @@ impl Omnibox {
                 palette.text_secondary
             }))
             .into_any_element();
+        // The resting address fades out where it is cut off, rather than
+        // ending on half a letter.
+        let text_fade = gpui::Edges {
+            right: px(metrics::OMNIBOX_TEXT_FADE).into(),
+            ..Default::default()
+        };
         let input = if centered_sidebar {
             h_stack()
                 .relative()
@@ -189,11 +195,22 @@ impl Omnibox {
                 .h_full()
                 .items_center()
                 .overflow_x_hidden()
+                .when(!editing, |input| input.overflow_fade(text_fade))
                 .opacity(address_text_opacity)
                 .child(translated(
                     input,
                     gpui::point(px(address_text_offset), px(0.0)),
                 ))
+                .into_any_element()
+        } else if style.trailing_site_info && !editing {
+            h_stack()
+                .flex_1()
+                .min_w_0()
+                .h_full()
+                .items_center()
+                .overflow_x_hidden()
+                .overflow_fade(text_fade)
+                .child(input)
                 .into_any_element()
         } else {
             input
