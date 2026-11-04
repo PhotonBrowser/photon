@@ -5,7 +5,7 @@ use gpui::{AnyElement, Context, Div, Window, div, prelude::*, px};
 use photon_core::{Command, DockRegion};
 
 use super::super::animated_icons::{animated_icon, reload_arrow};
-use super::super::button::{menu_button, toolbar_button};
+use super::super::button::{menu_button_sized, toolbar_button_sized};
 use super::super::icons::{back_icon, close_icon, forward_icon, reload_icon};
 use super::super::layout::{h_stack, v_stack};
 use super::super::settings::Settings;
@@ -76,10 +76,24 @@ impl BrowserWindow {
         let controls = layout
             .components(region)
             .filter(|component| component.id != ComponentId::TabStrip)
-            .map(|component| self.render_component(component.id, component.region, window, cx))
+            .map(|component| {
+                self.render_component(
+                    component.id,
+                    component.region,
+                    metrics::TOOLBAR_BUTTON_SIZE,
+                    window,
+                    cx,
+                )
+            })
             .collect::<Vec<_>>();
         let heading = if has_tab_strip {
-            Some(self.render_component(ComponentId::TabStrip, region, window, cx))
+            Some(self.render_component(
+                ComponentId::TabStrip,
+                region,
+                metrics::TOOLBAR_BUTTON_SIZE,
+                window,
+                cx,
+            ))
         } else {
             titlebar.map(IntoElement::into_any_element)
         };
@@ -123,6 +137,7 @@ impl BrowserWindow {
         &self,
         component: ComponentId,
         region: DockRegion,
+        toolbar_size: f32,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -167,11 +182,12 @@ impl BrowserWindow {
             ComponentId::BackButton => {
                 let enabled = self.navigation_state(cx).can_go_back;
                 let icon = back_icon(color, size).into_any_element();
-                toolbar_button(
+                toolbar_button_sized(
                     "toolbar-back",
                     "Go back",
                     0,
                     enabled,
+                    toolbar_size,
                     icon,
                     palette,
                     Box::new(cx.listener(|this, _, window, cx| {
@@ -183,11 +199,12 @@ impl BrowserWindow {
             ComponentId::ForwardButton => {
                 let enabled = self.navigation_state(cx).can_go_forward;
                 let icon = forward_icon(color, size).into_any_element();
-                toolbar_button(
+                toolbar_button_sized(
                     "toolbar-forward",
                     "Go forward",
                     1,
                     enabled,
+                    toolbar_size,
                     icon,
                     palette,
                     Box::new(cx.listener(|this, _, window, cx| {
@@ -218,11 +235,12 @@ impl BrowserWindow {
                 } else {
                     ("Reload page", reload_icon(color, size).into_any_element())
                 };
-                toolbar_button(
+                toolbar_button_sized(
                     "toolbar-reload",
                     label,
                     2,
                     enabled,
+                    toolbar_size,
                     icon,
                     palette,
                     Box::new(cx.listener(move |this, _, window, cx| {
@@ -241,13 +259,14 @@ impl BrowserWindow {
                     .update(cx, |omnibox, _| omnibox.set_floating_surface(None));
                 self.omnibox.clone().into_any_element()
             }
-            ComponentId::BrowserMenuButton => menu_button(
+            ComponentId::BrowserMenuButton => menu_button_sized(
                 if region == DockRegion::Leading || region == DockRegion::Trailing {
                     "side-browser-menu"
                 } else {
                     "toolbar-menu"
                 },
                 4,
+                toolbar_size,
                 palette,
                 Box::new(cx.listener(|this, _, window, cx| {
                     cx.stop_propagation();
@@ -274,7 +293,7 @@ impl BrowserWindow {
         }))
     }
 
-    fn navigation_state(&self, cx: &Context<Self>) -> NavigationState {
+    pub(super) fn navigation_state(&self, cx: &Context<Self>) -> NavigationState {
         self.active_webview()
             .map_or_else(NavigationState::default, |webview| {
                 let view = webview.read(cx);
@@ -289,9 +308,9 @@ impl BrowserWindow {
 }
 
 #[derive(Clone, Copy, Default)]
-struct NavigationState {
-    can_go_back: bool,
-    can_go_forward: bool,
-    can_reload: bool,
-    loading: bool,
+pub(in super::super) struct NavigationState {
+    pub(in super::super) can_go_back: bool,
+    pub(in super::super) can_go_forward: bool,
+    pub(in super::super) can_reload: bool,
+    pub(in super::super) loading: bool,
 }

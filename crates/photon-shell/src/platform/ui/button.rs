@@ -186,11 +186,36 @@ pub(super) fn icon_button(
 }
 
 /// A square toolbar button showing an icon, dimmed and inert while disabled.
+/// `toolbar_button` sizes it for toolbars; pass a smaller plate to
+/// `toolbar_button_sized` where buttons shrink with their header.
 pub(super) fn toolbar_button(
     id: &'static str,
     label: &'static str,
     tab_index: isize,
     enabled: bool,
+    icon: impl IntoElement,
+    palette: ThemeColors,
+    on_click: ClickHandler,
+) -> PressScaleElement<Stateful<Div>> {
+    toolbar_button_sized(
+        id,
+        label,
+        tab_index,
+        enabled,
+        metrics::TOOLBAR_BUTTON_SIZE,
+        icon,
+        palette,
+        on_click,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn toolbar_button_sized(
+    id: &'static str,
+    label: &'static str,
+    tab_index: isize,
+    enabled: bool,
+    size: f32,
     icon: impl IntoElement,
     palette: ThemeColors,
     on_click: ClickHandler,
@@ -204,7 +229,7 @@ pub(super) fn toolbar_button(
         .flex_shrink_0()
         .items_center()
         .justify_center()
-        .size(px(metrics::TOOLBAR_BUTTON_SIZE))
+        .size(px(size))
         .rounded(px(metrics::control_radius()))
         .child(icon);
     let button = if enabled {
@@ -234,6 +259,28 @@ pub(super) fn menu_button(
     window: &mut Window,
     cx: &mut App,
 ) -> PressScaleElement<Stateful<Div>> {
+    menu_button_sized(
+        id,
+        tab_index,
+        metrics::TOOLBAR_BUTTON_SIZE,
+        palette,
+        on_click,
+        window,
+        cx,
+    )
+}
+
+/// The button that opens the browser menu, on a smaller plate where buttons
+/// shrink with their header.
+pub(super) fn menu_button_sized(
+    id: &'static str,
+    tab_index: isize,
+    size: f32,
+    palette: ThemeColors,
+    on_click: ClickHandler,
+    window: &mut Window,
+    cx: &mut App,
+) -> PressScaleElement<Stateful<Div>> {
     let button = h_stack()
         .id(id)
         .role(Role::Button)
@@ -243,7 +290,7 @@ pub(super) fn menu_button(
         .flex_shrink_0()
         .items_center()
         .justify_center()
-        .size(px(metrics::TOOLBAR_BUTTON_SIZE))
+        .size(px(size))
         .rounded(px(metrics::control_radius()))
         .surface_fade()
         .hover_style(|style| style.bg(rgba(palette.hover_surface)))

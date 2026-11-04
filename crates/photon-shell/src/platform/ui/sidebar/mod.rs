@@ -21,7 +21,9 @@ use super::layout::{h_stack, v_stack};
 use super::{metrics, theme::ThemeColors};
 pub(super) use favourites::{FavouriteTile, favourites_empty_state, favourites_grid};
 pub(super) use footer::{BackgroundAudio, FooterActions, SpaceDot, footer};
-pub(super) use navigation::{navigation_bar, navigation_column};
+pub(super) use navigation::{
+    HeaderTier, header_tier, navigation_bar, navigation_column, sidebar_header_inset,
+};
 
 /// Shapes a button, tab or favourite as one of the collapsed sidebar's
 /// square tiles, so every item in it shares a size and corners.

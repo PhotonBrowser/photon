@@ -321,6 +321,13 @@ pub(super) const SIDEBAR_COLLAPSED_GAP: f32 = 4.0;
 pub(super) const SIDEBAR_PADDING: f32 = 8.0;
 /// Space between the sidebar's top-row buttons.
 pub(super) const SIDEBAR_CONTROL_GAP: f32 = 8.0;
+/// A narrow sidebar header's buttons: plates shrink with the header, and its
+/// gaps go away, so back, forward and the overflow menu still fit beside the
+/// native window controls at the minimum width.
+pub(super) const SIDEBAR_HEADER_NARROW_BUTTON: f32 = 26.0;
+/// A narrow sidebar header's reserve for the native window controls: their
+/// measured footprint with a little air, instead of the wide reserve.
+pub(super) const SIDEBAR_HEADER_NARROW_INSET: f32 = 72.0;
 /// Space between the sidebar's sections.
 pub(super) const SIDEBAR_SECTION_GAP: f32 = 8.0;
 /// Space between tab rows, and between favourite tiles.

@@ -3,10 +3,10 @@
 //! over it, and its content stays put while its width changes, fading
 //! between icons and labels.
 
-use gpui::{AnyElement, Context, Div, Stateful, Window, div, prelude::*, px};
+use gpui::{AnyElement, Context, Div, MenuItem, Stateful, Window, div, prelude::*, px};
 use photon_core::{Command, DockRegion, MAX_FAVOURITES};
 
-use super::super::super::button::toolbar_button;
+use super::super::super::button::{menu_button_sized, toolbar_button};
 use super::super::super::download_button::DownloadsButton;
 use super::super::super::downloads::Downloads;
 use super::super::super::icons::{private_icon, sidebar_icon};
@@ -14,8 +14,9 @@ use super::super::super::layout::{Elevated, Elevation, Raised, h_stack, v_stack}
 use super::super::super::motion::{AnimateIn, Edge, slide_in, translated};
 use super::super::super::settings::Settings;
 use super::super::super::sidebar::{
-    BackgroundAudio, FooterActions, SidebarSection, collapsed_tile, favourites_empty_state,
-    favourites_grid, footer, navigation_bar, navigation_column, sidebar,
+    BackgroundAudio, FooterActions, HeaderTier, SidebarSection, collapsed_tile,
+    favourites_empty_state, favourites_grid, footer, header_tier, navigation_bar,
+    navigation_column, sidebar, sidebar_header_inset,
 };
 use super::super::super::tabs::{TabDragAxis, TabDragMove, tab_list};
 use super::super::super::titlebar::window_drag_area;
@@ -27,6 +28,7 @@ use super::super::super::{
     theme::{self, ThemeColors},
 };
 use super::super::BrowserWindow;
+use crate::platform::shortcuts::{Reload, StopLoading, ToggleSidebar};
 
 impl BrowserWindow {
     /// The sidebar in `region`, while it is shown or revealed, and the
@@ -172,17 +174,113 @@ impl BrowserWindow {
             });
             navigation_column(fullscreen, leading, toggle)
         } else {
-            let toggle = has_toggle.then(|| {
+            let nav: Vec<(ComponentId, DockRegion)> = layout
+                .components(region)
+                .filter(|component| component.id.is_navigation_control())
+                .map(|component| (component.id, component.region))
+                .collect();
+            let has_reload = nav
+                .iter()
+                .any(|(id, _)| *id == ComponentId::ReloadButton);
+            let has_menu = nav
+                .iter()
+                .any(|(id, _)| *id == ComponentId::BrowserMenuButton);
+            let tier = header_tier(
+                width,
+                sidebar_header_inset(fullscreen, leading),
+                has_toggle,
+                nav.len(),
+            );
+            // A narrow header shrinks its plates; only a wide one fits them all.
+            let button_size = if tier == HeaderTier::Wide {
+                metrics::TOOLBAR_BUTTON_SIZE
+            } else {
+                metrics::SIDEBAR_HEADER_NARROW_BUTTON
+            };
+            let fold_toggle = has_toggle && tier != HeaderTier::Wide;
+            let fold_reload = has_reload && tier == HeaderTier::Narrow;
+            // A narrow header keeps only back and forward inline, so it fits
+            // every layout at the minimum width; the footer keeps opening
+            // the browser menu.
+            let fold_menu = has_menu && tier == HeaderTier::Narrow;
+            let toggle = (!fold_toggle && has_toggle).then(|| {
                 self.sidebar_toggle(metrics::TOOLBAR_ICON_SIZE, palette, window, cx)
                     .into_any_element()
             });
-            let controls = layout
-                .components(region)
-                .filter(|component| component.id.is_navigation_control())
-                .map(|component| self.render_component(component.id, component.region, window, cx))
+            let mut controls: Vec<AnyElement> = nav
+                .into_iter()
+                .filter(|(id, _)| {
+                    (*id != ComponentId::ReloadButton || !fold_reload)
+                        && (*id != ComponentId::BrowserMenuButton || !fold_menu)
+                })
+                .map(|(id, region)| self.render_component(id, region, button_size, window, cx))
                 .collect();
-            navigation_bar(width, fullscreen, leading, toggle, controls)
+            if fold_toggle || fold_reload {
+                let state = self.navigation_state(cx);
+                controls.push(
+                    menu_button_sized(
+                        "sidebar-header-overflow",
+                        3,
+                        metrics::SIDEBAR_HEADER_NARROW_BUTTON,
+                        palette,
+                        Box::new(cx.listener(move |this, _, window, cx| {
+                            cx.stop_propagation();
+                            this.show_header_overflow(
+                                window,
+                                fold_toggle,
+                                fold_reload,
+                                state.can_reload,
+                                state.loading,
+                                cx,
+                            );
+                        })),
+                        window,
+                        cx,
+                    )
+                    .into_any_element(),
+                );
+            }
+            navigation_bar(
+                width,
+                fullscreen,
+                leading,
+                toggle,
+                controls,
+                tier != HeaderTier::Wide,
+            )
         }
+    }
+
+    /// Opens the narrow header's overflow menu with exactly the actions
+    /// folded out of it, so no action ever appears twice.
+    fn show_header_overflow(
+        &mut self,
+        window: &mut Window,
+        fold_toggle: bool,
+        fold_reload: bool,
+        can_reload: bool,
+        loading: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let mut items = Vec::new();
+        if fold_toggle {
+            items.push(MenuItem::action(
+                self.sidebar_toggle_label(),
+                ToggleSidebar,
+            ));
+        }
+        if fold_reload {
+            let enabled = can_reload || loading;
+            if loading {
+                items.push(MenuItem::action("Stop", StopLoading).disabled(!enabled));
+            } else {
+                items.push(MenuItem::action("Reload", Reload).disabled(!enabled));
+            }
+        }
+        if items.is_empty() {
+            return;
+        }
+        self.show_context_menu(window, items, cx);
     }
 
     /// The sidebar's button, labelled for what pressing it does now.
