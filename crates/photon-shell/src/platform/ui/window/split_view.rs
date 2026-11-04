@@ -377,6 +377,16 @@ impl BrowserWindow {
         self.activate_tab(index, true, window, cx);
     }
 
+    /// Where a dropped tab's pane meets the other: an open split's divider,
+    /// or where a new split would divide the page. Both where a drop lands
+    /// and where its indicator is drawn follow it.
+    fn split_drop_boundary(&self) -> f32 {
+        self.split_view
+            .as_ref()
+            .filter(|split| self.split_open() && split.trailing.is_some())
+            .map_or(metrics::SPLIT_DROP_EDGE_SHARE, |split| split.ratio)
+    }
+
     /// The side of the page a tab dragged to `position` would split into,
     /// if it can split there.
     pub(super) fn split_drop_side(&self, id: u64, position: Point<Pixels>) -> Option<SplitSide> {
@@ -394,10 +404,7 @@ impl BrowserWindow {
             return None;
         }
         let x = f32::from(position.x - bounds.origin.x) / width;
-        let boundary = match self.split_view.as_ref().filter(|_| open) {
-            Some(split) => split.ratio,
-            None => metrics::SPLIT_DROP_EDGE_SHARE,
-        };
+        let boundary = self.split_drop_boundary();
         let side = if x < boundary {
             SplitSide::Leading
         } else {
@@ -483,10 +490,7 @@ impl BrowserWindow {
         self.tab_drag_layout
             .as_ref()
             .filter(|drag| self.tab_index_by_id(drag.id).is_some())?;
-        let boundary = match self.split_view.as_ref().filter(|_| self.split_open()) {
-            Some(split) if split.trailing.is_some() => split.ratio,
-            _ => metrics::SPLIT_DROP_EDGE_SHARE,
-        };
+        let boundary = self.split_drop_boundary();
         let (start, width) = match side {
             SplitSide::Leading => (0.0, boundary),
             SplitSide::Trailing => (boundary, 1.0 - boundary),
