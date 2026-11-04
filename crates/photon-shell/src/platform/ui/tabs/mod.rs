@@ -598,6 +598,30 @@ fn reorder_section(tabs: &mut [TabItem], reorder: &ReorderGroup<u64>, pinned: bo
 }
 
 /// The temporary insertion gap shown when a drag hovers over another strip.
+/// The split partner of `tab`, at `index`, taken from `slots` to share its
+/// row: only when listed right after it in the same section, and neither is
+/// dragged, so a drag shows where the tab will land.
+pub(super) fn take_split_partner(
+    tab: &TabItem,
+    slots: &mut [Option<TabItem>],
+    index: usize,
+) -> Option<(usize, TabItem)> {
+    let next = index + 1;
+    let joins = !tab.dragging
+        && slots
+            .get(next)
+            .and_then(Option::as_ref)
+            .is_some_and(|other| {
+                tab.split_partner == Some(other.reorder_key)
+                    && other.pinned == tab.pinned
+                    && !other.dragging
+            });
+    joins
+        .then(|| slots.get_mut(next)?.take())
+        .flatten()
+        .map(|partner| (next, partner))
+}
+
 pub(super) fn insertion_marker(axis: TabDragAxis, size: f32, palette: ThemeColors) -> AnyElement {
     let marker = div()
         .flex_shrink_0()

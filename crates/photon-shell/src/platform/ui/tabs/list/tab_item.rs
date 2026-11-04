@@ -118,7 +118,7 @@ pub(super) fn split_group(
     collapsed: bool,
     palette: ThemeColors,
 ) -> AnyElement {
-    let padding = px(metrics::SIDEBAR_SPLIT_GROUP_PADDING);
+    let padding = px(metrics::SPLIT_TAB_GROUP_PADDING);
     let half = |tab: AnyElement| div().flex_1().min_w_0().child(tab);
     let group = if collapsed {
         div().flex().flex_col().items_center()
@@ -130,7 +130,7 @@ pub(super) fn split_group(
         .p(padding)
         .gap(padding)
         .rounded(px(
-            metrics::sidebar_item_radius() + metrics::SIDEBAR_SPLIT_GROUP_PADDING
+            metrics::sidebar_item_radius() + metrics::SPLIT_TAB_GROUP_PADDING
         ))
         .bg(rgba(palette.hover_surface))
         .child(if collapsed {
