@@ -13,7 +13,7 @@ use std::time::Instant;
 use super::super::icons::{globe_icon, photon_logo, sleeping_icon};
 use super::super::metrics;
 use super::super::motion::{AnimateIn, Entrance, Speed, Tween, TweenCurve};
-use super::super::pages::PageIcon;
+use super::super::pages::{PageIcon, find_page};
 use super::super::settings::Settings;
 use super::super::theme::ThemeColors;
 use super::super::{ClickHandler, Favicon};
@@ -353,6 +353,15 @@ impl BrowserWindow {
         let Some(leading) = self.active_tab else {
             return;
         };
+        // A page only one tab may show fills the pane from its open tab.
+        let open = find_page(url).and_then(|page| self.single_page_tab(page));
+        // Already shown beside it, it is not opened a second time.
+        if let Some(index) = open {
+            if index != leading {
+                self.split_with_tab(index, window, cx);
+            }
+            return;
+        }
         let Some(id) = self.insert_address(leading + 1, url, false, window, cx) else {
             return;
         };

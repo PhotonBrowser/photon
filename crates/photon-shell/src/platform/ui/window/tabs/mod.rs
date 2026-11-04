@@ -370,6 +370,16 @@ impl BrowserWindow {
 
     /// Opens one of Photon's pages in a new tab, or switches to the tab
     /// already showing it when the page keeps to one tab.
+    /// The tab already showing `page`, when only one tab may show it.
+    pub(super) fn single_page_tab(&self, page: &'static PageDefinition) -> Option<usize> {
+        if !page.single_tab {
+            return None;
+        }
+        self.tabs.iter().position(
+            |tab| matches!(&tab.content, TabContent::Page(shown) if shown.definition.is(page)),
+        )
+    }
+
     pub(super) fn open_page_tab(
         &mut self,
         page: &'static PageDefinition,
@@ -380,15 +390,7 @@ impl BrowserWindow {
         if self.private && page.is(super::super::pages::SETTINGS) {
             return;
         }
-        let open = page
-            .single_tab
-            .then(|| {
-                self.tabs.iter().position(|tab| {
-                    matches!(&tab.content, TabContent::Page(shown) if shown.definition.is(page))
-                })
-            })
-            .flatten();
-        match open {
+        match self.single_page_tab(page) {
             Some(index) => self.activate_tab(index, true, window, cx),
             None => self.insert_page(self.new_tab_index(cx), page, window, cx),
         }
