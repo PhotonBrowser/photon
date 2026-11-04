@@ -42,7 +42,8 @@ pub(super) fn view(
         .children(choices.into_iter().enumerate().map(|(position, choice)| {
             let id = format!("split-view-choice-{}-entrance", choice.id);
             let delay = std::time::Duration::from_millis(
-                metrics::SPLIT_CHOOSER_CARD_STAGGER_MS * position.min(8) as u64,
+                metrics::SPLIT_CHOOSER_CARD_STAGGER_MS
+                    * position.min(metrics::SPLIT_CHOOSER_STAGGERED_CARDS) as u64,
             );
             div().child(choice_card(choice, palette)).animate_in(
                 id,

@@ -315,6 +315,8 @@ pub(super) const SPLIT_CHOOSER_MAX_COLUMNS: usize = 3;
 /// How far the chooser's cards rise as they appear, and the delay between them.
 pub(super) const SPLIT_CHOOSER_CARD_RISE: f32 = 10.0;
 pub(super) const SPLIT_CHOOSER_CARD_STAGGER_MS: u64 = 35;
+/// Cards after this many appear together rather than waiting their turn.
+pub(super) const SPLIT_CHOOSER_STAGGERED_CARDS: usize = 8;
 /// Space around a dragged tab's split drop indicator.
 pub(super) const SPLIT_DROP_INDICATOR_INSET: f32 = 8.0;
 pub(super) const SPLIT_DROP_INDICATOR_BORDER: f32 = 2.0;
