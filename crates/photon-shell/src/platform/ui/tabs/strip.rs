@@ -1,6 +1,6 @@
 //! The horizontal tab strip in the titlebar.
 
-use gpui::{Role, ScrollHandle, div, prelude::*, px, rgb, rgba};
+use gpui::{AnyElement, Role, ScrollHandle, div, prelude::*, px, rgb, rgba};
 
 use super::super::controls::FocusRing;
 use super::super::controls::{OwnsClicks, Pressable};
@@ -13,7 +13,7 @@ use super::super::{ClickHandler, metrics, theme::ThemeColors};
 use super::{
     DraggedTab, TabDragAxis, TabDragMove, TabDrop, TabItem, TabParts, TabPrepaint,
     animate_tab_motion, insertion_marker, is_foreign_tab_drag, reorder_tab_items,
-    sync_reorder_order,
+    sync_reorder_order, take_split_partner,
 };
 
 /// The tabs side by side, then a button that opens a new tab.
@@ -79,34 +79,55 @@ pub(in super::super) fn tab_strip_content(
         .items_center()
         .gap(px(metrics::TAB_STRIP_GAP))
         .flex_initial();
-    for (index, tab) in tabs.into_iter().enumerate() {
-        let stops = TabParts::focus_stops(&tab.icon);
+    let mut slots: Vec<Option<TabItem>> = tabs.into_iter().map(Some).collect();
+    for index in 0..slots.len() {
+        let Some(tab) = slots[index].take() else {
+            continue;
+        };
+        let partner = take_split_partner(&tab, &mut slots, index);
         let reorder = if tab.pinned {
             &pinned_reorder
         } else {
             &today_reorder
         };
         let before = tab.insertion_before;
-        let after = tab.insertion_after;
+        // A drop aimed between a split's tabs is marked after their group,
+        // which cannot open between them.
+        let after = match partner.as_ref() {
+            Some((_, partner)) => partner
+                .insertion_after
+                .or(tab.insertion_after)
+                .or(partner.insertion_before),
+            None => tab.insertion_after,
+        };
         if let Some(size) = before {
             tabs_element =
                 tabs_element.child(insertion_marker(TabDragAxis::Horizontal, size, palette));
         }
-        let parts = TabParts::new(
-            tab,
-            index,
-            tab_count,
-            focus_index,
-            metrics::TAB_FAVICON_SIZE,
-            palette,
-            TabDragAxis::Horizontal,
-        );
-        tabs_element = tabs_element.child(strip_tab(parts, palette, reorder));
+        let pinned = tab.pinned;
+        let mut item = |tab: TabItem, position: usize| {
+            let stops = TabParts::focus_stops(&tab.icon);
+            let parts = TabParts::new(
+                tab,
+                position,
+                tab_count,
+                focus_index,
+                metrics::TAB_FAVICON_SIZE,
+                palette,
+                TabDragAxis::Horizontal,
+            );
+            focus_index += stops;
+            strip_tab(parts, palette, reorder).into_any_element()
+        };
+        let first = item(tab, index);
+        tabs_element = tabs_element.child(match partner {
+            Some((at, partner)) => split_group(first, item(partner, at), pinned, palette),
+            None => first,
+        });
         if let Some(size) = after {
             tabs_element =
                 tabs_element.child(insertion_marker(TabDragAxis::Horizontal, size, palette));
         }
-        focus_index += stops;
     }
     let tab_viewport = h_stack()
         .id("browser-tab-strip-scroll")
@@ -164,7 +185,7 @@ fn strip_tab(
             .w(px(metrics::PINNED_TAB_WIDTH))
             .h(px(metrics::TAB_HEIGHT))
             .rounded(px(metrics::control_radius()));
-        let tab = if parts.active {
+        let tab = if parts.shown {
             tab.surface_fade().bg(rgba(palette.selected_surface))
         } else {
             tab.surface_fade()
@@ -202,7 +223,7 @@ fn strip_tab(
         .px(px(metrics::TAB_HORIZONTAL_PADDING))
         .rounded(px(metrics::control_radius()))
         .text_size(px(metrics::TAB_FONT_SIZE));
-    let tab = if parts.active {
+    let tab = if parts.shown {
         tab.surface_fade().bg(rgba(palette.selected_surface))
     } else {
         tab.surface_fade()
@@ -210,7 +231,8 @@ fn strip_tab(
     };
     let tooltip = (!parts.suppress_tooltips).then(|| label_tooltip(parts.label.clone(), palette));
     let tab = tab.when_some(tooltip, |tab, tooltip| tab.tooltip(tooltip));
-    let close = if parts.active {
+    // A split's tabs both show their close buttons, as both pages show.
+    let close = if parts.active || parts.shown {
         parts.close
     } else {
         parts
@@ -228,6 +250,34 @@ fn strip_tab(
         position_offset,
     );
     super::measured_tab(tab, reorder_key, focus_handle, reorder_transition, reorder)
+}
+
+/// A split's two tabs as one group in the strip, sharing the room two tabs
+/// would take.
+fn split_group(
+    first: AnyElement,
+    second: AnyElement,
+    pinned: bool,
+    palette: ThemeColors,
+) -> AnyElement {
+    let padding = metrics::SPLIT_TAB_GROUP_PADDING;
+    let group = h_stack()
+        .items_center()
+        .p(px(padding))
+        .gap(px(padding))
+        .rounded(px(metrics::control_radius() + padding))
+        .bg(rgba(palette.hover_surface));
+    let group = if pinned {
+        group.flex_shrink_0()
+    } else {
+        let width = |tab: f32| px(2.0 * tab + 3.0 * padding);
+        group
+            .flex_1()
+            .flex_basis(width(metrics::TAB_MAX_WIDTH))
+            .min_w(width(metrics::TAB_MIN_WIDTH))
+            .max_w(width(metrics::TAB_MAX_WIDTH))
+    };
+    group.child(first).child(second).into_any_element()
 }
 
 fn new_tab_button(
