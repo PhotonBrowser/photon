@@ -16,7 +16,7 @@ mod new_tab;
 mod tab_item;
 
 use new_tab::new_tab_row;
-use tab_item::{tab_row, tab_tile};
+use tab_item::{split_group, tab_row, tab_tile};
 
 /// The tabs, one row each: pinned tabs above a divider, then today's tabs
 /// and a row that opens a new tab. Collapsed, each row is only its icon. The
@@ -50,8 +50,19 @@ pub(in super::super) fn tab_list(
     let tab_count = tabs.len();
     let mut focus_index = if new_tab_at_end { 0 } else { 1 };
     let (mut pinned, mut today) = (Vec::new(), Vec::new());
-    for (index, tab) in tabs.into_iter().enumerate() {
-        let stops = TabParts::focus_stops(&tab.icon);
+    let mut slots: Vec<Option<TabItem>> = tabs.into_iter().map(Some).collect();
+    for index in 0..slots.len() {
+        let Some(tab) = slots[index].take() else {
+            continue;
+        };
+        // A split's second tab joins the first's row, wherever it is listed.
+        let partner = tab.split_partner.and_then(|partner| {
+            let at = slots.iter().position(|slot| {
+                slot.as_ref()
+                    .is_some_and(|other| other.reorder_key == partner && other.pinned == tab.pinned)
+            })?;
+            Some((at, slots[at].take()?))
+        });
         let is_pinned = tab.pinned;
         let section = if is_pinned { &mut pinned } else { &mut today };
         let reorder = if is_pinned {
@@ -60,29 +71,38 @@ pub(in super::super) fn tab_list(
             &today_reorder
         };
         let before = tab.insertion_before;
-        let after = tab.insertion_after;
+        let after = partner
+            .as_ref()
+            .map_or(tab.insertion_after, |(_, partner)| partner.insertion_after);
         if let Some(size) = before {
             section.push(insertion_marker(TabDragAxis::Vertical, size, palette));
         }
-        let parts = TabParts::new(
-            tab,
-            index,
-            tab_count,
-            focus_index,
-            spacing.icon_size,
-            palette,
-            TabDragAxis::Vertical,
-        );
-        let item = if collapsed {
-            tab_tile(parts, palette, reorder)
-        } else {
-            tab_row(parts, palette, reorder)
+        let mut item = |tab: TabItem, position: usize| {
+            let stops = TabParts::focus_stops(&tab.icon);
+            let parts = TabParts::new(
+                tab,
+                position,
+                tab_count,
+                focus_index,
+                spacing.icon_size,
+                palette,
+                TabDragAxis::Vertical,
+            );
+            focus_index += stops;
+            if collapsed {
+                tab_tile(parts, palette, reorder)
+            } else {
+                tab_row(parts, palette, reorder)
+            }
         };
-        section.push(item);
+        let first = item(tab, index);
+        section.push(match partner {
+            Some((at, partner)) => split_group(first, item(partner, at), collapsed, palette),
+            None => first,
+        });
         if let Some(size) = after {
             section.push(insertion_marker(TabDragAxis::Vertical, size, palette));
         }
-        focus_index += stops;
     }
     let section = |id: &'static str, label: &'static str, rows: Vec<_>, close_empty_slot: bool| {
         v_stack()

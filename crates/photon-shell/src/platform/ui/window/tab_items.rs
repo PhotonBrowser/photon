@@ -199,6 +199,9 @@ impl BrowserWindow {
                     sleeping: matches!(&tab.content, TabContent::Sleeping(_)),
                     pinned: tab.pin.is_some(),
                     shown: self.shows_tab(index),
+                    split_partner: self
+                        .split_group_partner(index)
+                        .map(|partner| self.tabs[partner].id),
                     active: self.active_tab == Some(index),
                     focus_handle: self.tab_focus_handles[index].clone(),
                     on_select: Box::new(cx.listener(move |this, _, window, cx| {

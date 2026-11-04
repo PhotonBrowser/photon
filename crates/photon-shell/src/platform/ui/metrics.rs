@@ -320,6 +320,8 @@ pub(super) const SPLIT_DROP_INDICATOR_INSET: f32 = 8.0;
 pub(super) const SPLIT_DROP_INDICATOR_BORDER: f32 = 2.0;
 /// The share of the page's width at either edge that a dropped tab splits.
 pub(super) const SPLIT_DROP_EDGE_SHARE: f32 = 0.5;
+/// Space around and between the two halves of a split's sidebar row.
+pub(super) const SIDEBAR_SPLIT_GROUP_PADDING: f32 = 3.0;
 /// Distance used to dampen a temporary stretch beyond the sidebar's maximum.
 pub(super) const SIDEBAR_RESIZE_RUBBERBAND_RANGE: f32 = 56.0;
 /// Resistance applied as the sidebar is pulled beyond its maximum width.

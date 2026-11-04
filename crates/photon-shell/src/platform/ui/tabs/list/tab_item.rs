@@ -36,7 +36,8 @@ pub(super) fn tab_row(
         parts.shown,
         palette,
     );
-    let close = if parts.active {
+    // A split's tabs both show their close buttons, as both pages show.
+    let close = if parts.active || parts.shown {
         parts.close
     } else {
         // Hidden, it is also left out of the tab order, so keyboard focus
@@ -107,4 +108,40 @@ fn tab_surface<E: InteractiveElement + gpui::Styled>(
                 metrics::SIDEBAR_TAB_SELECTION_DURATION_MS,
             ))
         })
+}
+
+/// The two tabs of a split as one row: side by side, or stacked as tiles
+/// while the sidebar is collapsed.
+pub(super) fn split_group(
+    first: AnyElement,
+    second: AnyElement,
+    collapsed: bool,
+    palette: ThemeColors,
+) -> AnyElement {
+    let padding = px(metrics::SIDEBAR_SPLIT_GROUP_PADDING);
+    let half = |tab: AnyElement| div().flex_1().min_w_0().child(tab);
+    let group = if collapsed {
+        div().flex().flex_col().items_center()
+    } else {
+        div().flex().flex_row().items_center()
+    };
+    group
+        .w_full()
+        .p(padding)
+        .gap(padding)
+        .rounded(px(
+            metrics::sidebar_item_radius() + metrics::SIDEBAR_SPLIT_GROUP_PADDING
+        ))
+        .bg(rgba(palette.hover_surface))
+        .child(if collapsed {
+            first
+        } else {
+            half(first).into_any_element()
+        })
+        .child(if collapsed {
+            second
+        } else {
+            half(second).into_any_element()
+        })
+        .into_any_element()
 }

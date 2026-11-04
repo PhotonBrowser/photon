@@ -283,6 +283,8 @@ pub(super) struct TabItem {
     pub pinned: bool,
     /// Whether the tab's page is visible, including a split partner.
     pub shown: bool,
+    /// The tab it shares a split with, whose row it joins in the sidebar.
+    pub split_partner: Option<u64>,
     /// The selected tab, which owns keyboard focus and accessibility state.
     pub active: bool,
     pub focus_handle: FocusHandle,
