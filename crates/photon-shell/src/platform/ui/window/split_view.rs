@@ -77,6 +77,16 @@ impl SplitView {
         }
     }
 
+    /// The presence at which the moving pane leaves the leading pane
+    /// `share` of the width: the inverse of `leading_share`.
+    fn presence_for_share(&self, share: f32) -> f32 {
+        let presence = match self.moving {
+            SplitSide::Trailing => (1.0 - share) / (1.0 - self.ratio),
+            SplitSide::Leading => share / self.ratio,
+        };
+        presence.clamp(0.0, 1.0)
+    }
+
     fn id(&self, side: SplitSide) -> Option<u64> {
         match side {
             SplitSide::Leading => Some(self.leading),
@@ -256,13 +266,38 @@ impl BrowserWindow {
     pub(super) fn close_split_view(&mut self, animated: bool, cx: &mut Context<Self>) {
         let animations = Settings::motion(cx);
         let active = self.active_id();
+        // The pane beside the active tab slides out. If the other pane was
+        // still sliding in, it stops where it is drawn and takes its full
+        // opacity and layout again, and the leaving pane starts from there.
+        let leaving = self.split_view.as_ref().and_then(|split| {
+            let side = split.side_of(active?)?.other();
+            (side != split.moving).then_some(split.moving)
+        });
+        if animated
+            && animations.allows_motion()
+            && let Some(settling) = leaving
+            && let Some(index) = self
+                .split_view
+                .as_ref()
+                .and_then(|split| split.id(settling))
+                .and_then(|id| self.tab_index_by_id(id))
+            && let Some(webview) = self.tabs[index].content.webview()
+        {
+            webview.update(cx, |view, cx| {
+                view.set_page_opacity(1.0);
+                view.set_layout_growth(Size::default());
+                cx.notify();
+            });
+        }
         if animated
             && animations.allows_motion()
             && self.split_open()
             && let Some(split) = self.split_view.as_mut()
         {
-            if let Some(side) = active.and_then(|id| split.side_of(id)) {
-                split.moving = side.other();
+            if let Some(settling) = leaving {
+                let share = split.leading_share(split.presence.value_at(Instant::now()));
+                split.moving = settling.other();
+                split.presence.jump_to(split.presence_for_share(share));
             }
             split.closing = true;
             split.presence.animate_to(0.0, Speed::Standard, &animations);
@@ -849,13 +884,31 @@ fn split_ratio(ratio: f32) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{SplitSide, metrics::SPLIT_VIEW_MIN_SHARE, split_ratio};
+    use super::{SplitSide, SplitView, Tween, metrics::SPLIT_VIEW_MIN_SHARE, split_ratio};
 
     #[test]
     fn panes_keep_a_usable_width() {
         assert_eq!(split_ratio(0.5), 0.5);
         assert_eq!(split_ratio(0.0), SPLIT_VIEW_MIN_SHARE);
         assert_eq!(split_ratio(1.0), 1.0 - SPLIT_VIEW_MIN_SHARE);
+    }
+
+    #[test]
+    fn presence_inverts_the_leading_share() {
+        for moving in [SplitSide::Leading, SplitSide::Trailing] {
+            let split = SplitView {
+                leading: 1,
+                trailing: Some(2),
+                ratio: 0.4,
+                presence: Tween::at(1.0),
+                moving,
+                closing: false,
+            };
+            for presence in [0.0, 0.3, 1.0] {
+                let share = split.leading_share(presence);
+                assert!((split.presence_for_share(share) - presence).abs() < 1e-5);
+            }
+        }
     }
 
     #[test]
