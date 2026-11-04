@@ -6,50 +6,57 @@
 //
 
 import SwiftUI
-import SwiftData
+
+private enum DotGridMetrics {
+    static let spacing: CGFloat = 24
+    static let diameter: CGFloat = 2
+    static let opacity = 0.14
+}
+
+private struct DotGridBackground: View {
+    var body: some View {
+        Canvas { context, size in
+            var dots = Path()
+
+            for y in stride(from: 0, through: size.height, by: DotGridMetrics.spacing) {
+                for x in stride(from: 0, through: size.width, by: DotGridMetrics.spacing) {
+                    let rect = CGRect(
+                        x: x - DotGridMetrics.diameter / 2,
+                        y: y - DotGridMetrics.diameter / 2,
+                        width: DotGridMetrics.diameter,
+                        height: DotGridMetrics.diameter
+                    )
+                    dots.addEllipse(in: rect)
+                }
+            }
+
+            context.fill(dots, with: .color(Color.primary.opacity(DotGridMetrics.opacity)))
+        }
+        .ignoresSafeArea()
+        .accessibilityHidden(true)
+    }
+}
 
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
-
     var body: some View {
-        NavigationSplitView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
-                    }
-                }
-                .onDelete(perform: deleteItems)
-            }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
-                    }
-                }
-            }
-        } detail: {
-            Text("Select an item")
-        }
-    }
+        ZStack {
+            Color(uiColor: .systemBackground)
+                .ignoresSafeArea()
 
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
-        }
-    }
+            DotGridBackground()
 
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
+            VStack {
+                Spacer()
+
+                Button {} label: {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 20, weight: .regular))
+                        .foregroundStyle(.primary)
+                        .frame(width: 100, height: 34)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.glass)
+                .accessibilityLabel("Search")
             }
         }
     }
@@ -57,5 +64,4 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
 }
