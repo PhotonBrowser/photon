@@ -54,6 +54,7 @@ pub(in super::super) fn favourites_grid(
 ) -> impl IntoElement {
     let columns = if collapsed { 1 } else { columns.max(1) };
     let gap = metrics::SidebarSpacing::new(collapsed).favourite_gap;
+    let tiles_len = tiles.len();
     let mut cells: Vec<AnyElement> = tiles
         .into_iter()
         .map(|tile| favourite_tile(tile, collapsed, suppress_tooltips, palette, motion))
@@ -63,9 +64,12 @@ pub(in super::super) fn favourites_grid(
     }
     let mut rows = Vec::new();
     let mut cells = cells.into_iter().peekable();
+    // A lone favourite fills its row instead of sitting in one column with
+    // empty fillers beside it.
+    let solitary = !collapsed && tiles_len == 1 && !(drop_hover && has_room);
     while cells.peek().is_some() {
         let row: Vec<AnyElement> = cells.by_ref().take(columns).collect();
-        let filler = columns - row.len();
+        let filler = if solitary { 0 } else { columns - row.len() };
         rows.push(
             h_stack()
                 .w_full()
