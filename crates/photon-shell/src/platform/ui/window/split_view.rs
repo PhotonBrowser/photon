@@ -332,6 +332,7 @@ impl BrowserWindow {
         let left_behind = split.closing && !active_is_split;
         let missing_tab = leading.is_none() || (trailing_id.is_some() && trailing.is_none());
         if !missing_tab && !shut && !left_behind {
+            self.keep_split_tabs_adjacent(cx);
             return;
         }
         self.split_view = None;
@@ -340,6 +341,41 @@ impl BrowserWindow {
                 self.hide_tab_page(index, cx);
             }
         }
+    }
+
+    /// Keeps a split's tabs next to each other in the tab order, leading
+    /// first, so the sidebar row they share, keyboard order and reordering
+    /// all agree. A drag in progress keeps its own order until it ends.
+    fn keep_split_tabs_adjacent(&mut self, cx: &mut Context<Self>) {
+        if self.tab_drag_layout.is_some() {
+            return;
+        }
+        let Some(split) = self.split_view.as_ref().filter(|split| !split.closing) else {
+            return;
+        };
+        let (Some(leading), Some(trailing)) = (
+            self.tab_index_by_id(split.leading),
+            split.trailing.and_then(|id| self.tab_index_by_id(id)),
+        ) else {
+            return;
+        };
+        let (first, second) = (&self.tabs[leading], &self.tabs[trailing]);
+        // Tabs listed in different places, as pinned and today's, or one a
+        // favourite's tile, keep their own places.
+        let listed_together = first.pin.is_some() == second.pin.is_some()
+            && first.space == second.space
+            && first.favourite.is_none()
+            && second.favourite.is_none();
+        if !listed_together || trailing == leading + 1 {
+            return;
+        }
+        // Taking the trailing tab out first shifts a later leading tab back.
+        let to = if trailing > leading {
+            leading + 1
+        } else {
+            leading
+        };
+        self.move_tab_to(trailing, to, cx);
     }
 
     /// Opens `url` in a new tab beside the leading one and shows it in the
