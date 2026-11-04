@@ -281,6 +281,9 @@ pub(super) struct TabItem {
     pub sleeping: bool,
     /// Whether the tab is pinned above today's tabs.
     pub pinned: bool,
+    /// Whether the tab's page is visible, including a split partner.
+    pub shown: bool,
+    /// The selected tab, which owns keyboard focus and accessibility state.
     pub active: bool,
     pub focus_handle: FocusHandle,
     pub on_select: ClickHandler,
@@ -309,6 +312,7 @@ struct TabParts {
     label: SharedString,
     close: gpui_motion::PressScaleElement<Stateful<gpui::Div>>,
     active: bool,
+    shown: bool,
     pinned: bool,
     audio_control: bool,
     suppress_tooltips: bool,
@@ -349,6 +353,7 @@ impl TabParts {
         let reorder_transition = tab.reorder_transition;
         let dragged = tab.dragging;
         let sleeping = tab.sleeping;
+        let shown = tab.shown;
         let suppress_tooltips = tab.suppress_tooltips;
         let focus_handle = tab.focus_handle.tab_index(focus_index).tab_stop(tab.active);
         let element = h_stack()
@@ -364,7 +369,7 @@ impl TabParts {
             .items_center()
             .text_color(rgb(if sleeping {
                 palette.text_secondary
-            } else if tab.active {
+            } else if shown {
                 palette.text_primary
             } else {
                 palette.text_secondary
@@ -404,7 +409,7 @@ impl TabParts {
                 1.0
             });
 
-        let icon_color = if tab.active {
+        let icon_color = if shown {
             palette.text_primary
         } else {
             palette.text_secondary
@@ -456,6 +461,7 @@ impl TabParts {
             label: tab.label,
             close,
             active: tab.active,
+            shown,
             pinned: tab.pinned,
             audio_control,
             suppress_tooltips,

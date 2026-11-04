@@ -1,28 +1,45 @@
-//! Two tabs side by side. The split shows while either of its tabs is
-//! active; a click in a pane makes that pane's tab active, and the divider
-//! between them sets how they share the width. The second pane slides and
-//! fades in when the split opens, and back out when it closes.
+//! Two tabs side by side, or an empty trailing pane waiting for a tab choice.
+//! A click in a page makes its tab active; the divider sets how the panes
+//! share the width. The trailing pane slides in when the split opens.
 
 use gpui::{
-    AnyElement, Context, DragMoveEvent, Empty, Render, Size, Window, div, prelude::*, px, relative,
+    AnyElement, App, Context, DragMoveEvent, Empty, ImageSource, ObjectFit, Render, SharedString,
+    Size, Window, div, img, prelude::*, px, relative,
 };
+use photon_core::site_name;
 use std::time::Instant;
 
+use super::super::Favicon;
+use super::super::icons::{globe_icon, photon_logo, sleeping_icon};
 use super::super::metrics;
 use super::super::motion::{Speed, Tween, TweenCurve};
+use super::super::pages::PageIcon;
 use super::super::settings::Settings;
 use super::super::theme::ThemeColors;
 use super::BrowserWindow;
+use super::content::{BrowserTab, TabContent};
+use super::tab_summary::tab_summary;
 
-/// The pair of tabs shown together, by tab ID, leading first.
+mod picker;
+
+/// The tabs shown in a split: a leading page and an optional trailing choice.
 pub(super) struct SplitView {
-    tabs: [u64; 2],
+    leading: u64,
+    trailing: Option<u64>,
     /// The leading pane's share of the width once the split has opened.
     ratio: f32,
     /// How far the trailing pane has come in: 0 closed, 1 open.
     presence: Tween,
     /// Whether the split ends once the trailing pane has gone.
     closing: bool,
+}
+
+struct SplitChoice {
+    id: u64,
+    title: SharedString,
+    address: SharedString,
+    icon: AnyElement,
+    on_select: super::super::ClickHandler,
 }
 
 impl SplitView {
@@ -45,11 +62,11 @@ impl Render for SplitDividerDrag {
 impl BrowserWindow {
     /// The tab shown beside the tab at `index`, when the two are split.
     pub(super) fn split_partner_of(&self, index: usize) -> Option<usize> {
-        let [leading, trailing] = self.split_view.as_ref()?.tabs;
+        let split = self.split_view.as_ref()?;
         let id = self.tabs.get(index)?.id;
         let partner = match id {
-            id if id == leading => trailing,
-            id if id == trailing => leading,
+            id if id == split.leading => split.trailing?,
+            id if split.trailing == Some(id) => split.leading,
             _ => return None,
         };
         self.tabs.iter().position(|tab| tab.id == partner)
@@ -65,12 +82,27 @@ impl BrowserWindow {
         self.active_tab == Some(index) || self.split_partner() == Some(index)
     }
 
-    /// Whether a split shows and is not on its way out.
+    /// Whether the split is visible and is not on its way out.
     pub(super) fn split_open(&self) -> bool {
-        self.split_partner().is_some() && self.split_view.as_ref().is_some_and(|s| !s.closing)
+        let Some(split) = self.split_view.as_ref() else {
+            return false;
+        };
+        let Some(active) = self.active_tab.and_then(|index| self.tabs.get(index)) else {
+            return false;
+        };
+        !split.closing && (active.id == split.leading || split.trailing == Some(active.id))
     }
 
-    /// Ends the split showing, or splits the active tab with a new one.
+    /// Whether the split's trailing pane is waiting for a tab choice.
+    pub(super) fn split_selection_pending(&self) -> bool {
+        self.split_open()
+            && self
+                .split_view
+                .as_ref()
+                .is_some_and(|split| split.trailing.is_none())
+    }
+
+    /// Ends a split, or opens an empty pane beside the active tab.
     pub(super) fn toggle_split_view(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.split_open() {
             self.close_split_view(true, cx);
@@ -79,10 +111,7 @@ impl BrowserWindow {
         let Some(active) = self.active_tab.map(|index| self.tabs[index].id) else {
             return;
         };
-        self.open_tab(window, cx);
-        if let Some(index) = self.active_tab {
-            self.split(active, self.tabs[index].id, window, cx);
-        }
+        self.set_split_view(active, None, window, cx);
     }
 
     /// Shows the tab at `index` beside the active one.
@@ -99,21 +128,32 @@ impl BrowserWindow {
             return;
         };
         if active != other && !(self.split_open() && self.split_partner() == Some(index)) {
-            self.split(active, other, window, cx);
+            self.set_split_view(active, Some(other), window, cx);
         }
     }
 
-    fn split(&mut self, leading: u64, trailing: u64, window: &mut Window, cx: &mut Context<Self>) {
+    fn set_split_view(
+        &mut self,
+        leading: u64,
+        trailing: Option<u64>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.close_split_view(false, cx);
         let mut presence = Tween::at_with_curve(0.0, TweenCurve::EaseOut);
         presence.animate_to(1.0, Speed::Standard, &Settings::motion(cx));
         self.split_view = Some(SplitView {
-            tabs: [leading, trailing],
+            leading,
+            trailing,
             ratio: 0.5,
             presence,
             closing: false,
         });
-        self.show_split_partner(window, cx);
+        if trailing.is_some() {
+            self.show_split_partner(window, cx);
+        } else {
+            cx.notify();
+        }
     }
 
     /// Puts the split's tabs back to one at a time, keeping the active tab;
@@ -122,7 +162,7 @@ impl BrowserWindow {
         let animations = Settings::motion(cx);
         if animated
             && animations.allows_motion()
-            && self.split_partner().is_some()
+            && self.split_open()
             && let Some(split) = self.split_view.as_mut()
         {
             split.closing = true;
@@ -136,8 +176,21 @@ impl BrowserWindow {
         cx.notify();
     }
 
-    /// Wakes and shows the page beside the active tab, after activation.
+    /// Keeps the leading tab current while choosing, then wakes the split partner.
     pub(super) fn show_split_partner(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let active_id = self
+            .active_tab
+            .and_then(|index| self.tabs.get(index).map(|tab| tab.id));
+        if let Some(split) = self
+            .split_view
+            .as_mut()
+            .filter(|split| split.trailing.is_none())
+        {
+            if let Some(active_id) = active_id {
+                split.leading = active_id;
+            }
+            return;
+        }
         let Some(partner) = self.split_partner() else {
             return;
         };
@@ -173,17 +226,23 @@ impl BrowserWindow {
         let Some(split) = self.split_view.as_ref() else {
             return;
         };
-        let present = split
-            .tabs
-            .map(|id| self.tabs.iter().position(|tab| tab.id == id));
+        let leading = self.tabs.iter().position(|tab| tab.id == split.leading);
+        let trailing_id = split.trailing;
+        let trailing = trailing_id.and_then(|id| self.tabs.iter().position(|tab| tab.id == id));
         let shut = split.closing && !split.presence.is_running();
+        let active_is_split = self.active_tab.is_some_and(|index| {
+            self.tabs
+                .get(index)
+                .is_some_and(|tab| tab.id == split.leading || split.trailing == Some(tab.id))
+        });
         // A closing split left for another tab has nothing left to slide.
-        let left_behind = split.closing && self.split_partner().is_none();
-        if present.iter().all(Option::is_some) && !shut && !left_behind {
+        let left_behind = split.closing && !active_is_split;
+        let missing_tab = leading.is_none() || (trailing_id.is_some() && trailing.is_none());
+        if !missing_tab && !shut && !left_behind {
             return;
         }
         self.split_view = None;
-        for index in present.into_iter().flatten() {
+        for index in [leading, trailing].into_iter().flatten() {
             if self.active_tab != Some(index) {
                 self.hide_tab_page(index, cx);
             }
@@ -201,19 +260,23 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        let partner = self.split_partner()?;
         let active = self.active_tab?;
         let split = self.split_view.as_ref()?;
+        let leading_id = split.leading;
+        let leading = self.tabs.iter().position(|tab| tab.id == leading_id)?;
+        let trailing_id = split.trailing;
+        let trailing = trailing_id.and_then(|id| self.tabs.iter().position(|tab| tab.id == id));
+        if trailing_id.is_some() && trailing.is_none() {
+            return None;
+        }
+        if active != leading && Some(active) != trailing {
+            return None;
+        }
         let now = Instant::now();
         let presence = split.presence.value_at(now);
         let moving = split.presence.is_running_at(now);
         let ratio = split.ratio;
         let share = split.leading_share(presence);
-        let (leading, trailing) = if self.tabs[active].id == split.tabs[0] {
-            (active, partner)
-        } else {
-            (partner, active)
-        };
         if moving {
             window.request_animation_frame();
         }
@@ -223,18 +286,18 @@ impl BrowserWindow {
         let slide_growth = (share - ratio) * width;
         let trailing_growth = Size {
             width: slide_growth
-                + if trailing == active {
+                + if Some(active) == trailing {
                     layout_growth.width
                 } else {
                     0.0
                 },
-            height: if trailing == active {
+            height: if Some(active) == trailing {
                 layout_growth.height
             } else {
                 0.0
             },
         };
-        if let Some(webview) = self.tabs[trailing].content.webview() {
+        if let Some(webview) = trailing.and_then(|index| self.tabs[index].content.webview()) {
             webview.update(cx, |view, _| {
                 view.set_layout_growth(trailing_growth);
                 view.set_page_opacity(presence);
@@ -247,7 +310,19 @@ impl BrowserWindow {
             .flex_none()
             .w(relative(share))
             .pr(half_gap);
-        let trailing_pane = self.split_pane(trailing, palette, cx).flex_1().pl(half_gap);
+        let trailing_pane = if let Some(trailing) = trailing {
+            self.split_pane(trailing, palette, cx).flex_1().pl(half_gap)
+        } else {
+            let choices = self.split_choices(leading_id, palette, cx);
+            div()
+                .relative()
+                .h_full()
+                .min_w_0()
+                .overflow_hidden()
+                .flex_1()
+                .pl(half_gap)
+                .child(picker::view(choices, palette, presence))
+        };
         let divider = (!moving).then(|| {
             div()
                 .id("split-view-divider")
@@ -273,6 +348,44 @@ impl BrowserWindow {
                 .on_drag_move(cx.listener(Self::drag_split_divider))
                 .into_any_element(),
         )
+    }
+
+    fn split_choices(
+        &self,
+        leading_id: u64,
+        palette: ThemeColors,
+        cx: &mut Context<Self>,
+    ) -> Vec<SplitChoice> {
+        self.tabs
+            .iter()
+            .filter(|tab| tab.id != leading_id)
+            .map(|tab| {
+                let summary = tab_summary(tab, cx);
+                let title = if summary.title.trim().is_empty() {
+                    "New Tab".to_owned()
+                } else {
+                    summary.title
+                };
+                let address = if summary.url.trim().is_empty() {
+                    "New tab".to_owned()
+                } else {
+                    site_name(&summary.url)
+                };
+                let id = tab.id;
+                let on_select = cx.listener(move |this, _, window, cx| {
+                    if let Some(index) = this.tabs.iter().position(|tab| tab.id == id) {
+                        this.split_with_tab(index, window, cx);
+                    }
+                });
+                SplitChoice {
+                    id,
+                    title: title.into(),
+                    address: address.into(),
+                    icon: split_choice_icon(tab, palette, cx),
+                    on_select: Box::new(on_select),
+                }
+            })
+            .collect()
     }
 
     /// One pane, which activates its tab when clicked.
@@ -314,6 +427,44 @@ impl BrowserWindow {
             cx.notify();
         }
     }
+}
+
+fn split_choice_icon(tab: &BrowserTab, palette: ThemeColors, cx: &App) -> AnyElement {
+    match &tab.content {
+        TabContent::Page(page) => match page.definition.icon {
+            PageIcon::Logo => img(photon_logo(palette.logo_tint))
+                .size(px(metrics::SPLIT_CHOOSER_ICON_SIZE))
+                .object_fit(ObjectFit::Contain)
+                .into_any_element(),
+            PageIcon::Symbol(symbol) => {
+                symbol(palette.text_primary, metrics::SPLIT_CHOOSER_ICON_SIZE)
+            }
+        },
+        TabContent::Sleeping(tab) => tab
+            .favicon
+            .as_ref()
+            .map(favicon_choice_icon)
+            .unwrap_or_else(|| {
+                sleeping_icon(palette.text_secondary, metrics::SPLIT_CHOOSER_ICON_SIZE)
+                    .into_any_element()
+            }),
+        TabContent::Web(webview) => webview
+            .read(cx)
+            .favicon
+            .as_ref()
+            .map(favicon_choice_icon)
+            .unwrap_or_else(|| {
+                globe_icon(palette.text_secondary, metrics::SPLIT_CHOOSER_ICON_SIZE)
+                    .into_any_element()
+            }),
+    }
+}
+
+fn favicon_choice_icon(favicon: &Favicon) -> AnyElement {
+    img(ImageSource::Render(favicon.image.clone()))
+        .size(px(metrics::SPLIT_CHOOSER_ICON_SIZE))
+        .object_fit(ObjectFit::Contain)
+        .into_any_element()
 }
 
 /// Keeps both panes wide enough to use.

@@ -302,6 +302,16 @@ pub(super) const SIDEBAR_RESIZE_HANDLE_WIDTH: f32 = 12.0;
 pub(super) const SPLIT_VIEW_DIVIDER_WIDTH: f32 = 12.0;
 /// The smallest share of the width either split view pane keeps.
 pub(super) const SPLIT_VIEW_MIN_SHARE: f32 = 0.2;
+/// Space around the split pane's tab chooser.
+pub(super) const SPLIT_CHOOSER_PADDING: f32 = 24.0;
+/// Space between tab choices in the split pane.
+pub(super) const SPLIT_CHOOSER_GAP: f32 = 12.0;
+pub(super) const SPLIT_CHOOSER_CARD_WIDTH: f32 = 220.0;
+pub(super) const SPLIT_CHOOSER_CARD_HEIGHT: f32 = 64.0;
+pub(super) const SPLIT_CHOOSER_CARD_PADDING: f32 = 12.0;
+pub(super) const SPLIT_CHOOSER_ICON_SIZE: f32 = 32.0;
+pub(super) const SPLIT_CHOOSER_TEXT_GAP: f32 = 2.0;
+pub(super) const SPLIT_CHOOSER_MAX_COLUMNS: usize = 3;
 /// Distance used to dampen a temporary stretch beyond the sidebar's maximum.
 pub(super) const SIDEBAR_RESIZE_RUBBERBAND_RANGE: f32 = 56.0;
 /// Resistance applied as the sidebar is pulled beyond its maximum width.

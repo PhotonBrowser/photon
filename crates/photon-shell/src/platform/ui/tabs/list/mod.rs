@@ -1,23 +1,22 @@
 //! The sidebar's vertical tab list: pinned tabs, then today's tabs under a
 //! row that opens a new tab. Collapsed to icons, each is a square tile.
 
-use gpui::{AnyElement, App, Role, Window, div, prelude::*, px, rgb, rgba};
+use gpui::{App, Role, Window, div, prelude::*, px, rgba};
 
-use super::super::animated_icons::{animated_icon, plus};
-use super::super::controls::FocusRing;
-use super::super::controls::{OwnsClicks, Pressable};
-use super::super::layout::{h_stack, v_stack};
+use super::super::layout::v_stack;
 use super::super::motion::ReorderGroup;
-use super::super::motion::SurfaceFade;
-use super::super::sidebar::collapsed_tile;
-use super::super::tooltip::label_tooltip;
 use super::super::{ClickHandler, metrics, theme::ThemeColors};
 use super::{
     DraggedTab, TabDragAxis, TabDragMove, TabDrop, TabItem, TabParts, TabPrepaint,
-    animate_tab_motion, insertion_marker, is_foreign_tab_drag, reorder_tab_items,
-    sync_reorder_order,
+    insertion_marker, is_foreign_tab_drag, reorder_tab_items, sync_reorder_order,
 };
 use std::time::Duration;
+
+mod new_tab;
+mod tab_item;
+
+use new_tab::new_tab_row;
+use tab_item::{tab_row, tab_tile};
 
 /// The tabs, one row each: pinned tabs above a divider, then today's tabs
 /// and a row that opens a new tab. Collapsed, each row is only its icon. The
@@ -177,151 +176,4 @@ pub(in super::super) fn tab_list(
     })
     .can_drop(|value, window, _| is_foreign_tab_drag(value, window))
     .on_drop(move |dragged: &DraggedTab, window, cx| on_drop(dragged, window, cx))
-}
-
-/// A full-width row: icon, title, and a close button on the active tab and
-/// on the row under the pointer. Hidden, the close button still sits under
-/// the pointer only when its row is hovered, so it is never clicked unseen.
-fn tab_row(parts: TabParts, palette: ThemeColors, reorder: &ReorderGroup<u64>) -> AnyElement {
-    let motion = parts.motion;
-    let position_offset = parts.position_offset;
-    let reorder_key = parts.reorder_key;
-    let focus_handle = parts.focus_handle.clone();
-    let reorder_transition = parts.reorder_transition;
-    let row = parts
-        .tab
-        .w_full()
-        .gap(px(metrics::SIDEBAR_TAB_ICON_GAP))
-        .h(px(metrics::SIDEBAR_TAB_HEIGHT))
-        .pl(px(metrics::SIDEBAR_TAB_PADDING))
-        .pr(px(metrics::SIDEBAR_PADDING))
-        .rounded(px(metrics::sidebar_item_radius()))
-        .text_size(px(metrics::SIDEBAR_FONT_SIZE));
-    let row = if parts.active {
-        row.surface_fade().bg(rgba(palette.selected_surface))
-    } else {
-        row.surface_fade()
-            .hover_style(|style| style.bg(rgba(palette.hover_surface)))
-    };
-    let tooltip = (!parts.suppress_tooltips).then(|| label_tooltip(parts.label.clone(), palette));
-    let row = row.when_some(tooltip, |row, tooltip| row.tooltip(tooltip));
-    let row = row
-        .scale(if parts.active {
-            metrics::SIDEBAR_TAB_SELECTED_SCALE
-        } else {
-            1.0
-        })
-        .transitions(|transitions| {
-            transitions.scale(Duration::from_millis(
-                metrics::SIDEBAR_TAB_SELECTION_DURATION_MS,
-            ))
-        });
-    let close = if parts.active {
-        parts.close
-    } else {
-        // Hidden, it is also left out of the tab order, so keyboard focus
-        // never lands on it unseen.
-        parts
-            .close
-            .tab_stop(false)
-            .opacity(0.0)
-            .group_hover_style(parts.group, |style| style.opacity(1.0))
-    };
-    let row = animate_tab_motion(
-        row.child(parts.icon)
-            .child(div().flex_1().min_w_0().truncate().child(parts.label))
-            .child(close),
-        motion,
-        TabDragAxis::Vertical,
-        position_offset,
-    );
-    super::measured_tab(row, reorder_key, focus_handle, reorder_transition, reorder)
-}
-
-/// A square holding only the tab's icon, for the collapsed sidebar. The
-/// tab's title stays its accessible name; middle-click still closes it.
-fn tab_tile(parts: TabParts, palette: ThemeColors, reorder: &ReorderGroup<u64>) -> AnyElement {
-    let motion = parts.motion;
-    let position_offset = parts.position_offset;
-    let reorder_key = parts.reorder_key;
-    let focus_handle = parts.focus_handle.clone();
-    let reorder_transition = parts.reorder_transition;
-    let tooltip = (!parts.suppress_tooltips).then(|| label_tooltip(parts.label.clone(), palette));
-    let tile = collapsed_tile(parts.tab)
-        .relative()
-        .justify_center()
-        .when_some(tooltip, |tile, tooltip| tile.tooltip(tooltip));
-    let tile = if parts.active {
-        tile.surface_fade().bg(rgba(palette.selected_surface))
-    } else {
-        tile.surface_fade()
-            .hover_style(|style| style.bg(rgba(palette.hover_surface)))
-    };
-    let tile = tile
-        .scale(if parts.active {
-            metrics::SIDEBAR_TAB_SELECTED_SCALE
-        } else {
-            1.0
-        })
-        .transitions(|transitions| {
-            transitions.scale(Duration::from_millis(
-                metrics::SIDEBAR_TAB_SELECTION_DURATION_MS,
-            ))
-        });
-    let tile = animate_tab_motion(
-        tile.child(parts.icon),
-        motion,
-        TabDragAxis::Vertical,
-        position_offset,
-    );
-    super::measured_tab(tile, reorder_key, focus_handle, reorder_transition, reorder)
-}
-
-/// "+ New Tab", above the tabs; collapsed, only "+".
-fn new_tab_row(
-    on_click: ClickHandler,
-    collapsed: bool,
-    suppress_tooltip: bool,
-    focus_index: isize,
-    palette: ThemeColors,
-    window: &mut Window,
-    cx: &mut App,
-) -> gpui_motion::PressScaleElement<gpui::Stateful<gpui::Div>> {
-    let row = h_stack()
-        .id("browser-new-tab")
-        .role(Role::Button)
-        .aria_label("New tab")
-        .tab_index(focus_index)
-        .focus_ring(palette)
-        .items_center()
-        .rounded(px(metrics::sidebar_item_radius()))
-        .text_size(px(metrics::SIDEBAR_FONT_SIZE))
-        .text_color(rgb(palette.text_secondary))
-        .surface_fade()
-        .hover_style(|style| style.bg(rgba(palette.hover_surface)))
-        .owns_clicks()
-        .pressable()
-        .on_click(on_click)
-        .relative()
-        .child(animated_icon(
-            "browser-new-tab",
-            plus(),
-            palette.text_secondary,
-            metrics::SidebarSpacing::new(collapsed).icon_size,
-            window,
-            cx,
-        ));
-    if collapsed {
-        let row = collapsed_tile(row).justify_center();
-        return if suppress_tooltip {
-            row
-        } else {
-            row.tooltip(label_tooltip("New tab", palette))
-        };
-    }
-    row.w_full()
-        .gap(px(metrics::SIDEBAR_TAB_ICON_GAP))
-        .h(px(metrics::SIDEBAR_TAB_HEIGHT))
-        .px(px(metrics::SIDEBAR_TAB_PADDING))
-        .child("New tab")
 }

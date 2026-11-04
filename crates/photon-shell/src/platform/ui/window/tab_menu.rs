@@ -169,7 +169,10 @@ impl BrowserWindow {
             ));
         }
         items.extend(self.favourite_item(index, cx));
-        if self.split_open() && self.split_partner_of(index).is_some() {
+        let closes_split = self.split_open()
+            && (self.split_partner_of(index).is_some()
+                || (self.split_selection_pending() && self.active_tab == Some(index)));
+        if closes_split {
             items.push(command_item(
                 "Close Split View",
                 MenuCommand::CloseSplitView,
