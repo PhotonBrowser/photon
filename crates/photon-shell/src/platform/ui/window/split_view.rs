@@ -448,8 +448,25 @@ impl BrowserWindow {
         let Some(active) = self.active_id() else {
             return;
         };
+        // A pane waiting for a tab takes the dropped one in place, as picking
+        // it from the chooser does, without the split opening again.
         if self.split_selection_pending() {
-            self.close_split_view(false, cx);
+            if let Some(split) = self.split_view.as_mut()
+                && split.leading != id
+            {
+                match side {
+                    SplitSide::Trailing => split.trailing = Some(id),
+                    SplitSide::Leading => {
+                        split.trailing = Some(split.leading);
+                        split.leading = id;
+                    }
+                }
+            }
+            if let Some(index) = self.tab_index_by_id(id) {
+                self.activate_tab(index, true, window, cx);
+            }
+            cx.notify();
+            return;
         }
         let open = self.split_open();
         let replaced = self
