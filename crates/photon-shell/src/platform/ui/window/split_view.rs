@@ -393,9 +393,12 @@ impl BrowserWindow {
         };
         // A page only one tab may show fills the pane from its open tab.
         let open = find_page(url).and_then(|page| self.single_page_tab(page));
-        // Already shown beside it, it is not opened a second time.
+        // Already shown by the leading tab, the page cannot fill the pane
+        // too, so the waiting pane closes and leaves it showing.
         if let Some(index) = open {
-            if index != leading {
+            if index == leading {
+                self.close_split_view(true, cx);
+            } else {
                 self.split_with_tab(index, window, cx);
             }
             return;
