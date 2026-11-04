@@ -1,15 +1,18 @@
 //! The field's content, and the panel it opens into while typing.
 
 use crate::platform::site_info::SiteControl;
-use gpui::{AnyElement, Context, Focusable, deferred, div, prelude::*, px, rgb, rgba};
+use gpui::{
+    AnyElement, ClipboardItem, Context, Focusable, deferred, div, prelude::*, px, rgb, rgba,
+};
 use gpui_elements::editable_text::text_input;
 use photon_core::DockRegion;
 use std::rc::Rc;
 
+use super::super::animated_icons::toggle_icon;
 use super::super::button::toolbar_button;
 use super::super::controls::OwnsClicks;
 use super::super::controls::themed_text_input;
-use super::super::icons::{search_icon_sized, site_controls_icon};
+use super::super::icons::{lucide, search_icon_sized, site_controls_icon};
 use super::super::layout::{Elevated, Elevation, Raised};
 use super::super::layout::{h_stack, v_stack};
 use super::super::menu::MENU_MOTION;
@@ -93,23 +96,62 @@ impl Omnibox {
             .active_style(|style| style.bg(rgba(palette.hover_surface)))
             .aria_expanded(site_info_open)
         });
-        let site_info_button = if style.trailing_site_info {
-            site_info_button.map(|button| {
-                let button = button.transitions(|transitions| transitions.opacity(SURFACE_FADE));
-                let button = if site_info_open {
-                    button
-                } else {
-                    button
-                        .opacity(0.0)
-                        .group_hover_style("sidebar-panel", |style| style.opacity(1.0))
-                        .focus_style(|style| style.opacity(1.0))
-                };
+        let copied = self.link_copied.is_some();
+        let copy_link_button = (!editing).then(|| {
+            toolbar_button(
+                "copy-link-button",
+                if copied { "Link copied" } else { "Copy link" },
+                0,
+                true,
+                div()
+                    .group_hover_style("copy-link-button", |style| {
+                        style.text_color(rgb(palette.text_primary))
+                    })
+                    .child(toggle_icon(
+                        "copy-link-icon",
+                        [lucide!("check"), lucide!("link")],
+                        copied,
+                        if copied {
+                            palette.text_primary
+                        } else {
+                            palette.text_secondary
+                        },
+                        metrics::SITE_INFO_BUTTON_ICON_SIZE,
+                        &super::super::settings::Settings::motion(cx),
+                    )),
+                palette,
+                Box::new(cx.listener(|this, _: &gpui::ClickEvent, _, cx| this.copy_link(cx))),
+            )
+            .group("copy-link-button")
+            .transitions(|transitions| transitions.bg(SURFACE_FADE))
+            .when(copied, |button| button.bg(rgba(palette.hover_surface)))
+            .hover_style(|style| style.bg(rgba(palette.hover_surface)))
+            .active_style(|style| style.bg(rgba(palette.hover_surface)))
+        });
+        // In the sidebar the buttons rest hidden until the panel is hovered,
+        // unless one is showing something.
+        let sidebar_button = |button: gpui_motion::PressScaleElement<gpui::Stateful<gpui::Div>>,
+                              shown: bool| {
+            let button = button.transitions(|transitions| transitions.opacity(SURFACE_FADE));
+            let button = if shown {
                 button
-                    .size(px(metrics::SIDEBAR_OMNIBOX_BUTTON_SIZE))
-                    .rounded(px(metrics::sidebar_omnibox_button_radius()))
-            })
+            } else {
+                button
+                    .opacity(0.0)
+                    .group_hover_style("sidebar-panel", |style| style.opacity(1.0))
+                    .focus_style(|style| style.opacity(1.0))
+            };
+            button
+                .size(px(metrics::SIDEBAR_OMNIBOX_BUTTON_SIZE))
+                .rounded(px(metrics::sidebar_omnibox_button_radius()))
+        };
+        let (copy_link_button, site_info_button) = if style.trailing_site_info {
+            (
+                copy_link_button.map(|button| sidebar_button(button, copied)),
+                site_info_button.map(|button| sidebar_button(button, site_info_open)),
+            )
         } else {
-            site_info_button
+            (copy_link_button, site_info_button)
         };
         // The page's address rests quieter than text being edited.
         let input = input
@@ -161,6 +203,7 @@ impl Omnibox {
                         .items_center()
                         .child(input),
                 )
+                .children(copy_link_button)
                 .when_some(site_info_button, |row, button| row.child(button));
             if let Some(icon) = icon {
                 row.child(
@@ -186,13 +229,46 @@ impl Omnibox {
                 }))
                 .children(icon)
                 .child(input)
+                .children(copy_link_button)
                 .when_some(site_info_button, |row, button| row.child(button))
         } else {
             row.px(px(metrics::OMNIBOX_HORIZONTAL_PADDING))
+                .children(copy_link_button)
                 .when_some(site_info_button, |row, button| row.child(button))
                 .children(icon)
                 .child(input)
         }
+    }
+
+    /// Copies the page's full address, showing a tick until it turns back.
+    fn copy_link(&mut self, cx: &mut Context<Self>) {
+        let url = match self.webview.as_ref() {
+            Some(webview) => webview.read(cx).state.url.clone(),
+            None => self.page_address.clone().unwrap_or_default(),
+        };
+        if url.is_empty() {
+            return;
+        }
+        cx.write_to_clipboard(ClipboardItem::new_string(url));
+        self.link_copies += 1;
+        let copy = self.link_copies;
+        self.link_copied = Some(copy);
+        cx.notify();
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(
+                    metrics::COPY_LINK_CONFIRM_MS,
+                ))
+                .await;
+            this.update(cx, |this, cx| {
+                if this.link_copied == Some(copy) {
+                    this.link_copied = None;
+                    cx.notify();
+                }
+            })
+            .ok();
+        })
+        .detach();
     }
 
     /// Opens or closes the popover: AppKit's own on macOS, GPUI's elsewhere.

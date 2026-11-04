@@ -86,6 +86,10 @@ pub(super) struct Omnibox {
     /// Where the site information button was last drawn, which its popover
     /// points at.
     site_info_button_bounds: Option<gpui::Bounds<gpui::Pixels>>,
+    /// The copy link button shows its tick while this is set; each copy
+    /// counts up, so only the latest one turns it back.
+    link_copied: Option<u64>,
+    link_copies: u64,
     /// Keeps the site information popover drawn while it animates away.
     site_info_presence: super::motion::Presence<()>,
     field_hovered: bool,
@@ -207,6 +211,8 @@ impl Omnibox {
             site_info_security: false,
             site_certificate: None,
             site_info_button_bounds: None,
+            link_copied: None,
+            link_copies: 0,
             site_info_presence: Default::default(),
             field_hovered: false,
             floating_surface: None,

@@ -82,6 +82,8 @@ pub(super) const SITE_INFO_DETAIL_FONT_SIZE: f32 = 11.0;
 pub(super) const SITE_INFO_PAGE_DURATION_MS: u64 = 200;
 /// The site information button's icon in the address field.
 pub(super) const SITE_INFO_BUTTON_ICON_SIZE: f32 = 16.0;
+/// How long the copy link button shows its tick before turning back.
+pub(super) const COPY_LINK_CONFIRM_MS: u64 = 1500;
 
 /// A keycap in a keyboard shortcut.
 pub(super) const KBD_HEIGHT: f32 = 18.0;
