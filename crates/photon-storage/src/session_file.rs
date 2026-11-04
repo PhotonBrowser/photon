@@ -1,6 +1,6 @@
 //! Bounds for saved windows and tabs before they enter browser state.
 
-use photon_core::{Session, SessionTab};
+use photon_core::{Session, SessionSplit, SessionTab};
 use serde_json::Value;
 use std::io;
 
@@ -114,10 +114,31 @@ pub(crate) fn decode(bytes: &[u8]) -> super::ProfileLoadOutcome<Session> {
         let space = fields
             .get("space")
             .and_then(|value| serde_json::from_value(value.clone()).ok());
+        // A split reopens only while both of its tabs survived; positions
+        // follow the tabs recovered around any damaged ones.
+        let recovered = |position: usize| original_to_recovered.get(position).copied().flatten();
+        let split = fields
+            .get("split")
+            .filter(|value| !value.is_null())
+            .and_then(|value| serde_json::from_value::<SessionSplit>(value.clone()).ok())
+            .and_then(|split| {
+                let leading = recovered(split.leading)?;
+                let trailing = recovered(split.trailing)?;
+                Some(SessionSplit {
+                    leading,
+                    trailing,
+                    ..split
+                })
+            })
+            .filter(|split| split.fits(tabs.len()));
+        if fields.get("split").is_some_and(|value| !value.is_null()) && split.is_none() {
+            partially_recovered = true;
+        }
         windows.push(photon_core::WindowSession {
             tabs,
             active,
             space,
+            split,
         });
     }
 
@@ -144,6 +165,12 @@ fn validate_session(session: &Session) -> Result<(), &'static str> {
             .is_some_and(|active| active >= window.tabs.len())
         {
             return Err("session has an invalid active tab index");
+        }
+        if window
+            .split
+            .is_some_and(|split| !split.fits(window.tabs.len()))
+        {
+            return Err("session has an invalid split");
         }
         for tab in &window.tabs {
             validate_tab(tab)?;
@@ -328,6 +355,45 @@ mod tests {
                 tabs: Vec::new(),
                 active: Some(0),
                 space: None,
+                split: None,
+            }],
+        };
+        assert!(encode(&session).is_err());
+    }
+
+    #[test]
+    fn a_split_follows_its_tabs_past_a_damaged_one() {
+        let bytes = br#"{"windows":[{"tabs":[17,{"url":"https://a.example/","title":"A","space":1},{"url":"https://b.example/","title":"B","space":1}],"active":1,"split":{"leading":1,"trailing":2,"leading_share":400}}]}"#;
+        let super::super::ProfileLoadOutcome::PartiallyRecovered(session) = decode(bytes) else {
+            panic!("the damaged tab is recovered around");
+        };
+        assert_eq!(
+            session.windows[0].split,
+            Some(SessionSplit {
+                leading: 0,
+                trailing: 1,
+                leading_share: 400
+            })
+        );
+    }
+
+    #[test]
+    fn a_split_losing_a_tab_does_not_reopen() {
+        let bytes = br#"{"windows":[{"tabs":[17,{"url":"https://b.example/","title":"B","space":1}],"split":{"leading":0,"trailing":1,"leading_share":500}}]}"#;
+        let super::super::ProfileLoadOutcome::PartiallyRecovered(session) = decode(bytes) else {
+            panic!("the damaged tab is recovered around");
+        };
+        assert_eq!(session.windows[0].split, None);
+    }
+
+    #[test]
+    fn save_rejects_a_split_of_missing_tabs() {
+        let session = Session {
+            windows: vec![photon_core::WindowSession {
+                tabs: Vec::new(),
+                active: None,
+                space: None,
+                split: Some(SessionSplit::new(0, 1, 0.5)),
             }],
         };
         assert!(encode(&session).is_err());

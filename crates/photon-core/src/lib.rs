@@ -33,7 +33,7 @@ pub use internal_pages::{internal_page_name, internal_page_url};
 pub use new_tab::{MAX_NEW_TAB_PINS, NewTabSettings, SHORTCUT_COUNTS, Shortcut, site_name};
 pub use omnibox::resolve as resolve_omnibox_input;
 pub use omnibox::*;
-pub use session::{Session, SessionTab, WindowSession};
+pub use session::{Session, SessionSplit, SessionTab, WindowSession};
 pub use settings::{
     AnimationSettings, BACKGROUND_NOISE_INTENSITY_MAX, BrowserSettings, NewTabPosition,
     PopupPolicy, TabLayout, ThemeMode, Transparency, WindowBackgroundStyle, WindowColor,
