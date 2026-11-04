@@ -105,7 +105,7 @@ impl Render for SplitDividerDrag {
     }
 }
 
-/// How the drop indicator and the chooser's cards come in.
+/// How a dragged tab's drop indicator comes in.
 const DROP_INDICATOR_ENTRANCE: Entrance = Entrance::new()
     .fade_from(0.0)
     .scale_from(0.97)

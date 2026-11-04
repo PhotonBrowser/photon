@@ -368,8 +368,6 @@ impl BrowserWindow {
         }
     }
 
-    /// Opens one of Photon's pages in a new tab, or switches to the tab
-    /// already showing it when the page keeps to one tab.
     /// The tab already showing `page`, when only one tab may show it.
     pub(super) fn single_page_tab(&self, page: &'static PageDefinition) -> Option<usize> {
         if !page.single_tab {
@@ -380,6 +378,8 @@ impl BrowserWindow {
         )
     }
 
+    /// Opens one of Photon's pages in a new tab, or switches to the tab
+    /// already showing it when the page keeps to one tab.
     pub(super) fn open_page_tab(
         &mut self,
         page: &'static PageDefinition,
