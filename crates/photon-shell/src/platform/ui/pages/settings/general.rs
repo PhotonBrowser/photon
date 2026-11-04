@@ -55,6 +55,24 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
         .child(restore_session(palette, cx))
         .child(engine_idle_timeout(palette, cx))
         .child(interaction_sounds(palette, cx))
+        .child(space_swipe_direction(palette, cx))
+}
+
+fn space_swipe_direction(palette: ThemeColors, cx: &App) -> impl IntoElement {
+    let reversed = Settings::get(cx).reverse_space_swipe;
+    v_stack()
+        .gap(px(metrics::MENU_ITEM_GAP))
+        .child(group(palette).child(switch_row(
+            "settings-reverse-space-swipe",
+            "Reverse space swipe",
+            reversed,
+            palette,
+            change(move |settings| settings.reverse_space_swipe = !reversed),
+        )))
+        .child(secondary_text(
+            "Swipe the other way across the sidebar to move between spaces.",
+            palette,
+        ))
 }
 
 fn interaction_sounds(palette: ThemeColors, cx: &App) -> impl IntoElement {

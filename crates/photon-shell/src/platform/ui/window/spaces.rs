@@ -208,8 +208,11 @@ impl BrowserWindow {
         self.spaces.swipe += x;
         if self.spaces.swipe.abs() >= SWIPE_DISTANCE {
             self.spaces.swiped = true;
-            // Fingers moving left bring in the space to the right.
-            self.switch_space_by(if self.spaces.swipe < 0.0 { 1 } else { -1 }, cx);
+            // Fingers moving left bring in the space to the right, unless
+            // the swipe direction is reversed.
+            let forward = self.spaces.swipe < 0.0;
+            let reversed = Settings::get(cx).reverse_space_swipe;
+            self.switch_space_by(if forward != reversed { 1 } else { -1 }, cx);
         }
     }
 
