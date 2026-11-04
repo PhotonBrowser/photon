@@ -200,7 +200,7 @@ pub(super) const HISTORY_SWIPE_INDICATOR_SIZE: f32 = 42.0;
 pub(super) const HISTORY_SWIPE_INDICATOR_ICON_SIZE: f32 = 18.0;
 /// Gesture travel at which the edge arrow becomes fully visible.
 pub(super) const HISTORY_SWIPE_INDICATOR_REVEAL_DISTANCE: f32 = 20.0;
-/// The hovered link's address, shown over the page's bottom-left corner.
+/// The hovered link's address, centred along the page's bottom edge.
 pub(super) const LINK_STATUS_INSET: f32 = 6.0;
 /// The label never covers more than this share of the page's width.
 pub(super) const LINK_STATUS_MAX_WIDTH_FRACTION: f32 = 0.6;
