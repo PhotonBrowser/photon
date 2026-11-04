@@ -32,9 +32,9 @@ through `BrowsingHistory`; observe `Settings` to follow changes made in other
 windows. Add the browser's own pages under `platform/ui/pages/` and list them in
 `platform/ui/pages/registry.rs` (see `Documentation/Pages.md`).
 
-Keep the public Rust browser-model C ABI in `photon-ffi`. The shell's Rust
-declarations for its private Engine bridge live in `platform/engine_ffi.rs`; the
-Engine's public C++ embedder contract remains `PhotonEmbedder.h`.
+The shell's Rust declarations for its private Engine bridge live in
+`platform/engine_ffi.rs`; the Engine's public C++ embedder contract remains
+`PhotonEmbedder.h`.
 
 Keep semantic haptic feedback behind `src/platform/haptics.rs` and browser
 keyboard bindings behind `src/platform/shortcuts/`.

@@ -14,8 +14,6 @@
   and internal pages can use it directly.
   `photon-performance` owns performance diagnostics, accumulation, sampling,
   and formatting. `photon-performance-ui` owns GPUI charts and overlays.
-- `photon-ffi` is the Rust exported C ABI. Confine raw pointers and C string
-  conversion to this crate.
 - `photon-shell` owns shared window-bound GPUI views, OS adapters, the Engine
   adapter, and presentation lifecycle. Browser keyboard bindings and haptic
   feedback are shell modules. Performance diagnostics live in

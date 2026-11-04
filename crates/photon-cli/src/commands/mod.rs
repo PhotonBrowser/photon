@@ -8,8 +8,6 @@ pub(super) mod format;
 pub(super) mod gpui;
 pub(super) mod ide;
 pub(super) mod install;
-#[cfg(target_os = "macos")]
-pub(super) mod ios;
 pub(super) mod lint;
 #[cfg(target_os = "linux")]
 pub(super) mod linux_desktop;

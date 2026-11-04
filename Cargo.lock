@@ -4529,13 +4529,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "photon-ffi"
-version = "0.1.0"
-dependencies = [
- "photon-core",
-]
-
-[[package]]
 name = "photon-performance"
 version = "0.1.0"
 dependencies = [

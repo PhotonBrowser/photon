@@ -10,4 +10,4 @@ clocks and storage.
 Settings types may derive serde with defaults so older profiles still load;
 saving and loading belong in `photon-storage`. Performance diagnostics belong
 in `photon-performance`. Do not add GPUI, platform handles, raw C pointers, or
-Ladybird types here. The exported C ABI belongs in `photon-ffi`.
+Ladybird types here.

@@ -17,7 +17,6 @@
 | --- | --- | --- |
 | `photon-core` | Browser state, commands, address/search rules, tab-sleep policy, and application logic | Must remain independent of UI frameworks, native handles, and Ladybird classes. |
 | `photon-cli` | Developer setup, build, run, dependency, and CLI installation commands | `photon install` installs the Cargo CLI only; keep OS desktop integration in its own platform-specific command module. |
-| `photon-ffi` | Exported Rust C ABI | Keep C ABI adaptation here rather than in core. |
 | `photon-shell` | Shared GPUI views, browser/window lifecycle, Engine adapter, and target OS adapters | Shell calls the explicit Engine embedder API; keep target OS behavior under `platform/<target>/`. |
 | `photon-presentation-ipc` | Presentation XPC transport | Owns transport, not browser policy. |
 | `photon-presentation-broker` | Presentation broker service executable | Keep service-executable responsibilities here. |

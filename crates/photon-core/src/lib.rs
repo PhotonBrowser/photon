@@ -1,6 +1,4 @@
 //! Framework-independent browser state and command rules.
-//!
-//! The native C ABI is implemented in the separate `photon-ffi` crate.
 
 mod browsing_data;
 mod commands;
