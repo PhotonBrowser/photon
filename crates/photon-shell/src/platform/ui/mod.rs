@@ -7,6 +7,7 @@ mod button;
 mod color_picker;
 mod command_palette;
 mod controls;
+mod copy_icon;
 mod download_button;
 mod downloads;
 mod dropdown;

@@ -8,11 +8,11 @@ use gpui_elements::editable_text::text_input;
 use photon_core::DockRegion;
 use std::rc::Rc;
 
-use super::super::animated_icons::toggle_icon;
 use super::super::button::toolbar_button;
 use super::super::controls::OwnsClicks;
 use super::super::controls::themed_text_input;
-use super::super::icons::{lucide, search_icon_sized, site_controls_icon};
+use super::super::copy_icon::copy_link_icon;
+use super::super::icons::{search_icon_sized, site_controls_icon};
 use super::super::layout::{Elevated, Elevation, Raised};
 use super::super::layout::{h_stack, v_stack};
 use super::super::menu::MENU_MOTION;
@@ -107,23 +107,20 @@ impl Omnibox {
                     .group_hover_style("copy-link-button", |style| {
                         style.text_color(rgb(palette.text_primary))
                     })
-                    .child(toggle_icon(
-                        "copy-link-icon",
-                        [lucide!("check"), lucide!("link")],
-                        copied,
+                    .child(copy_link_icon(
+                        self.link_copied.map(|(_, at)| at),
+                        super::super::settings::Settings::motion(cx).allows_motion(),
                         if copied {
                             palette.text_primary
                         } else {
                             palette.text_secondary
                         },
                         metrics::SITE_INFO_BUTTON_ICON_SIZE,
-                        &super::super::settings::Settings::motion(cx),
                     )),
                 palette,
                 Box::new(cx.listener(|this, _: &gpui::ClickEvent, _, cx| this.copy_link(cx))),
             )
             .group("copy-link-button")
-            .transitions(|transitions| transitions.bg(SURFACE_FADE))
             .when(copied, |button| button.bg(rgba(palette.hover_surface)))
             .hover_style(|style| style.bg(rgba(palette.hover_surface)))
             .active_style(|style| style.bg(rgba(palette.hover_surface)))
@@ -145,13 +142,36 @@ impl Omnibox {
                 .size(px(metrics::SIDEBAR_OMNIBOX_BUTTON_SIZE))
                 .rounded(px(metrics::sidebar_omnibox_button_radius()))
         };
-        let (copy_link_button, site_info_button) = if style.trailing_site_info {
-            (
-                copy_link_button.map(|button| sidebar_button(button, copied)),
-                site_info_button.map(|button| sidebar_button(button, site_info_open)),
-            )
+        // In the sidebar the buttons share a tray that collapses while they
+        // are hidden, so the address can use the room they would take.
+        let buttons = if style.trailing_site_info {
+            let shown = copied || site_info_open;
+            let open_width = metrics::OMNIBOX_GAP
+                + copy_link_button.iter().chain(&site_info_button).count() as f32
+                    * (metrics::SIDEBAR_OMNIBOX_BUTTON_SIZE + metrics::OMNIBOX_GAP)
+                - metrics::OMNIBOX_GAP;
+            let tray = h_stack()
+                .id("omnibox-buttons")
+                .flex_none()
+                .h_full()
+                .items_center()
+                .justify_end()
+                .gap(px(metrics::OMNIBOX_GAP))
+                // Takes back the row's gap, which the tray includes itself.
+                .ml(px(-metrics::OMNIBOX_GAP))
+                .overflow_hidden()
+                .transitions(|transitions| transitions.size(SURFACE_FADE))
+                .w(px(if shown { open_width } else { 0.0 }))
+                .group_hover_style("sidebar-panel", move |style| style.w(px(open_width)))
+                .children(copy_link_button.map(|button| sidebar_button(button, copied)))
+                .children(site_info_button.map(|button| sidebar_button(button, site_info_open)));
+            vec![tray.into_any_element()]
         } else {
-            (copy_link_button, site_info_button)
+            copy_link_button
+                .into_iter()
+                .map(IntoElement::into_any_element)
+                .chain(site_info_button.map(IntoElement::into_any_element))
+                .collect()
         };
         // The page's address rests quieter than text being edited.
         let input = input
@@ -203,8 +223,7 @@ impl Omnibox {
                         .items_center()
                         .child(input),
                 )
-                .children(copy_link_button)
-                .when_some(site_info_button, |row, button| row.child(button));
+                .children(buttons);
             if let Some(icon) = icon {
                 row.child(
                     gpui::div()
@@ -229,12 +248,10 @@ impl Omnibox {
                 }))
                 .children(icon)
                 .child(input)
-                .children(copy_link_button)
-                .when_some(site_info_button, |row, button| row.child(button))
+                .children(buttons)
         } else {
             row.px(px(metrics::OMNIBOX_HORIZONTAL_PADDING))
-                .children(copy_link_button)
-                .when_some(site_info_button, |row, button| row.child(button))
+                .children(buttons)
                 .children(icon)
                 .child(input)
         }
@@ -252,7 +269,7 @@ impl Omnibox {
         cx.write_to_clipboard(ClipboardItem::new_string(url));
         self.link_copies += 1;
         let copy = self.link_copies;
-        self.link_copied = Some(copy);
+        self.link_copied = Some((copy, std::time::Instant::now()));
         cx.notify();
         cx.spawn(async move |this, cx| {
             cx.background_executor()
@@ -261,7 +278,7 @@ impl Omnibox {
                 ))
                 .await;
             this.update(cx, |this, cx| {
-                if this.link_copied == Some(copy) {
+                if this.link_copied.is_some_and(|(latest, _)| latest == copy) {
                     this.link_copied = None;
                     cx.notify();
                 }

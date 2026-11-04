@@ -84,6 +84,18 @@ pub(super) const SITE_INFO_PAGE_DURATION_MS: u64 = 200;
 pub(super) const SITE_INFO_BUTTON_ICON_SIZE: f32 = 16.0;
 /// How long the copy link button shows its tick before turning back.
 pub(super) const COPY_LINK_CONFIRM_MS: u64 = 1500;
+/// The copy link icon's timeline: the link shrinks away, the tick pops up and
+/// draws its stroke, then the link pops back after the confirmation.
+pub(super) const COPY_ICON_SHRINK_MS: u64 = 120;
+pub(super) const COPY_ICON_POP_DELAY_MS: u64 = 90;
+pub(super) const COPY_ICON_POP_MS: u64 = 320;
+pub(super) const COPY_ICON_DRAW_DELAY_MS: u64 = 130;
+pub(super) const COPY_ICON_DRAW_MS: u64 = 280;
+pub(super) const COPY_ICON_RETURN_MS: u64 = 260;
+/// How small the copy link icon's glyphs get while hidden.
+pub(super) const COPY_ICON_HIDDEN_SCALE: f32 = 0.5;
+/// How far the copy link icon's pop passes its size before settling.
+pub(super) const COPY_ICON_OVERSHOOT: f32 = 2.2;
 
 /// A keycap in a keyboard shortcut.
 pub(super) const KBD_HEIGHT: f32 = 18.0;
