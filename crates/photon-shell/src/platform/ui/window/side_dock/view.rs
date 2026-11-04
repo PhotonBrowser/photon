@@ -299,10 +299,13 @@ impl BrowserWindow {
         let dragging_over_favourites = self.favourites_drag_hover.is_some();
         let tiles = self.favourite_tiles(&saved, collapsed, palette, cx);
         if !tiles.is_empty() {
+            // The grid repacks the same order into as many columns as fit.
+            let columns = metrics::sidebar_favourite_columns(self.sidebar.width(cx));
             return Some(
                 favourites_grid(
                     tiles,
                     collapsed,
+                    columns,
                     palette,
                     dragging_over_favourites,
                     saved.len() < MAX_FAVOURITES,

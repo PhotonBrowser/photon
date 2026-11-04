@@ -332,7 +332,22 @@ pub(super) const SIDEBAR_TAB_PADDING: f32 = 12.0;
 pub(super) const SIDEBAR_TAB_ICON_GAP: f32 = 10.0;
 pub(super) const SIDEBAR_FONT_SIZE: f32 = 14.0;
 pub(super) const SIDEBAR_ICON_SIZE: f32 = 18.0;
-pub(super) const SIDEBAR_FAVOURITE_COLUMNS: usize = 3;
+/// The sidebar width below which favourites use two columns.
+pub(super) const SIDEBAR_FAVOURITE_NARROW_WIDTH: f32 = 180.0;
+/// The sidebar width from which favourites use four columns.
+pub(super) const SIDEBAR_FAVOURITE_WIDE_WIDTH: f32 = 260.0;
+
+/// How many favourites fit in a row at the sidebar's width: two in the
+/// narrowest sidebar, three at the default width, four once there is room.
+pub(super) fn sidebar_favourite_columns(width: f32) -> usize {
+    if width < SIDEBAR_FAVOURITE_NARROW_WIDTH {
+        2
+    } else if width < SIDEBAR_FAVOURITE_WIDE_WIDTH {
+        3
+    } else {
+        4
+    }
+}
 
 /// The sidebar's spacing and icon size, which tighten when it collapses to
 /// icons.

@@ -39,8 +39,8 @@ pub use settings::{
     PopupPolicy, TabLayout, ThemeMode, Transparency, WindowBackgroundStyle, WindowColor,
 };
 pub use sidebar::{
-    SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH, SidebarResize,
-    SidebarSettings,
+    SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH,
+    SidebarResize, SidebarSettings,
 };
 pub use spaces::{
     MAX_FAVOURITES, MAX_SPACE_COLORS, Space, SpaceColors, SpaceId, SpaceTint, Spaces,

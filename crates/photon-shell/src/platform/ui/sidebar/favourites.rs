@@ -43,6 +43,7 @@ pub(in super::super) struct FavouriteTile {
 pub(in super::super) fn favourites_grid(
     tiles: Vec<FavouriteTile>,
     collapsed: bool,
+    columns: usize,
     palette: ThemeColors,
     drop_hover: bool,
     has_room: bool,
@@ -51,11 +52,7 @@ pub(in super::super) fn favourites_grid(
     suppress_tooltips: bool,
     motion: &MotionConfig,
 ) -> impl IntoElement {
-    let columns = if collapsed {
-        1
-    } else {
-        metrics::SIDEBAR_FAVOURITE_COLUMNS
-    };
+    let columns = if collapsed { 1 } else { columns.max(1) };
     let gap = metrics::SidebarSpacing::new(collapsed).favourite_gap;
     let mut cells: Vec<AnyElement> = tiles
         .into_iter()
