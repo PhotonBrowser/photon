@@ -80,9 +80,15 @@ pub(in super::super) fn tab_list(
             &today_reorder
         };
         let before = tab.insertion_before;
-        let after = partner
-            .as_ref()
-            .map_or(tab.insertion_after, |(_, partner)| partner.insertion_after);
+        // A drop aimed between a split's tabs is marked after their row,
+        // which cannot open between them.
+        let after = match partner.as_ref() {
+            Some((_, partner)) => partner
+                .insertion_after
+                .or(tab.insertion_after)
+                .or(partner.insertion_before),
+            None => tab.insertion_after,
+        };
         if let Some(size) = before {
             section.push(insertion_marker(TabDragAxis::Vertical, size, palette));
         }
