@@ -590,6 +590,23 @@ impl EngineSession {
         unsafe { embedder::photon_view_zoom(self.view, step) }
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub(in crate::platform) fn send_pinch(
+        &mut self,
+        x: f64,
+        y: f64,
+        shift: bool,
+        control: bool,
+        alt: bool,
+        meta: bool,
+        scale_delta: f64,
+    ) {
+        self.callbacks.mark_input();
+        unsafe {
+            embedder::photon_view_pinch(self.view, x, y, shift, control, alt, meta, scale_delta)
+        }
+    }
+
     pub(in crate::platform) fn restart_unresponsive_page(&mut self) {
         unsafe { embedder::photon_view_restart_unresponsive_page(self.view) }
     }

@@ -107,6 +107,7 @@ void photon_view_find_in_page(void*, char const*, bool, bool) { }
 void photon_view_find_in_page_step(void*, bool) { }
 void photon_view_find_in_page_end(void*) { }
 void photon_view_zoom(void*, int) { }
+void photon_view_pinch(void*, double, double, bool, bool, bool, bool, double) { }
 void photon_view_restart_unresponsive_page(void*) { }
 
 #if defined(__APPLE__)

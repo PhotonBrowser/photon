@@ -704,6 +704,7 @@ impl Render for PhotonWebView {
         let weak_this = cx.entity().downgrade();
         let weak_mouse_down = weak_this.clone();
         let weak_mouse_up = weak_this.clone();
+        let weak_pinch = weak_this.clone();
         let mut webview = div()
             .size_full()
             .relative()
@@ -834,6 +835,11 @@ impl Render for PhotonWebView {
                     captured,
                 );
             }))
+            .on_pinch(move |event, _, app| {
+                weak_pinch
+                    .update(app, |this, _| this.input.pinch(&mut this.session, event))
+                    .ok();
+            })
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                 if this.fullscreen_key_down(event) {
                     cx.stop_propagation();

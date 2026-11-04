@@ -395,6 +395,16 @@ pub(super) mod embedder {
         pub fn photon_view_find_in_page_step(view: *mut c_void, forward: bool);
         pub fn photon_view_find_in_page_end(view: *mut c_void);
         pub fn photon_view_zoom(view: *mut c_void, step: i32);
+        pub fn photon_view_pinch(
+            view: *mut c_void,
+            x: f64,
+            y: f64,
+            shift: bool,
+            control: bool,
+            alt: bool,
+            meta: bool,
+            scale_delta: f64,
+        );
         pub fn photon_view_restart_unresponsive_page(view: *mut c_void);
         pub fn photon_view_close_dialog(
             view: *mut c_void,

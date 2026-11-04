@@ -360,6 +360,9 @@ void photon_view_find_in_page_step(void* view, bool forward);
 void photon_view_find_in_page_end(void* view);
 // Zooms in (step > 0), out (step < 0), or back to 100% (step == 0).
 void photon_view_zoom(void* view, int step);
+// Forwards a trackpad pinch gesture's magnification to the page.
+void photon_view_pinch(void* view, double x, double y, bool shift,
+    bool control, bool alt, bool meta, double scale_delta);
 // Restarts the WebContent process currently holding unresponsive input.
 void photon_view_restart_unresponsive_page(void* view);
 void photon_runtime_set_system_reduced_motion_preference(void* runtime,

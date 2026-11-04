@@ -1011,6 +1011,22 @@ extern "C" void photon_view_pointer(void* view, int kind, double x, double y,
     static_cast<ViewHandle*>(view)->view->send_pointer_event(event);
 }
 
+extern "C" void photon_view_pinch(void* view, double x, double y,
+    bool shift, bool control, bool alt, bool meta, double scale_delta)
+{
+    if (!view)
+        return;
+    Photon::PinchEvent event;
+    event.x = x;
+    event.y = y;
+    event.shift = shift;
+    event.control = control;
+    event.alt = alt;
+    event.meta = meta;
+    event.scale_delta = scale_delta;
+    static_cast<ViewHandle*>(view)->view->send_pinch_event(event);
+}
+
 extern "C" void photon_view_key(void* view, uint16_t key, bool pressed,
     uint32_t code_point, bool shift, bool control,
     bool alt, bool meta, bool repeat,

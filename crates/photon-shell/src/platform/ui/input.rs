@@ -3,7 +3,7 @@
 use super::super::engine::EngineSession;
 use gpui::{
     KeyDownEvent, KeyUpEvent, Keystroke, Modifiers, MouseButton, MouseDownEvent, MouseExitEvent,
-    MouseMoveEvent, MouseUpEvent, ScrollDelta, ScrollWheelEvent, TouchPhase,
+    MouseMoveEvent, MouseUpEvent, PinchEvent, ScrollDelta, ScrollWheelEvent, TouchPhase,
 };
 
 /// An editing command the page runs from its shortcut, such as ⌘C.
@@ -250,6 +250,22 @@ impl WebViewInput {
             history_swipe_back_enabled,
             history_swipe_forward_enabled,
             history_swipe_gesture_id,
+        );
+    }
+
+    pub(super) fn pinch(&mut self, session: &mut EngineSession, event: &PinchEvent) {
+        if event.phase == TouchPhase::Cancelled {
+            return;
+        }
+        let (x, y) = self.content_position(event.position);
+        session.send_pinch(
+            x,
+            y,
+            event.modifiers.shift,
+            event.modifiers.control,
+            event.modifiers.alt,
+            event.modifiers.platform,
+            f64::from(event.delta),
         );
     }
 
