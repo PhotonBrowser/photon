@@ -218,9 +218,8 @@ impl BrowserWindow {
         // Any target other than the page clears its split indicator; the
         // page sets it again below, redrawing only when its side changes.
         let previous_split_drop = self.split_drop.take();
-        if previous_split_drop.is_some()
-            && self.split_drop_side(dragged.id, position) != previous_split_drop
-        {
+        let page_split_drop = self.split_drop_side(dragged.id, position);
+        if previous_split_drop.is_some() && page_split_drop != previous_split_drop {
             cx.notify();
         }
         let source_bounds = window.bounds();
@@ -310,7 +309,7 @@ impl BrowserWindow {
             return;
         }
 
-        self.split_drop = self.split_drop_side(dragged.id, position);
+        self.split_drop = page_split_drop;
         if self.split_drop != previous_split_drop {
             cx.notify();
         }
