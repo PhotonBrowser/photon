@@ -139,10 +139,7 @@ These show dimmed until the Engine can do them:
   resolves submitted text with the chosen search engine and asks its window
   to open the result, which loads a web page or one of the browser's own
   pages in the active tab. Startup addresses use the same rule.
-- `photon-core` exposes the shared resolution rules and
-  `normalize_url` with errors flattened for native callers.
-- `crates/photon-ffi` implements `photon_browser_navigate` on top of core and
-  owns the C string and output-buffer boundary.
+- `photon-core` exposes the shared resolution rules and `normalize_url`.
 
 The native shell owns the address entry and keeps typed text when a navigation
 is rejected, so it can be corrected. There is no second UI-side copy of the

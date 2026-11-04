@@ -17,8 +17,6 @@ Setup installs or refreshes `photon` and its `ph` alias in Cargo's bin directory
 ```sh
 photon doctor
 photon run --url https://ladybird.org
-photon ios devices
-photon ios run --iphone "iPhone 18 Pro"
 photon check
 photon test
 photon deps status
@@ -36,14 +34,3 @@ the launcher and icon without removing the CLI. `photon deps status`,
 `photon deps sync`, `photon deps restore`, and `photon deps pin` cover the
 common submodule workflow. Command behavior lives in one module per command
 under [`src/commands`](src/commands/).
-
-The macOS-only `photon ios` commands build and launch the SwiftUI home surface
-with its Rust/WebKit backend in the Xcode project under `../../ios/`. Use
-`photon ios devices --kind model`
-to list simulator models, `--kind physical --paired` to list paired phones,
-and `--connected` to filter to currently booted or connected devices. Use
-`--model` (or `--iphone`) for a simulator model and `--device` for an existing
-simulator or physical device. Physical builds use Xcode signing; pass
-`--team-id TEAM_ID` and, when needed, `--allow-provisioning-updates` plus
-`--allow-device-registration`. See the [iOS guide](../../ios/README.md) for
-examples and target behavior.

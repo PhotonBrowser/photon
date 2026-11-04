@@ -65,25 +65,19 @@ flowchart LR
     Shell --> Platform[Platform adapters<br/>macOS · Linux · Windows]
     Shell --> PerfUI[photon-performance-ui<br/>GPUI charts and overlays]
     PerfUI --> Perf[photon-performance<br/>sampling and diagnostics]
-    FFI[photon-ffi<br/>C API] --> Core
     CLI[photon-cli<br/>setup and developer commands]
-    IOS[ios/<br/>SwiftUI host] --> IOSFFI[photon-ffi adapter]
-    IOS --> IOSWebKit[WebKit adapter<br/>WKWebView]
-    IOSFFI --> Core
 ```
 
 The shell connects the browser interface to framework-independent browser
 rules, profile storage, and the Ladybird Engine. See the
 [architecture guide](Documentation/Architecture.md) for component boundaries
-and common change locations. The iOS app host and backend design are in
-[ios/](ios/README.md); its home surface uses SwiftUI/WebKit and does not use
-Ladybird.
+and common change locations.
 
 <details>
 <summary>Rust crate guides</summary>
 
 - [photon-app](crates/photon-app/README.md) · [photon-brand](crates/photon-brand/README.md) · [photon-cli](crates/photon-cli/README.md) · [photon-core](crates/photon-core/README.md)
-- [photon-ffi](crates/photon-ffi/README.md) · [photon-performance](crates/photon-performance/README.md) · [photon-performance-ui](crates/photon-performance-ui/README.md)
+- [photon-performance](crates/photon-performance/README.md) · [photon-performance-ui](crates/photon-performance-ui/README.md)
 - [photon-presentation-broker](crates/photon-presentation-broker/README.md) · [photon-presentation-ipc](crates/photon-presentation-ipc/README.md) · [photon-shell](crates/photon-shell/README.md)
 - [photon-storage](crates/photon-storage/README.md) · [gpui-motion](crates/gpui-motion/README.md)
 

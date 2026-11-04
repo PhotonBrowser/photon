@@ -1,10 +1,7 @@
 # Photon architecture
 
-Photon’s desktop browser is built from a Rust application and the Ladybird
-browser Engine. GPUI-CE draws the desktop interface; the Engine loads and
-renders desktop web pages. The iOS target in [`ios/`](../ios/README.md) is a
-native app host with a Rust-backed browser page adapter and WebKit for website
-content. It does not use Ladybird or the desktop Engine embedder.
+Photon’s browser is built from a Rust application and the Ladybird browser
+Engine. GPUI-CE draws the interface; the Engine loads and renders web pages.
 
 This guide is for people who want to understand how Photon fits together or
 find the right place to make a change. For installation and build steps, see
@@ -13,29 +10,21 @@ find the right place to make a change. For installation and build steps, see
 ## The short version
 
 ```text
-Photon desktop                              Photon iOS
-     │                                           │
-     ▼                                           ▼
-Rust + GPUI-CE shell                   SwiftUI home surface
-     │                                           │
-     ├── photon-core                       AppServices
-     ├── photon-storage                        │
-     └── Photon Engine API          WebKitBrowserAdapter
-                │                       ┌───────┴───────┐
-                ▼                       ▼               ▼
-          Ladybird Engine        photon-ffi       WebKitPage
-                                        │               │
-                                        ▼               ▼
-                                   photon-core       WKWebView
+Photon
+  │
+  ▼
+Rust + GPUI-CE shell
+  ├── photon-core
+  ├── photon-storage
+  └── Photon Engine API
+          │
+          ▼
+    Ladybird Engine
 ```
 
-On desktop, the **shell** owns browser windows and coordinates tabs, views,
-and Engine sessions. **Core** owns browser rules that work without a window;
-the **Engine** implements desktop web page behavior. On iOS, Swift is the
-platform host: `WebKitBrowserAdapter` connects the existing Rust page-state API
-to a WebKit page. The app currently has a dotted home surface and Liquid Glass
-bottom actions, with no browser page UI yet. The
-iOS guide documents the source layout and limits of the current FFI.
+The **shell** owns browser windows and coordinates tabs, views, and Engine
+sessions. **Core** owns browser rules that work without a window; the **Engine**
+implements web page behavior.
 
 ## What happens when you open a page
 
@@ -52,11 +41,6 @@ The shell handles coordination and presentation; the Engine handles web page
 behavior. Shared UI code must not depend on Ladybird implementation details or
 receive page pixel buffers.
 
-The iOS navigation path uses `photon-ffi` for address/search resolution and
-page-state updates. `WebKitPage` drives `WKWebView` and maps its delegate events
-back through the same Rust handle. The current FFI is per page and does not yet
-provide tab/session management or profile persistence.
-
 ## Main parts
 
 | Part | What it does |
@@ -67,9 +51,7 @@ provide tab/session management or profile persistence.
 | `photon-storage` | Reads and writes profile data such as history, icons, settings, and website data. |
 | `Engine/` | Ladybird and Photon’s embedder API for creating and controlling web views. |
 | `native/embedder/` | Bridges the C++ embedder API to the private C ABI used by Rust. |
-| `photon-ffi` | Exposes selected browser-model operations through a separate C ABI; it does not start the Engine. |
 | `photon-cli` | Provides setup, build, run, and development commands. Cargo CLI installation stays separate from the Linux desktop integration commands that manage XDG launcher files. |
-| `ios/` | Native app host with a Rust `photon-ffi` adapter and WebKit page surface; it is separate from the desktop Engine path. |
 
 Other focused packages provide branding, performance diagnostics, sound,
 motion, and macOS presentation transport. Performance sampling and data live
@@ -109,7 +91,6 @@ native half keeps it beside the component, as `ui/glass/macos.rs` does.
 | Rust-to-Engine bridge | [`native/embedder`](../native/embedder/PhotonEmbedderBridge.cpp) and [`engine_ffi.rs`](../crates/photon-shell/src/platform/engine_ffi.rs) |
 | Theme colors, spacing, or typography | [Theme guide](Theme.md) |
 | Generic GPUI-CE behavior | [`vendor/gpui-ce`](../vendor/gpui-ce/README.md) |
-| iOS app structure and ownership | [iOS architecture](../ios/README.md) |
 
 ## Platform support
 
@@ -117,11 +98,9 @@ macOS is Photon’s primary development platform, with AppKit integration and
 IOSurface/Metal page presentation. Linux has a shared GPUI shell and an
 interim portable CPU-frame renderer; its shell-only mode can run without the Engine,
 while full browser runtime validation is still outstanding. Windows support is
-experimental, and native Engine builds are not yet established. The iOS target
-under `ios/` has a minimal home surface and a Rust/WebKit backend scaffold, with no
-Ladybird or desktop Engine integration. See
-[Linux support](Linux.md) for the Linux checklist and
-[Building Photon](Building.md) for current build and validation details.
+experimental, and native Engine builds are not yet established. See
+[Linux support](Linux.md) for the Linux checklist and [Building Photon](Building.md)
+for current build and validation details.
 
 ## Related guides
 

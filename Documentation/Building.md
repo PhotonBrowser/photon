@@ -46,37 +46,6 @@ photon run
 - Browser context menus and page `<select>` controls use the shared GPUI menu surface and work without platform-native menu hooks. They inherit the semantic theme roles, menu metrics, and motion used by Photon popovers.
 - `photon clean` removes generated build trees and stops the checkout-specific presentation broker.
 
-## iOS app
-
-On macOS, the same CLI can build and launch the SwiftUI home surface and
-Rust/WebKit backend in [`ios/`](../ios/README.md). Xcode and a compatible iOS
-Simulator runtime are required. The Xcode build phase compiles the
-`photon-ffi` Rust static library for the selected device or simulator
-architecture; Rust and rustup must be on `PATH`.
-
-```sh
-photon ios devices
-photon ios devices --kind model
-photon ios devices --kind physical --paired
-photon ios devices --connected
-photon ios build --model "iPhone 18 Pro"
-photon ios run --iphone "iPhone 18 Pro"
-photon ios run --device "My iPhone" --team-id ABCDE12345
-```
-
-The device inventory separates simulator instances, available iPhone simulator
-models, and physical iPhones known to Xcode. `--model` (or `--iphone`) selects
-a simulator model and creates an instance when needed; `--device` selects an
-existing simulator or a physical phone by name or UDID. A physical phone must
-be paired and connected to install and launch. Physical builds also need a
-valid Xcode signing configuration; pass `--team-id TEAM_ID` or set the team in
-Xcode. Add `--allow-provisioning-updates` to let Xcode update profiles through
-the Apple Developer account. If the device is not registered with that team,
-also pass `--allow-device-registration`. The default build target is a generic
-iOS Simulator; launch and run require a unique booted or installed simulator
-unless you select a target explicitly. Artifacts are stored in
-`build/ios/DerivedData/`.
-
 ## Troubleshooting
 
 - **Missing Engine or GPUI-CE:** From the checkout root, run `git submodule update --init --recursive`, then `./photon setup`. Setup initializes missing submodules without checking out over initialized worktrees.
