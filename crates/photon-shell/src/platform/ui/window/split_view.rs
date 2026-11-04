@@ -224,7 +224,10 @@ impl BrowserWindow {
             && let Some(split) = self.split_view.as_mut()
         {
             split.trailing = Some(other);
-            self.activate_tab(index, true, window, cx);
+            self.keep_split_tabs_adjacent(cx);
+            if let Some(index) = self.tab_index_by_id(other) {
+                self.activate_tab(index, true, window, cx);
+            }
             return;
         }
         self.set_split_view(active, Some(other), SplitSide::Trailing, window, cx);
@@ -250,6 +253,7 @@ impl BrowserWindow {
             moving,
             closing: false,
         });
+        self.keep_split_tabs_adjacent(cx);
         if pending {
             // The empty pane is ready for an address straight away: the
             // sidebar's field opens what is entered there in the new pane.
@@ -369,7 +373,6 @@ impl BrowserWindow {
         let left_behind = split.closing && !active_is_split;
         let missing_tab = leading.is_none() || (trailing_id.is_some() && trailing.is_none());
         if !missing_tab && !shut && !left_behind {
-            self.keep_split_tabs_adjacent(cx);
             return;
         }
         self.split_view = None;
@@ -382,8 +385,9 @@ impl BrowserWindow {
 
     /// Keeps a split's tabs next to each other in the tab order, leading
     /// first, so the sidebar row they share, keyboard order and reordering
-    /// all agree. A drag in progress keeps its own order until it ends.
-    fn keep_split_tabs_adjacent(&mut self, cx: &mut Context<Self>) {
+    /// all agree. Called where a split forms or changes and where a tab drag
+    /// ends; a drag in progress keeps its own order until then.
+    pub(super) fn keep_split_tabs_adjacent(&mut self, cx: &mut Context<Self>) {
         if self.tab_drag_layout.is_some() {
             return;
         }
@@ -444,6 +448,7 @@ impl BrowserWindow {
         if let Some(split) = self.split_view.as_mut() {
             split.trailing = Some(id);
         }
+        self.keep_split_tabs_adjacent(cx);
         let Some(index) = self.tab_index_by_id(id) else {
             return;
         };
@@ -538,6 +543,7 @@ impl BrowserWindow {
                     }
                 }
             }
+            self.keep_split_tabs_adjacent(cx);
             if let Some(index) = self.tab_index_by_id(id) {
                 self.activate_tab(index, true, window, cx);
             }
@@ -582,6 +588,7 @@ impl BrowserWindow {
                 }
             }
         }
+        self.keep_split_tabs_adjacent(cx);
         if let Some(index) = self.tab_index_by_id(id) {
             self.activate_tab(index, true, window, cx);
         }

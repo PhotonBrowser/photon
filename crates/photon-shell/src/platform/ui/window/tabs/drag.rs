@@ -1050,6 +1050,7 @@ impl BrowserWindow {
                     .ok();
             }
             Self::notify_other_tab_drop_targets(cx, window.window_handle());
+            self.keep_split_tabs_adjacent(cx);
             return;
         }
 
@@ -1128,8 +1129,9 @@ impl BrowserWindow {
         }
         self.suppress_tab_click_until = Some(Instant::now() + Duration::from_millis(250));
         Self::notify_other_tab_drop_targets(cx, window.window_handle());
-        if let Some((id, side)) = split_drop {
-            self.drop_tab_in_split(id, side, window, cx);
+        match split_drop {
+            Some((id, side)) => self.drop_tab_in_split(id, side, window, cx),
+            None => self.keep_split_tabs_adjacent(cx),
         }
         cx.notify();
         window.refresh();
