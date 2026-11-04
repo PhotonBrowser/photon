@@ -21,6 +21,7 @@
 @end
 
 static NSXPCInterface* PhotonPresentationInterface(void);
+static int64_t const PhotonPresentationBootstrapTimeoutNanoseconds = 5 * NSEC_PER_SEC;
 
 @interface PhotonPresentationEventBroker : NSObject <PhotonPresentationEventChannel>
 @property (nonatomic, strong) NSMutableDictionary<NSString*, MTLSharedEventHandle*>* handles;
@@ -380,10 +381,19 @@ void* photon_presentation_xpc_connect(char const* service_name)
         xpc_object_t ping = xpc_dictionary_create(NULL, NULL, 0);
         xpc_dictionary_set_string(ping, "op", "ping");
         xpc_dictionary_set_string(ping, "channel", "__bootstrap_ping__");
-        xpc_object_t pong = xpc_connection_send_message_with_reply_sync(surface, ping);
-        char const* reply = pong && xpc_get_type(pong) == XPC_TYPE_DICTIONARY ? xpc_dictionary_get_string(pong, "reply") : NULL;
-        BOOL pingSucceeded = reply && strcmp(reply, "pong") == 0;
-        if (!pingSucceeded) {
+        dispatch_semaphore_t pingCompleted = dispatch_semaphore_create(0);
+        __block BOOL pingSucceeded = NO;
+        xpc_connection_send_message_with_reply(surface, ping,
+                                               dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0),
+                                               ^(xpc_object_t pong) {
+                                                   char const* reply = pong && xpc_get_type(pong) == XPC_TYPE_DICTIONARY ? xpc_dictionary_get_string(pong, "reply") : NULL;
+                                                   pingSucceeded = reply && strcmp(reply, "pong") == 0;
+                                                   dispatch_semaphore_signal(pingCompleted);
+                                               });
+        long pingWaitResult = dispatch_semaphore_wait(
+            pingCompleted,
+            dispatch_time(DISPATCH_TIME_NOW, PhotonPresentationBootstrapTimeoutNanoseconds));
+        if (pingWaitResult != 0 || !pingSucceeded) {
             [connection invalidate];
             xpc_connection_cancel(surface);
             return NULL;
