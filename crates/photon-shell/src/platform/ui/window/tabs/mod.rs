@@ -457,7 +457,7 @@ impl BrowserWindow {
         activate: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) {
+    ) -> u64 {
         self.insert_webview_with_appearance(
             index,
             webview,
@@ -468,7 +468,7 @@ impl BrowserWindow {
             },
             window,
             cx,
-        );
+        )
     }
 
     #[cfg(not(feature = "ui-only"))]
@@ -502,7 +502,7 @@ impl BrowserWindow {
         options: TabInsertionOptions,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) {
+    ) -> u64 {
         let viewport = self
             .active_webview()
             .and_then(|webview| webview.read(cx).last_viewport);
@@ -515,7 +515,7 @@ impl BrowserWindow {
             }
             None => {
                 let index = index.clamp(self.pinned_count(), self.tabs.len());
-                self.insert_tab_at_with_appearance(index, content, None, options, window, cx);
+                self.insert_tab_at_with_appearance(index, content, None, options, window, cx)
             }
         }
     }
@@ -553,9 +553,9 @@ impl BrowserWindow {
         activate: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) {
+    ) -> u64 {
         let index = index.clamp(self.pinned_count(), self.tabs.len());
-        self.insert_tab_at(index, content, None, activate, window, cx);
+        self.insert_tab_at(index, content, None, activate, window, cx)
     }
 
     /// Inserts a tab, pinned at `pin` or one of today's tabs.
@@ -567,7 +567,7 @@ impl BrowserWindow {
         activate: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) {
+    ) -> u64 {
         self.insert_tab_at_with_appearance(
             index,
             content,
@@ -578,7 +578,7 @@ impl BrowserWindow {
             },
             window,
             cx,
-        );
+        )
     }
 
     pub(super) fn insert_tab_at_immediately(
@@ -611,7 +611,7 @@ impl BrowserWindow {
         options: TabInsertionOptions,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) {
+    ) -> u64 {
         let index = index.min(self.tabs.len());
         let page_address = content.page_address();
         let page = page_address.as_deref().unwrap_or_else(|| {
@@ -666,6 +666,7 @@ impl BrowserWindow {
             cx.notify();
             self.wake_tab_sleep_scheduler();
         }
+        id
     }
 
     fn allocate_tab_id() -> u64 {

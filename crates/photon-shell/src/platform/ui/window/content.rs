@@ -184,23 +184,7 @@ impl BrowserWindow {
         cx: &mut Context<Self>,
     ) {
         if self.active_tab.is_none() {
-            match find_page(url) {
-                Some(page) => self.insert_page(self.new_tab_index(cx), page, window, cx),
-                None => {
-                    if let Some(webview) =
-                        create_webview(cx, self.runtime.clone(), url, self.private)
-                    {
-                        self.insert_webview(
-                            self.new_tab_index(cx),
-                            webview,
-                            None,
-                            true,
-                            window,
-                            cx,
-                        );
-                    }
-                }
-            }
+            self.insert_address(self.new_tab_index(cx), url, true, window, cx);
             return;
         }
         if let Some(page) = find_page(url) {
@@ -221,6 +205,28 @@ impl BrowserWindow {
             return;
         };
         self.replace_active_content(TabContent::Web(webview), window, cx);
+    }
+
+    /// Opens `address` in a new tab at `index`: one of Photon's pages, or
+    /// a web page. Returns the new tab's id.
+    pub(super) fn insert_address(
+        &mut self,
+        index: usize,
+        address: &str,
+        activate: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<u64> {
+        match find_page(address) {
+            Some(page) => {
+                let content = self.new_page(page, cx);
+                Some(self.insert_content(index, content, activate, window, cx))
+            }
+            None => {
+                let webview = create_webview(cx, self.runtime.clone(), address, self.private)?;
+                Some(self.insert_webview(index, webview, None, activate, window, cx))
+            }
+        }
     }
 
     fn replace_active_content(

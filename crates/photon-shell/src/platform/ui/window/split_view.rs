@@ -8,18 +8,17 @@ use gpui::{
     SharedString, Size, Window, div, img, prelude::*, px, relative, rgba,
 };
 use photon_core::site_name;
-use std::collections::HashSet;
 use std::time::Instant;
 
 use super::super::icons::{globe_icon, photon_logo, sleeping_icon};
 use super::super::metrics;
 use super::super::motion::{AnimateIn, Entrance, Speed, Tween, TweenCurve};
-use super::super::pages::{PageIcon, find_page};
+use super::super::pages::PageIcon;
 use super::super::settings::Settings;
 use super::super::theme::ThemeColors;
 use super::super::{ClickHandler, Favicon};
 use super::BrowserWindow;
-use super::content::{BrowserTab, TabContent, create_webview};
+use super::content::{BrowserTab, TabContent};
 use super::tab_summary::tab_summary;
 
 mod picker;
@@ -354,26 +353,15 @@ impl BrowserWindow {
         let Some(leading) = self.active_tab else {
             return;
         };
-        let before: HashSet<u64> = self.tabs.iter().map(|tab| tab.id).collect();
-        match find_page(url) {
-            Some(page) => {
-                let content = self.new_page(page, cx);
-                self.insert_content(leading + 1, content, false, window, cx);
-            }
-            None => {
-                let Some(webview) = create_webview(cx, self.runtime.clone(), url, self.private)
-                else {
-                    return;
-                };
-                self.insert_webview(leading + 1, webview, None, false, window, cx);
-            }
-        }
-        let Some(index) = self.tabs.iter().position(|tab| !before.contains(&tab.id)) else {
+        let Some(id) = self.insert_address(leading + 1, url, false, window, cx) else {
             return;
         };
         if let Some(split) = self.split_view.as_mut() {
-            split.trailing = Some(self.tabs[index].id);
+            split.trailing = Some(id);
         }
+        let Some(index) = self.tab_index_by_id(id) else {
+            return;
+        };
         self.activate_tab(index, true, window, cx);
     }
 
