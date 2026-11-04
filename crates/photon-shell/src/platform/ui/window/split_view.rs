@@ -234,7 +234,7 @@ impl BrowserWindow {
         self.split_view = Some(SplitView {
             leading,
             trailing,
-            ratio: 0.5,
+            ratio: metrics::SPLIT_VIEW_OPENING_SHARE,
             presence,
             moving,
             closing: false,
@@ -384,7 +384,7 @@ impl BrowserWindow {
         self.split_view
             .as_ref()
             .filter(|split| self.split_open() && split.trailing.is_some())
-            .map_or(metrics::SPLIT_DROP_EDGE_SHARE, |split| split.ratio)
+            .map_or(metrics::SPLIT_VIEW_OPENING_SHARE, |split| split.ratio)
     }
 
     /// The side of the page a tab dragged to `position` would split into,
@@ -405,10 +405,19 @@ impl BrowserWindow {
         }
         let x = f32::from(position.x - bounds.origin.x) / width;
         let boundary = self.split_drop_boundary();
-        let side = if x < boundary {
+        let side = if open {
+            if x < boundary {
+                SplitSide::Leading
+            } else {
+                SplitSide::Trailing
+            }
+        } else if x < metrics::SPLIT_DROP_EDGE_SHARE {
             SplitSide::Leading
-        } else {
+        } else if x > 1.0 - metrics::SPLIT_DROP_EDGE_SHARE {
             SplitSide::Trailing
+        } else {
+            // The page's middle is not a split target.
+            return None;
         };
         // A pane already showing the tab has nothing to change.
         let unchanged = self

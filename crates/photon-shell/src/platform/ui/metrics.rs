@@ -318,8 +318,11 @@ pub(super) const SPLIT_CHOOSER_CARD_STAGGER_MS: u64 = 35;
 /// Space around a dragged tab's split drop indicator.
 pub(super) const SPLIT_DROP_INDICATOR_INSET: f32 = 8.0;
 pub(super) const SPLIT_DROP_INDICATOR_BORDER: f32 = 2.0;
-/// The share of the page's width at either edge that a dropped tab splits.
-pub(super) const SPLIT_DROP_EDGE_SHARE: f32 = 0.5;
+/// The share of an unsplit page's width at either edge where a dropped tab
+/// opens a split; a drop between the edges does nothing.
+pub(super) const SPLIT_DROP_EDGE_SHARE: f32 = 0.25;
+/// The leading pane's share of the width when a split opens.
+pub(super) const SPLIT_VIEW_OPENING_SHARE: f32 = 0.5;
 /// Space around and between the two halves of a split's sidebar row.
 pub(super) const SIDEBAR_SPLIT_GROUP_PADDING: f32 = 3.0;
 /// Distance used to dampen a temporary stretch beyond the sidebar's maximum.
