@@ -383,6 +383,41 @@ impl BrowserWindow {
         }
     }
 
+    /// The split to save with the session: its tabs, leading first, and
+    /// the leading pane's share. A split waiting for a tab or closing has
+    /// nothing to reopen.
+    pub(super) fn saved_split(&self) -> Option<(u64, u64, f32)> {
+        let split = self.split_view.as_ref().filter(|split| !split.closing)?;
+        Some((split.leading, split.trailing?, split.ratio))
+    }
+
+    /// Reopens a saved split of two restored tabs, already in place.
+    pub(super) fn restore_split(
+        &mut self,
+        leading: u64,
+        trailing: u64,
+        share: f32,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if leading == trailing
+            || self.tab_index_by_id(leading).is_none()
+            || self.tab_index_by_id(trailing).is_none()
+        {
+            return;
+        }
+        self.split_view = Some(SplitView {
+            leading,
+            trailing: Some(trailing),
+            ratio: split_ratio(share),
+            presence: Tween::at(1.0),
+            moving: SplitSide::Trailing,
+            closing: false,
+        });
+        self.keep_split_tabs_adjacent(cx);
+        self.show_split_partner(window, cx);
+    }
+
     /// Keeps a split's tabs next to each other in the tab order, leading
     /// first, so the sidebar row they share, keyboard order and reordering
     /// all agree. Called where a split forms or changes and where a tab drag

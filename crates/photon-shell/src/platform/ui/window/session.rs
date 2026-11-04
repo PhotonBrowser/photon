@@ -11,7 +11,7 @@ use gpui::Window;
 use gpui::{App, BorrowAppContext, Context, Global, Task};
 #[cfg(not(feature = "ui-only"))]
 use photon_core::BrowserState;
-use photon_core::{Session, SessionTab, WindowSession};
+use photon_core::{Session, SessionSplit, SessionTab, WindowSession};
 use photon_storage::{Profile, ProfileWriteTicket};
 #[cfg(not(feature = "ui-only"))]
 use std::rc::Rc;
@@ -217,6 +217,8 @@ impl BrowserWindow {
             space: Some(self.current_space(cx)),
             ..WindowSession::default()
         };
+        let split = self.saved_split();
+        let (mut leading, mut trailing) = (None, None);
         for (index, tab) in self.tabs.iter().enumerate() {
             if tab.pin.is_some() || tab.favourite.is_some() {
                 continue;
@@ -228,12 +230,27 @@ impl BrowserWindow {
             if self.active_tab == Some(index) {
                 state.active = Some(state.tabs.len());
             }
+            if let Some((leading_id, trailing_id, _)) = split {
+                if tab.id == leading_id {
+                    leading = Some(state.tabs.len());
+                } else if tab.id == trailing_id {
+                    trailing = Some(state.tabs.len());
+                }
+            }
             state.tabs.push(SessionTab {
                 url: summary.url,
                 title: summary.title,
                 space: tab.space,
             });
         }
+        // Only a split of two saved tabs reopens.
+        state.split =
+            leading
+                .zip(trailing)
+                .zip(split)
+                .map(|((leading, trailing), (_, _, share))| {
+                    SessionSplit::new(leading, trailing, share)
+                });
         state
     }
 
@@ -251,6 +268,7 @@ impl BrowserWindow {
             .filter(|&position| position < saved.tabs.len())
             .unwrap_or(0);
         let mut active = None;
+        let mut restored = Vec::with_capacity(saved.tabs.len());
         for (position, tab) in saved.tabs.iter().enumerate() {
             let index = self.tabs.len();
             match find_page(&tab.url) {
@@ -309,9 +327,27 @@ impl BrowserWindow {
             if position == active_position {
                 active = Some(index);
             }
+            restored.push((position, self.tabs[index].id));
         }
+        let saved_split = saved.split.filter(|split| split.fits(saved.tabs.len()));
+        let split_tab = |position: usize| {
+            restored
+                .iter()
+                .find(|&&(restored, _)| restored == position)
+                .map(|&(_, id)| id)
+        };
+        let split = saved_split.and_then(|split| {
+            Some((
+                split_tab(split.leading)?,
+                split_tab(split.trailing)?,
+                split.share(),
+            ))
+        });
         if let Some(active) = active.or_else(|| (first < self.tabs.len()).then_some(first)) {
             self.activate_tab(active, true, window, cx);
+            if let Some((leading, trailing, share)) = split {
+                self.restore_split(leading, trailing, share, window, cx);
+            }
         } else if self.tabs.is_empty() && self.tab_axis(cx) == super::TabDragAxis::Horizontal {
             self.open_tab(window, cx);
         }
