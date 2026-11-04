@@ -141,6 +141,9 @@ pub(in crate::platform) struct BrowserWindow {
     split_drop: Option<split_view::SplitSide>,
     /// Where the page area was last drawn, for dropping tabs into a split.
     page_bounds: Option<Bounds<Pixels>>,
+    /// Where the sidebar panel was last drawn, which covers the page while
+    /// it is revealed over it.
+    sidebar_panel_bounds: Option<Bounds<Pixels>>,
     /// The active tab drag, its measured geometry, and the temporary motion.
     tab_drag_layout: Option<TabDragLayout>,
     tab_geometry: HashMap<u64, Bounds<Pixels>>,
@@ -712,6 +715,7 @@ fn open_browser_window(
                 split_view: None,
                 split_drop: None,
                 page_bounds: None,
+                sidebar_panel_bounds: None,
                 tab_drag_layout: None,
                 tab_geometry: HashMap::new(),
                 tab_container_bounds: None,

@@ -394,6 +394,14 @@ impl BrowserWindow {
         if !bounds.contains(&position) || self.tab_index_by_id(id).is_none() {
             return None;
         }
+        // A sidebar revealed over the page takes what is dropped on it.
+        let over_sidebar = self.sidebar.over_page()
+            && self
+                .sidebar_panel_bounds
+                .is_some_and(|panel| panel.contains(&position));
+        if over_sidebar {
+            return None;
+        }
         let active = self.active_id()?;
         let open = self.split_open() && !self.split_selection_pending();
         if !open && id == active {

@@ -121,6 +121,16 @@ impl BrowserWindow {
                 })
                 .overflow_hidden()
                 .occlude()
+                .on_prepaint({
+                    let browser = cx.entity().downgrade();
+                    move |prepaint, _, cx| {
+                        browser
+                            .update(cx, |this, _| {
+                                this.sidebar_panel_bounds = Some(prepaint.bounds)
+                            })
+                            .ok();
+                    }
+                })
                 .on_scroll_wheel(cx.listener(|this, event, _, cx| this.swipe_spaces(event, cx))),
         );
         panel = if leading {
