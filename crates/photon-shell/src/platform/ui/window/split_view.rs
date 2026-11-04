@@ -184,11 +184,13 @@ impl BrowserWindow {
         let Some(id) = self.tabs.get(index).map(|tab| tab.id) else {
             return;
         };
-        if self.split_open() {
-            self.close_split_view(false, cx);
-        }
         if self.active_tab != Some(index) {
             self.activate_tab(index, false, window, cx);
+        }
+        // A tab that could not wake stays inactive; a split beside it would
+        // send the omnibox's next address to the tab that is.
+        if self.active_tab != Some(index) {
+            return;
         }
         self.set_split_view(id, None, SplitSide::Trailing, window, cx);
     }
