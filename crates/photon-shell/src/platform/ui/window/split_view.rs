@@ -377,12 +377,6 @@ impl BrowserWindow {
         self.activate_tab(index, true, window, cx);
     }
 
-    /// Whether `position` lies over the page area.
-    pub(super) fn tab_drag_over_page(&self, position: Point<Pixels>) -> bool {
-        self.page_bounds
-            .is_some_and(|bounds| bounds.contains(&position))
-    }
-
     /// The side of the page a tab dragged to `position` would split into,
     /// if it can split there.
     pub(super) fn split_drop_side(&self, id: u64, position: Point<Pixels>) -> Option<SplitSide> {
@@ -484,6 +478,11 @@ impl BrowserWindow {
         cx: &App,
     ) -> Option<AnyElement> {
         let side = self.split_drop?;
+        // Drawn only while the dragged tab is still being dragged, so a
+        // drag ended any other way, as by closing its tab, leaves no mark.
+        self.tab_drag_layout
+            .as_ref()
+            .filter(|drag| self.tab_index_by_id(drag.id).is_some())?;
         let boundary = match self.split_view.as_ref().filter(|_| self.split_open()) {
             Some(split) if split.trailing.is_some() => split.ratio,
             _ => metrics::SPLIT_DROP_EDGE_SHARE,

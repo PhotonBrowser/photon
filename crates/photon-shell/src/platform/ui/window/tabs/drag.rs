@@ -218,7 +218,9 @@ impl BrowserWindow {
         // Any target other than the page clears its split indicator; the
         // page sets it again below, redrawing only when its side changes.
         let previous_split_drop = self.split_drop.take();
-        if previous_split_drop.is_some() && !self.tab_drag_over_page(position) {
+        if previous_split_drop.is_some()
+            && self.split_drop_side(dragged.id, position) != previous_split_drop
+        {
             cx.notify();
         }
         let source_bounds = window.bounds();
@@ -232,6 +234,10 @@ impl BrowserWindow {
             source_bounds,
             cx,
         ) {
+            // Another window above this one takes the drop, not the page.
+            if previous_split_drop.is_some() {
+                cx.notify();
+            }
             match kind {
                 ExternalDropTargetKind::Favourites => {
                     self.clear_favourites_drag_hover(current_window, dragged.id, cx);
@@ -1015,6 +1021,11 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // Every way a drag ends clears the split indicator.
+        let released_split_drop = self.split_drop.take();
+        if released_split_drop.is_some() {
+            cx.notify();
+        }
         if let Some(dragged) = cx
             .active_drag()
             .and_then(|drag| drag.value.downcast_ref::<DraggedTab>())
@@ -1044,7 +1055,7 @@ impl BrowserWindow {
         }
 
         // Released over the page beside a split indicator.
-        let split_drop = self.split_drop.take().and_then(|side| {
+        let split_drop = released_split_drop.and_then(|side| {
             self.tab_drag_layout
                 .as_ref()
                 .filter(|drag| {
