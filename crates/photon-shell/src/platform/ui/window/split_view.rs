@@ -456,7 +456,7 @@ impl BrowserWindow {
     fn split_drop_boundary(&self) -> f32 {
         self.split_view
             .as_ref()
-            .filter(|split| self.split_open() && split.trailing.is_some())
+            .filter(|_| self.split_open())
             .map_or(metrics::SPLIT_VIEW_OPENING_SHARE, |split| split.ratio)
     }
 
@@ -476,8 +476,11 @@ impl BrowserWindow {
             return None;
         }
         let active = self.active_id()?;
-        let open = self.split_open() && !self.split_selection_pending();
-        if !open && id == active {
+        // A split waiting for a tab is laid out already, so its panes take
+        // drops by where they are drawn; only the waiting pane takes the
+        // tab it is beside.
+        let open = self.split_open();
+        if id == active && (!open || self.split_selection_pending()) {
             return None;
         }
         let width = f32::from(bounds.size.width);
