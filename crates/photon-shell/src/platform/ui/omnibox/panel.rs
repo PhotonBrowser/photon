@@ -13,7 +13,7 @@ use super::super::icons::{search_icon_sized, site_controls_icon};
 use super::super::layout::{Elevated, Elevation, Raised};
 use super::super::layout::{h_stack, v_stack};
 use super::super::menu::MENU_MOTION;
-use super::super::motion::{AnimateIn, field_panel, field_panel_rows, translated};
+use super::super::motion::{AnimateIn, SURFACE_FADE, field_panel, field_panel_rows, translated};
 use super::super::workspace_layout::WorkspaceLayout;
 use super::super::{metrics, theme::ThemeColors};
 use super::rows::{SuggestionActions, icon_slot, suggestion_icon, suggestion_rows};
@@ -95,6 +95,15 @@ impl Omnibox {
         });
         let site_info_button = if style.trailing_site_info {
             site_info_button.map(|button| {
+                let button = button.transitions(|transitions| transitions.opacity(SURFACE_FADE));
+                let button = if site_info_open {
+                    button
+                } else {
+                    button
+                        .opacity(0.0)
+                        .group_hover_style("sidebar-panel", |style| style.opacity(1.0))
+                        .focus_style(|style| style.opacity(1.0))
+                };
                 button
                     .size(px(metrics::SIDEBAR_OMNIBOX_BUTTON_SIZE))
                     .rounded(px(metrics::sidebar_omnibox_button_radius()))

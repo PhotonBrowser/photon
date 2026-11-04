@@ -48,10 +48,6 @@ pub(in super::super) trait AnimateSpring:
 
 impl<E: Styled + gpui::IntoElement + Sized + 'static> AnimateSpring for E {}
 
-/// How long a surface takes to change colour, as when hovered, pressed or
-/// selected. Colour changes stay under reduced motion: they move nothing.
-pub(super) const SURFACE_FADE: Duration = Duration::from_millis(140);
-
 /// Fades a surface between its resting, hovered, pressed and selected
 /// colours instead of switching them at once.
 pub(in super::super) trait SurfaceFade: gpui::InteractiveElement + Sized {

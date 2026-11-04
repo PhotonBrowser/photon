@@ -111,6 +111,7 @@ impl BrowserWindow {
         let mut panel = window_drag_area(
             div()
                 .id("sidebar-panel")
+                .group("sidebar-panel")
                 .absolute()
                 .top(px(layout.top_extent() * chrome_shown + reveal_inset))
                 .bottom(px(layout.bottom_extent() * chrome_shown + reveal_inset))

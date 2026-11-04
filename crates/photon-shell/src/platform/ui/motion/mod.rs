@@ -20,6 +20,10 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// How long a surface takes to change colour, as when hovered, pressed or
+/// selected. Colour changes stay under reduced motion: they move nothing.
+pub(super) const SURFACE_FADE: Duration = Duration::from_millis(140);
+
 pub(super) use gpui_motion::{Axis as ReorderAxis, ReorderGroup};
 
 mod entrance;
