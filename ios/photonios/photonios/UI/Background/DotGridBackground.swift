@@ -23,26 +23,17 @@ struct DotGridBackground: View {
     let touchLocation: CGPoint
     let ripples: [DotRipple]
     let isTouching: Bool
+    let onTouchChanged: (CGPoint) -> Void
+    let onTouchEnded: (CGPoint) -> Void
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 60, paused: ripples.isEmpty)) { timeline in
-            GeometryReader { geometry in
+        GeometryReader { geometry in
+            ZStack {
                 Canvas { context, size in
                     let canvasFrame = geometry.frame(in: .global)
                     let touchOrigin = localPoint(for: touchLocation, in: canvasFrame)
-                    let rippleStates = ripples.compactMap { ripple -> (origin: CGPoint, radius: CGFloat)? in
-                        let elapsed = timeline.date.timeIntervalSince(ripple.startedAt)
-                        guard elapsed < DotGridMetrics.rippleDuration else { return nil }
-
-                        let origin = localPoint(for: ripple.origin, in: canvasFrame)
-                        let progress = CGFloat(elapsed / DotGridMetrics.rippleDuration)
-                        let radius = farthestCornerDistance(from: origin, in: size) * progress
-                        return (origin, radius)
-                    }
-
                     var dots = Path()
                     var touchDots = Path()
-                    var rippleDots = Path()
 
                     for y in stride(from: 0, through: size.height, by: DotGridMetrics.spacing) {
                         for x in stride(from: 0, through: size.width, by: DotGridMetrics.spacing) {
@@ -59,21 +50,6 @@ struct DotGridBackground: View {
                                     touchDots.addEllipse(in: dotBounds(at: point, diameter: diameter))
                                 }
                             }
-
-                            let rippleIntensity = rippleStates.reduce(CGFloat.zero) { strongest, ripple in
-                                let distance = hypot(x - ripple.origin.x, y - ripple.origin.y)
-                                let intensity = max(
-                                    0,
-                                    1 - abs(distance - ripple.radius) / DotGridMetrics.rippleWidth
-                                )
-                                return max(strongest, intensity)
-                            }
-
-                            if rippleIntensity > 0.05 {
-                                let diameter = DotGridMetrics.diameter
-                                    * (1 + rippleIntensity * (DotGridMetrics.rippleDotScale - 1))
-                                rippleDots.addEllipse(in: dotBounds(at: point, diameter: diameter))
-                            }
                         }
                     }
 
@@ -82,13 +58,61 @@ struct DotGridBackground: View {
                         touchDots,
                         with: .color(Color.primary.opacity(DotGridMetrics.touchOpacity))
                     )
-                    context.fill(
-                        rippleDots,
-                        with: .color(Color.primary.opacity(DotGridMetrics.rippleOpacity))
-                    )
                 }
+
+                TimelineView(.animation(minimumInterval: 1 / 30, paused: ripples.isEmpty)) { timeline in
+                    Canvas { context, size in
+                        let canvasFrame = geometry.frame(in: .global)
+                        let rippleStates = ripples.compactMap { ripple -> (origin: CGPoint, radius: CGFloat)? in
+                            let elapsed = timeline.date.timeIntervalSince(ripple.startedAt)
+                            guard elapsed < DotGridMetrics.rippleDuration else { return nil }
+
+                            let origin = localPoint(for: ripple.origin, in: canvasFrame)
+                            let progress = CGFloat(elapsed / DotGridMetrics.rippleDuration)
+                            let radius = farthestCornerDistance(from: origin, in: size) * progress
+                            return (origin, radius)
+                        }
+
+                        guard !rippleStates.isEmpty else { return }
+
+                        var rippleDots = Path()
+
+                        for y in stride(from: 0, through: size.height, by: DotGridMetrics.spacing) {
+                            for x in stride(from: 0, through: size.width, by: DotGridMetrics.spacing) {
+                                let rippleIntensity = rippleStates.reduce(CGFloat.zero) { strongest, ripple in
+                                    let distance = hypot(x - ripple.origin.x, y - ripple.origin.y)
+                                    let intensity = max(
+                                        0,
+                                        1 - abs(distance - ripple.radius) / DotGridMetrics.rippleWidth
+                                    )
+                                    return max(strongest, intensity)
+                                }
+
+                                if rippleIntensity > 0.05 {
+                                    let diameter = DotGridMetrics.diameter
+                                        * (1 + rippleIntensity * (DotGridMetrics.rippleDotScale - 1))
+                                    rippleDots.addEllipse(
+                                        in: dotBounds(at: CGPoint(x: x, y: y), diameter: diameter)
+                                    )
+                                }
+                            }
+                        }
+
+                        context.fill(
+                            rippleDots,
+                            with: .color(Color.primary.opacity(DotGridMetrics.rippleOpacity))
+                        )
+                    }
+                }
+                .allowsHitTesting(false)
             }
         }
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                .onChanged { onTouchChanged($0.location) }
+                .onEnded { onTouchEnded($0.location) }
+        )
         .ignoresSafeArea()
         .accessibilityHidden(true)
     }

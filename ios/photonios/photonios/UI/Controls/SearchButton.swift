@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SearchButton: View {
+    let namespace: Namespace.ID
     let action: () -> Void
 
     var body: some View {
@@ -10,8 +11,10 @@ struct SearchButton: View {
                 .foregroundStyle(.primary)
                 .frame(width: 100, height: 34)
                 .contentShape(Rectangle())
+                .transition(.blurReplace)
         }
         .buttonStyle(.glass)
+        .matchedGeometryEffect(id: "search-url-bar", in: namespace)
         .accessibilityLabel("Search")
     }
 }
