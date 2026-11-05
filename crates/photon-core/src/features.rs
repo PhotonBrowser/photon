@@ -28,6 +28,90 @@ pub enum Feature {
     KeyboardShortcuts,
     /// Hiding the browser's surrounding chrome for focused browsing.
     ZenMode,
+    /// Native Liquid Glass or platform material behind the window.
+    LiquidGlass,
+    /// Native glass behind menus and popovers where supported.
+    GlassMenus,
+    /// Translucent browser surfaces.
+    Transparency,
+    /// Decorative noise on the browser's window background.
+    BackgroundNoise,
+    /// Transitions and other animated interface effects.
+    Animations,
+    /// Elastic scrolling for browser interface surfaces.
+    ElasticScrolling,
+    /// Sound effects for interface feedback.
+    InteractionSounds,
+    /// Asking sites to use dark appearance where supported.
+    ForceDarkMode,
+    /// The logo on the new tab page.
+    NewTabLogo,
+    /// Website shortcuts on the new tab page.
+    NewTabShortcuts,
+    /// Automatic discarding of idle page processes.
+    TabSleeping,
+    /// Closing tabs that have been unused for twelve hours.
+    TabArchiving,
+}
+
+/// A group of related optional features in the settings catalog.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FeatureCategory {
+    Navigation,
+    PageTools,
+    Appearance,
+    Interaction,
+    NewTab,
+    TabManagement,
+}
+
+impl FeatureCategory {
+    /// Every feature group in display order.
+    pub const ALL: [Self; 6] = [
+        Self::Navigation,
+        Self::PageTools,
+        Self::Appearance,
+        Self::Interaction,
+        Self::NewTab,
+        Self::TabManagement,
+    ];
+
+    /// The label shown above this group in settings.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Navigation => "Navigation and layout",
+            Self::PageTools => "Page tools",
+            Self::Appearance => "Appearance",
+            Self::Interaction => "Interface effects",
+            Self::NewTab => "New tab page",
+            Self::TabManagement => "Tab management",
+        }
+    }
+}
+
+/// The profile setting that controls one feature.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FeaturePreference {
+    /// A feature-specific entry in [`FeatureSettings`].
+    Registry,
+    /// Existing profile preference for glass menus and popovers.
+    GlassMenus,
+    /// Existing profile preference for interface sounds.
+    InteractionSounds,
+    /// Existing profile preference for dark page appearance.
+    ForceDarkMode,
+    /// Existing profile preference for interface animations.
+    Animations,
+    /// Existing profile preference for elastic scrolling.
+    ElasticScrolling,
+    /// Existing profile preference for the new tab logo.
+    NewTabLogo,
+    /// Existing profile preference for new tab shortcuts.
+    NewTabShortcuts,
+    /// Existing profile preference for tab sleeping.
+    TabSleeping,
+    /// Existing profile preference for tab archiving.
+    TabArchiving,
 }
 
 /// User-facing information and requirements for one built-in feature.
@@ -43,99 +127,13 @@ pub struct FeatureDefinition {
     pub name: &'static str,
     /// Short description shown below the settings control.
     pub description: &'static str,
+    /// Group in the Features settings page.
+    pub category: FeatureCategory,
+    /// The profile setting that controls this feature.
+    pub preference: FeaturePreference,
     /// Features that must also be enabled for this feature to work.
     pub requires: &'static [Feature],
 }
-
-/// The central catalog of optional features available in this build.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct FeatureRegistry;
-
-const NO_REQUIREMENTS: &[Feature] = &[];
-const SIDEBAR_REQUIREMENT: &[Feature] = &[Feature::Sidebar];
-
-const FEATURES: &[FeatureDefinition] = &[
-    FeatureDefinition {
-        feature: Feature::Sidebar,
-        key: "sidebar",
-        setting_id: "settings-feature-sidebar",
-        name: "Sidebar",
-        description: "Vertical tabs, favourites, and sidebar navigation.",
-        requires: NO_REQUIREMENTS,
-    },
-    FeatureDefinition {
-        feature: Feature::CommandPalette,
-        key: "command-palette",
-        setting_id: "settings-feature-command-palette",
-        name: "Command palette",
-        description: "Search and run browser commands from the keyboard.",
-        requires: NO_REQUIREMENTS,
-    },
-    FeatureDefinition {
-        feature: Feature::FindInPage,
-        key: "find-in-page",
-        setting_id: "settings-feature-find-in-page",
-        name: "Find in page",
-        description: "Search for text in the current page.",
-        requires: NO_REQUIREMENTS,
-    },
-    FeatureDefinition {
-        feature: Feature::History,
-        key: "history",
-        setting_id: "settings-feature-history",
-        name: "History page",
-        description: "Browse, search, and import visited pages.",
-        requires: NO_REQUIREMENTS,
-    },
-    FeatureDefinition {
-        feature: Feature::Downloads,
-        key: "downloads",
-        setting_id: "settings-feature-downloads",
-        name: "Downloads interface",
-        description: "Show download controls, progress, and the downloads page.",
-        requires: NO_REQUIREMENTS,
-    },
-    FeatureDefinition {
-        feature: Feature::PerformanceTools,
-        key: "performance-tools",
-        setting_id: "settings-feature-performance-tools",
-        name: "Performance tools",
-        description: "Open live process, resource, and performance details.",
-        requires: NO_REQUIREMENTS,
-    },
-    FeatureDefinition {
-        feature: Feature::SplitView,
-        key: "split-view",
-        setting_id: "settings-feature-split-view",
-        name: "Split view",
-        description: "Show two tabs side by side in one window.",
-        requires: NO_REQUIREMENTS,
-    },
-    FeatureDefinition {
-        feature: Feature::Spaces,
-        key: "spaces",
-        setting_id: "settings-feature-spaces",
-        name: "Spaces",
-        description: "Switch between groups of tabs in the sidebar. Requires Sidebar.",
-        requires: SIDEBAR_REQUIREMENT,
-    },
-    FeatureDefinition {
-        feature: Feature::KeyboardShortcuts,
-        key: "keyboard-shortcuts",
-        setting_id: "settings-feature-keyboard-shortcuts",
-        name: "Keyboard shortcuts help",
-        description: "Open the built-in list of browser keyboard shortcuts.",
-        requires: NO_REQUIREMENTS,
-    },
-    FeatureDefinition {
-        feature: Feature::ZenMode,
-        key: "zen-mode",
-        setting_id: "settings-feature-zen-mode",
-        name: "Zen mode",
-        description: "Hide the browser controls around the page for focused browsing.",
-        requires: NO_REQUIREMENTS,
-    },
-];
 
 /// Preferences for optional features. Unlisted features remain enabled.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -143,6 +141,229 @@ const FEATURES: &[FeatureDefinition] = &[
 pub struct FeatureSettings {
     disabled: BTreeSet<String>,
 }
+
+/// Central catalog of optional browser features.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct FeatureRegistry;
+
+const NO_REQUIREMENTS: &[Feature] = &[];
+const SIDEBAR_REQUIREMENT: &[Feature] = &[Feature::Sidebar];
+
+macro_rules! feature {
+    ($feature:ident, $key:literal, $name:literal, $description:literal, $category:ident, $preference:ident, $requires:ident) => {
+        FeatureDefinition {
+            feature: Feature::$feature,
+            key: $key,
+            setting_id: concat!("settings-feature-", $key),
+            name: $name,
+            description: $description,
+            category: FeatureCategory::$category,
+            preference: FeaturePreference::$preference,
+            requires: $requires,
+        }
+    };
+}
+
+const FEATURES: &[FeatureDefinition] = &[
+    feature!(
+        Sidebar,
+        "sidebar",
+        "Sidebar",
+        "Vertical tabs, favourites, and sidebar navigation.",
+        Navigation,
+        Registry,
+        NO_REQUIREMENTS
+    ),
+    feature!(
+        Spaces,
+        "spaces",
+        "Spaces",
+        "Switch between groups of tabs in the sidebar. Requires Sidebar.",
+        Navigation,
+        Registry,
+        SIDEBAR_REQUIREMENT
+    ),
+    feature!(
+        SplitView,
+        "split-view",
+        "Split view",
+        "Show two tabs side by side in one window.",
+        Navigation,
+        Registry,
+        NO_REQUIREMENTS
+    ),
+    feature!(
+        ZenMode,
+        "zen-mode",
+        "Zen mode",
+        "Hide the browser controls around the page for focused browsing.",
+        Navigation,
+        Registry,
+        NO_REQUIREMENTS
+    ),
+    feature!(
+        CommandPalette,
+        "command-palette",
+        "Command palette",
+        "Search and run browser commands from the keyboard.",
+        PageTools,
+        Registry,
+        NO_REQUIREMENTS
+    ),
+    feature!(
+        FindInPage,
+        "find-in-page",
+        "Find in page",
+        "Search for text in the current page.",
+        PageTools,
+        Registry,
+        NO_REQUIREMENTS
+    ),
+    feature!(
+        History,
+        "history",
+        "History page",
+        "Browse, search, and import visited pages.",
+        PageTools,
+        Registry,
+        NO_REQUIREMENTS
+    ),
+    feature!(
+        Downloads,
+        "downloads",
+        "Downloads interface",
+        "Show download controls, progress, and the downloads page.",
+        PageTools,
+        Registry,
+        NO_REQUIREMENTS
+    ),
+    feature!(
+        PerformanceTools,
+        "performance-tools",
+        "Performance tools",
+        "Open live process, resource, and performance details.",
+        PageTools,
+        Registry,
+        NO_REQUIREMENTS
+    ),
+    feature!(
+        KeyboardShortcuts,
+        "keyboard-shortcuts",
+        "Keyboard shortcuts help",
+        "Open the built-in list of browser keyboard shortcuts.",
+        PageTools,
+        Registry,
+        NO_REQUIREMENTS
+    ),
+    feature!(
+        LiquidGlass,
+        "liquid-glass",
+        "Liquid Glass window material",
+        "Allow Liquid Glass or the platform's equivalent native window material.",
+        Appearance,
+        Registry,
+        NO_REQUIREMENTS
+    ),
+    feature!(
+        GlassMenus,
+        "glass-menus",
+        "Glass menus and popovers",
+        "Use Liquid Glass behind menus and popovers where supported.",
+        Appearance,
+        GlassMenus,
+        NO_REQUIREMENTS
+    ),
+    feature!(
+        Transparency,
+        "transparency",
+        "Translucent surfaces",
+        "Allow desktop translucency; choose its strength in Appearance.",
+        Appearance,
+        Registry,
+        NO_REQUIREMENTS
+    ),
+    feature!(
+        BackgroundNoise,
+        "background-noise",
+        "Background texture",
+        "Show decorative texture on browser window backgrounds.",
+        Appearance,
+        Registry,
+        NO_REQUIREMENTS
+    ),
+    feature!(
+        ForceDarkMode,
+        "force-dark-mode",
+        "Force dark page appearance",
+        "Ask sites to use dark themes and darken light content where supported.",
+        Appearance,
+        ForceDarkMode,
+        NO_REQUIREMENTS
+    ),
+    feature!(
+        Animations,
+        "animations",
+        "Interface animations",
+        "Animate browser interface changes. Timing remains configurable in the profile.",
+        Interaction,
+        Animations,
+        NO_REQUIREMENTS
+    ),
+    feature!(
+        ElasticScrolling,
+        "elastic-scrolling",
+        "Elastic scrolling",
+        "Allow browser interface surfaces to stretch past their scroll limits where supported.",
+        Interaction,
+        ElasticScrolling,
+        NO_REQUIREMENTS
+    ),
+    feature!(
+        InteractionSounds,
+        "interaction-sounds",
+        "Interaction sounds",
+        "Play subtle sounds with browser interface feedback.",
+        Interaction,
+        InteractionSounds,
+        NO_REQUIREMENTS
+    ),
+    feature!(
+        NewTabLogo,
+        "new-tab-logo",
+        "New tab logo",
+        "Show the Photon logo on the new tab page.",
+        NewTab,
+        NewTabLogo,
+        NO_REQUIREMENTS
+    ),
+    feature!(
+        NewTabShortcuts,
+        "new-tab-shortcuts",
+        "New tab shortcuts",
+        "Show pinned and frequently visited websites on the new tab page.",
+        NewTab,
+        NewTabShortcuts,
+        NO_REQUIREMENTS
+    ),
+    feature!(
+        TabSleeping,
+        "tab-sleeping",
+        "Tab sleeping",
+        "Discard idle page processes using the mode selected under Tabs.",
+        TabManagement,
+        TabSleeping,
+        NO_REQUIREMENTS
+    ),
+    feature!(
+        TabArchiving,
+        "tab-archiving",
+        "Tab archiving",
+        "Close tabs that have been unused for twelve hours.",
+        TabManagement,
+        TabArchiving,
+        NO_REQUIREMENTS
+    ),
+];
 
 impl FeatureRegistry {
     /// Every optional feature in stable display order.
@@ -180,17 +401,17 @@ impl FeatureSettings {
                 .all(|requirement| self.is_enabled(*requirement))
     }
 
-    /// Whether the user has enabled this feature in settings, regardless of requirements.
+    /// Whether the user has enabled this feature in the registry, regardless of requirements.
     pub fn is_configured_enabled(&self, feature: Feature) -> bool {
         !self.disabled.contains(feature.definition().key)
     }
 
-    /// Enables `feature` in settings.
+    /// Enables `feature` in the registry.
     pub fn enable(&mut self, feature: Feature) {
         self.disabled.remove(feature.definition().key);
     }
 
-    /// Disables `feature` in settings.
+    /// Disables `feature` in the registry.
     pub fn disable(&mut self, feature: Feature) {
         self.disabled.insert(feature.definition().key.to_owned());
     }
@@ -239,6 +460,13 @@ mod tests {
         for definition in definitions {
             assert_eq!(FEATURE_REGISTRY.definition(definition.feature), definition);
         }
-        assert_eq!(definitions.len(), 10);
+        assert_eq!(definitions.len(), 22);
+        for category in FeatureCategory::ALL {
+            assert!(
+                definitions
+                    .iter()
+                    .any(|definition| definition.category == category)
+            );
+        }
     }
 }

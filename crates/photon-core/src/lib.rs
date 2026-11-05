@@ -27,7 +27,8 @@ pub use commands::{
 pub use crashes::{CrashResponse, EngineService, PageCrashes};
 pub use dialogs::{Credentials, DialogInput, DialogKind, DialogReply, DialogRequest, PageDialogs};
 pub use features::{
-    FEATURE_REGISTRY, Feature, FeatureDefinition, FeatureRegistry, FeatureSettings,
+    FEATURE_REGISTRY, Feature, FeatureCategory, FeatureDefinition, FeaturePreference,
+    FeatureRegistry, FeatureSettings,
 };
 pub use history::{HISTORY_MAX_PAGES, HISTORY_MAX_SEARCHES, History, HistoryEntry, SearchEntry};
 pub use history_days::{day_heading, local_day, time_of_day};

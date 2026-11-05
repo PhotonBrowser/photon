@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::features::FeatureSettings;
+use super::features::{Feature, FeaturePreference, FeatureSettings};
 use super::new_tab::NewTabSettings;
 use super::sidebar::SidebarSettings;
 use super::spaces::Spaces;
@@ -305,6 +305,72 @@ where
 }
 
 impl BrowserSettings {
+    /// Whether a registered feature is enabled by both the registry and its
+    /// underlying profile preference, if it already had one.
+    pub fn is_feature_enabled(&self, feature: Feature) -> bool {
+        if !self.features.is_enabled(feature) {
+            return false;
+        }
+
+        match feature.definition().preference {
+            FeaturePreference::Registry => true,
+            FeaturePreference::GlassMenus => self.glass_surfaces,
+            FeaturePreference::InteractionSounds => self.interaction_sounds,
+            FeaturePreference::ForceDarkMode => self.force_dark_mode,
+            FeaturePreference::Animations => self.animations.enabled,
+            FeaturePreference::ElasticScrolling => self.elastic_scroll,
+            FeaturePreference::NewTabLogo => self.new_tab.show_logo,
+            FeaturePreference::NewTabShortcuts => self.new_tab.show_shortcuts,
+            FeaturePreference::TabSleeping => self.tab_sleep_mode != TabSleepMode::Off,
+            FeaturePreference::TabArchiving => self.archive_tabs,
+        }
+    }
+
+    /// The tab-sleep policy after applying its registry switch.
+    pub fn effective_tab_sleep_mode(&self) -> TabSleepMode {
+        if self.is_feature_enabled(Feature::TabSleeping) {
+            self.tab_sleep_mode
+        } else {
+            TabSleepMode::Off
+        }
+    }
+
+    /// The native window material after applying the Liquid Glass switch.
+    pub fn effective_window_background_style(&self) -> WindowBackgroundStyle {
+        if self.is_feature_enabled(Feature::LiquidGlass) {
+            self.window_background_style
+        } else {
+            WindowBackgroundStyle::Blurred
+        }
+    }
+
+    /// Changes a registered feature while preserving the existing settings
+    /// field used by older profiles and related customization controls.
+    pub fn set_feature_enabled(&mut self, feature: Feature, enabled: bool) {
+        if enabled {
+            self.features.enable(feature);
+        } else {
+            self.features.disable(feature);
+        }
+
+        match feature.definition().preference {
+            FeaturePreference::Registry => {}
+            FeaturePreference::GlassMenus => self.glass_surfaces = enabled,
+            FeaturePreference::InteractionSounds => self.interaction_sounds = enabled,
+            FeaturePreference::ForceDarkMode => self.force_dark_mode = enabled,
+            FeaturePreference::Animations => self.animations.enabled = enabled,
+            FeaturePreference::ElasticScrolling => self.elastic_scroll = enabled,
+            FeaturePreference::NewTabLogo => self.new_tab.show_logo = enabled,
+            FeaturePreference::NewTabShortcuts => self.new_tab.show_shortcuts = enabled,
+            FeaturePreference::TabSleeping => {
+                if enabled && self.tab_sleep_mode == TabSleepMode::Off {
+                    self.tab_sleep_mode = TabSleepMode::Balanced;
+                }
+            }
+            FeaturePreference::TabArchiving => self.archive_tabs = enabled,
+        }
+    }
+
     /// Returns every preference to its default, keeping what people made
     /// themselves: each space with its favourites and pinned tabs, and the
     /// new tab page's shortcuts. Space colours and dismissed hints reset.
@@ -371,6 +437,28 @@ mod tests {
             serde_json::from_str("{}").expect("older profiles remain readable");
         assert!(settings.features.is_enabled(crate::Feature::Sidebar));
         assert!(settings.features.is_enabled(crate::Feature::History));
+    }
+
+    #[test]
+    fn feature_registry_uses_existing_settings_and_keeps_sleep_policy() {
+        let mut settings = BrowserSettings::default();
+        assert!(!settings.is_feature_enabled(crate::Feature::InteractionSounds));
+        assert!(!settings.is_feature_enabled(crate::Feature::TabArchiving));
+        assert!(settings.is_feature_enabled(crate::Feature::NewTabShortcuts));
+
+        settings.set_feature_enabled(crate::Feature::InteractionSounds, true);
+        settings.set_feature_enabled(crate::Feature::NewTabShortcuts, false);
+        settings.set_feature_enabled(crate::Feature::TabArchiving, true);
+        assert!(settings.interaction_sounds);
+        assert!(!settings.new_tab.show_shortcuts);
+        assert!(settings.archive_tabs);
+
+        settings.tab_sleep_mode = TabSleepMode::Maximum;
+        settings.set_feature_enabled(crate::Feature::TabSleeping, false);
+        assert_eq!(settings.effective_tab_sleep_mode(), TabSleepMode::Off);
+        assert_eq!(settings.tab_sleep_mode, TabSleepMode::Maximum);
+        settings.set_feature_enabled(crate::Feature::TabSleeping, true);
+        assert_eq!(settings.effective_tab_sleep_mode(), TabSleepMode::Maximum);
     }
 
     #[test]
