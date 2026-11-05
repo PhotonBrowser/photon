@@ -91,6 +91,7 @@ pub(in super::super) fn footer(
     cx: &mut App,
 ) -> gpui::AnyElement {
     let has_multiple_spaces = spaces.len() > 1;
+    let has_left_controls = actions.downloads_enabled || actions.background_audio.is_some();
     let focus = has_multiple_spaces.then(|| {
         let selected = spaces.iter().position(|space| space.active).unwrap_or(0);
         RovingFocus::keyed(
@@ -175,36 +176,37 @@ pub(in super::super) fn footer(
             .children(space_switcher)
             .children(new_space)
     });
-    h_stack()
+    let left_controls = h_stack()
+        .items_center()
+        .children(actions.downloads_enabled.then(|| {
+            downloads_anchor(actions.downloads_drawn).child(downloads_button(
+                "sidebar-downloads",
+                0,
+                actions.downloads_state,
+                palette,
+                window,
+                cx,
+                actions.downloads,
+            ))
+        }))
+        .children(
+            actions
+                .background_audio
+                .map(|audio| background_audio_button(audio, palette, cx)),
+        );
+    let footer = h_stack()
         .w_full()
         .h(px(metrics::SIDEBAR_FOOTER_HEIGHT))
         .flex_shrink_0()
         .items_center()
         .justify_between()
-        .px(px(metrics::SIDEBAR_PADDING))
-        .child(
-            h_stack()
-                .items_center()
-                .children(actions.downloads_enabled.then(|| {
-                    downloads_anchor(actions.downloads_drawn).child(downloads_button(
-                        "sidebar-downloads",
-                        0,
-                        actions.downloads_state,
-                        palette,
-                        window,
-                        cx,
-                        actions.downloads,
-                    ))
-                }))
-                .children(
-                    actions
-                        .background_audio
-                        .map(|audio| background_audio_button(audio, palette, cx)),
-                ),
-        )
-        .children(space_controls)
-        .child(menu)
-        .into_any_element()
+        .px(px(metrics::SIDEBAR_PADDING));
+    let footer = if has_left_controls {
+        footer.child(left_controls).children(space_controls)
+    } else {
+        footer.children(space_controls)
+    };
+    footer.child(menu).into_any_element()
 }
 
 /// The spaces as dots in `stack`, a row or a column. One space needs no
