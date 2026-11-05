@@ -1,6 +1,7 @@
 //! Every page Photon draws itself, found by its name in a `photon://` address.
 
 use gpui::{AnyElement, AnyView, App};
+use photon_core::Feature;
 use photon_core::internal_page_name;
 
 use super::PageContext;
@@ -21,6 +22,8 @@ pub(in super::super) struct PageDefinition {
     pub(in super::super) shows_address: bool,
     /// Whether opening the page again switches to the tab already showing it.
     pub(in super::super) single_tab: bool,
+    /// The optional feature that owns this page, when any.
+    pub(in super::super) feature: Option<Feature>,
     /// Builds the page's view.
     pub(in super::super) build: fn(PageContext, &mut App) -> AnyView,
 }

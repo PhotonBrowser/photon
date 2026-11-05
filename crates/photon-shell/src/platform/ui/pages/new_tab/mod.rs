@@ -32,6 +32,7 @@ pub(super) const PAGE: PageDefinition = PageDefinition {
     icon: PageIcon::Logo,
     shows_address: false,
     single_tab: false,
+    feature: None,
     build: |context, cx| cx.new(|cx| NewTabPage::new(context, cx)).into(),
 };
 

@@ -21,6 +21,7 @@ pub(super) const PAGE: PageDefinition = PageDefinition {
     icon: PageIcon::Symbol(|color, size| download_icon(color, size).into_any_element()),
     shows_address: true,
     single_tab: true,
+    feature: Some(photon_core::Feature::Downloads),
     build: |context, cx| cx.new(|cx| DownloadsPage::new(context, cx)).into(),
 };
 

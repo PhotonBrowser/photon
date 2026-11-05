@@ -94,8 +94,8 @@ impl InternalPage {
         Self {
             definition,
             view: {
-                let body = (definition.build)(context, cx);
-                cx.new(|cx| PageFrame::new(body, cx))
+                let frame_context = context.clone();
+                cx.new(|cx| PageFrame::new(definition, frame_context, cx))
             },
             events,
         }
@@ -137,16 +137,35 @@ pub(super) fn page_frame(content: AnyElement, palette: ThemeColors, radius: f32)
 
 /// Separates the live surface from an internal page's expensive form/layout.
 struct PageFrame {
-    body: AnyView,
+    definition: &'static PageDefinition,
+    context: Option<PageContext>,
+    body: Option<AnyView>,
     foreground: Option<u32>,
     _appearance: Option<gpui::Subscription>,
     _preview: gpui::Subscription,
     _settings: gpui::Subscription,
 }
 impl PageFrame {
-    fn new(body: AnyView, cx: &mut gpui::Context<Self>) -> Self {
+    fn new(
+        definition: &'static PageDefinition,
+        context: PageContext,
+        cx: &mut gpui::Context<Self>,
+    ) -> Self {
+        let body =
+            Self::feature_enabled(definition, cx).then(|| (definition.build)(context.clone(), cx));
+        Self::from_parts(definition, Some(context), body, cx)
+    }
+
+    fn from_parts(
+        definition: &'static PageDefinition,
+        context: Option<PageContext>,
+        body: Option<AnyView>,
+        cx: &mut gpui::Context<Self>,
+    ) -> Self {
         Self {
             body,
+            definition,
+            context,
             foreground: None,
             _appearance: None,
             _preview: cx.observe_global::<super::appearance_preview::AppearancePreview>(|_, cx| {
@@ -154,6 +173,17 @@ impl PageFrame {
             }),
             _settings: cx.observe_global::<Settings>(|_, cx| cx.notify()),
         }
+    }
+
+    #[cfg(test)]
+    fn new_test(body: AnyView, cx: &mut gpui::Context<Self>) -> Self {
+        Self::from_parts(SETTINGS, None, Some(body), cx)
+    }
+
+    fn feature_enabled(definition: &PageDefinition, cx: &gpui::App) -> bool {
+        definition
+            .feature
+            .is_none_or(|feature| Settings::get(cx).features.is_enabled(feature))
     }
 }
 impl gpui::Render for PageFrame {
@@ -170,11 +200,39 @@ impl gpui::Render for PageFrame {
             .foreground
             .replace(palette.text_primary)
             .is_some_and(|ink| ink != palette.text_primary)
+            && let Some(body) = &self.body
         {
-            gpui::App::notify(cx, self.body.entity_id());
+            gpui::App::notify(cx, body.entity_id());
+        }
+        if !Self::feature_enabled(self.definition, cx) {
+            self.body = None;
+            let palette = super::theme::page_palette(window, cx);
+            let message = format!(
+                "{} is turned off. Re-enable it in Settings under Features.",
+                self.definition.title
+            );
+            return page_frame(
+                super::layout::v_stack()
+                    .size_full()
+                    .items_center()
+                    .justify_center()
+                    .child(super::layout::secondary_text(message, palette).text_center())
+                    .into_any_element(),
+                palette,
+                metrics::page_radius(),
+            );
+        }
+        if self.body.is_none() {
+            let context = self
+                .context
+                .as_ref()
+                .expect("feature page retains its build context");
+            self.body = Some((self.definition.build)(context.clone(), cx));
         }
         page_frame(
             self.body
+                .as_ref()
+                .expect("enabled page has a view")
                 .clone()
                 .cached(StyleRefinement::default().size_full())
                 .into_any_element(),

@@ -6,6 +6,7 @@
 //! `reset` returns every setting to its default, after asking.
 
 mod appearance;
+mod features;
 mod general;
 mod new_tab;
 mod privacy;
@@ -44,6 +45,7 @@ const SECTION_MOTION: Entrance = fade();
 #[derive(Clone, Copy, PartialEq)]
 enum Section {
     General,
+    Features,
     Appearance,
     Search,
     NewTab,
@@ -53,8 +55,9 @@ enum Section {
 }
 
 impl Section {
-    const ALL: [Self; 7] = [
+    const ALL: [Self; 8] = [
         Self::General,
+        Self::Features,
         Self::Appearance,
         Self::Search,
         Self::NewTab,
@@ -66,6 +69,7 @@ impl Section {
     fn id(self) -> &'static str {
         match self {
             Self::General => "general",
+            Self::Features => "features",
             Self::Appearance => "appearance",
             Self::Search => "search",
             Self::NewTab => "new-tab",
@@ -78,6 +82,7 @@ impl Section {
     fn title(self) -> &'static str {
         match self {
             Self::General => "General",
+            Self::Features => "Features",
             Self::Appearance => "Appearance",
             Self::Search => "Search",
             Self::NewTab => "New tab page",
@@ -91,6 +96,7 @@ impl Section {
         let name = photon_brand::NAME;
         match self {
             Self::General => format!("How {name} fits in with your Mac."),
+            Self::Features => "Choose which optional browser features are available.".to_owned(),
             Self::Appearance => format!("How {name} looks."),
             Self::Search => {
                 "Where searches from the address bar go, and how it shows addresses.".to_owned()
@@ -106,6 +112,7 @@ impl Section {
         let size = metrics::SETTINGS_SIDEBAR_ICON_SIZE;
         match self {
             Self::General => settings_icon(color, size).into_any_element(),
+            Self::Features => grid_icon(color, size).into_any_element(),
             Self::Appearance => appearance_icon(color, size).into_any_element(),
             Self::Search => search_icon_sized(color, size).into_any_element(),
             Self::NewTab => grid_icon(color, size).into_any_element(),
@@ -123,6 +130,7 @@ pub(super) const PAGE: PageDefinition = PageDefinition {
     icon: PageIcon::Symbol(|color, size| settings_icon(color, size).into_any_element()),
     shows_address: true,
     single_tab: true,
+    feature: None,
     build: |context, cx| cx.new(|cx| SettingsPage::new(context, cx)).into(),
 };
 
@@ -224,6 +232,7 @@ impl Render for SettingsPage {
         });
         let body = match section {
             Section::General => general::settings(palette, cx).into_any_element(),
+            Section::Features => features::settings(palette, cx).into_any_element(),
             Section::Appearance => appearance::settings(
                 window,
                 palette,

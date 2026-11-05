@@ -41,7 +41,7 @@ fn preview_frames_repaint_the_surface_without_rebuilding_the_page(cx: &mut gpui:
             renders: counter,
             _settings: cx.observe_global::<Settings>(|_, cx| cx.notify()),
         });
-        PageFrame::new(body.into(), cx)
+        PageFrame::new_test(body.into(), cx)
     });
     cx.update(|window, cx| {
         window.draw(cx).clear(cx);
