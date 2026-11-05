@@ -1,6 +1,7 @@
 //! Opening the command palette and executing a selected browser command.
 
 use gpui::{AnyElement, Context, Window, div, prelude::*};
+use photon_core::Feature;
 
 use super::super::command_palette::{COMMAND_PALETTE_MOTION, CommandPalette, CommandPaletteEvent};
 use super::super::modal::modal;
@@ -10,6 +11,12 @@ use super::BrowserWindow;
 impl BrowserWindow {
     /// Opens the command palette, or focuses its search field when already open.
     pub(super) fn open_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !Settings::get(cx)
+            .features
+            .is_enabled(Feature::CommandPalette)
+        {
+            return;
+        }
         let availability = self.command_availability(cx);
         if let Some(palette) = self.command_palette.clone() {
             palette.update(cx, |palette, cx| {

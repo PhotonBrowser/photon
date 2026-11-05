@@ -457,11 +457,18 @@ impl BrowserWindow {
                     unseen: Downloads::has_unseen(self.private, cx),
                     animate: Settings::motion(cx).enabled,
                 },
+                downloads_enabled: Settings::get(cx)
+                    .features
+                    .is_enabled(photon_core::Feature::Downloads),
                 menu: Box::new(cx.listener(|this, _, window, cx| {
                     cx.stop_propagation();
                     this.show_browser_menu(window, cx);
                 })),
-                new_space: (!self.private).then(|| -> ClickHandler {
+                new_space: (!self.private
+                    && Settings::get(cx)
+                        .features
+                        .is_enabled(photon_core::Feature::Spaces))
+                .then(|| -> ClickHandler {
                     Box::new(cx.listener(|this, _, window, cx| {
                         this.edit_space(None, window, cx);
                     }))

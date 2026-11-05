@@ -4,6 +4,7 @@ use gpui::{
     App, Context, FontWeight, Render, Role, Subscription, Task, Window, div, prelude::*, px, rgb,
     rgba, size,
 };
+use photon_core::Feature;
 use photon_performance::{format_bytes, format_rate};
 use std::{
     collections::{HashMap, HashSet},
@@ -50,6 +51,13 @@ pub(super) struct TaskManagerWindow {
 impl TaskManagerWindow {
     fn new(runtime: Rc<EngineRuntime>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let settings_subscription = cx.observe_global_in::<Settings>(window, |_, window, cx| {
+            if !Settings::get(cx)
+                .features
+                .is_enabled(Feature::PerformanceTools)
+            {
+                window.remove_window();
+                return;
+            }
             window_settings::configure_native_controls(window, &Settings::get(cx).animations);
             cx.notify();
         });
@@ -366,6 +374,12 @@ impl Render for TaskManagerWindow {
 }
 
 pub(super) fn open_task_manager(runtime: Rc<EngineRuntime>, cx: &mut App) {
+    if !Settings::get(cx)
+        .features
+        .is_enabled(Feature::PerformanceTools)
+    {
+        return;
+    }
     if let Some(existing) = cx
         .windows()
         .into_iter()

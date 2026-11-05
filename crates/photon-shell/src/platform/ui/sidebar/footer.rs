@@ -27,6 +27,7 @@ pub(in super::super) struct FooterActions {
     /// Opens the downloads popover.
     pub(in super::super) downloads: ClickHandler,
     pub(in super::super) downloads_state: DownloadsButton,
+    pub(in super::super) downloads_enabled: bool,
     /// Told where the downloads button is drawn, which its popover points at.
     pub(in super::super) downloads_drawn: PrepaintHandler,
     pub(in super::super) menu: ClickHandler,
@@ -124,18 +125,20 @@ pub(in super::super) fn footer(
     if collapsed {
         let spacing = metrics::SidebarSpacing::new(collapsed);
         let menu = super::collapsed_tile(menu);
-        let downloads = downloads_anchor(actions.downloads_drawn).child(super::collapsed_tile(
-            downloads_button(
-                "sidebar-downloads",
-                0,
-                actions.downloads_state,
-                palette,
-                window,
-                cx,
-                actions.downloads,
-            )
-            .tooltip(label_tooltip("Downloads", palette)),
-        ));
+        let downloads = actions.downloads_enabled.then(|| {
+            downloads_anchor(actions.downloads_drawn).child(super::collapsed_tile(
+                downloads_button(
+                    "sidebar-downloads",
+                    0,
+                    actions.downloads_state,
+                    palette,
+                    window,
+                    cx,
+                    actions.downloads,
+                )
+                .tooltip(label_tooltip("Downloads", palette)),
+            ))
+        });
         let new_space = new_space.map(|button| {
             super::collapsed_tile(button.tooltip(label_tooltip("New space", palette)))
         });
@@ -158,7 +161,7 @@ pub(in super::super) fn footer(
             ))
             .children(new_space)
             .children(background_audio)
-            .child(downloads)
+            .children(downloads)
             .child(menu)
             .into_any_element();
     }
@@ -172,7 +175,7 @@ pub(in super::super) fn footer(
         .child(
             h_stack()
                 .items_center()
-                .child(
+                .children(actions.downloads_enabled.then(|| {
                     downloads_anchor(actions.downloads_drawn).child(downloads_button(
                         "sidebar-downloads",
                         0,
@@ -181,8 +184,8 @@ pub(in super::super) fn footer(
                         window,
                         cx,
                         actions.downloads,
-                    )),
-                )
+                    ))
+                }))
                 .children(
                     actions
                         .background_audio

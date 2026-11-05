@@ -400,6 +400,24 @@ impl BrowserWindow {
     /// Redraws the chrome and every tab for changed settings, such as the theme.
     fn settings_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.preview_foreground = None;
+        let features = Settings::get(cx).features.clone();
+        if !features.is_enabled(photon_core::Feature::FindInPage) {
+            self.close_find_bar(false, window, cx);
+        }
+        if !features.is_enabled(photon_core::Feature::ZenMode) && self.sidebar.zen() {
+            self.toggle_zen_mode(cx);
+        }
+        if !features.is_enabled(photon_core::Feature::CommandPalette) {
+            self.command_palette = None;
+            self._command_palette_subscription = None;
+            window.focus(&self.root_focus, cx);
+        }
+        if !features.is_enabled(photon_core::Feature::Downloads) {
+            self.dismiss_downloads_popover(cx);
+        }
+        if !features.is_enabled(photon_core::Feature::SplitView) && self.split_view.is_some() {
+            self.close_split_view(false, cx);
+        }
         if self.tabs.is_empty() && self.tab_axis(cx) == TabDragAxis::Horizontal {
             self.open_tab(window, cx);
         }
@@ -417,6 +435,14 @@ impl BrowserWindow {
         self.update_page_preferences(window, cx);
         for webview in self.tabs.iter().filter_map(|tab| tab.content.webview()) {
             webview.update(cx, |_, cx| cx.notify());
+        }
+        if !features.is_enabled(photon_core::Feature::PerformanceTools) {
+            for webview in self.tabs.iter().filter_map(|tab| tab.content.webview()) {
+                webview.update(cx, |view, cx| {
+                    view.set_performance_overlay_enabled(false);
+                    cx.notify();
+                });
+            }
         }
         self.omnibox.update(cx, |_, cx| cx.notify());
         self.wake_tab_sleep_scheduler();

@@ -4,6 +4,7 @@
 use crate::platform::shortcuts::CloseTab;
 use gpui::{Context, MenuItem, Window};
 use photon_core::BrowserCommand;
+use photon_core::Feature;
 
 use super::BrowserWindow;
 use super::content::TabContent;
@@ -173,7 +174,10 @@ impl BrowserWindow {
             || (self.split_selection_pending() && self.active_tab == Some(index));
         if in_split {
             items.push(command_item("Separate Tabs", MenuCommand::CloseSplitView));
-        } else {
+        } else if super::super::settings::Settings::get(cx)
+            .features
+            .is_enabled(Feature::SplitView)
+        {
             items.push(command_item(
                 "Create Split View",
                 MenuCommand::CreateSplitView(index),

@@ -19,6 +19,7 @@ use super::super::pages::DOWNLOADS;
 use super::super::settings::Settings;
 use super::super::{metrics, theme::ThemeColors, theme::palette};
 use super::BrowserWindow;
+use photon_core::Feature;
 
 /// What the popover's controls ask the window to do.
 #[derive(Clone)]
@@ -33,6 +34,9 @@ impl BrowserWindow {
     /// Opens the downloads popover above the sidebar's downloads button, or
     /// closes it when it is open.
     pub(super) fn toggle_downloads_popover(&mut self, window: &Window, cx: &mut Context<Self>) {
+        if !Settings::get(cx).features.is_enabled(Feature::Downloads) {
+            return;
+        }
         if self.downloads_popover.is_some() {
             self.dismiss_downloads_popover(cx);
             return;
@@ -84,6 +88,9 @@ impl BrowserWindow {
         window: &Window,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
+        if !Settings::get(cx).features.is_enabled(Feature::Downloads) {
+            return None;
+        }
         let anchor = self.downloads_popover?;
         let palette = palette(window, cx);
         let actions = self.downloads_popover_actions(window, cx);

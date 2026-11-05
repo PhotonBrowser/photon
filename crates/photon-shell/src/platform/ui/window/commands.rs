@@ -38,6 +38,12 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if command
+            .feature()
+            .is_some_and(|feature| !Settings::get(cx).features.is_enabled(feature))
+        {
+            return;
+        }
         // A private window is disposable and cannot change how Photon is set up.
         if self.private && command.customises() {
             return;
@@ -110,8 +116,10 @@ impl BrowserWindow {
     /// Capabilities used to validate registered commands for this window.
     pub(super) fn command_availability(&self, cx: &App) -> CommandAvailability {
         let layout = self.layout(cx);
-        let shows_spaces = layout.shows_spaces();
-        let spaces = &Settings::get(cx).spaces;
+        let settings = Settings::get(cx);
+        let shows_spaces =
+            layout.shows_spaces() && settings.features.is_enabled(photon_core::Feature::Spaces);
+        let spaces = &settings.spaces;
         let active_webview = self.active_webview();
         let page_state = active_webview
             .as_ref()
@@ -131,6 +139,7 @@ impl BrowserWindow {
             has_previous_space: shows_spaces
                 && spaces.neighbour_of(self.current_space(cx), -1).is_some(),
             shows_split: self.split_partner().is_some() && self.split_open(),
+            features: settings.features.clone(),
             private: self.private,
         }
     }

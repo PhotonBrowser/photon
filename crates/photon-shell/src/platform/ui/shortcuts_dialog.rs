@@ -55,7 +55,7 @@ impl Render for ShortcutsDialog {
                 palette,
                 Box::new(cx.listener(|_, _, _, cx| cx.emit(ShortcutsDialogEvent::Dismiss))),
             ));
-        let groups = shortcut_groups()
+        let groups = shortcut_groups(&Settings::get(cx).features)
             .into_iter()
             .map(|group| shortcut_group(group, palette, cx));
         modal_panel(palette)

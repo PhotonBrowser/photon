@@ -5,6 +5,7 @@ use gpui::{
     MouseDownEvent, Pixels, Point, Role, SharedString, WeakEntity, Window, deferred, div, point,
     prelude::*, px,
 };
+use photon_core::Feature;
 
 use super::super::menu::{menu_action_with_state, menu_heading, menu_separator, popover_surface};
 use super::super::motion::{Edge, Transition};
@@ -439,6 +440,7 @@ impl BrowserWindow {
             ShowKeyboardShortcuts, ToggleDebugInfo, ToggleSidebarIcons, ToggleZenMode, ZoomIn,
             ZoomOut,
         };
+        let features = &super::super::settings::Settings::get(cx).features;
 
         let mut items = vec![
             MenuItem::action("New Tab", NewTab),
@@ -448,24 +450,28 @@ impl BrowserWindow {
         ];
         if let Some(webview) = self.active_webview() {
             let debug_info = webview.read(cx).performance_overlay_enabled;
-            items.extend([
-                MenuItem::action("Copy Address", CopyAddress),
-                MenuItem::action("Find in Page…", FindInPage),
-                MenuItem::submenu(Menu::new("Zoom").items([
-                    MenuItem::action("Zoom In", ZoomIn),
-                    MenuItem::action("Zoom Out", ZoomOut),
-                    MenuItem::action("Actual Size", ResetZoom),
-                ])),
-                MenuItem::action("Debug Info", ToggleDebugInfo).checked(debug_info),
-                MenuItem::separator(),
-            ]);
+            items.push(MenuItem::action("Copy Address", CopyAddress));
+            if features.is_enabled(Feature::FindInPage) {
+                items.push(MenuItem::action("Find in Page…", FindInPage));
+            }
+            items.push(MenuItem::submenu(Menu::new("Zoom").items([
+                MenuItem::action("Zoom In", ZoomIn),
+                MenuItem::action("Zoom Out", ZoomOut),
+                MenuItem::action("Actual Size", ResetZoom),
+            ])));
+            if features.is_enabled(Feature::PerformanceTools) {
+                items.push(MenuItem::action("Debug Info", ToggleDebugInfo).checked(debug_info));
+            }
+            items.push(MenuItem::separator());
         }
         // A private window is disposable and cannot change how Photon is set up.
         if self.private {
-            items.push(MenuItem::action(
-                "Keyboard Shortcuts",
-                ShowKeyboardShortcuts,
-            ));
+            if features.is_enabled(Feature::KeyboardShortcuts) {
+                items.push(MenuItem::action(
+                    "Keyboard Shortcuts",
+                    ShowKeyboardShortcuts,
+                ));
+            }
             return items;
         }
         if self.layout(cx).has_sidebar() {
@@ -478,11 +484,18 @@ impl BrowserWindow {
                 MenuCommand::EditTheme(self.current_space(cx)),
             ),
             MenuItem::separator(),
-            MenuItem::action("Zen Mode", ToggleZenMode).checked(self.sidebar.zen()),
+            MenuItem::action("Zen Mode", ToggleZenMode)
+                .checked(self.sidebar.zen())
+                .disabled(!features.is_enabled(Feature::ZenMode)),
             MenuItem::separator(),
-            MenuItem::action("Keyboard Shortcuts", ShowKeyboardShortcuts),
-            MenuItem::action("Settings…", OpenSettings),
         ]);
+        if features.is_enabled(Feature::KeyboardShortcuts) {
+            items.push(MenuItem::action(
+                "Keyboard Shortcuts",
+                ShowKeyboardShortcuts,
+            ));
+        }
+        items.push(MenuItem::action("Settings…", OpenSettings));
         items
     }
 }

@@ -1,7 +1,7 @@
 //! Browser commands and shortcuts, collected once for menus, bindings and lists.
 
 use gpui::Action;
-use photon_core::Command;
+use photon_core::{Command, Feature, FeatureSettings};
 
 use super::actions::*;
 
@@ -128,6 +128,19 @@ pub(super) struct ShortcutSpec {
     label: ShortcutLabel,
     pub(super) keys: &'static [&'static str],
     pub(super) action: ShortcutAction,
+}
+
+impl ShortcutSpec {
+    fn feature(&self) -> Option<Feature> {
+        match self.action {
+            ShortcutAction::OpenCommandPalette => Some(Feature::CommandPalette),
+            ShortcutAction::FindNext | ShortcutAction::FindPrevious => Some(Feature::FindInPage),
+            _ => match self.label {
+                ShortcutLabel::Command(command) => command.feature(),
+                ShortcutLabel::Text(_) => None,
+            },
+        }
+    }
 }
 
 const SHORTCUTS: &[ShortcutSpec] = &[
@@ -440,19 +453,24 @@ pub fn shortcut_name_for_action(action: &dyn Action) -> Option<&'static str> {
 }
 
 /// Every browser shortcut worth listing, grouped by what it acts on.
-pub fn shortcut_groups() -> Vec<ShortcutGroup> {
+pub fn shortcut_groups(features: &FeatureSettings) -> Vec<ShortcutGroup> {
     GROUPS
         .into_iter()
-        .map(|name| ShortcutGroup {
-            name,
-            entries: shortcut_specs()
+        .filter_map(|name| {
+            let entries: Vec<_> = shortcut_specs()
                 .iter()
                 .filter(|shortcut| shortcut.group == name)
+                .filter(|shortcut| {
+                    shortcut
+                        .feature()
+                        .is_none_or(|feature| features.is_enabled(feature))
+                })
                 .map(|shortcut| ShortcutEntry {
                     name: shortcut.label.name(),
                     action: shortcut.action.action(),
                 })
-                .collect(),
+                .collect();
+            (!entries.is_empty()).then_some(ShortcutGroup { name, entries })
         })
         .collect()
 }
@@ -465,7 +483,7 @@ mod tests {
     #[test]
     fn every_listed_shortcut_has_a_binding() {
         let bindings = browser_shortcuts();
-        for group in shortcut_groups() {
+        for group in shortcut_groups(&FeatureSettings::default()) {
             for entry in group.entries {
                 assert!(
                     bindings
@@ -476,6 +494,27 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn disabled_features_remove_their_shortcuts_from_the_help_catalog() {
+        let mut features = FeatureSettings::default();
+        features.disable(Feature::FindInPage);
+        features.disable(Feature::History);
+        features.disable(Feature::Downloads);
+
+        let entries: Vec<_> = shortcut_groups(&features)
+            .into_iter()
+            .flat_map(|group| group.entries)
+            .map(|entry| entry.name)
+            .collect();
+
+        assert!(!entries.contains(&"Find in Page"));
+        assert!(!entries.contains(&"Find Next"));
+        assert!(!entries.contains(&"History"));
+        assert!(!entries.contains(&"Downloads"));
+        assert!(entries.contains(&"Go Back"));
+        assert!(entries.contains(&"Settings"));
     }
 
     #[test]

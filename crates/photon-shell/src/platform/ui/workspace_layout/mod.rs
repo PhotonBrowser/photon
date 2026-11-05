@@ -5,7 +5,8 @@
 
 use gpui::{App, Window};
 use photon_core::{
-    DockRegion, SpaceId, TabLayout, WorkspaceLayout as SavedWorkspaceLayout, WorkspaceSettings,
+    DockRegion, Feature, SpaceId, TabLayout, WorkspaceLayout as SavedWorkspaceLayout,
+    WorkspaceSettings,
 };
 use std::rc::Rc;
 
@@ -44,6 +45,9 @@ impl WorkspaceLayout {
     }
 
     fn resolve(settings: &photon_core::BrowserSettings, space: SpaceId) -> Self {
+        if !settings.features.is_enabled(Feature::Sidebar) {
+            return Self::for_tab_layout(TabLayout::Horizontal);
+        }
         let active_space = settings
             .spaces
             .get(space)
@@ -311,6 +315,22 @@ mod tests {
         assert!(vertical.shows_spaces());
         assert_eq!(vertical.omnibox_placement(), OmniboxPlacement::Sidebar);
         assert_eq!(vertical.top_extent(), 0.0);
+    }
+
+    #[test]
+    fn disabling_the_sidebar_uses_the_horizontal_layout_without_changing_preferences() {
+        let mut settings = photon_core::BrowserSettings::default();
+        settings.features.disable(Feature::Sidebar);
+        let space = settings.spaces.active().id;
+
+        let layout = WorkspaceLayout::resolve(&settings, space);
+        assert!(!layout.has_sidebar());
+        assert!(layout.has_tab_strip());
+
+        settings.features.enable(Feature::Sidebar);
+        let restored = WorkspaceLayout::resolve(&settings, space);
+        assert!(restored.has_sidebar());
+        assert!(restored.has_vertical_tabs());
     }
 
     #[test]

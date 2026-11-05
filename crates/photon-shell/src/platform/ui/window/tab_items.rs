@@ -33,8 +33,12 @@ impl BrowserWindow {
     /// every tab.
     pub(super) fn listed_tabs(&self, cx: &App) -> Vec<usize> {
         let mut tabs = self.space_tabs(cx);
-        if self.shows_spaces(cx) {
-            tabs.retain(|&index| self.tabs[index].favourite.is_none());
+        if self.layout(cx).has_sidebar() {
+            let current_space = (!self.shows_spaces(cx)).then(|| self.current_space(cx));
+            tabs.retain(|&index| {
+                self.tabs[index].favourite.is_none()
+                    || current_space.is_some_and(|space| self.tabs[index].space != space)
+            });
         }
         tabs
     }

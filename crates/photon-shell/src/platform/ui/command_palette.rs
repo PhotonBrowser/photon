@@ -98,7 +98,7 @@ impl CommandPalette {
 
     fn update_matches(&mut self, cx: &mut Context<Self>) {
         let query = self.input.read(cx).as_str().to_owned();
-        self.matches = COMMAND_REGISTRY.search(&query, self.availability);
+        self.matches = COMMAND_REGISTRY.search(&query, &self.availability);
         self.selected = self.selected.min(self.matches.len().saturating_sub(1));
         cx.notify();
     }

@@ -14,7 +14,7 @@ use crate::platform::shortcuts::{
 use gpui::{App, Global, Menu, MenuItem, OsAction, SystemMenuType};
 use gpui_elements::editable_text::actions::{Copy, Cut, Paste, Redo, SelectAll, Undo};
 use photon_brand::NAME;
-use photon_core::Command;
+use photon_core::{Command, Feature};
 
 use crate::platform::MenuBarState;
 
@@ -31,7 +31,7 @@ fn show_menu_bar(state: MenuBarState, cx: &mut App) {
     {
         return;
     }
-    cx.set_global(ShownMenuBar(state));
+    cx.set_global(ShownMenuBar(state.clone()));
     cx.set_menus(menu_bar(state));
 }
 
@@ -52,7 +52,7 @@ pub(crate) fn update_menu_bar(state: MenuBarState, cx: &mut App) {
 }
 
 fn menu_bar(state: MenuBarState) -> Vec<Menu> {
-    let commands = state.commands;
+    let commands = &state.commands;
     let reload = if state.loading {
         MenuItem::action(label(&StopLoading), StopLoading)
     } else {
@@ -60,7 +60,8 @@ fn menu_bar(state: MenuBarState) -> Vec<Menu> {
     }
     .disabled(!commands.allows(Command::ReloadPage));
     let mut view = vec![
-        MenuItem::action(label(&OpenCommandPalette), OpenCommandPalette),
+        MenuItem::action(label(&OpenCommandPalette), OpenCommandPalette)
+            .disabled(!commands.features.is_enabled(Feature::CommandPalette)),
         MenuItem::separator(),
     ];
     if commands.has_sidebar {
@@ -71,7 +72,9 @@ fn menu_bar(state: MenuBarState) -> Vec<Menu> {
         ]);
     }
     view.extend([
-        MenuItem::action(label(&ToggleZenMode), ToggleZenMode).checked(state.zen),
+        MenuItem::action(label(&ToggleZenMode), ToggleZenMode)
+            .checked(state.zen)
+            .disabled(!commands.allows(Command::ToggleZenMode)),
         MenuItem::action(label(&ToggleSplitView), ToggleSplitView)
             .checked(state.split_view)
             .disabled(!commands.allows(Command::ToggleSplitView)),
@@ -82,9 +85,12 @@ fn menu_bar(state: MenuBarState) -> Vec<Menu> {
         MenuItem::action(label(&ZoomOut), ZoomOut),
         MenuItem::action(label(&ResetZoom), ResetZoom),
         MenuItem::separator(),
-        MenuItem::action(label(&OpenHistory), OpenHistory),
-        MenuItem::action(label(&OpenDownloads), OpenDownloads),
-        MenuItem::action(label(&OpenTaskManager), OpenTaskManager),
+        MenuItem::action(label(&OpenHistory), OpenHistory)
+            .disabled(!commands.allows(Command::OpenHistory)),
+        MenuItem::action(label(&OpenDownloads), OpenDownloads)
+            .disabled(!commands.allows(Command::OpenDownloads)),
+        MenuItem::action(label(&OpenTaskManager), OpenTaskManager)
+            .disabled(!commands.allows(Command::OpenTaskManager)),
         MenuItem::separator(),
         reload,
     ]);
@@ -123,8 +129,10 @@ fn menu_bar(state: MenuBarState) -> Vec<Menu> {
             MenuItem::separator(),
             MenuItem::action(label(&FindInPage), FindInPage)
                 .disabled(!commands.allows(Command::FindInPage)),
-            MenuItem::action(label(&FindNext), FindNext).disabled(!commands.has_page),
-            MenuItem::action(label(&FindPrevious), FindPrevious).disabled(!commands.has_page),
+            MenuItem::action(label(&FindNext), FindNext)
+                .disabled(!commands.features.is_enabled(Feature::FindInPage) || !commands.has_page),
+            MenuItem::action(label(&FindPrevious), FindPrevious)
+                .disabled(!commands.features.is_enabled(Feature::FindInPage) || !commands.has_page),
         ]),
         Menu::new("View").items(view),
         Menu::new("History").items([
@@ -147,7 +155,8 @@ fn menu_bar(state: MenuBarState) -> Vec<Menu> {
         Menu::new("Help").items([MenuItem::action(
             label(&ShowKeyboardShortcuts),
             ShowKeyboardShortcuts,
-        )]),
+        )
+        .disabled(!commands.allows(Command::ShowKeyboardShortcuts))]),
     ]
 }
 
@@ -193,6 +202,7 @@ mod tests {
                 has_next_space: true,
                 has_previous_space: true,
                 shows_split: true,
+                features: Default::default(),
                 private: false,
             },
             ..MenuBarState::default()

@@ -7,7 +7,7 @@ use gpui::{
     AnyElement, App, Context, DragMoveEvent, Empty, ImageSource, ObjectFit, Pixels, Point, Render,
     SharedString, Size, Window, div, img, prelude::*, px, relative, rgba,
 };
-use photon_core::site_name;
+use photon_core::{Feature, site_name};
 use std::time::Instant;
 
 use super::super::icons::{globe_icon, photon_logo, sleeping_icon};
@@ -198,6 +198,9 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if !Settings::get(cx).features.is_enabled(Feature::SplitView) {
+            return;
+        }
         let Some(id) = self.tabs.get(index).map(|tab| tab.id) else {
             return;
         };
@@ -220,6 +223,9 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if !Settings::get(cx).features.is_enabled(Feature::SplitView) {
+            return;
+        }
         let (Some(active), Some(other)) = (self.active_id(), self.tabs.get(index).map(|t| t.id))
         else {
             return;
@@ -248,6 +254,9 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if !Settings::get(cx).features.is_enabled(Feature::SplitView) {
+            return;
+        }
         self.close_split_view(false, cx);
         let mut presence = Tween::at_with_curve(0.0, TweenCurve::EaseOut);
         presence.animate_to(1.0, Speed::Standard, &Settings::motion(cx));
@@ -407,6 +416,9 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if !Settings::get(cx).features.is_enabled(Feature::SplitView) {
+            return;
+        }
         if leading == trailing
             || self.tab_index_by_id(leading).is_none()
             || self.tab_index_by_id(trailing).is_none()
@@ -469,6 +481,9 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if !Settings::get(cx).features.is_enabled(Feature::SplitView) {
+            return;
+        }
         let Some(leading) = self.active_tab else {
             return;
         };
@@ -643,6 +658,9 @@ impl BrowserWindow {
         palette: ThemeColors,
         cx: &App,
     ) -> Option<AnyElement> {
+        if !Settings::get(cx).features.is_enabled(Feature::SplitView) {
+            return None;
+        }
         let side = self.split_drop?;
         // Drawn only while the dragged tab is still being dragged, so a
         // drag ended any other way, as by closing its tab, leaves no mark.

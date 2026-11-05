@@ -91,7 +91,7 @@ pub(crate) use ui::run;
 pub use ui::show_alert;
 
 /// State the shared browser UI sends to its native menu adapter.
-#[derive(Clone, Copy, Default, PartialEq)]
+#[derive(Clone, Default, PartialEq)]
 #[cfg_attr(target_os = "linux", allow(dead_code))]
 pub(crate) struct MenuBarState {
     pub(crate) commands: CommandAvailability,

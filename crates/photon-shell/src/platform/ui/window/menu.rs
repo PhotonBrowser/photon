@@ -3,7 +3,7 @@
 //! which the window runs when the item is chosen.
 
 use gpui::{App, Context, MenuItem, SharedString, Window};
-use photon_core::{Shortcut, SpaceId};
+use photon_core::{Feature, Shortcut, SpaceId};
 
 use crate::platform::app_update::update_app;
 
@@ -117,6 +117,12 @@ impl BrowserWindow {
     }
 
     pub(super) fn toggle_performance_overlay(&mut self, cx: &mut Context<Self>) {
+        if !super::super::settings::Settings::get(cx)
+            .features
+            .is_enabled(Feature::PerformanceTools)
+        {
+            return;
+        }
         if let Some(webview) = self.active_webview() {
             webview.update(cx, |view, cx| {
                 view.set_performance_overlay_enabled(!view.performance_overlay_enabled);

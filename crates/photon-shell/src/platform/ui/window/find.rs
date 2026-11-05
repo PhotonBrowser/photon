@@ -1,6 +1,7 @@
 //! Opening, stepping through and closing the find bar.
 
 use gpui::{Context, Window, prelude::*};
+use photon_core::Feature;
 
 use super::super::find_bar::{CloseFindBar, FindBar};
 use super::BrowserWindow;
@@ -8,6 +9,12 @@ use super::BrowserWindow;
 impl BrowserWindow {
     /// Opens the find bar for the active tab, or focuses it when it is open.
     pub(super) fn open_find_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !super::super::settings::Settings::get(cx)
+            .features
+            .is_enabled(Feature::FindInPage)
+        {
+            return;
+        }
         let bar = match &self.find_bar {
             Some((bar, _)) => bar.clone(),
             None => {
@@ -29,6 +36,12 @@ impl BrowserWindow {
 
     /// Goes to the next or previous match, opening the bar if it is closed.
     pub(super) fn find_step(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
+        if !super::super::settings::Settings::get(cx)
+            .features
+            .is_enabled(Feature::FindInPage)
+        {
+            return;
+        }
         match &self.find_bar {
             Some((bar, _)) => bar.update(cx, |bar, cx| bar.step(forward, cx)),
             None => self.open_find_bar(window, cx),

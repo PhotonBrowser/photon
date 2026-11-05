@@ -6,7 +6,7 @@ use gpui::{
     AnyElement, Context, Entity, MenuItem, MouseDownEvent, ScrollDelta, ScrollWheelEvent,
     Subscription, TouchPhase, Window, div, prelude::*,
 };
-use photon_core::{SpaceId, WindowColor};
+use photon_core::{Feature, SpaceId, WindowColor};
 use std::time::Instant;
 use std::{cell::Cell, rc::Rc};
 
@@ -110,9 +110,15 @@ impl BrowserWindow {
     /// strip shows every tab.
     pub(super) fn shows_spaces(&self, cx: &gpui::App) -> bool {
         self.layout(cx).shows_spaces()
+            && Settings::get(cx)
+                .features
+                .is_enabled(photon_core::Feature::Spaces)
     }
 
     pub(super) fn switch_space(&mut self, id: SpaceId, cx: &mut Context<Self>) {
+        if !Settings::get(cx).features.is_enabled(Feature::Spaces) {
+            return;
+        }
         if Settings::get(cx).spaces.get(id).is_none() {
             return;
         }
@@ -126,6 +132,9 @@ impl BrowserWindow {
 
     /// Switches to the space `offset` places along, if there is one.
     pub(super) fn switch_space_by(&mut self, offset: isize, cx: &mut Context<Self>) {
+        if !Settings::get(cx).features.is_enabled(Feature::Spaces) {
+            return;
+        }
         let current = self.current_space(cx);
         if let Some(id) = Settings::get(cx).spaces.neighbour_of(current, offset) {
             self.switch_space(id, cx);
@@ -215,6 +224,9 @@ impl BrowserWindow {
 
     /// The footer's dots, one per space.
     pub(super) fn space_dots(&self, palette: ThemeColors, cx: &mut Context<Self>) -> Vec<SpaceDot> {
+        if !Settings::get(cx).features.is_enabled(Feature::Spaces) {
+            return Vec::new();
+        }
         let active = self.current_space(cx);
         let spaces = &Settings::get(cx).spaces;
         spaces
