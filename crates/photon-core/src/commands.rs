@@ -3,6 +3,7 @@
 use std::ops::Range;
 
 use crate::omnibox::match_words;
+use crate::{Feature, FeatureSettings};
 
 /// A command the browser window can execute.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -279,7 +280,7 @@ impl CommandRegistry {
 
     /// Available commands matching every query word at the start of a name or
     /// keyword. An empty query returns all commands allowed in this context.
-    pub fn search(self, query: &str, availability: CommandAvailability) -> Vec<CommandMatch> {
+    pub fn search(self, query: &str, availability: &CommandAvailability) -> Vec<CommandMatch> {
         let query = query.trim();
         self.builtins()
             .iter()
@@ -311,7 +312,7 @@ impl Command {
 }
 
 /// Browser state that determines which commands can run in a window.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CommandAvailability {
     pub has_page: bool,
     /// Whether the window has an active tab, whatever it shows.
@@ -327,6 +328,8 @@ pub struct CommandAvailability {
     pub has_previous_space: bool,
     /// Whether two tabs show side by side.
     pub shows_split: bool,
+    /// Profile feature preferences used to suppress disabled commands.
+    pub features: FeatureSettings,
     /// A private window is disposable: it cannot change settings, themes or
     /// spaces.
     pub private: bool,
@@ -346,11 +349,33 @@ impl Command {
                 | Self::OpenSettings
         )
     }
+
+    /// The optional feature that makes this command available, if any.
+    pub fn feature(self) -> Option<Feature> {
+        match self {
+            Self::ToggleSidebar | Self::ToggleSidebarIcons => Some(Feature::Sidebar),
+            Self::ToggleZenMode => Some(Feature::ZenMode),
+            Self::FindInPage => Some(Feature::FindInPage),
+            Self::ToggleSplitView | Self::SwitchSplitPane => Some(Feature::SplitView),
+            Self::NewSpace | Self::NextSpace | Self::PreviousSpace => Some(Feature::Spaces),
+            Self::OpenHistory => Some(Feature::History),
+            Self::OpenDownloads => Some(Feature::Downloads),
+            Self::OpenTaskManager => Some(Feature::PerformanceTools),
+            Self::ShowKeyboardShortcuts => Some(Feature::KeyboardShortcuts),
+            _ => None,
+        }
+    }
 }
 
 impl CommandAvailability {
     /// Whether `command` can run with these capabilities.
-    pub fn allows(self, command: Command) -> bool {
+    pub fn allows(&self, command: Command) -> bool {
+        if command
+            .feature()
+            .is_some_and(|feature| !self.features.is_enabled(feature))
+        {
+            return false;
+        }
         if self.private && command.customises() {
             return false;
         }
@@ -372,7 +397,7 @@ impl CommandAvailability {
     }
 
     /// Registered commands that can run with these capabilities.
-    pub fn commands(self) -> impl Iterator<Item = Command> {
+    pub fn commands(&self) -> impl Iterator<Item = Command> + '_ {
         COMMAND_REGISTRY
             .builtins()
             .iter()
@@ -396,6 +421,28 @@ mod tests {
         assert!(!private.allows(Command::NextSpace));
         assert!(private.allows(Command::NewTab));
         assert!(private.allows(Command::NewPrivateWindow));
+    }
+
+    #[test]
+    fn disabled_features_remove_commands_from_every_catalog_query() {
+        let mut features = FeatureSettings::default();
+        features.disable(Feature::FindInPage);
+        features.disable(Feature::Downloads);
+        let availability = CommandAvailability {
+            has_page: true,
+            features,
+            ..CommandAvailability::default()
+        };
+
+        assert!(!availability.allows(Command::FindInPage));
+        assert!(!availability.allows(Command::OpenDownloads));
+        assert!(availability.allows(Command::OpenHistory));
+        assert!(COMMAND_REGISTRY.search("find", &availability).is_empty());
+        assert!(
+            !availability
+                .commands()
+                .any(|command| command == Command::OpenDownloads)
+        );
     }
     use super::*;
     use std::collections::HashSet;
@@ -459,6 +506,7 @@ mod tests {
             has_next_space: true,
             has_previous_space: false,
             shows_split: false,
+            features: FeatureSettings::default(),
             private: false,
         };
 
@@ -487,11 +535,11 @@ mod tests {
             has_page: true,
             ..CommandAvailability::default()
         };
-        let matches = COMMAND_REGISTRY.search("refresh", availability);
+        let matches = COMMAND_REGISTRY.search("refresh", &availability);
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].command, Command::ReloadPage);
 
-        let matches = COMMAND_REGISTRY.search("address", availability);
+        let matches = COMMAND_REGISTRY.search("address", &availability);
         assert!(
             matches
                 .iter()

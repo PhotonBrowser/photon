@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::features::FeatureSettings;
 use super::new_tab::NewTabSettings;
 use super::sidebar::SidebarSettings;
 use super::spaces::Spaces;
@@ -155,6 +156,8 @@ pub struct BrowserSettings {
     /// not, it shows only the site until clicked.
     pub show_full_address: bool,
     pub popup_policy: PopupPolicy,
+    /// Which optional browser features are disabled for this profile.
+    pub features: FeatureSettings,
     pub new_tab: NewTabSettings,
     pub sidebar: SidebarSettings,
     /// Whether closing the last tab closes its window. When not, the window
@@ -264,6 +267,7 @@ impl Default for BrowserSettings {
             default_search_engine: "google".to_owned(),
             show_full_address: false,
             popup_policy: PopupPolicy::Ask,
+            features: FeatureSettings::default(),
             new_tab: NewTabSettings::default(),
             sidebar: SidebarSettings::default(),
             close_window_with_last_tab: true,
@@ -359,6 +363,14 @@ mod tests {
     #[test]
     fn keeps_the_shared_engine_warm_for_one_minute_by_default() {
         assert_eq!(BrowserSettings::default().engine_idle_timeout_seconds, 60);
+    }
+
+    #[test]
+    fn profiles_without_feature_preferences_keep_every_feature_enabled() {
+        let settings: BrowserSettings =
+            serde_json::from_str("{}").expect("older profiles remain readable");
+        assert!(settings.features.is_enabled(crate::Feature::Sidebar));
+        assert!(settings.features.is_enabled(crate::Feature::History));
     }
 
     #[test]

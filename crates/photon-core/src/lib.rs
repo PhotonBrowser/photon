@@ -4,6 +4,7 @@ mod browsing_data;
 mod commands;
 mod crashes;
 mod dialogs;
+mod features;
 mod history;
 mod history_days;
 mod internal_pages;
@@ -25,6 +26,9 @@ pub use commands::{
 };
 pub use crashes::{CrashResponse, EngineService, PageCrashes};
 pub use dialogs::{Credentials, DialogInput, DialogKind, DialogReply, DialogRequest, PageDialogs};
+pub use features::{
+    FEATURE_REGISTRY, Feature, FeatureDefinition, FeatureRegistry, FeatureSettings,
+};
 pub use history::{HISTORY_MAX_PAGES, HISTORY_MAX_SEARCHES, History, HistoryEntry, SearchEntry};
 pub use history_days::{day_heading, local_day, time_of_day};
 pub use internal_pages::{internal_page_name, internal_page_url};
