@@ -445,13 +445,16 @@ mod tests {
         assert!(!settings.is_feature_enabled(crate::Feature::InteractionSounds));
         assert!(!settings.is_feature_enabled(crate::Feature::TabArchiving));
         assert!(settings.is_feature_enabled(crate::Feature::NewTabShortcuts));
+        assert!(settings.is_feature_enabled(crate::Feature::NewTabCustomization));
 
         settings.set_feature_enabled(crate::Feature::InteractionSounds, true);
         settings.set_feature_enabled(crate::Feature::NewTabShortcuts, false);
         settings.set_feature_enabled(crate::Feature::TabArchiving, true);
+        settings.set_feature_enabled(crate::Feature::NewTabCustomization, false);
         assert!(settings.interaction_sounds);
         assert!(!settings.new_tab.show_shortcuts);
         assert!(settings.archive_tabs);
+        assert!(!settings.is_feature_enabled(crate::Feature::NewTabCustomization));
 
         settings.tab_sleep_mode = TabSleepMode::Maximum;
         settings.set_feature_enabled(crate::Feature::TabSleeping, false);

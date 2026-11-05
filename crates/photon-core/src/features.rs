@@ -1,57 +1,39 @@
-//! Optional browser features and the stable catalog users can configure.
+//! Optional browser features and the registry generated from their modules.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::BTreeSet;
 
 /// An optional built-in feature of the browser shell.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+///
+/// The build script creates one associated constant per module under
+/// `src/features`, so adding a feature module also registers its stable ID.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(transparent)]
 #[non_exhaustive]
-#[serde(rename_all = "kebab-case")]
-pub enum Feature {
-    /// The vertical navigation and tab sidebar.
-    Sidebar,
-    /// Searchable command execution from the keyboard.
-    CommandPalette,
-    /// Page text search and its find bar.
-    FindInPage,
-    /// The built-in browser history view.
-    History,
-    /// Download progress and the built-in downloads view.
-    Downloads,
-    /// Live resource and process inspection tools.
-    PerformanceTools,
-    /// Two tabs displayed beside one another.
-    SplitView,
-    /// User-created groups of tabs.
-    Spaces,
-    /// The built-in keyboard shortcut reference.
-    KeyboardShortcuts,
-    /// Hiding the browser's surrounding chrome for focused browsing.
-    ZenMode,
-    /// Native Liquid Glass or platform material behind the window.
-    LiquidGlass,
-    /// Native glass behind menus and popovers where supported.
-    GlassMenus,
-    /// Translucent browser surfaces.
-    Transparency,
-    /// Decorative noise on the browser's window background.
-    BackgroundNoise,
-    /// Transitions and other animated interface effects.
-    Animations,
-    /// Elastic scrolling for browser interface surfaces.
-    ElasticScrolling,
-    /// Sound effects for interface feedback.
-    InteractionSounds,
-    /// Asking sites to use dark appearance where supported.
-    ForceDarkMode,
-    /// The logo on the new tab page.
-    NewTabLogo,
-    /// Website shortcuts on the new tab page.
-    NewTabShortcuts,
-    /// Automatic discarding of idle page processes.
-    TabSleeping,
-    /// Closing tabs that have been unused for twelve hours.
-    TabArchiving,
+pub struct Feature(&'static str);
+
+impl Feature {
+    /// The stable key stored in profile settings.
+    pub const fn key(self) -> &'static str {
+        self.0
+    }
+}
+
+impl<'de> Deserialize<'de> for Feature {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let key = String::deserialize(deserializer)?;
+        FEATURE_REGISTRY
+            .builtins()
+            .iter()
+            .find(|definition| definition.key == key)
+            .map(|definition| definition.feature)
+            .ok_or_else(|| {
+                <D::Error as serde::de::Error>::custom(format!("unknown feature key `{key}`"))
+            })
+    }
 }
 
 /// A group of related optional features in the settings catalog.
@@ -164,209 +146,10 @@ macro_rules! feature {
     };
 }
 
-const FEATURES: &[FeatureDefinition] = &[
-    feature!(
-        Sidebar,
-        "sidebar",
-        "Sidebar",
-        "Vertical tabs, favourites, and sidebar navigation.",
-        Navigation,
-        Registry,
-        NO_REQUIREMENTS
-    ),
-    feature!(
-        Spaces,
-        "spaces",
-        "Spaces",
-        "Switch between groups of tabs in the sidebar. Requires Sidebar.",
-        Navigation,
-        Registry,
-        SIDEBAR_REQUIREMENT
-    ),
-    feature!(
-        SplitView,
-        "split-view",
-        "Split view",
-        "Show two tabs side by side in one window.",
-        Navigation,
-        Registry,
-        NO_REQUIREMENTS
-    ),
-    feature!(
-        ZenMode,
-        "zen-mode",
-        "Zen mode",
-        "Hide the browser controls around the page for focused browsing.",
-        Navigation,
-        Registry,
-        NO_REQUIREMENTS
-    ),
-    feature!(
-        CommandPalette,
-        "command-palette",
-        "Command palette",
-        "Search and run browser commands from the keyboard.",
-        PageTools,
-        Registry,
-        NO_REQUIREMENTS
-    ),
-    feature!(
-        FindInPage,
-        "find-in-page",
-        "Find in page",
-        "Search for text in the current page.",
-        PageTools,
-        Registry,
-        NO_REQUIREMENTS
-    ),
-    feature!(
-        History,
-        "history",
-        "History page",
-        "Browse, search, and import visited pages.",
-        PageTools,
-        Registry,
-        NO_REQUIREMENTS
-    ),
-    feature!(
-        Downloads,
-        "downloads",
-        "Downloads interface",
-        "Show download controls, progress, and the downloads page.",
-        PageTools,
-        Registry,
-        NO_REQUIREMENTS
-    ),
-    feature!(
-        PerformanceTools,
-        "performance-tools",
-        "Performance tools",
-        "Open live process, resource, and performance details.",
-        PageTools,
-        Registry,
-        NO_REQUIREMENTS
-    ),
-    feature!(
-        KeyboardShortcuts,
-        "keyboard-shortcuts",
-        "Keyboard shortcuts help",
-        "Open the built-in list of browser keyboard shortcuts.",
-        PageTools,
-        Registry,
-        NO_REQUIREMENTS
-    ),
-    feature!(
-        LiquidGlass,
-        "liquid-glass",
-        "Liquid Glass window material",
-        "Allow Liquid Glass or the platform's equivalent native window material.",
-        Appearance,
-        Registry,
-        NO_REQUIREMENTS
-    ),
-    feature!(
-        GlassMenus,
-        "glass-menus",
-        "Glass menus and popovers",
-        "Use Liquid Glass behind menus and popovers where supported.",
-        Appearance,
-        GlassMenus,
-        NO_REQUIREMENTS
-    ),
-    feature!(
-        Transparency,
-        "transparency",
-        "Translucent surfaces",
-        "Allow desktop translucency; choose its strength in Appearance.",
-        Appearance,
-        Registry,
-        NO_REQUIREMENTS
-    ),
-    feature!(
-        BackgroundNoise,
-        "background-noise",
-        "Background texture",
-        "Show decorative texture on browser window backgrounds.",
-        Appearance,
-        Registry,
-        NO_REQUIREMENTS
-    ),
-    feature!(
-        ForceDarkMode,
-        "force-dark-mode",
-        "Force dark page appearance",
-        "Ask sites to use dark themes and darken light content where supported.",
-        Appearance,
-        ForceDarkMode,
-        NO_REQUIREMENTS
-    ),
-    feature!(
-        Animations,
-        "animations",
-        "Interface animations",
-        "Animate browser interface changes. Timing remains configurable in the profile.",
-        Interaction,
-        Animations,
-        NO_REQUIREMENTS
-    ),
-    feature!(
-        ElasticScrolling,
-        "elastic-scrolling",
-        "Elastic scrolling",
-        "Allow browser interface surfaces to stretch past their scroll limits where supported.",
-        Interaction,
-        ElasticScrolling,
-        NO_REQUIREMENTS
-    ),
-    feature!(
-        InteractionSounds,
-        "interaction-sounds",
-        "Interaction sounds",
-        "Play subtle sounds with browser interface feedback.",
-        Interaction,
-        InteractionSounds,
-        NO_REQUIREMENTS
-    ),
-    feature!(
-        NewTabLogo,
-        "new-tab-logo",
-        "New tab logo",
-        "Show the Photon logo on the new tab page.",
-        NewTab,
-        NewTabLogo,
-        NO_REQUIREMENTS
-    ),
-    feature!(
-        NewTabShortcuts,
-        "new-tab-shortcuts",
-        "New tab shortcuts",
-        "Show pinned and frequently visited websites on the new tab page.",
-        NewTab,
-        NewTabShortcuts,
-        NO_REQUIREMENTS
-    ),
-    feature!(
-        TabSleeping,
-        "tab-sleeping",
-        "Tab sleeping",
-        "Discard idle page processes using the mode selected under Tabs.",
-        TabManagement,
-        TabSleeping,
-        NO_REQUIREMENTS
-    ),
-    feature!(
-        TabArchiving,
-        "tab-archiving",
-        "Tab archiving",
-        "Close tabs that have been unused for twelve hours.",
-        TabManagement,
-        TabArchiving,
-        NO_REQUIREMENTS
-    ),
-];
+include!(concat!(env!("OUT_DIR"), "/feature_registry.rs"));
 
 impl FeatureRegistry {
-    /// Every optional feature in stable display order.
+    /// Every optional feature in alphabetical, build-generated order.
     pub const fn builtins(self) -> &'static [FeatureDefinition] {
         FEATURES
     }
@@ -376,7 +159,7 @@ impl FeatureRegistry {
         FEATURES
             .iter()
             .find(|definition| definition.feature == feature)
-            .expect("every optional feature must have a registry definition")
+            .expect("every built-in feature must have a registry definition")
     }
 }
 
@@ -455,12 +238,15 @@ mod tests {
     }
 
     #[test]
-    fn registry_has_one_definition_for_every_feature() {
+    fn feature_modules_register_every_definition_once() {
         let definitions = FEATURE_REGISTRY.builtins();
+        let mut keys = BTreeSet::new();
         for definition in definitions {
+            assert_eq!(definition.key, definition.feature.key());
+            assert!(keys.insert(definition.key));
             assert_eq!(FEATURE_REGISTRY.definition(definition.feature), definition);
         }
-        assert_eq!(definitions.len(), 22);
+        assert!(!definitions.is_empty());
         for category in FeatureCategory::ALL {
             assert!(
                 definitions
@@ -468,5 +254,18 @@ mod tests {
                     .any(|definition| definition.category == category)
             );
         }
+    }
+
+    #[test]
+    fn feature_serialization_uses_its_stable_key() {
+        assert_eq!(
+            serde_json::to_string(&Feature::NewTabLogo).unwrap(),
+            "\"new-tab-logo\""
+        );
+        assert_eq!(
+            serde_json::from_str::<Feature>("\"new-tab-logo\"").unwrap(),
+            Feature::NewTabLogo
+        );
+        assert!(serde_json::from_str::<Feature>("\"unknown-feature\"").is_err());
     }
 }

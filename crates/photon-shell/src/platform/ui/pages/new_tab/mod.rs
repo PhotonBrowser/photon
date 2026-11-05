@@ -65,7 +65,16 @@ impl NewTabPage {
             adding: None,
             adding_presence: Presence::default(),
             // Follow changes made here, in settings, or in another window.
-            _settings_observer: cx.observe_global::<Settings>(|_, cx| cx.notify()),
+            _settings_observer: cx.observe_global::<Settings>(|this, cx| {
+                if !Settings::get(cx).is_feature_enabled(photon_core::Feature::NewTabCustomization)
+                {
+                    this.customising = false;
+                    this.customise_presence = Presence::default();
+                    this.adding = None;
+                    this.adding_presence = Presence::default();
+                }
+                cx.notify();
+            }),
             _history_observer: cx.observe_global::<BrowsingHistory>(|_, cx| cx.notify()),
         }
     }
@@ -106,6 +115,8 @@ impl Render for NewTabPage {
         let elastic_scroll = crate::platform::ui::elastic_scroll_enabled(cx);
         let show_logo = settings.is_feature_enabled(photon_core::Feature::NewTabLogo);
         let show_shortcuts = settings.is_feature_enabled(photon_core::Feature::NewTabShortcuts);
+        let customization_enabled =
+            settings.is_feature_enabled(photon_core::Feature::NewTabCustomization);
         let shortcuts = if show_shortcuts {
             layout.shortcuts(&BrowsingHistory::most_visited(layout.history_needed(), cx))
         } else {
@@ -147,7 +158,7 @@ impl Render for NewTabPage {
                     .p(px(metrics::INTERNAL_PAGE_INSET))
                     .child(content),
             )
-            .when(!private, |page| {
+            .when(!private && customization_enabled, |page| {
                 page.child(
                     div()
                         .absolute()
@@ -156,7 +167,9 @@ impl Render for NewTabPage {
                         .child(self.customise_button(palette, cx)),
                 )
             })
-            .children(self.shortcut_form(super::super::theme::palette(window, cx), cx))
+            .when(!private && customization_enabled, |page| {
+                page.children(self.shortcut_form(super::super::theme::palette(window, cx), cx))
+            })
     }
 }
 
