@@ -68,7 +68,7 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
             if current.is_feature_enabled(Feature::TabSleeping) {
                 sleep_description(sleep_mode).to_owned()
             } else {
-                "Tab sleeping is disabled. Enable it under Features to choose an idle policy."
+                "Tab sleeping is disabled. Enable it under Advanced to choose an idle policy."
                     .to_owned()
             }
             .into(),

@@ -208,7 +208,7 @@ impl gpui::Render for PageFrame {
             self.body = None;
             let palette = super::theme::page_palette(window, cx);
             let message = format!(
-                "{} is turned off. Re-enable it in Settings under Features.",
+                "{} is turned off. Re-enable it in Settings under Advanced.",
                 self.definition.title
             );
             return page_frame(

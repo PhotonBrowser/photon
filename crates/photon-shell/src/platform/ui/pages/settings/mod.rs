@@ -19,8 +19,8 @@ mod workspace_presets;
 use super::super::controls::{FocusRing, RovingAxis, RovingFocus};
 use super::super::controls::{OwnsClicks, Pressable};
 use super::super::icons::{
-    appearance_icon, globe_icon, grid_icon, search_icon_sized, settings_icon, shield_icon,
-    sidebar_icon,
+    appearance_icon, globe_icon, grid_icon, more_icon, search_icon_sized, settings_icon,
+    shield_icon, sidebar_icon,
 };
 use super::super::layout::{h_stack, v_stack};
 use super::super::motion::{AnimateIn, Entrance, Presence, fade};
@@ -45,50 +45,50 @@ const SECTION_MOTION: Entrance = fade();
 #[derive(Clone, Copy, PartialEq)]
 enum Section {
     General,
-    Features,
     Appearance,
     Search,
     NewTab,
     Tabs,
     Sites,
     Privacy,
+    Advanced,
 }
 
 impl Section {
     const ALL: [Self; 8] = [
         Self::General,
-        Self::Features,
         Self::Appearance,
         Self::Search,
         Self::NewTab,
         Self::Tabs,
         Self::Sites,
         Self::Privacy,
+        Self::Advanced,
     ];
 
     fn id(self) -> &'static str {
         match self {
             Self::General => "general",
-            Self::Features => "features",
             Self::Appearance => "appearance",
             Self::Search => "search",
             Self::NewTab => "new-tab",
             Self::Tabs => "tabs",
             Self::Sites => "sites",
             Self::Privacy => "privacy",
+            Self::Advanced => "advanced",
         }
     }
 
     fn title(self) -> &'static str {
         match self {
             Self::General => "General",
-            Self::Features => "Features",
             Self::Appearance => "Appearance",
             Self::Search => "Search",
             Self::NewTab => "New tab page",
             Self::Tabs => "Tabs",
             Self::Sites => "Sites",
             Self::Privacy => "Privacy",
+            Self::Advanced => "Advanced",
         }
     }
 
@@ -96,7 +96,6 @@ impl Section {
         let name = photon_brand::NAME;
         match self {
             Self::General => format!("How {name} fits in with your Mac."),
-            Self::Features => "Choose which optional browser features are available.".to_owned(),
             Self::Appearance => format!("How {name} looks."),
             Self::Search => {
                 "Where searches from the address bar go, and how it shows addresses.".to_owned()
@@ -105,6 +104,7 @@ impl Section {
             Self::Tabs => "How tabs open and close.".to_owned(),
             Self::Sites => "What sites may do.".to_owned(),
             Self::Privacy => format!("Delete what {name} and websites keep on this Mac."),
+            Self::Advanced => "Choose which optional browser features are available.".to_owned(),
         }
     }
 
@@ -112,13 +112,13 @@ impl Section {
         let size = metrics::SETTINGS_SIDEBAR_ICON_SIZE;
         match self {
             Self::General => settings_icon(color, size).into_any_element(),
-            Self::Features => grid_icon(color, size).into_any_element(),
             Self::Appearance => appearance_icon(color, size).into_any_element(),
             Self::Search => search_icon_sized(color, size).into_any_element(),
             Self::NewTab => grid_icon(color, size).into_any_element(),
             Self::Tabs => sidebar_icon(color, size).into_any_element(),
             Self::Sites => globe_icon(color, size).into_any_element(),
             Self::Privacy => shield_icon(color, size).into_any_element(),
+            Self::Advanced => more_icon(color, size).into_any_element(),
         }
     }
 }
@@ -232,7 +232,7 @@ impl Render for SettingsPage {
         });
         let body = match section {
             Section::General => general::settings(palette, cx).into_any_element(),
-            Section::Features => features::settings(palette, cx).into_any_element(),
+            Section::Advanced => features::settings(palette, cx).into_any_element(),
             Section::Appearance => appearance::settings(
                 window,
                 palette,
