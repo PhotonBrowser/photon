@@ -8,7 +8,7 @@
 
 use gpui::{App, BorrowAppContext, Global, Task, WindowAppearance};
 use photon_core::SearchEngines;
-use photon_core::{BrowserSettings, SpaceId, ThemeMode};
+use photon_core::{BrowserSettings, Feature, SpaceId, ThemeMode};
 use photon_storage::{Profile, ProfileWriteTicket};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -291,7 +291,7 @@ impl Settings {
     pub(super) fn motion(cx: &App) -> MotionConfig {
         let settings = Self::get(cx).animations;
         MotionConfig {
-            enabled: settings.enabled,
+            enabled: Self::get(cx).is_feature_enabled(Feature::Animations),
             reduce_motion: cx.reduce_motion(),
             effect_strength: f32::from(settings.effect_strength_percent.min(300)) / 100.0,
             timings: MotionTimings {

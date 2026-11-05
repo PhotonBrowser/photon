@@ -287,7 +287,7 @@ impl Render for SettingsPage {
             .child(div().flex_1().h_full().min_w_0().child(scrolling_column(
                 "settings-content",
                 content,
-                crate::platform::supports_elastic_scroll() && Settings::get(cx).elastic_scroll,
+                crate::platform::ui::elastic_scroll_enabled(cx),
                 if section == Section::Appearance {
                     metrics::SETTINGS_APPEARANCE_MAX_WIDTH
                 } else {

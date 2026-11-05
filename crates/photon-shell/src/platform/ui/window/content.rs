@@ -426,7 +426,7 @@ pub(super) fn create_webview_from_session(
         webview
     });
     // Apply profile preferences before the initial viewport starts navigation.
-    let force_dark_mode = Settings::get(cx).force_dark_mode;
+    let force_dark_mode = Settings::get(cx).is_feature_enabled(photon_core::Feature::ForceDarkMode);
     webview.update(cx, |view, _| view.update_force_dark_mode(force_dark_mode));
     let wake = UiWake {
         app: cx.to_async(),
@@ -441,7 +441,7 @@ pub(super) fn create_webview_from_session(
 /// appearance the settings choose.
 pub(super) fn follow_appearance(webview: &Entity<PhotonWebView>, window: &Window, cx: &mut App) {
     let appearance = Settings::appearance(window.appearance(), cx);
-    let force_dark_mode = Settings::get(cx).force_dark_mode;
+    let force_dark_mode = Settings::get(cx).is_feature_enabled(photon_core::Feature::ForceDarkMode);
     webview.update(cx, |view, _| {
         view.update_color_scheme(appearance);
         view.update_force_dark_mode(force_dark_mode);

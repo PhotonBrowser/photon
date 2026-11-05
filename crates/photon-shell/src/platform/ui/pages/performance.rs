@@ -10,7 +10,6 @@ use std::{collections::VecDeque, time::Instant};
 
 use super::super::super::engine::PerformanceDashboardLease;
 use super::super::layout::{h_stack, v_stack};
-use super::super::settings::Settings;
 use super::super::{metrics, theme::ThemeColors, theme::page_palette as palette};
 use super::layout::{group, heading, secondary_text};
 use super::{PageContext, PageDefinition, PageIcon};
@@ -309,9 +308,7 @@ impl Render for PerformancePage {
             .text_color(rgb(palette.text_primary))
             .size_full()
             .overflow_y_scroll()
-            .elastic_scroll(
-                crate::platform::supports_elastic_scroll() && Settings::get(cx).elastic_scroll,
-            )
+            .elastic_scroll(crate::platform::ui::elastic_scroll_enabled(cx))
             .p(px(metrics::PERFORMANCE_PAGE_INSET))
             .items_center()
             .child(

@@ -61,14 +61,19 @@ pub(super) type KeyDownHandler =
     Box<dyn Fn(&gpui::KeyDownEvent, &mut gpui::Window, &mut gpui::App)>;
 
 pub(in crate::platform) fn interaction_sounds_enabled(cx: &gpui::App) -> bool {
-    settings::Settings::get(cx).interaction_sounds
+    settings::Settings::get(cx).is_feature_enabled(photon_core::Feature::InteractionSounds)
+}
+
+pub(in crate::platform) fn elastic_scroll_enabled(cx: &gpui::App) -> bool {
+    crate::platform::supports_elastic_scroll()
+        && settings::Settings::get(cx).is_feature_enabled(photon_core::Feature::ElasticScrolling)
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 pub(in crate::platform) fn window_background_style(
     cx: &gpui::App,
 ) -> photon_core::WindowBackgroundStyle {
-    settings::Settings::get(cx).window_background_style
+    settings::Settings::get(cx).effective_window_background_style()
 }
 
 pub(in crate::platform) use webview::{

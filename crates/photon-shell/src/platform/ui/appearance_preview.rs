@@ -2,7 +2,7 @@
 
 use super::settings::Settings;
 use gpui::{App, EntityId, Global};
-use photon_core::{SpaceColors, SpaceId, WindowColor};
+use photon_core::{Feature, SpaceColors, SpaceId, WindowColor};
 
 #[derive(Clone, Copy, Default, PartialEq)]
 pub(super) struct AppearancePreview {
@@ -53,6 +53,9 @@ impl AppearancePreview {
     /// subtle look while the space has no colours.
     pub fn transparency_in(space: &photon_core::Space, cx: &App) -> u8 {
         let settings = Settings::get(cx);
+        if !settings.is_feature_enabled(Feature::Transparency) {
+            return 0;
+        }
         if !Self::has_colors(space, cx) {
             return ((1.0
                 - crate::platform::theme_config::theme()
@@ -77,6 +80,9 @@ impl AppearancePreview {
             .min(100)
     }
     pub fn noise(cx: &App) -> u8 {
+        if !Settings::get(cx).is_feature_enabled(Feature::BackgroundNoise) {
+            return 0;
+        }
         Self::get(cx)
             .noise
             .unwrap_or(Settings::get(cx).background_noise_intensity)

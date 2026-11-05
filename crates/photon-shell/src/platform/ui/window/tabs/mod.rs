@@ -883,7 +883,7 @@ impl BrowserWindow {
         let animations = Settings::get(cx).animations;
         if self.spinner_running
             || cx.reduce_motion()
-            || !animations.enabled
+            || !Settings::get(cx).is_feature_enabled(photon_core::Feature::Animations)
             || !self.spinner_shown(cx)
         {
             return;
@@ -896,7 +896,8 @@ impl BrowserWindow {
                 let keep_running = update_app(cx, |cx| {
                     this.update(cx, |this, cx| {
                         let keep_running = !cx.reduce_motion()
-                            && Settings::get(cx).animations.enabled
+                            && Settings::get(cx)
+                                .is_feature_enabled(photon_core::Feature::Animations)
                             && this.spinner_shown(cx);
                         if keep_running {
                             this.spinner_step = (this.spinner_step + 1) % LOADING_SPINNER_STEPS;

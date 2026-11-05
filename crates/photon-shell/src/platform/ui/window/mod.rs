@@ -422,12 +422,12 @@ impl BrowserWindow {
             self.open_tab(window, cx);
         }
         self.backdrop.update(cx, |_, cx| cx.notify());
-        let tab_sleep_mode = Settings::get(cx).tab_sleep_mode;
+        let tab_sleep_mode = Settings::get(cx).effective_tab_sleep_mode();
         if tab_sleep_mode != self.tab_sleep_mode {
             self.tab_sleep_mode = tab_sleep_mode;
             self.sleep_idle_tabs(window, cx);
         }
-        let background_style = Settings::get(cx).window_background_style;
+        let background_style = Settings::get(cx).effective_window_background_style();
         if background_style != self.window_background_style {
             window_settings::apply_background_style(window, background_style);
             self.window_background_style = background_style;
@@ -452,7 +452,8 @@ impl BrowserWindow {
 
     fn update_page_preferences(&mut self, window: &Window, cx: &mut App) {
         let appearance = Settings::appearance(window.appearance(), cx);
-        let force_dark_mode = Settings::get(cx).force_dark_mode;
+        let force_dark_mode =
+            Settings::get(cx).is_feature_enabled(photon_core::Feature::ForceDarkMode);
         for webview in self
             .tabs
             .iter()
@@ -735,7 +736,7 @@ fn open_browser_window(
                 tab_sleep_waker,
                 _tab_sleep_task: tab_sleep_task,
                 _memory_pressure_monitor: memory_pressure_monitor,
-                tab_sleep_mode: Settings::get(cx).tab_sleep_mode,
+                tab_sleep_mode: Settings::get(cx).effective_tab_sleep_mode(),
                 active_tab: None,
                 tab_page_transition: None,
                 split_view: None,
@@ -803,7 +804,7 @@ fn open_browser_window(
                 backdrop,
                 _chrome_subscription: chrome_subscription,
                 _window_observer: window_observer,
-                window_background_style: Settings::get(cx).window_background_style,
+                window_background_style: Settings::get(cx).effective_window_background_style(),
                 _window_release: {
                     let key = cx.entity_id().as_u64();
                     cx.on_release(move |this, cx| {

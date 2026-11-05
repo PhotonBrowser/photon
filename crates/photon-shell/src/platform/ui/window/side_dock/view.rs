@@ -284,7 +284,7 @@ impl BrowserWindow {
             sections,
             collapsed,
             palette,
-            crate::platform::supports_elastic_scroll() && Settings::get(cx).elastic_scroll,
+            crate::platform::ui::elastic_scroll_enabled(cx),
         )
     }
 

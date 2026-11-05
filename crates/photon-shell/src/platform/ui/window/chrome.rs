@@ -8,7 +8,6 @@ use super::super::animated_icons::{animated_icon, reload_arrow};
 use super::super::button::{menu_button, toolbar_button};
 use super::super::icons::{back_icon, close_icon, forward_icon, reload_icon};
 use super::super::layout::{h_stack, v_stack};
-use super::super::settings::Settings;
 use super::super::tabs::{TabDragAxis, TabDragMove, tab_strip};
 use super::super::titlebar::titlebar;
 use super::super::toolbar::toolbar_row;
@@ -145,7 +144,7 @@ impl BrowserWindow {
                 self.tab_container_bounds_handler(cx),
                 self.tab_strip_scroll.clone(),
                 palette,
-                crate::platform::supports_elastic_scroll() && Settings::get(cx).elastic_scroll,
+                crate::platform::ui::elastic_scroll_enabled(cx),
                 self.tab_reorder_groups
                     .group(TabDragAxis::Horizontal, true)
                     .clone(),

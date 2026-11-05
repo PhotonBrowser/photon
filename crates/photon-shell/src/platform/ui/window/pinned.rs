@@ -213,7 +213,7 @@ impl BrowserWindow {
     }
 
     fn archive_unused_tabs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let enabled = Settings::get(cx).archive_tabs;
+        let enabled = Settings::get(cx).is_feature_enabled(photon_core::Feature::TabArchiving);
         for index in (0..self.tabs.len()).rev() {
             let tab = &self.tabs[index];
             let unused = should_archive(

@@ -41,7 +41,7 @@ impl RenderOnce for Glass {
 
         if let Some(palette) = frosted
             && enabled
-            && Settings::get(cx).glass_surfaces
+            && Settings::get(cx).is_feature_enabled(photon_core::Feature::GlassMenus)
         {
             return animated(frosted_surface(content, palette), &id);
         }

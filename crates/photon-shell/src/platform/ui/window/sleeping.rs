@@ -314,7 +314,7 @@ impl BrowserWindow {
     }
 
     fn next_sleep_check_delay(&self, cx: &gpui::App) -> Option<Duration> {
-        let mode = Settings::get(cx).tab_sleep_mode;
+        let mode = Settings::get(cx).effective_tab_sleep_mode();
         photon_core::idle_timeout(mode)?;
         let now = Instant::now();
         let system_idle = crate::platform::system_idle_duration();
@@ -344,7 +344,7 @@ impl BrowserWindow {
     }
 
     pub(super) fn sleep_idle_tabs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let mode = Settings::get(cx).tab_sleep_mode;
+        let mode = Settings::get(cx).effective_tab_sleep_mode();
         if photon_core::idle_timeout(mode).is_none() {
             return;
         }

@@ -110,7 +110,10 @@ pub(super) fn open_minimal_window(
                         this.webview.update(cx, |view, cx| {
                             let appearance = Settings::appearance(window.appearance(), cx);
                             view.update_color_scheme(appearance);
-                            view.update_force_dark_mode(Settings::get(cx).force_dark_mode);
+                            view.update_force_dark_mode(
+                                Settings::get(cx)
+                                    .is_feature_enabled(photon_core::Feature::ForceDarkMode),
+                            );
                             cx.notify();
                         });
                         cx.notify();

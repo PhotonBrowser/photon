@@ -271,10 +271,7 @@ impl Render for JavaScriptDialog {
                     .id("javascript-dialog-message")
                     .max_h(px(metrics::DIALOG_MESSAGE_MAX_HEIGHT))
                     .overflow_y_scroll()
-                    .elastic_scroll(
-                        crate::platform::supports_elastic_scroll()
-                            && Settings::get(cx).elastic_scroll,
-                    )
+                    .elastic_scroll(crate::platform::ui::elastic_scroll_enabled(cx))
                     .child(self.request.message.clone()),
             );
 

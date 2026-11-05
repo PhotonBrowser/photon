@@ -77,10 +77,7 @@ impl Render for ShortcutsDialog {
                     .id("keyboard-shortcuts-list")
                     .max_h(px(metrics::SHORTCUTS_DIALOG_MAX_HEIGHT))
                     .overflow_y_scroll()
-                    .elastic_scroll(
-                        crate::platform::supports_elastic_scroll()
-                            && Settings::get(cx).elastic_scroll,
-                    )
+                    .elastic_scroll(crate::platform::ui::elastic_scroll_enabled(cx))
                     .gap(px(metrics::INTERNAL_PAGE_GROUP_GAP))
                     .children(groups),
             )

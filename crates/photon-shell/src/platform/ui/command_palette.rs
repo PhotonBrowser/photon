@@ -18,7 +18,6 @@ use super::icons::search_icon_sized;
 use super::kbd::{action_kbd, keycap_label};
 use super::layout::{Elevated, Raised, h_stack, v_stack};
 use super::metrics;
-use super::settings::Settings;
 
 pub(super) const COMMAND_PALETTE_MOTION: super::motion::Entrance = super::motion::popover();
 
@@ -271,9 +270,7 @@ impl Render for CommandPalette {
                 .max_h(px(metrics::COMMAND_PALETTE_MAX_RESULTS_HEIGHT))
                 .overflow_y_scroll()
                 .track_scroll(&self.results_scroll)
-                .elastic_scroll(
-                    crate::platform::supports_elastic_scroll() && Settings::get(cx).elastic_scroll,
-                )
+                .elastic_scroll(crate::platform::ui::elastic_scroll_enabled(cx))
                 .p(px(metrics::COMMAND_PALETTE_LIST_PADDING))
                 .children(rows)
                 .into_any_element()

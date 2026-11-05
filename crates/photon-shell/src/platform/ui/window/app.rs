@@ -377,7 +377,9 @@ fn follow_settings(runtime: &Rc<EngineRuntime>, cx: &mut App) {
     let apply = |runtime: &EngineRuntime, cx: &mut App| {
         cx.set_window_appearance(None);
         runtime.set_popup_policy(Settings::get(cx).popup_policy);
-        runtime.set_elastic_scroll(Settings::get(cx).elastic_scroll);
+        runtime.set_elastic_scroll(
+            Settings::get(cx).is_feature_enabled(photon_core::Feature::ElasticScrolling),
+        );
     };
     apply(runtime, cx);
     let runtime = runtime.clone();

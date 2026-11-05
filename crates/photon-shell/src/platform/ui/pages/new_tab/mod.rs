@@ -103,15 +103,20 @@ impl Render for NewTabPage {
         let palette = palette(window, cx);
         let settings = Settings::get(cx);
         let layout = settings.new_tab.clone();
-        let elastic_scroll = crate::platform::supports_elastic_scroll() && settings.elastic_scroll;
-        let shortcuts =
-            layout.shortcuts(&BrowsingHistory::most_visited(layout.history_needed(), cx));
+        let elastic_scroll = crate::platform::ui::elastic_scroll_enabled(cx);
+        let show_logo = settings.is_feature_enabled(photon_core::Feature::NewTabLogo);
+        let show_shortcuts = settings.is_feature_enabled(photon_core::Feature::NewTabShortcuts);
+        let shortcuts = if show_shortcuts {
+            layout.shortcuts(&BrowsingHistory::most_visited(layout.history_needed(), cx))
+        } else {
+            Vec::new()
+        };
 
         let mut content = v_stack()
             .text_color(gpui::rgb(palette.text_primary))
             .items_center()
             .gap(px(metrics::INTERNAL_PAGE_SECTION_GAP));
-        if layout.show_logo {
+        if show_logo {
             content = content.child(
                 img(photon_logo(palette.logo_tint))
                     .size(px(metrics::NEW_TAB_LOGO_SIZE))
@@ -122,7 +127,7 @@ impl Render for NewTabPage {
         if private {
             content = content.child(private_note(palette));
         }
-        if layout.show_shortcuts {
+        if show_shortcuts {
             content = content.child(self.shortcut_grid(shortcuts, palette, cx));
         }
 

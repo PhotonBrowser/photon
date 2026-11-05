@@ -117,7 +117,7 @@ pub(super) fn palette(window: &Window, cx: &App) -> ThemeColors {
         appearance,
         WindowStyle {
             transparency: settings.transparency,
-            transparency_percent: settings.transparency_percent,
+            transparency_percent: Some(AppearancePreview::transparency_in(active, cx)),
             color: active.color,
             tint: active.tint,
             colors: active.colors,
