@@ -2,7 +2,6 @@
 
 use gpui::{ElementId, Role, SharedString, div, prelude::*, px, rgb, rgba};
 
-use super::controls::{haptic_switch_toggle, switch, toggled};
 use super::icons::check_icon;
 use super::layout::h_stack;
 use super::motion::pressable;
@@ -14,8 +13,6 @@ use super::controls::FocusRing;
 use super::controls::OwnsClicks;
 use super::glass::{Glass, glass};
 use super::layout::{Elevated, Elevation, Raised};
-use std::cell::Cell;
-use std::rc::Rc;
 
 /// How menus open and close.
 pub(super) const MENU_MOTION: Entrance = popover();
@@ -133,47 +130,6 @@ pub(super) fn menu_option(
                 .into_any_element()
         })
         .on_click(on_click)
-}
-
-/// A menu row with a switch that turns something on or off.
-pub(super) fn menu_switch(
-    id: &'static str,
-    label: &'static str,
-    tab_index: isize,
-    on: bool,
-    on_toggle: ClickHandler,
-    palette: ThemeColors,
-) -> impl IntoElement {
-    let on_toggle = Rc::new(on_toggle);
-    let activated = Rc::new(Cell::new(false));
-    let row_toggle = haptic_switch_toggle(on_toggle.clone(), activated.clone());
-    let switch_toggle = row_toggle.clone();
-    let dragged = Rc::new(Cell::new(false));
-    let row_dragged_on_down = dragged.clone();
-    let row_dragged_on_click = dragged.clone();
-    let row_activated_on_down = activated;
-    menu_item(id, label, tab_index, Role::MenuItemCheckBox, palette)
-        .aria_toggled(toggled(on))
-        .child(switch(
-            id,
-            on,
-            palette,
-            None,
-            on_toggle,
-            switch_toggle,
-            dragged,
-        ))
-        .on_mouse_down_all(move |event, phase, _, _, _| {
-            if phase == gpui::DispatchPhase::Capture && event.button == gpui::MouseButton::Left {
-                row_dragged_on_down.set(false);
-                row_activated_on_down.set(false);
-            }
-        })
-        .on_click(move |event, window, cx| {
-            if !row_dragged_on_click.replace(false) {
-                row_toggle(event, window, cx);
-            }
-        })
 }
 
 /// A small heading over the rows or control that follow it.

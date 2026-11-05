@@ -1,12 +1,10 @@
 //! The tabs section: inactive page sleeping, closing the last tab, and
 //! closing tabs left unused.
 
-use crate::platform::shortcuts::ReopenClosedTab;
 use gpui::{App, SharedString, prelude::*, px};
-use photon_core::{NewTabPosition, TabSleepMode};
+use photon_core::{Feature, NewTabPosition, TabSleepMode};
 
 use super::super::super::controls::{Choice, choices};
-use super::super::super::kbd::action_keys;
 use super::super::super::layout::v_stack;
 use super::super::super::settings::Settings;
 use super::super::super::{metrics, theme::ThemeColors};
@@ -17,7 +15,6 @@ use super::super::layout::{group, group_with_choices, secondary_text};
 pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
     let current = Settings::get(cx);
     let close_window = current.close_window_with_last_tab;
-    let archive = current.archive_tabs;
     let sleep_mode = current.tab_sleep_mode;
     let new_tab_position = current.new_tab_position;
     let setting = |row, note: SharedString, panel: gpui::Div| {
@@ -55,7 +52,6 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
                 "settings-tab-sleep",
                 "Inactive tabs",
                 [
-                    (TabSleepMode::Off, "Off"),
                     (TabSleepMode::Balanced, "Balanced"),
                     (TabSleepMode::Maximum, "Maximum"),
                 ]
@@ -69,7 +65,13 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
                 palette,
             )
             .into_any_element(),
-            sleep_description(sleep_mode).into(),
+            if current.is_feature_enabled(Feature::TabSleeping) {
+                sleep_description(sleep_mode).to_owned()
+            } else {
+                "Tab sleeping is disabled. Enable it under Features to choose an idle policy."
+                    .to_owned()
+            }
+            .into(),
             group_with_choices(palette),
         ))
         .child(setting(
@@ -83,23 +85,6 @@ pub(super) fn settings(palette: ThemeColors, cx: &App) -> impl IntoElement {
             .into_any_element(),
             "Other windows always close with their last tab. When off, the main window stays open on a new tab page; the horizontal layout adds it as a tab."
                 .into(),
-            group(palette),
-        ))
-        .child(setting(
-            switch_row(
-                "settings-archive-tabs",
-                "Close unused tabs after 12 hours",
-                archive,
-                palette,
-                change(move |settings| settings.archive_tabs = !archive),
-            )
-            .into_any_element(),
-            match action_keys(&ReopenClosedTab, cx) {
-                Some(keys) => format!("Pinned tabs stay. Closed tabs can be reopened with {keys}."),
-                None => "Pinned tabs stay. Closed tabs can be reopened from the History menu."
-                    .to_owned(),
-            }
-            .into(),
             group(palette),
         ))
 }

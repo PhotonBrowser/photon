@@ -7,8 +7,7 @@ use super::super::super::controls::choices;
 use super::super::super::icons::edit_icon;
 use super::super::super::layout::v_stack;
 use super::super::super::menu::{
-    MENU_MOTION, menu_action, menu_block, menu_heading, menu_separator, menu_switch,
-    popover_surface,
+    MENU_MOTION, menu_action, menu_block, menu_heading, menu_separator, popover_surface,
 };
 use super::super::super::motion::{Edge, Transition};
 use super::super::super::{metrics, theme::ThemeColors};
@@ -86,24 +85,7 @@ impl NewTabPage {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let options = LayoutOptions::read(cx);
-        let mut content = v_stack()
-            .w_full()
-            .child(menu_switch(
-                "new-tab-show-logo",
-                "Show logo",
-                0,
-                options.show_logo,
-                options.toggle_logo(),
-                palette,
-            ))
-            .child(menu_switch(
-                "new-tab-show-shortcuts",
-                "Show shortcuts",
-                1,
-                options.show_shortcuts,
-                options.toggle_shortcuts(),
-                palette,
-            ));
+        let mut content = v_stack().w_full();
         if options.show_shortcuts {
             content = content
                 .child(menu_heading("Number of shortcuts", palette))
@@ -119,7 +101,7 @@ impl NewTabPage {
             content = content.child(menu_action(
                 "new-tab-restore-shortcuts",
                 "Restore removed shortcuts",
-                2,
+                0,
                 options.restore_removed(),
                 palette,
             ));
@@ -127,7 +109,7 @@ impl NewTabPage {
         content = content.child(menu_action(
             "new-tab-all-settings",
             "All settings…",
-            3,
+            if options.has_removed { 1 } else { 0 },
             Box::new(cx.listener(|this, _, _, cx| {
                 this.customising = false;
                 this.context.open_page(SETTINGS, cx);
