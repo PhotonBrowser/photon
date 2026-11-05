@@ -93,6 +93,12 @@ struct NativeGlassViews(
 
 impl gpui::Global for NativeGlassViews {}
 
+pub(super) fn release_native_glass(cx: &mut App) {
+    if cx.has_global::<NativeGlassViews>() {
+        cx.update_global::<NativeGlassViews, _>(|views, _| views.0.clear());
+    }
+}
+
 pub(super) fn native_glass(
     id: &gpui::ElementId,
     window: &Window,

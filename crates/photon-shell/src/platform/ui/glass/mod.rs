@@ -31,6 +31,14 @@ pub(super) fn glass_available(cx: &App) -> bool {
     }
 }
 
+/// Drops the cached native materials when their owning plugin is disabled.
+pub(super) fn release_native_glass(cx: &mut App) {
+    #[cfg(target_os = "macos")]
+    macos::release_native_glass(cx);
+    #[cfg(not(target_os = "macos"))]
+    let _ = cx;
+}
+
 /// A `div` drawn over native glass. Style and fill it as any `div`: its
 /// corner radius shapes the glass, and its background and border draw on it.
 pub(super) fn glass(id: impl Into<ElementId>) -> Glass {

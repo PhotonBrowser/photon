@@ -212,6 +212,23 @@ fn relieve_memory_pressure(cx: &mut App) -> Option<Instant> {
 }
 
 impl BrowserWindow {
+    pub(super) fn enable_tab_sleeping(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self._tab_sleep_task.is_some() {
+            return;
+        }
+        let (waker, task) = Self::sleep_inactive_tabs_regularly(window, cx);
+        self._memory_pressure_monitor = Some(MemoryPressureMonitor::new(waker.clone()));
+        self.tab_sleep_waker = Some(waker);
+        self._tab_sleep_task = Some(task);
+        self.wake_tab_sleep_scheduler();
+    }
+
+    pub(super) fn disable_tab_sleeping(&mut self) {
+        self.tab_sleep_waker = None;
+        self._tab_sleep_task = None;
+        self._memory_pressure_monitor = None;
+    }
+
     pub(super) fn sleep_inactive_tabs_regularly(
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -310,7 +327,9 @@ impl BrowserWindow {
     }
 
     pub(super) fn wake_tab_sleep_scheduler(&mut self) {
-        let _ = self.tab_sleep_waker.try_send(SleepWake::Recheck);
+        if let Some(waker) = &mut self.tab_sleep_waker {
+            let _ = waker.try_send(SleepWake::Recheck);
+        }
     }
 
     fn next_sleep_check_delay(&self, cx: &gpui::App) -> Option<Duration> {
@@ -379,6 +398,9 @@ impl BrowserWindow {
     }
 
     fn pressure_candidates(&self, cx: &App) -> Vec<(u64, u64, Instant)> {
+        if !Settings::get(cx).is_feature_enabled(photon_core::Feature::TabSleeping) {
+            return Vec::new();
+        }
         self.tabs
             .iter()
             .enumerate()
@@ -407,6 +429,9 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
+        if !Settings::get(cx).is_feature_enabled(photon_core::Feature::TabSleeping) {
+            return false;
+        }
         let Some(index) = self.tabs.iter().position(|tab| tab.id == id) else {
             return false;
         };

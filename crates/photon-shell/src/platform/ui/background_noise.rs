@@ -2,10 +2,11 @@
 
 use gpui::{ImageSource, ObjectFit, RenderImage, img, prelude::*, px};
 use image::{Frame, RgbaImage};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 const TEXTURE_SIZE: u32 = 880;
 const TEXTURE_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/background-noise.rgba"));
+static TEXTURE: OnceLock<Mutex<Option<Arc<RenderImage>>>> = OnceLock::new();
 
 /// Grain clipped to `radius`, so it follows the rounded surface it covers.
 pub(super) fn overlay(intensity: u8, radius: f32) -> impl IntoElement {
@@ -26,13 +27,22 @@ pub(super) fn overlay(intensity: u8, radius: f32) -> impl IntoElement {
 }
 
 fn texture() -> Arc<RenderImage> {
-    static TEXTURE: OnceLock<Arc<RenderImage>> = OnceLock::new();
-
     TEXTURE
-        .get_or_init(|| {
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get_or_insert_with(|| {
             let pixels = RgbaImage::from_raw(TEXTURE_SIZE, TEXTURE_SIZE, TEXTURE_BYTES.to_vec())
                 .expect("tiled background noise texture has the expected dimensions");
             Arc::new(RenderImage::new([Frame::new(pixels)]))
         })
         .clone()
+}
+
+pub(super) fn release_texture() {
+    if let Some(texture) = TEXTURE.get() {
+        *texture
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+    }
 }

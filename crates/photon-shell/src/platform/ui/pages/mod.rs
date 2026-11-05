@@ -171,7 +171,12 @@ impl PageFrame {
             _preview: cx.observe_global::<super::appearance_preview::AppearancePreview>(|_, cx| {
                 cx.notify()
             }),
-            _settings: cx.observe_global::<Settings>(|_, cx| cx.notify()),
+            _settings: cx.observe_global::<Settings>(|this, cx| {
+                if !Self::feature_enabled(this.definition, cx) {
+                    this.body = None;
+                }
+                cx.notify();
+            }),
         }
     }
 

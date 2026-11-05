@@ -123,15 +123,15 @@ pub(in crate::platform) struct BrowserWindow {
     /// points at.
     downloads_button_bounds: Option<gpui::Bounds<Pixels>>,
     /// Redraws the downloads button, popover and notices as downloads change.
-    _downloads_subscription: Subscription,
+    _downloads_subscription: Option<Subscription>,
     tab_focus_handles: Vec<FocusHandle>,
     /// Closes today's tabs left unused, when the setting asks.
-    _archive_task: Task<()>,
+    _archive_task: Option<Task<()>>,
     /// Wakes the deadline scheduler when settings or tabs change.
-    tab_sleep_waker: sleeping::TabSleepWaker,
+    tab_sleep_waker: Option<sleeping::TabSleepWaker>,
     /// Sleeps out-of-view pages and checks for system memory pressure.
-    _tab_sleep_task: Task<()>,
-    _memory_pressure_monitor: sleeping::MemoryPressureMonitor,
+    _tab_sleep_task: Option<Task<()>>,
+    _memory_pressure_monitor: Option<sleeping::MemoryPressureMonitor>,
     tab_sleep_mode: TabSleepMode,
     active_tab: Option<usize>,
     /// Cross-fades a retained web page beneath the newly selected page.
@@ -619,11 +619,16 @@ fn open_browser_window(
                 cx.set_global(AlertCenter::default());
             }
             let alert_subscription = cx.observe_global::<AlertCenter>(|_, cx| cx.notify());
-            let downloads_subscription =
-                cx.observe_global::<super::downloads::Downloads>(|this: &mut BrowserWindow, cx| {
-                    this.chrome.update(cx, |_, cx| cx.notify());
-                    this.overlays.update(cx, |_, cx| cx.notify());
-                    cx.notify();
+            let downloads_subscription = Settings::get(cx)
+                .is_feature_enabled(photon_core::Feature::Downloads)
+                .then(|| {
+                    cx.observe_global::<super::downloads::Downloads>(
+                        |this: &mut BrowserWindow, cx| {
+                            this.chrome.update(cx, |_, cx| cx.notify());
+                            this.overlays.update(cx, |_, cx| cx.notify());
+                            cx.notify();
+                        },
+                    )
                 });
             let backdrop = cx.new(|_| workspace::WindowBackdrop);
             let preview_subscription = cx.observe_global_in::<AppearancePreview>(
@@ -686,10 +691,17 @@ fn open_browser_window(
                 .detach();
             });
             let registry_window_id = window.window_handle().window_id().as_u64();
-            let (tab_sleep_waker, tab_sleep_task) =
-                BrowserWindow::sleep_inactive_tabs_regularly(window, cx);
-            let memory_pressure_monitor =
-                sleeping::MemoryPressureMonitor::new(tab_sleep_waker.clone());
+            let (tab_sleep_waker, tab_sleep_task, memory_pressure_monitor) =
+                if Settings::get(cx).is_feature_enabled(photon_core::Feature::TabSleeping) {
+                    let (waker, task) = BrowserWindow::sleep_inactive_tabs_regularly(window, cx);
+                    let monitor = sleeping::MemoryPressureMonitor::new(waker.clone());
+                    (Some(waker), Some(task), Some(monitor))
+                } else {
+                    (None, None, None)
+                };
+            let archive_task = Settings::get(cx)
+                .is_feature_enabled(photon_core::Feature::TabArchiving)
+                .then(|| BrowserWindow::archive_unused_tabs_regularly(window, cx));
             let mut browser = BrowserWindow {
                 tabs: Vec::new(),
                 tab_subscriptions: Vec::new(),
@@ -711,7 +723,7 @@ fn open_browser_window(
                 downloads_button_bounds: None,
                 _downloads_subscription: downloads_subscription,
                 tab_focus_handles: Vec::new(),
-                _archive_task: BrowserWindow::archive_unused_tabs_regularly(window, cx),
+                _archive_task: archive_task,
                 tab_sleep_waker,
                 _tab_sleep_task: tab_sleep_task,
                 _memory_pressure_monitor: memory_pressure_monitor,

@@ -31,6 +31,14 @@ removed from a resolved copy of the saved layout. The saved layout remains
 unchanged, so re-enabling a plugin restores the user's placements. Empty docks
 are omitted and their extents are recalculated from the remaining components.
 
+Disabling a plugin also stops its active work where it owns any: tab sleeping
+drops its scheduler and OS memory-pressure monitor, tab archiving drops its
+periodic timer, Downloads drops its window redraw observer, and performance
+pages drop their samplers and monitoring leases. Glass and background-noise
+caches are released when those features are turned off. The built-in Rust code
+is still statically linked into Photon; runtime switches release resources and
+stop work, but do not unload machine code from the process.
+
 ## Third-party extensions
 
 Third-party extensions are not loadable yet. The current registries are

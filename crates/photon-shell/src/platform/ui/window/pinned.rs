@@ -17,6 +17,16 @@ use super::content::{BrowserTab, SleepingTab, TabContent};
 const ARCHIVE_CHECK_INTERVAL: Duration = Duration::from_secs(5 * 60);
 
 impl BrowserWindow {
+    pub(super) fn enable_tab_archiving(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self._archive_task.is_none() {
+            self._archive_task = Some(Self::archive_unused_tabs_regularly(window, cx));
+        }
+    }
+
+    pub(super) fn disable_tab_archiving(&mut self) {
+        self._archive_task = None;
+    }
+
     pub(super) fn tab_index_by_id(&self, id: u64) -> Option<usize> {
         self.tabs.iter().position(|tab| tab.id == id)
     }
