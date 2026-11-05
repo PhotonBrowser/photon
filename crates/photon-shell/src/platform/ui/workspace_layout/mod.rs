@@ -5,8 +5,8 @@
 
 use gpui::{App, Window};
 use photon_core::{
-    DockRegion, Feature, SpaceId, TabLayout, WorkspaceLayout as SavedWorkspaceLayout,
-    WorkspaceSettings,
+    DockRegion, Feature, FeatureSettings, SpaceId, TabLayout,
+    WorkspaceLayout as SavedWorkspaceLayout, WorkspaceSettings,
 };
 use std::rc::Rc;
 
@@ -57,27 +57,45 @@ impl WorkspaceLayout {
             .presets
             .iter()
             .find(|preset| active_space.preset_override_id.as_deref() == Some(&preset.id))
-            .and_then(|preset| Self::from_saved(&preset.layout))
+            .and_then(|preset| Self::from_saved_with_features(&preset.layout, &settings.features))
             .or_else(|| {
                 active_space
                     .layout_override
                     .as_ref()
-                    .and_then(Self::from_saved)
+                    .and_then(|layout| Self::from_saved_with_features(layout, &settings.features))
             })
             .or_else(|| {
-                settings
-                    .workspace
-                    .default_preset()
-                    .and_then(|preset| Self::from_saved(&preset.layout))
+                settings.workspace.default_preset().and_then(|preset| {
+                    Self::from_saved_with_features(&preset.layout, &settings.features)
+                })
             })
             .unwrap_or_else(|| Self::for_tab_layout(settings.tab_layout))
     }
 
     pub(super) fn from_saved(saved: &SavedWorkspaceLayout) -> Option<Self> {
+        Self::from_saved_with_features(saved, &FeatureSettings::default())
+    }
+
+    fn from_saved_with_features(
+        saved: &SavedWorkspaceLayout,
+        features: &FeatureSettings,
+    ) -> Option<Self> {
         if !saved.is_valid() {
             return None;
         }
-        let saved = expand_legacy_components(saved)?;
+        let mut saved = expand_legacy_components(saved)?;
+        for component in &mut saved.components {
+            let Some(id) = ComponentId::from_key(&component.id) else {
+                continue;
+            };
+            if component.visible
+                && component_definition(id)
+                    .feature
+                    .is_some_and(|feature| !features.is_enabled(feature))
+            {
+                component.visible = false;
+            }
+        }
 
         let visible = saved
             .components
@@ -331,6 +349,34 @@ mod tests {
         let restored = WorkspaceLayout::resolve(&settings, space);
         assert!(restored.has_sidebar());
         assert!(restored.has_vertical_tabs());
+    }
+
+    #[test]
+    fn disabled_component_features_remove_their_owned_layout_components() {
+        let saved = SavedWorkspaceLayout::vertical();
+        let mut features = FeatureSettings::default();
+        features.disable(Feature::Sidebar);
+
+        let resolved = WorkspaceLayout::from_saved_with_features(&saved, &features).unwrap();
+
+        assert!(
+            resolved
+                .components(DockRegion::Leading)
+                .chain(resolved.components(DockRegion::Trailing))
+                .all(|placement| component_definition(placement.id).feature
+                    != Some(Feature::Sidebar))
+        );
+        assert!(
+            resolved
+                .saved()
+                .component(VERTICAL_TABS_COMPONENT_ID)
+                .is_some_and(|component| !component.visible)
+        );
+        assert!(
+            saved
+                .component(VERTICAL_TABS_COMPONENT_ID)
+                .is_some_and(|component| component.visible)
+        );
     }
 
     #[test]

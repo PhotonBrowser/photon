@@ -24,6 +24,7 @@ mod page_menu;
 mod peek;
 mod permissions;
 mod pinned;
+mod plugins;
 mod popup_window;
 mod popups;
 mod registry;
@@ -47,7 +48,7 @@ use gpui::{
     AnyElement, AnyWindowHandle, App, Bounds, Context, Entity, FocusHandle, Pixels, Point, Render,
     ScrollHandle, Subscription, Task, WeakEntity, Window, WindowHandle, div, prelude::*,
 };
-use photon_core::{BrowserCommand, SpaceId, TabSleepMode, WindowBackgroundStyle};
+use photon_core::{BrowserCommand, FeatureSettings, SpaceId, TabSleepMode, WindowBackgroundStyle};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::rc::Rc;
@@ -232,6 +233,7 @@ pub(in crate::platform) struct BrowserWindow {
     /// tab only while it is, since GPUI-CE stops drawing an occluded window.
     window_visible: bool,
     window_background_style: WindowBackgroundStyle,
+    observed_features: FeatureSettings,
     _appearance_subscription: Subscription,
     /// Redraws as the window comes to the front, so the menu bar follows it.
     _activation_subscription: Subscription,
@@ -401,23 +403,8 @@ impl BrowserWindow {
     fn settings_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.preview_foreground = None;
         let features = Settings::get(cx).features.clone();
-        if !features.is_enabled(photon_core::Feature::FindInPage) {
-            self.close_find_bar(false, window, cx);
-        }
-        if !features.is_enabled(photon_core::Feature::ZenMode) && self.sidebar.zen() {
-            self.toggle_zen_mode(cx);
-        }
-        if !features.is_enabled(photon_core::Feature::CommandPalette) {
-            self.command_palette = None;
-            self._command_palette_subscription = None;
-            window.focus(&self.root_focus, cx);
-        }
-        if !features.is_enabled(photon_core::Feature::Downloads) {
-            self.dismiss_downloads_popover(cx);
-        }
-        if !features.is_enabled(photon_core::Feature::SplitView) && self.split_view.is_some() {
-            self.close_split_view(false, cx);
-        }
+        let previous_features = std::mem::replace(&mut self.observed_features, features.clone());
+        plugins::apply_feature_changes(self, &previous_features, &features, window, cx);
         if self.tabs.is_empty() && self.tab_axis(cx) == TabDragAxis::Horizontal {
             self.open_tab(window, cx);
         }
@@ -435,14 +422,6 @@ impl BrowserWindow {
         self.update_page_preferences(window, cx);
         for webview in self.tabs.iter().filter_map(|tab| tab.content.webview()) {
             webview.update(cx, |_, cx| cx.notify());
-        }
-        if !features.is_enabled(photon_core::Feature::PerformanceTools) {
-            for webview in self.tabs.iter().filter_map(|tab| tab.content.webview()) {
-                webview.update(cx, |view, cx| {
-                    view.set_performance_overlay_enabled(false);
-                    cx.notify();
-                });
-            }
         }
         self.omnibox.update(cx, |_, cx| cx.notify());
         self.wake_tab_sleep_scheduler();
@@ -805,6 +784,7 @@ fn open_browser_window(
                 _chrome_subscription: chrome_subscription,
                 _window_observer: window_observer,
                 window_background_style: Settings::get(cx).effective_window_background_style(),
+                observed_features: Settings::get(cx).features.clone(),
                 _window_release: {
                     let key = cx.entity_id().as_u64();
                     cx.on_release(move |this, cx| {

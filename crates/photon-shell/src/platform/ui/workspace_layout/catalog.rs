@@ -3,7 +3,7 @@
 
 use photon_core::{
     ADDRESS_FIELD_COMPONENT_ID, BACK_BUTTON_COMPONENT_ID, BROWSER_MENU_BUTTON_COMPONENT_ID,
-    DockRegion, FAVOURITES_PANEL_COMPONENT_ID, FORWARD_BUTTON_COMPONENT_ID,
+    DockRegion, FAVOURITES_PANEL_COMPONENT_ID, FORWARD_BUTTON_COMPONENT_ID, Feature,
     RELOAD_BUTTON_COMPONENT_ID, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_FOOTER_COMPONENT_ID,
     SIDEBAR_MAX_WIDTH, SIDEBAR_TOGGLE_COMPONENT_ID, TAB_STRIP_COMPONENT_ID,
     VERTICAL_TABS_COMPONENT_ID,
@@ -69,6 +69,8 @@ impl ComponentId {
 /// A shell component's placement and size limits.
 pub(in super::super) struct ComponentDefinition {
     pub(in super::super) id: ComponentId,
+    /// The built-in feature that owns this component, if any.
+    pub(in super::super) feature: Option<Feature>,
     pub(in super::super) default_region: DockRegion,
     pub(in super::super) supported_regions: &'static [DockRegion],
     /// Component compatibility groups used to reject conflicting saved layouts.
@@ -133,6 +135,7 @@ pub(super) const COMPONENT_GROUPS: &[ComponentGroupDefinition] = &[
 pub(super) const COMPONENTS: &[ComponentDefinition] = &[
     ComponentDefinition {
         id: ComponentId::TabStrip,
+        feature: None,
         default_region: DockRegion::Top,
         supported_regions: TOP_BOTTOM,
         groups: TAB_SURFACE,
@@ -140,6 +143,7 @@ pub(super) const COMPONENTS: &[ComponentDefinition] = &[
     },
     ComponentDefinition {
         id: ComponentId::BackButton,
+        feature: None,
         default_region: DockRegion::Top,
         supported_regions: ALL_DOCKS,
         groups: SIDEBAR_DOCK,
@@ -147,6 +151,7 @@ pub(super) const COMPONENTS: &[ComponentDefinition] = &[
     },
     ComponentDefinition {
         id: ComponentId::ForwardButton,
+        feature: None,
         default_region: DockRegion::Top,
         supported_regions: ALL_DOCKS,
         groups: SIDEBAR_DOCK,
@@ -154,6 +159,7 @@ pub(super) const COMPONENTS: &[ComponentDefinition] = &[
     },
     ComponentDefinition {
         id: ComponentId::ReloadButton,
+        feature: None,
         default_region: DockRegion::Top,
         supported_regions: ALL_DOCKS,
         groups: SIDEBAR_DOCK,
@@ -161,6 +167,7 @@ pub(super) const COMPONENTS: &[ComponentDefinition] = &[
     },
     ComponentDefinition {
         id: ComponentId::AddressField,
+        feature: None,
         default_region: DockRegion::Top,
         supported_regions: ALL_DOCKS,
         groups: &["address-surface", "sidebar-dock"],
@@ -168,6 +175,7 @@ pub(super) const COMPONENTS: &[ComponentDefinition] = &[
     },
     ComponentDefinition {
         id: ComponentId::BrowserMenuButton,
+        feature: None,
         default_region: DockRegion::Top,
         supported_regions: ALL_DOCKS,
         groups: SIDEBAR_DOCK,
@@ -175,6 +183,7 @@ pub(super) const COMPONENTS: &[ComponentDefinition] = &[
     },
     ComponentDefinition {
         id: ComponentId::SidebarToggle,
+        feature: Some(Feature::Sidebar),
         default_region: DockRegion::Leading,
         supported_regions: SIDES,
         groups: SIDEBAR_DOCK,
@@ -185,6 +194,7 @@ pub(super) const COMPONENTS: &[ComponentDefinition] = &[
     },
     ComponentDefinition {
         id: ComponentId::FavouritesPanel,
+        feature: Some(Feature::Sidebar),
         default_region: DockRegion::Leading,
         supported_regions: SIDES,
         groups: SIDEBAR_DOCK,
@@ -192,6 +202,7 @@ pub(super) const COMPONENTS: &[ComponentDefinition] = &[
     },
     ComponentDefinition {
         id: ComponentId::VerticalTabs,
+        feature: Some(Feature::Sidebar),
         default_region: DockRegion::Leading,
         supported_regions: SIDES,
         groups: &["tab-surface", "sidebar-dock"],
@@ -199,6 +210,7 @@ pub(super) const COMPONENTS: &[ComponentDefinition] = &[
     },
     ComponentDefinition {
         id: ComponentId::SidebarFooter,
+        feature: Some(Feature::Sidebar),
         default_region: DockRegion::Leading,
         supported_regions: SIDES,
         groups: SIDEBAR_DOCK,

@@ -143,6 +143,21 @@ impl SidebarState {
         self.zen
     }
 
+    /// Clears transient sidebar and Zen state when the sidebar plugin is
+    /// disabled, so the horizontal fallback does not inherit tucked chrome.
+    pub(super) fn reset_for_disabled_feature(&mut self) {
+        self.visible = true;
+        self.zen = false;
+        self.shown.jump_to(1.0);
+        self.tucked.jump_to(0.0);
+        self.revealed = false;
+        self.reveal.jump_to(0.0);
+        self.pointer_on_edge = false;
+        self.pointer_on_sidebar = false;
+        self._hide_check = None;
+        self.window_controls = None;
+    }
+
     /// How far it is shown beside the page, from 0 to 1.
     pub(super) fn shown(&self) -> f32 {
         self.sample(&self.shown)

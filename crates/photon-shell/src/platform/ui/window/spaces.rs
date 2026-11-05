@@ -80,6 +80,12 @@ impl SpacesState {
 }
 
 impl BrowserWindow {
+    /// Closes the space editor when the Spaces or Sidebar plugin is disabled.
+    pub(super) fn dismiss_space_editor(&mut self) {
+        self.spaces.editor = None;
+        self.spaces.editor_presence = Presence::default();
+    }
+
     /// The space new tabs join, and whose tabs the sidebar shows.
     pub(super) fn current_space(&self, cx: &gpui::App) -> SpaceId {
         resolve_space(self.spaces.current, cx).id

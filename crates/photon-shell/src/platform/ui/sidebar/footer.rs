@@ -90,7 +90,8 @@ pub(in super::super) fn footer(
     window: &mut Window,
     cx: &mut App,
 ) -> gpui::AnyElement {
-    let focus = (spaces.len() > 1).then(|| {
+    let has_multiple_spaces = spaces.len() > 1;
+    let focus = has_multiple_spaces.then(|| {
         let selected = spaces.iter().position(|space| space.active).unwrap_or(0);
         RovingFocus::keyed(
             "sidebar-spaces",
@@ -145,26 +146,35 @@ pub(in super::super) fn footer(
         let background_audio = actions
             .background_audio
             .map(|audio| super::collapsed_tile(background_audio_button(audio, palette, cx)));
+        let space_switcher = has_multiple_spaces.then(|| {
+            space_switcher(v_stack(), spaces, palette, focus, RovingAxis::Vertical)
+                .w_full()
+                .flex_shrink_0()
+                .items_center()
+                .pt(px(spacing.padding))
+                .pb(px(metrics::PAGE_INSET))
+                .gap(px(spacing.item_gap))
+        });
         return v_stack()
             .w_full()
             .flex_shrink_0()
             .items_center()
-            .pt(px(spacing.padding))
-            .pb(px(metrics::PAGE_INSET))
-            .gap(px(spacing.item_gap))
-            .child(space_switcher(
-                v_stack(),
-                spaces,
-                palette,
-                focus,
-                RovingAxis::Vertical,
-            ))
+            .children(space_switcher)
             .children(new_space)
             .children(background_audio)
             .children(downloads)
             .child(menu)
             .into_any_element();
     }
+    let space_switcher = has_multiple_spaces
+        .then(|| space_switcher(h_stack(), spaces, palette, focus, RovingAxis::Horizontal));
+    let space_controls = (space_switcher.is_some() || new_space.is_some()).then(|| {
+        h_stack()
+            .items_center()
+            .gap(px(metrics::SPACE_DOT_GAP))
+            .children(space_switcher)
+            .children(new_space)
+    });
     h_stack()
         .w_full()
         .h(px(metrics::SIDEBAR_FOOTER_HEIGHT))
@@ -192,19 +202,7 @@ pub(in super::super) fn footer(
                         .map(|audio| background_audio_button(audio, palette, cx)),
                 ),
         )
-        .child(
-            h_stack()
-                .items_center()
-                .gap(px(metrics::SPACE_DOT_GAP))
-                .child(space_switcher(
-                    h_stack(),
-                    spaces,
-                    palette,
-                    focus,
-                    RovingAxis::Horizontal,
-                ))
-                .children(new_space),
-        )
+        .children(space_controls)
         .child(menu)
         .into_any_element()
 }
