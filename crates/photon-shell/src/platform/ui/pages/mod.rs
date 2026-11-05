@@ -6,7 +6,7 @@
 //! window for anything beyond itself through its [`PageContext`].
 //!
 //! To add a page, write a module here with its view and a
-//! [`PageDefinition`], and list it in [`registry`]. Build it from the shared
+//! [`PageDefinition`], and list it in the owning shell plugin module. Build it from the shared
 //! [`layout`] and [`controls`].
 
 #[cfg(target_os = "macos")]
@@ -30,8 +30,10 @@ use std::rc::Rc;
 use super::super::engine::EngineRuntime;
 use super::settings::Settings;
 use super::{ClickHandler, metrics, theme::ThemeColors};
+#[cfg(target_os = "macos")]
+pub(in crate::platform::ui) use registry::APPKIT;
 pub(super) use registry::{
-    DOWNLOADS, HISTORY, NEW_TAB, PageDefinition, PageIcon, SETTINGS, find_page,
+    DOWNLOADS, HISTORY, NEW_TAB, PERFORMANCE, PageDefinition, PageIcon, SETTINGS, find_page,
 };
 
 /// What a page asks its window to do.
@@ -186,9 +188,7 @@ impl PageFrame {
     }
 
     fn feature_enabled(definition: &PageDefinition, cx: &gpui::App) -> bool {
-        definition
-            .feature
-            .is_none_or(|feature| Settings::get(cx).features.is_enabled(feature))
+        super::window::plugins::page_enabled(definition, &Settings::get(cx).features)
     }
 }
 impl gpui::Render for PageFrame {

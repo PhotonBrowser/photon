@@ -9,5 +9,6 @@ pub(super) const DEFINITION: FeatureDefinition = feature!(
         "Browse, search, and import visited pages.",
         PageTools,
         Registry,
-        NO_REQUIREMENTS
+        NO_REQUIREMENTS,
+        &[Command::OpenHistory]
     );

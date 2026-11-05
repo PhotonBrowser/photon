@@ -352,18 +352,11 @@ impl Command {
 
     /// The optional feature that makes this command available, if any.
     pub fn feature(self) -> Option<Feature> {
-        match self {
-            Self::ToggleSidebar | Self::ToggleSidebarIcons => Some(Feature::Sidebar),
-            Self::ToggleZenMode => Some(Feature::ZenMode),
-            Self::FindInPage => Some(Feature::FindInPage),
-            Self::ToggleSplitView | Self::SwitchSplitPane => Some(Feature::SplitView),
-            Self::NewSpace | Self::NextSpace | Self::PreviousSpace => Some(Feature::Spaces),
-            Self::OpenHistory => Some(Feature::History),
-            Self::OpenDownloads => Some(Feature::Downloads),
-            Self::OpenTaskManager => Some(Feature::PerformanceTools),
-            Self::ShowKeyboardShortcuts => Some(Feature::KeyboardShortcuts),
-            _ => None,
-        }
+        crate::FEATURE_REGISTRY
+            .builtins()
+            .iter()
+            .find(|definition| definition.commands.contains(&self))
+            .map(|definition| definition.feature)
     }
 }
 

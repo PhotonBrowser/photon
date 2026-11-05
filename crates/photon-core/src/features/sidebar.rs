@@ -9,5 +9,6 @@ pub(super) const DEFINITION: FeatureDefinition = feature!(
         "Vertical tabs, favourites, and sidebar navigation.",
         Navigation,
         Registry,
-        NO_REQUIREMENTS
+        NO_REQUIREMENTS,
+        &[Command::ToggleSidebar, Command::ToggleSidebarIcons]
     );

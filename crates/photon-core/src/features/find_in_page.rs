@@ -9,5 +9,6 @@ pub(super) const DEFINITION: FeatureDefinition = feature!(
         "Search for text in the current page.",
         PageTools,
         Registry,
-        NO_REQUIREMENTS
+        NO_REQUIREMENTS,
+        &[Command::FindInPage]
     );

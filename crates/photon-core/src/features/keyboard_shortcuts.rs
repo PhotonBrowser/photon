@@ -9,5 +9,6 @@ pub(super) const DEFINITION: FeatureDefinition = feature!(
         "Open the built-in list of browser keyboard shortcuts.",
         PageTools,
         Registry,
-        NO_REQUIREMENTS
+        NO_REQUIREMENTS,
+        &[Command::ShowKeyboardShortcuts]
     );

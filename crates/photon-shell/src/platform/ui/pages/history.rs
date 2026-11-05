@@ -27,7 +27,6 @@ pub(super) const PAGE: PageDefinition = PageDefinition {
     icon: PageIcon::Symbol(|color, size| history_icon(color, size).into_any_element()),
     shows_address: true,
     single_tab: true,
-    feature: Some(photon_core::Feature::History),
     build: |context, cx| cx.new(|cx| HistoryPage::new(context, cx)).into(),
 };
 

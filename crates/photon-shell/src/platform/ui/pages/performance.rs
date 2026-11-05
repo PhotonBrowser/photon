@@ -25,7 +25,6 @@ pub(super) const PAGE: PageDefinition = PageDefinition {
     icon: PageIcon::Logo,
     shows_address: true,
     single_tab: true,
-    feature: Some(photon_core::Feature::PerformanceTools),
     build: |context, cx| cx.new(|cx| PerformancePage::new(context, cx)).into(),
 };
 

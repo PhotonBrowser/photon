@@ -1,5 +1,6 @@
 //! Optional browser features and the registry generated from their modules.
 
+use crate::Command;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::BTreeSet;
 
@@ -115,6 +116,8 @@ pub struct FeatureDefinition {
     pub preference: FeaturePreference,
     /// Features that must also be enabled for this feature to work.
     pub requires: &'static [Feature],
+    /// Core commands contributed by this feature.
+    pub commands: &'static [Command],
 }
 
 /// Preferences for optional features. Unlisted features remain enabled.
@@ -133,6 +136,18 @@ const SIDEBAR_REQUIREMENT: &[Feature] = &[Feature::Sidebar];
 
 macro_rules! feature {
     ($feature:ident, $key:literal, $name:literal, $description:literal, $category:ident, $preference:ident, $requires:ident) => {
+        feature!(
+            $feature,
+            $key,
+            $name,
+            $description,
+            $category,
+            $preference,
+            $requires,
+            &[]
+        )
+    };
+    ($feature:ident, $key:literal, $name:literal, $description:literal, $category:ident, $preference:ident, $requires:ident, $commands:expr) => {
         FeatureDefinition {
             feature: Feature::$feature,
             key: $key,
@@ -142,6 +157,7 @@ macro_rules! feature {
             category: FeatureCategory::$category,
             preference: FeaturePreference::$preference,
             requires: $requires,
+            commands: $commands,
         }
     };
 }

@@ -24,7 +24,7 @@ mod page_menu;
 mod peek;
 mod permissions;
 mod pinned;
-mod plugins;
+pub(super) mod plugins;
 mod popup_window;
 mod popups;
 mod registry;

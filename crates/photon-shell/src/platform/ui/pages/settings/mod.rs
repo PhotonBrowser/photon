@@ -130,7 +130,6 @@ pub(super) const PAGE: PageDefinition = PageDefinition {
     icon: PageIcon::Symbol(|color, size| settings_icon(color, size).into_any_element()),
     shows_address: true,
     single_tab: true,
-    feature: None,
     build: |context, cx| cx.new(|cx| SettingsPage::new(context, cx)).into(),
 };
 

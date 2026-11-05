@@ -9,5 +9,6 @@ pub(super) const DEFINITION: FeatureDefinition = feature!(
         "Open live process, resource, and performance details.",
         PageTools,
         Registry,
-        NO_REQUIREMENTS
+        NO_REQUIREMENTS,
+        &[Command::OpenTaskManager]
     );

@@ -38,8 +38,7 @@ impl BrowserWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if command
-            .feature()
+        if super::plugins::feature_for_command(command)
             .is_some_and(|feature| !Settings::get(cx).features.is_enabled(feature))
         {
             return;

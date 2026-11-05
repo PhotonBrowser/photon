@@ -1,7 +1,6 @@
 //! Every page Photon draws itself, found by its name in a `photon://` address.
 
 use gpui::{AnyElement, AnyView, App};
-use photon_core::Feature;
 use photon_core::internal_page_name;
 
 use super::PageContext;
@@ -22,8 +21,6 @@ pub(in super::super) struct PageDefinition {
     pub(in super::super) shows_address: bool,
     /// Whether opening the page again switches to the tab already showing it.
     pub(in super::super) single_tab: bool,
-    /// The optional feature that owns this page, when any.
-    pub(in super::super) feature: Option<Feature>,
     /// Builds the page's view.
     pub(in super::super) build: fn(PageContext, &mut App) -> AnyView,
 }
@@ -45,18 +42,10 @@ pub(in super::super) const SETTINGS: &PageDefinition = &settings::PAGE;
 #[cfg(target_os = "macos")]
 pub(in super::super) const APPKIT: &PageDefinition = &appkit::PAGE;
 
-/// Every page, found by name.
-#[cfg(target_os = "macos")]
-const PAGES: [&PageDefinition; 6] = [NEW_TAB, DOWNLOADS, HISTORY, PERFORMANCE, SETTINGS, APPKIT];
-#[cfg(not(target_os = "macos"))]
-const PAGES: [&PageDefinition; 5] = [NEW_TAB, DOWNLOADS, HISTORY, PERFORMANCE, SETTINGS];
-
 /// The page `url` names, if it is one of Photon's.
 pub(in super::super) fn find_page(url: &str) -> Option<&'static PageDefinition> {
     let name = internal_page_name(url)?;
-    PAGES
-        .into_iter()
-        .find(|page| page.name.eq_ignore_ascii_case(name))
+    super::super::window::plugins::pages().find(|page| page.name.eq_ignore_ascii_case(name))
 }
 
 impl PageDefinition {

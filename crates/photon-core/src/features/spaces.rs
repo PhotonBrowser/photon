@@ -9,5 +9,6 @@ pub(super) const DEFINITION: FeatureDefinition = feature!(
         "Switch between groups of tabs in the sidebar. Requires Sidebar.",
         Navigation,
         Registry,
-        SIDEBAR_REQUIREMENT
+        SIDEBAR_REQUIREMENT,
+        &[Command::NewSpace, Command::NextSpace, Command::PreviousSpace]
     );

@@ -12,18 +12,22 @@ The registry covers navigation, page tools, appearance, interface effects,
 new-tab controls, and tab management, including Liquid Glass and background
 texture.
 
-To add a built-in plugin, create a snake-case Rust module in
-`crates/photon-core/src/features/` and define its `DEFINITION` with the
-`feature!` macro. The filename supplies its stable kebab-case key and generated
-`Feature::Name` constant. Add a page or workspace component owner only when the
-plugin contributes that surface; add a window cleanup hook only when disabling
-it must dismiss active transient UI.
+To add a built-in plugin, create matching snake-case modules in
+`crates/photon-core/src/features/` and
+`crates/photon-shell/src/platform/ui/window/plugins/`. Define the core
+`DEFINITION` with the `feature!` macro; its filename supplies the stable
+kebab-case key and generated `Feature::Name` constant. Declare contributed
+commands with that manifest, and declare pages, workspace components, and
+activation or deactivation hooks in the shell module. The shell build discovers
+the plugin files and rejects a missing or unmatched feature module.
 
 The shell connects plugin IDs to the surfaces they own:
 
-- Internal pages declare an owning feature in `PageDefinition`.
-- Workspace components declare an owning feature in the component catalog.
-- Window plugins can register cleanup hooks for transient UI and state.
+- Internal pages belong to the shell plugin that lists them.
+- Workspace components belong to the shell plugin that lists them; their
+  placement catalog only describes layout and sizing.
+- Window plugins register activation and deactivation hooks for resources and
+  transient state.
 
 When a feature is disabled, its page and controls stop rendering, open
 feature-owned transient UI is dismissed, and disabled workspace components are

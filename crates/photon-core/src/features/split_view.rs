@@ -9,5 +9,6 @@ pub(super) const DEFINITION: FeatureDefinition = feature!(
         "Show two tabs side by side in one window.",
         Navigation,
         Registry,
-        NO_REQUIREMENTS
+        NO_REQUIREMENTS,
+        &[Command::ToggleSplitView, Command::SwitchSplitPane]
     );

@@ -89,8 +89,7 @@ impl WorkspaceLayout {
                 continue;
             };
             if component.visible
-                && component_definition(id)
-                    .feature
+                && super::window::plugins::component_feature(id)
                     .is_some_and(|feature| !features.is_enabled(feature))
             {
                 component.visible = false;
@@ -288,6 +287,17 @@ mod tests {
     };
 
     #[test]
+    fn every_layout_component_is_declared_by_a_plugin() {
+        assert_eq!(
+            catalog::COMPONENTS.len(),
+            catalog::COMPONENTS
+                .iter()
+                .filter(|definition| super::super::window::plugins::has_component(definition.id))
+                .count()
+        );
+    }
+
+    #[test]
     fn resolves_the_builtin_layouts_to_their_current_components() {
         let horizontal = WorkspaceLayout::for_tab_layout(TabLayout::Horizontal);
         assert_eq!(
@@ -363,8 +373,10 @@ mod tests {
             resolved
                 .components(DockRegion::Leading)
                 .chain(resolved.components(DockRegion::Trailing))
-                .all(|placement| component_definition(placement.id).feature
-                    != Some(Feature::Sidebar))
+                .all(
+                    |placement| super::super::window::plugins::component_feature(placement.id)
+                        != Some(Feature::Sidebar)
+                )
         );
         assert!(
             resolved

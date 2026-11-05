@@ -31,7 +31,6 @@ pub(super) const PAGE: PageDefinition = PageDefinition {
     icon: PageIcon::Logo,
     shows_address: true,
     single_tab: true,
-    feature: None,
     build: |context, cx| cx.new(|cx| AppKitPage::new(context, cx)).into(),
 };
 
