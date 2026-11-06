@@ -27,19 +27,37 @@ fn resolve_helper_directory(
 
 pub(crate) fn startup_address(
     environment: Option<String>,
-    argument: Option<String>,
+    arguments: impl IntoIterator<Item = OsString>,
 ) -> Option<String> {
-    environment
-        .into_iter()
-        .chain(argument)
+    if let Some(address) = environment
         .map(|address| address.trim().to_owned())
-        .find(|address| !address.is_empty())
+        .filter(|address| !address.is_empty())
+    {
+        return Some(address);
+    }
+    let mut arguments = arguments.into_iter();
+    while let Some(argument) = arguments.next() {
+        if argument == "--automation-socket" {
+            arguments.next();
+            continue;
+        }
+        if argument == "--" {
+            return arguments.next()?.into_string().ok();
+        }
+        let Some(argument) = argument.to_str() else {
+            continue;
+        };
+        if !argument.starts_with('-') && !argument.trim().is_empty() {
+            return Some(argument.trim().to_owned());
+        }
+    }
+    None
 }
 
 #[cfg(test)]
 mod tests {
     use super::{resolve_helper_directory, startup_address};
-    use std::path::Path;
+    use std::{ffi::OsString, os::unix::ffi::OsStringExt, path::Path};
 
     #[test]
     fn packaged_helpers_follow_the_executable() {
@@ -62,12 +80,10 @@ mod tests {
 
     #[test]
     fn desktop_url_is_used_without_a_developer_override() {
-        assert_eq!(
-            startup_address(None, Some("https://example.org/a?q=one%20two&b=3".into())),
-            Some("https://example.org/a?q=one%20two&b=3".into())
-        );
-        assert_eq!(startup_address(None, None), None);
-        assert_eq!(startup_address(Some("  ".into()), None), None);
+        let url = "https://example.org/a?q=one%20two&b=3";
+        assert_eq!(startup_address(None, [url.into()]), Some(url.into()));
+        assert_eq!(startup_address(None, []), None);
+        assert_eq!(startup_address(Some("  ".into()), []), None);
     }
 
     #[test]
@@ -75,13 +91,51 @@ mod tests {
         assert_eq!(
             startup_address(
                 Some(" https://developer.example/ ".into()),
-                Some("https://other.example/".into())
+                ["https://other.example/".into()]
             ),
             Some("https://developer.example/".into())
         );
         assert_eq!(
-            startup_address(Some(" ".into()), Some("https://example.org/".into())),
+            startup_address(Some(" ".into()), ["https://example.org/".into()]),
             Some("https://example.org/".into())
+        );
+    }
+
+    #[test]
+    fn automation_flags_and_the_socket_path_are_not_addresses() {
+        assert_eq!(
+            startup_address(None, ["--automation-socket".into(), "/tmp/socket".into()]),
+            None
+        );
+        assert_eq!(
+            startup_address(
+                None,
+                [
+                    "--automation-socket".into(),
+                    "/tmp/socket".into(),
+                    "https://example.org/".into()
+                ]
+            ),
+            Some("https://example.org/".into())
+        );
+        assert_eq!(
+            startup_address(None, ["--automation-socket=/tmp/socket".into()]),
+            None
+        );
+    }
+
+    #[test]
+    fn non_utf8_arguments_do_not_panic() {
+        assert_eq!(
+            startup_address(None, [OsString::from_vec(vec![0xff])]),
+            None
+        );
+        let executable = Path::new("/tmp")
+            .join(OsString::from_vec(vec![0xff]))
+            .join("Photon");
+        assert_eq!(
+            resolve_helper_directory(None, &executable).unwrap(),
+            executable.parent().unwrap()
         );
     }
 }

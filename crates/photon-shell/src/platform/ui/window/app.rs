@@ -406,7 +406,10 @@ pub(super) fn launch_address() -> Option<String> {
     }
     #[cfg(not(feature = "ui-only"))]
     {
-        initial_address()
+        std::env::var("PHOTON_URL")
+            .ok()
+            .map(|address| address.trim().to_owned())
+            .filter(|address| !address.is_empty())
     }
 }
 
@@ -417,7 +420,7 @@ pub(super) fn initial_address() -> Option<String> {
     {
         crate::platform::linux::startup::startup_address(
             std::env::var("PHOTON_URL").ok(),
-            std::env::args().nth(1),
+            std::env::args_os().skip(1),
         )
     }
     #[cfg(not(target_os = "linux"))]
