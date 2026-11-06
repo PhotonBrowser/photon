@@ -4,6 +4,7 @@ import UIKit
 struct KeyboardLifecycleObserver: ViewModifier {
     let onWillShow: () -> Void
     let onDidShow: () -> Void
+    let onWillHide: (Notification) -> Void
     let onDidHide: () -> Void
 
     func body(content: Content) -> some View {
@@ -13,6 +14,9 @@ struct KeyboardLifecycleObserver: ViewModifier {
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
                 onDidShow()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { notification in
+                onWillHide(notification)
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in
                 onDidHide()
@@ -24,12 +28,14 @@ extension View {
     func onKeyboardLifecycle(
         willShow: @escaping () -> Void,
         didShow: @escaping () -> Void,
+        willHide: @escaping (Notification) -> Void,
         didHide: @escaping () -> Void
     ) -> some View {
         modifier(
             KeyboardLifecycleObserver(
                 onWillShow: willShow,
                 onDidShow: didShow,
+                onWillHide: willHide,
                 onDidHide: didHide
             )
         )

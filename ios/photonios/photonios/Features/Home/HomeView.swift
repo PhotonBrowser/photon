@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 private enum HomeMotion {
     static let panelResponse: TimeInterval = 0.28
@@ -25,6 +26,7 @@ struct HomeView: View {
         .onKeyboardLifecycle(
             willShow: keyboardWillShow,
             didShow: keyboardDidShow,
+            willHide: keyboardWillHide,
             didHide: keyboardDidHide
         )
     }
@@ -125,17 +127,44 @@ struct HomeView: View {
         isURLBarSettled = isURLBarActive
     }
 
-    private func keyboardDidHide() {
-        let animation = reduceMotion
-            ? Animation.easeOut(duration: HomeMotion.reducedMotionDuration)
-            : .easeInOut(duration: HomeMotion.keyboardDismissDuration)
+    private func keyboardWillHide(_ notification: Notification) {
+        withAnimation(keyboardDismissAnimation(for: notification)) {
+            isURLBarSettled = false
+            isURLFieldFocused = false
+            isURLBarActive = false
+        }
+    }
 
-        withAnimation(animation) {
+    private func keyboardDidHide() {
+        withAnimation(.easeOut(duration: HomeMotion.reducedMotionDuration)) {
             isKeyboardVisible = false
             isURLBarSettled = false
             isURLFieldFocused = false
             isURLBarActive = false
         }
+    }
+
+    private func keyboardDismissAnimation(for notification: Notification) -> Animation {
+        let userInfo = notification.userInfo ?? [:]
+        let duration = userInfo[UIResponder.keyboardAnimationDurationUserInfoKey] as? TimeInterval
+            ?? HomeMotion.keyboardDismissDuration
+
+        guard !reduceMotion else {
+            return .easeOut(duration: min(duration, HomeMotion.reducedMotionDuration))
+        }
+
+        let curve = (userInfo[UIResponder.keyboardAnimationCurveUserInfoKey] as? NSNumber)?.intValue
+        if curve == UIView.AnimationCurve.easeIn.rawValue {
+            return .timingCurve(0.42, 0, 1, 1, duration: duration)
+        }
+        if curve == UIView.AnimationCurve.easeOut.rawValue {
+            return .timingCurve(0, 0, 0.58, 1, duration: duration)
+        }
+        if curve == UIView.AnimationCurve.linear.rawValue {
+            return .linear(duration: duration)
+        }
+
+        return .timingCurve(0.42, 0, 0.58, 1, duration: duration)
     }
 }
 
