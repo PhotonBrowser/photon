@@ -1,0 +1,3 @@
+ts	phase	decision	why	evidence	result
+2026-11-06T21:23:35Z	frame	Start with a full Linux browser baseline before packaging	A distributable shell cannot load web pages	Documentation/Linux.md	open
+2026-11-06T21:23:35Z	baseline	Initialize pinned dependencies before retrying setup	Cargo cannot compile setup with the GPUI patch directory absent	/tmp/photon-linux220-setup.log	NOT VERIFIED
