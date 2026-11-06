@@ -115,7 +115,8 @@ you move the checkout or change Cargo's install root, run `./photon install`
 followed by `photon desktop install` to refresh both paths. This is developer
 integration, not a packaged end-user build; see
 [PHTN-239](https://linear.app/photonbrowser/issue/PHTN-239/package-photon-for-supported-linux-distributions)
-for distribution packaging.
+for distribution packaging, and [Experimental package](#experimental-package)
+for the experimental archive tooling.
 
 To remove the desktop entry and icon, then remove the installed CLI if desired:
 
@@ -126,3 +127,119 @@ cargo uninstall photon-cli
 
 If Photon is your current default browser, choose another default in desktop
 settings before removing the entry.
+
+## Experimental package
+
+`photon package` turns a completed build into a relocatable archive for
+[issue #220](https://github.com/PhotonBrowser/photon/issues/220). The first
+target is Ubuntu 24.04 on x86_64 with its glibc. Other distributions, older
+glibc releases, musl and ARM are untested.
+
+**Status: NOT VERIFIED at runtime.** Fixture tests cover the staging tool. No
+real package has yet rendered a page on a machine without the checkout.
+
+```sh
+photon build
+photon package                          # build/package/photon-<version>-<commit>-linux-x86_64.tar.xz
+photon package --debug --output /tmp/photon-debug
+```
+
+`photon package` never builds. It requires `target/<profile>/Photon` and an
+Engine build whose recorded fingerprint matches the Engine checkout. The app
+also needs the provenance stamp written by `photon build`; packaging rejects a
+binary from older Rust or GPUI sources or a binary changed after that stamp.
+Run it after `photon build` finishes and never beside a running build. It reads
+the Engine build's `CMakeCache.txt` for the build type and the library, helper and
+vcpkg folders, and refuses a build whose type differs from the requested
+profile. Debug archives end in `-debug`. It refuses to replace an existing
+archive, and it deletes only the staging folder it created. It checks input
+hashes again after staging to reject files changed while copying.
+
+The archive holds one folder, and `<archive>.sha256` sits next to it.
+
+| Path | Contents |
+| --- | --- |
+| `bin/` | `Photon`, every helper listed in `Engine/Meta/CMake/ladybird_helper_processes.cmake`, and `photon-desktop` |
+| `lib/` | The Engine and vcpkg libraries that `Photon` and the helpers load, and every top-level vcpkg shared library |
+| `share/Lagom/` | The Engine resources |
+| `README` | Launch, registration, updates, removal and profile instructions |
+| `LICENSE`, `share/licenses/` | The Photon, Engine, GPUI-CE and vcpkg port notices |
+| `HOST-LIBRARIES` | The libraries the host must provide |
+| `VERSION` | The Photon, Engine and GPUI-CE commits, marked `-dirty` for uncommitted changes, and the profile |
+
+Staged executables get the RUNPATH `$ORIGIN/../lib` and staged libraries get
+`$ORIGIN`. The build tree is not modified. `Photon` finds its helpers beside
+its own executable and opens the address given as its first argument, so the
+package has no launcher script.
+
+### Library policy
+
+The package bundles only libraries from the selected Engine build and its
+matching vcpkg profile. Libraries from the system library folders stay on the
+host and are listed in `HOST-LIBRARIES`. They include glibc and the dynamic
+loader, the C++ runtime, graphics drivers and their dispatch libraries. The
+exact desktop-library requirements depend on the completed build and are
+recorded in `HOST-LIBRARIES`. Build packages on
+Ubuntu 24.04 so that their glibc and C++ runtime requirements match the
+target.
+
+Packaging fails when any of these holds:
+
+- A library is unresolved, or one name resolves to two different bundled files. When a host library also needs a library supplied by the selected vcpkg profile, the package keeps the bundled copy.
+- A library comes from another profile's build or from an unsupported folder such as `/usr/local/lib`.
+- A file is not an x86-64 ELF file.
+- A file needs a bundled library but has no RUNPATH entry to rewrite.
+- A helper or the resources are missing, or `Photon` is a UI-only build.
+
+### Install, update and remove
+
+```sh
+sha256sum --check photon-<version>-<commit>-linux-x86_64.tar.xz.sha256
+mkdir -p ~/.local/opt
+tar -xf photon-<version>-<commit>-linux-x86_64.tar.xz -C ~/.local/opt
+~/.local/opt/photon-<version>-<commit>-linux-x86_64/bin/Photon https://example.org/
+~/.local/opt/photon-<version>-<commit>-linux-x86_64/bin/photon-desktop install
+```
+
+`bin/photon-desktop install` writes
+`${XDG_DATA_HOME:-~/.local/share}/applications/org.photonbrowser.photon.desktop`.
+The entry starts that folder's `bin/Photon` with the link and uses the icon in
+the folder. Folder paths may contain spaces. Registration refuses a path that
+contains `"`, `` ` ``, `$`, `\`, `%` or a control character, because the entry
+cannot hold those characters unescaped. It never changes the default browser.
+Choose Photon in desktop settings or run
+`xdg-settings set default-web-browser org.photonbrowser.photon.desktop`. The
+package and `photon desktop install` share one desktop ID, so the most recent
+registration wins.
+
+To update, quit Photon. Extract the new archive beside the old folder, run the
+new folder's `bin/photon-desktop install`, then delete the old folder. There is
+no automatic updater. An old folder still runs for a rollback, but a newer
+profile may not open in an older version.
+
+To remove the package, choose another default browser if Photon is the
+default. Run the folder's `bin/photon-desktop uninstall`, then delete the
+folder. Uninstall removes the entry only when it points at that folder, so an
+older folder cannot remove a newer registration. Removal keeps the profile in
+`${XDG_DATA_HOME:-~/.local/share}/Photon/Default` and the settings in
+`${XDG_CONFIG_HOME:-~/.config}/Photon/config.toml`. Delete both to reset
+Photon.
+
+### Known limitations
+
+- Opening a link while Photon runs starts a second process on the same profile. There is no single-instance handoff.
+- A `.lagom` folder in `$XDG_CONFIG_HOME`, or in `$HOME` when that is unset, replaces the bundled resources.
+- vcpkg's OpenSSL records its module and engine folders inside the build tree. The default provider is built in. Whether anything loads from those folders at runtime is unverified.
+- Only top-level vcpkg libraries are bundled. Subfolders such as `ossl-modules/` are not.
+
+### Before publishing an archive
+
+1. Render a page from the real archive in a runtime-only Ubuntu 24.04 container with no checkout, compiler or build tree:
+
+   ```sh
+   docker build -t photon-linux220-runtime -f scripts/linux_runtime_smoke.Dockerfile scripts
+   python3 scripts/linux_package_smoke.py build/package/photon-<version>-<commit>-linux-x86_64.tar.xz
+   ```
+
+2. Exercise link opening, default-browser selection, an update beside the old folder, removal that keeps the profile, and a WebRTC page, which starts the `WebRTCClient` helper.
+3. Collect the unresolved notices. The archive does not yet carry the licenses of the Rust crates linked into `Photon`, including GPUI-CE's dependencies, or of the bundled fonts, such as Noto Emoji under the SIL Open Font License.

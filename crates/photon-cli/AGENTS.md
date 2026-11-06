@@ -12,3 +12,11 @@ Linux XDG desktop entry and URL-handler management in
 desktop installation automatically after the CLI is installed;
 `photon setup --ui-only` must leave existing desktop files untouched and must
 not install them.
+
+`commands/linux_package.rs` owns `photon package`, which archives completed
+build outputs and never builds. `packaging/linux/stage.cmake` owns copying and
+relocating ELF files; it reads the helper list from the Engine and the paths
+from the Engine build's `CMakeCache.txt`. Keep `HELPER_PROCESS_TARGETS` in
+`commands/build.rs` equal to the Engine's helper list; a test enforces it.
+`commands/linux_desktop.rs` renders every desktop entry and writes the
+packaged registration script from `packaging/linux/photon-desktop`.
