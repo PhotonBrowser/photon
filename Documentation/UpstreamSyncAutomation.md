@@ -1,6 +1,6 @@
 # Automated upstream sync reviews
 
-Photon can use `photon deps sync --review` to integrate Ladybird and GPUI-CE and dispatch a GitHub Actions review workflow. Local merges do not require GitHub authentication by default. `photon deps pin` later records tested dependency revisions in the root repository.
+Photon can use `photon deps sync --review` to integrate Ladybird and GPUI-CE and dispatch a GitHub Actions review workflow. Local merges do not require GitHub authentication by default. GPUI-CE integrations are optional and Photon-led; use this combined workflow only when you intend to review upstream changes for both dependencies. `photon deps pin` later records tested dependency revisions in the root repository.
 
 The workflow at `.github/workflows/upstream-sync-review.yml` listens for the `photon_upstream_sync` repository dispatch sent by `photon deps sync --review` (or legacy `photon sync`). GitHub only runs a `repository_dispatch` workflow when its workflow file exists on the repository's default branch, so merge this workflow there before dispatching a review. It opens one combined **Photon Upstream Sync #NNN** GitHub issue with before and after tips for Engine and GPUI-CE.
 
@@ -12,7 +12,7 @@ The workflow at `.github/workflows/upstream-sync-review.yml` listens for the `ph
 
 ## Use
 
-Continue with your normal local procedure:
+For a deliberate combined integration, use this procedure:
 
 ```sh
 photon deps sync --check

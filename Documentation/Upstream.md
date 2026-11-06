@@ -11,23 +11,25 @@ A Git submodule entry in the Photon repository records a **commit ID**, never a 
 
 Setup configures the Photon remotes to use HTTPS so fresh clones and submodule updates work without SSH keys. Before pushing through HTTPS, run `gh auth login` and `gh auth setup-git`; contributors who prefer SSH can configure SSH URLs in `photon.toml`.
 
-GPUI-CE is a standalone submodule. Keep generic externally-produced Metal surface support in `PhotonBrowser/gpui-ce`; keep Photon frame ordering, broker policy, Engine ownership and release translation in this repository. Do not add Photon or Ladybird types to GPUI-CE. GPUI-CE syncs merge upstream `main` into Photon's persistent `main` branch; keep the native adapters as Photon commits after the upstream base.
+GPUI-CE is an independently maintained Photon fork. Its persistent `main` branch is Photon-owned and may diverge from upstream. Keep the `upstream` remote as a source of reference and improvements, but import upstream changes selectively when they serve Photon; regular merges and clean mergeability are not goals for this fork. `photon deps sync gpui` deliberately merges upstream `main` into Photon's branch, so use it only when that broad integration is intended. For a focused improvement, port or cherry-pick the relevant change and review its assumptions against Photon's code.
+
+Use the fork for reusable framework behavior that supports Photon, including animation and rendering performance work. Keep Photon frame ordering, broker policy, Engine ownership and release translation in this repository. Do not add Photon or Ladybird types to GPUI-CE.
 
 ## Routine development
 
-Setup activates the persistent Photon branches. `photon deps status` shows each dependency's current branch, pin alignment, worktree cleanliness, and cached upstream counts. `photon deps edit [engine|gpui]` switches one or all clean checkouts to the persistent Photon branches. `photon deps restore [engine|gpui]` returns one or all checkouts to the commits pinned by this root repository. Switching requires a clean source worktree.
+Setup activates the persistent Photon branches. `photon deps status` shows each dependency's current branch, pin alignment, worktree cleanliness, and cached upstream counts; GPUI-CE's upstream counts are informational and do not define a sync target. `photon deps edit [engine|gpui]` switches one or all clean checkouts to the persistent Photon branches. `photon deps restore [engine|gpui]` returns one or all checkouts to the commits pinned by this root repository. Switching requires a clean source worktree.
 
 ## Sync upstream
 
 Before syncing, save work in the root and dependency being changed. Never switch the Engine checkout while CMake or Ninja is building from it; wait for the build or stop it cleanly first.
 
-Run `photon deps sync --check` to fetch upstream tips and preview both merges. Run `photon deps sync` to merge them locally, or specify `engine`, `gpui` to sync one dependency. The command selects the persistent Photon branch when the worktree is clean. A sync does not require GitHub authentication unless you pass `--review` to dispatch the review issue. If a merge conflicts, the command stops and prints every unresolved path, the full combined conflict diff, Git's output, and instructions for completing the merge. Resolve and commit that merge before starting another sync.
+Run `photon deps sync engine` to review and merge Ladybird updates. GPUI-CE updates are Photon-led: run `photon deps sync gpui --check` or `photon deps sync gpui` only when you intentionally want to review or merge the current upstream branch. An unqualified `photon deps sync` (and legacy `photon sync`) operates on both dependencies, so use it only when a GPUI-CE merge is also intended. The command selects the persistent Photon branch when the worktree is clean. A sync does not require GitHub authentication unless you pass `--review` to dispatch the review issue. If a merge conflicts, the command stops and prints every unresolved path, the full combined conflict diff, Git's output, and instructions for completing the merge. Resolve and commit that merge before starting another sync.
 
 The legacy `photon sync` command remains available and dispatches the review workflow after a successful all-dependency sync. `photon sync --no-review` skips that dispatch. See [Automated upstream sync reviews](UpstreamSyncAutomation.md).
 
 The preview compares committed branch tips; uncommitted edits are excluded and may still prevent a real sync.
 
-For GPUI-CE, `photon deps sync gpui` fetches and merges upstream `main` into the persistent Photon `main` branch. Resolve conflicts by understanding both sides and preserving Photon-independent generic renderer behavior. Run focused dependency checks and Photon checks before pushing the branch:
+When deliberately doing a broad GPUI-CE integration, `photon deps sync gpui` fetches and merges upstream `main` into the persistent Photon `main` branch. Resolve conflicts by understanding both sides and preserving Photon-independent generic renderer behavior. Run focused dependency checks and Photon checks before pushing the branch:
 
 ```bash
 cargo check -p gpui_ce_apple

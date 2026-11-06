@@ -1,11 +1,18 @@
 # Photon GPUI-CE fork
 
-Photon uses its maintained fork at `vendor/gpui-ce/` (`origin`:
-`PhotonBrowser/gpui-ce`; `upstream`:
-`https://github.com/gpui-ce/gpui-ce`). The root repository pins a tested fork
-revision. Sync upstream `main` into the persistent fork `main` branch, validate
-the GPUI-CE crates and Photon, push the tested fork commit, then update the
-root gitlink. Do not move the pin to an untested upstream tip.
+Photon develops GPUI-CE as an independent framework fork at `vendor/gpui-ce/`
+(`origin`: `PhotonBrowser/gpui-ce`; `upstream`:
+`https://github.com/gpui-ce/gpui-ce`). The persistent `main` branch and the
+tested revision pinned by the root repository are Photon-owned. Keep the
+upstream remote for reference, but import its changes selectively; Photon does
+not target regular upstream merges or clean mergeability. The fork can evolve
+its APIs and internals to support Photon’s animation, rendering, and performance
+goals. Use `photon deps sync gpui` only when a broad upstream merge is intended.
+Before advancing the root gitlink, validate and push the tested fork commit to
+Photon’s `origin`; never pin an untested upstream tip.
+
+Keep reusable framework behavior in GPUI-CE and Photon application policy in
+`photon-shell`. Do not add Photon or Ladybird lifecycle types to GPUI-CE.
 
 Photon needs a generic macOS `ExternalMetalSurface` for an externally-produced
 BGRA IOSurface. Its descriptor includes the logical resource and generation

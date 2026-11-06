@@ -106,33 +106,26 @@ fn wait_for_child(child: &mut Child) -> Result<ExitStatus, String> {
     }
 }
 
+const ENGINE_UPSTREAM_WARNING_THRESHOLD: usize = 10;
+
 pub(crate) fn warn_if_dependencies_are_behind(root: &Path) {
-    let dependencies = [
-        ("Engine", "Engine", "upstream/master", 10),
-        ("GPUI-CE", "vendor/gpui-ce", "upstream/main", 1),
-    ];
-
-    let mut behind = Vec::new();
-    for (name, repository, upstream, threshold) in dependencies {
-        let repository = root.join(repository);
-        let Some(count) = upstream_ahead_count(&repository, upstream) else {
-            continue;
-        };
-        if is_dependency_behind(count, threshold) {
-            behind.push(format!("{name}: {count}"));
-        }
-    }
-
-    if !behind.is_empty() {
-        let warning = format!(
-            "⚠ Dependency updates available (commits behind upstream): {}. Run `photon sync --check` to review.",
-            behind.join(", ")
-        );
+    if let Some(warning) = dependency_warning(root) {
         eprintln!(
             "{}",
             warning.if_supports_color(Stream::Stderr, |text| format!("{}", text.yellow()))
         );
     }
+}
+
+fn dependency_warning(root: &Path) -> Option<String> {
+    let count = upstream_ahead_count(&root.join("Engine"), "upstream/master")?;
+    if !is_dependency_behind(count, ENGINE_UPSTREAM_WARNING_THRESHOLD) {
+        return None;
+    }
+
+    Some(format!(
+        "⚠ Dependency updates available (commits behind upstream): Engine: {count}. Run `photon deps sync engine --check` to review."
+    ))
 }
 
 fn is_dependency_behind(count: usize, threshold: usize) -> bool {
@@ -162,54 +155,78 @@ mod tests {
         sync::atomic::{AtomicUsize, Ordering},
     };
 
-    use super::{is_dependency_behind, warn_if_dependencies_are_behind};
+    use super::{ENGINE_UPSTREAM_WARNING_THRESHOLD, dependency_warning, is_dependency_behind};
 
     static NEXT_TEMP_REPO: AtomicUsize = AtomicUsize::new(0);
 
     #[test]
-    fn dependency_warning_thresholds_are_inclusive() {
-        assert!(!is_dependency_behind(9, 10));
-        assert!(is_dependency_behind(10, 10));
-        assert!(!is_dependency_behind(0, 1));
-        assert!(is_dependency_behind(1, 1));
+    fn dependency_warning_threshold_is_inclusive() {
+        assert!(!is_dependency_behind(
+            ENGINE_UPSTREAM_WARNING_THRESHOLD - 1,
+            ENGINE_UPSTREAM_WARNING_THRESHOLD
+        ));
+        assert!(is_dependency_behind(
+            ENGINE_UPSTREAM_WARNING_THRESHOLD,
+            ENGINE_UPSTREAM_WARNING_THRESHOLD
+        ));
     }
 
     #[test]
-    fn warning_displays_for_disposable_dependencies_at_thresholds() {
+    fn warning_tracks_engine_updates_and_ignores_gpui_updates() {
         let root = temporary_repository();
-        for (path, branch, count) in [("Engine", "master", 10), ("vendor/gpui-ce", "main", 1)] {
-            let repository = root.join(path);
-            std::fs::create_dir_all(&repository).unwrap();
-            git(&repository, &["init", "-q"]);
-            git(&repository, &["config", "user.name", "Photon Test"]);
-            git(
-                &repository,
-                &["config", "user.email", "photon-test@example.invalid"],
-            );
-            std::fs::write(repository.join("file"), "0").unwrap();
-            git(&repository, &["add", "file"]);
-            git(&repository, &["commit", "-qm", "base"]);
-            let base = git_output(&repository, &["rev-parse", "HEAD"]);
-            for revision in 1..=count {
-                std::fs::write(repository.join("file"), revision.to_string()).unwrap();
-                git(
-                    &repository,
-                    &["commit", "-qam", &format!("revision {revision}")],
-                );
-            }
-            git(
-                &repository,
-                &[
-                    "update-ref",
-                    &format!("refs/remotes/upstream/{branch}"),
-                    "HEAD",
-                ],
-            );
-            git(&repository, &["reset", "-q", "--hard", &base]);
-        }
+        create_repository_with_upstream_ahead(&root, "Engine", "master", 10);
+        create_repository_with_upstream_ahead(&root, "vendor/gpui-ce", "main", 1);
 
-        warn_if_dependencies_are_behind(&root);
+        let warning = dependency_warning(&root).expect("Engine updates should be reported");
+        assert!(warning.contains("Engine: 10"), "{warning}");
+        assert!(!warning.contains("GPUI-CE"), "{warning}");
+        assert!(
+            warning.contains("photon deps sync engine --check"),
+            "{warning}"
+        );
+
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn gpui_updates_alone_do_not_trigger_dependency_warning() {
+        let root = temporary_repository();
+        create_repository_with_upstream_ahead(&root, "vendor/gpui-ce", "main", 1);
+
+        assert_eq!(dependency_warning(&root), None);
+
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    fn create_repository_with_upstream_ahead(root: &Path, path: &str, branch: &str, count: usize) {
+        let repository = root.join(path);
+        std::fs::create_dir_all(&repository).unwrap();
+        git(&repository, &["init", "-q"]);
+        git(&repository, &["config", "user.name", "Photon Test"]);
+        git(
+            &repository,
+            &["config", "user.email", "photon-test@example.invalid"],
+        );
+        std::fs::write(repository.join("file"), "0").unwrap();
+        git(&repository, &["add", "file"]);
+        git(&repository, &["commit", "-qm", "base"]);
+        let base = git_output(&repository, &["rev-parse", "HEAD"]);
+        for revision in 1..=count {
+            std::fs::write(repository.join("file"), revision.to_string()).unwrap();
+            git(
+                &repository,
+                &["commit", "-qam", &format!("revision {revision}")],
+            );
+        }
+        git(
+            &repository,
+            &[
+                "update-ref",
+                &format!("refs/remotes/upstream/{branch}"),
+                "HEAD",
+            ],
+        );
+        git(&repository, &["reset", "-q", "--hard", &base]);
     }
 
     fn temporary_repository() -> std::path::PathBuf {
