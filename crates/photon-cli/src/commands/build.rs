@@ -429,7 +429,20 @@ fn embedder_library_output(engine_dir: &Path) -> PathBuf {
     } else if cfg!(target_os = "windows") {
         engine_dir.join("bin/lagom-photonembedder.dll")
     } else {
-        engine_dir.join("lib64/liblagom-photonembedder.so")
+        let directory = std::fs::read_to_string(engine_dir.join("CMakeCache.txt"))
+            .ok()
+            .and_then(|cache| {
+                cache.lines().find_map(|line| {
+                    let (_, directory) = line
+                        .strip_prefix("CMAKE_INSTALL_LIBDIR:")?
+                        .split_once('=')?;
+                    (!directory.is_empty()).then(|| directory.to_owned())
+                })
+            })
+            .unwrap_or_else(|| "lib".to_owned());
+        engine_dir
+            .join(directory)
+            .join("liblagom-photonembedder.so")
     }
 }
 
@@ -898,6 +911,26 @@ mod test {
     use std::collections::BTreeSet;
 
     use super::HELPER_PROCESS_TARGETS;
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn embedder_output_follows_the_configured_library_directory() {
+        let engine =
+            std::env::temp_dir().join(format!("photon-library-dir-{}", std::process::id()));
+        std::fs::create_dir_all(&engine).unwrap();
+        for directory in ["lib", "lib64"] {
+            std::fs::write(
+                engine.join("CMakeCache.txt"),
+                format!("CMAKE_INSTALL_LIBDIR:PATH={directory}\n"),
+            )
+            .unwrap();
+            assert_eq!(
+                super::embedder_library_output(&engine),
+                engine.join(directory).join("liblagom-photonembedder.so")
+            );
+        }
+        std::fs::remove_dir_all(engine).unwrap();
+    }
 
     #[test]
     fn helper_targets_match_the_engine_helper_list() {
