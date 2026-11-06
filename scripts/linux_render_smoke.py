@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import http.server
 import os
 import signal
@@ -130,7 +131,7 @@ def stop_photon(process: subprocess.Popen[bytes]) -> None:
         process.wait(timeout=5)
 
 
-def run_smoke() -> None:
+def run_smoke(executable: Path | None = None) -> None:
     with tempfile.TemporaryDirectory(prefix="photon-linux-render-") as temporary:
         work_dir = Path(temporary)
         home = work_dir / "home"
@@ -161,6 +162,29 @@ def run_smoke() -> None:
             }
         )
         environment.pop("WAYLAND_DISPLAY", None)
+        if executable is not None:
+            for variable in (
+                "PHOTON_HELPER_DIRECTORY",
+                "PHOTON_URL",
+                "PHOTON_ENGINE_BUILD_DIR",
+                "LD_LIBRARY_PATH",
+                "DYLD_LIBRARY_PATH",
+            ):
+                environment.pop(variable, None)
+            environment["PHOTON_SHUTDOWN_AFTER_SECONDS"] = "120"
+            command = [str(executable), url]
+            working_directory = work_dir
+        else:
+            command = [
+                str(ROOT / "photon"),
+                "run",
+                "--debug",
+                "--url",
+                url,
+                "--shutdown-after-seconds",
+                "120",
+            ]
+            working_directory = ROOT
 
         log_path = work_dir / "photon.log"
         process: subprocess.Popen[bytes] | None = None
@@ -168,16 +192,8 @@ def run_smoke() -> None:
         try:
             with log_path.open("wb") as log_file:
                 process = subprocess.Popen(
-                    [
-                        str(ROOT / "photon"),
-                        "run",
-                        "--debug",
-                        "--url",
-                        url,
-                        "--shutdown-after-seconds",
-                        "120",
-                    ],
-                    cwd=ROOT,
+                    command,
+                    cwd=working_directory,
                     env=environment,
                     stdin=subprocess.DEVNULL,
                     stdout=log_file,
@@ -237,4 +253,16 @@ def run_smoke() -> None:
 
 
 if __name__ == "__main__":
-    run_smoke()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--executable",
+        type=Path,
+        help="launch a packaged executable with the test URL instead of building from source",
+    )
+    arguments = parser.parse_args()
+    executable = arguments.executable
+    if executable is not None:
+        executable = executable.resolve()
+        if not executable.is_file() or not os.access(executable, os.X_OK):
+            parser.error(f"not an executable file: {executable}")
+    run_smoke(executable)
