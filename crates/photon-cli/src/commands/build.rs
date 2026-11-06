@@ -14,7 +14,7 @@ use crate::support::{
     success, with_progress,
 };
 
-const HELPER_PROCESS_TARGETS: &[&str] = &[
+pub(super) const HELPER_PROCESS_TARGETS: &[&str] = &[
     "WebContent",
     "WebWorker",
     "Compositor",
@@ -263,7 +263,24 @@ fn build_app(root: &Path, release: bool, verbose: bool) -> Result<(), String> {
     if release {
         args.push("--release");
     }
-    invoke_cargo(&args, root, Some(&engine), verbose)
+    #[cfg(target_os = "linux")]
+    let source = app_source_fingerprint(root, release)?;
+    invoke_cargo(&args, root, Some(&engine), verbose)?;
+    #[cfg(target_os = "linux")]
+    {
+        let stamp = app_build_stamp(root, release)?;
+        if !stamp.starts_with(&format!("source={source}\n")) {
+            return Err(
+                "application sources changed during the build; build again before packaging".into(),
+            );
+        }
+        std::fs::write(
+            photon_executable(root, release).with_extension("photon-build-stamp"),
+            stamp,
+        )
+        .map_err(|error| format!("cannot record application build provenance: {error}"))?;
+    }
+    Ok(())
 }
 
 fn invoke_cargo(
@@ -441,7 +458,52 @@ fn engine_targets_are_current(engine_dir: &Path, root: &Path) -> Result<bool, St
     Ok(output.contains("ninja: no work to do."))
 }
 
-fn engine_fingerprint(root: &Path, release: bool) -> Result<String, String> {
+#[cfg(target_os = "linux")]
+fn app_source_fingerprint(root: &Path, release: bool) -> Result<String, String> {
+    let mut hasher = DefaultHasher::new();
+    engine_fingerprint(root, release)?.hash(&mut hasher);
+    for (repository, paths) in [
+        (
+            root.to_path_buf(),
+            vec![
+                "Cargo.toml",
+                "Cargo.lock",
+                "rust-toolchain.toml",
+                "crates",
+                "native",
+            ],
+        ),
+        (root.join("vendor/gpui-ce"), vec!["."]),
+    ] {
+        output("git", &["rev-parse", "HEAD"], &repository)?.hash(&mut hasher);
+        let mut diff = vec!["diff", "--binary", "HEAD", "--"];
+        diff.extend(&paths);
+        hash_output("git", &diff, &repository)?.hash(&mut hasher);
+        let mut untracked = vec!["ls-files", "--others", "--exclude-standard", "--"];
+        untracked.extend(&paths);
+        for relative in output("git", &untracked, &repository)?.lines() {
+            relative.hash(&mut hasher);
+            let file = repository.join(relative);
+            if file.is_file() {
+                hash_file(&file, &mut hasher)?;
+            }
+        }
+    }
+    Ok(format!("{:016x}", hasher.finish()))
+}
+
+#[cfg(target_os = "linux")]
+pub(super) fn app_build_stamp(root: &Path, release: bool) -> Result<String, String> {
+    let source = app_source_fingerprint(root, release)?;
+    let mut binary = DefaultHasher::new();
+    hash_file(&photon_executable(root, release), &mut binary)?;
+    Ok(format!(
+        "source={source}\nbinary={:016x}\n",
+        binary.finish()
+    ))
+}
+
+pub(super) fn engine_fingerprint(root: &Path, release: bool) -> Result<String, String> {
     let engine_source = path(&root.join("Engine"));
     let revision = output("git", &["-C", &engine_source, "rev-parse", "HEAD"], root)?;
     let diff_hash = hash_output(
@@ -713,7 +775,7 @@ fn run_ui_portable(
 }
 
 #[cfg(any(target_os = "linux", target_os = "windows"))]
-fn photon_executable(root: &Path, release: bool) -> PathBuf {
+pub(super) fn photon_executable(root: &Path, release: bool) -> PathBuf {
     let filename = if cfg!(target_os = "windows") {
         "Photon.exe"
     } else {

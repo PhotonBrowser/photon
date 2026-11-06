@@ -1,0 +1,58 @@
+#!/bin/sh
+set -eu
+
+fail() {
+    printf '%s: %s\n' "$0" "$1" >&2
+    exit 1
+}
+
+[ $# -eq 1 ] || fail "usage: $0 install|uninstall"
+
+prefix=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
+case $prefix in
+*[\"\`\$\\%]* | *[[:cntrl:]]*)
+    fail "cannot register a folder whose path contains \", \`, \$, \\, % or a control character: $prefix"
+    ;;
+esac
+data_home=${XDG_DATA_HOME:-${HOME:?HOME is not set}/.local/share}
+case $data_home in
+/*) ;;
+*) fail "XDG_DATA_HOME must be an absolute path: $data_home" ;;
+esac
+applications=$data_home/applications
+entry=$applications/@DESKTOP_ID@
+
+rendered() {
+    replacement=$(printf '%s\n' "$prefix" | sed 's/[&|]/\\&/g')
+    sed "s|@PHOTON_PREFIX@|$replacement|g" "$prefix/share/applications/@DESKTOP_ID@.in"
+}
+
+refresh() {
+    if command -v update-desktop-database >/dev/null 2>&1; then
+        update-desktop-database "$applications" ||
+            printf '%s: update-desktop-database failed; launchers may take time to notice the change\n' "$0" >&2
+    fi
+}
+
+case $1 in
+install)
+    mkdir -p "$applications"
+    rendered >"$entry.partial"
+    mv -f "$entry.partial" "$entry"
+    refresh
+    printf 'Registered %s for %s\n' "$entry" "$prefix"
+    ;;
+uninstall)
+    try_exec=$(rendered | grep '^TryExec=')
+    if [ -f "$entry" ] && grep -qxF "$try_exec" "$entry"; then
+        rm -f "$entry"
+        refresh
+        printf 'Removed %s\n' "$entry"
+    elif [ -e "$entry" ]; then
+        printf '%s belongs to another installation; leaving it in place\n' "$entry"
+    fi
+    ;;
+*)
+    fail "usage: $0 install|uninstall"
+    ;;
+esac

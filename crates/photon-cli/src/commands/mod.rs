@@ -11,6 +11,8 @@ pub(super) mod install;
 pub(super) mod lint;
 #[cfg(target_os = "linux")]
 pub(super) mod linux_desktop;
+#[cfg(target_os = "linux")]
+pub(super) mod linux_package;
 pub(super) mod pin;
 #[cfg(target_os = "macos")]
 pub(super) mod presentation_broker;

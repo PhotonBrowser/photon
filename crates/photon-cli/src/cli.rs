@@ -51,6 +51,16 @@ enum Command {
         #[command(subcommand)]
         command: DesktopCommand,
     },
+    /// Archive a completed build as an experimental relocatable Linux package.
+    #[cfg(target_os = "linux")]
+    Package {
+        /// Package the debug build instead of the release build.
+        #[arg(long)]
+        debug: bool,
+        /// Folder that receives the archive and its checksum [default: build/package].
+        #[arg(long, value_name = "DIR")]
+        output: Option<PathBuf>,
+    },
     /// Report tool versions, installed Rust tools, and dependency checkout state.
     Doctor,
     /// Report Rust editor metadata.
@@ -249,8 +259,14 @@ pub fn run() -> Result<(), String> {
         #[cfg(target_os = "linux")]
         Some(Command::Desktop { command }) => match command {
             DesktopCommand::Install => commands::linux_desktop::install(&root),
-            DesktopCommand::Uninstall => commands::linux_desktop::uninstall(),
+            DesktopCommand::Uninstall => commands::linux_desktop::uninstall(&root),
         },
+        #[cfg(target_os = "linux")]
+        Some(Command::Package { debug, output }) => {
+            let output = std::path::absolute(output.unwrap_or_else(|| root.join("build/package")))
+                .map_err(|error| format!("cannot resolve the output folder: {error}"))?;
+            commands::linux_package::package(&root, !debug, &output, verbose).map(|_| ())
+        }
         Some(Command::Doctor) => commands::setup::doctor(&root),
         Some(Command::Ide { command }) => match command {
             IdeCommand::Setup => commands::ide::setup(&root, verbose),
@@ -478,6 +494,26 @@ mod tests {
         };
 
         assert!(!profile.release());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn package_defaults_to_release_and_accepts_debug_and_an_output_folder() {
+        let cli = Cli::try_parse_from(["photon", "package"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Some(Command::Package {
+                debug: false,
+                output: None
+            })
+        ));
+        let cli =
+            Cli::try_parse_from(["photon", "package", "--debug", "--output", "dist"]).unwrap();
+        let Some(Command::Package { debug, output }) = cli.command else {
+            panic!("expected package command");
+        };
+        assert!(debug);
+        assert_eq!(output.as_deref(), Some(std::path::Path::new("dist")));
     }
 
     #[test]
