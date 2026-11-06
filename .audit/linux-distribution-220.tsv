@@ -1,3 +1,6 @@
 ts	phase	decision	why	evidence	result
 2026-11-06T21:23:35Z	frame	Start with a full Linux browser baseline before packaging	A distributable shell cannot load web pages	Documentation/Linux.md	open
 2026-11-06T21:23:35Z	baseline	Initialize pinned dependencies before retrying setup	Cargo cannot compile setup with the GPUI patch directory absent	/tmp/photon-linux220-setup.log	NOT VERIFIED
+2026-11-06T21:26:30Z	baseline	Full setup completed with pinned dependencies	Establish a real full-browser baseline before creating a package	/tmp/photon-linux220-setup.log	setup passed; Engine build running
+2026-11-06T21:26:30Z	desktop	Separate StartupNotify from the MIME-type list	Full setup emitted an invalid MIME-type error; focused test reproduced the joined fields	/tmp/photon-linux220-desktop-test-before.log	regression failed before fix
+2026-11-06T21:26:30Z	desktop	Verify generated desktop entry and all CLI tests	Check installed metadata with desktop-file-validate as well as the regression test	/tmp/photon-linux220-desktop-validate.log; /tmp/photon-linux220-cli-tests.log	VERIFIED; format passed; workspace check running

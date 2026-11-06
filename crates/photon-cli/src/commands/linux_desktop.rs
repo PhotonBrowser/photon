@@ -96,7 +96,7 @@ fn desktop_entry(executable: &Path, icon: &Path) -> Result<String, String> {
          Icon={}\n\
          Terminal=false\n\
          Categories=Network;WebBrowser;\n\
-         MimeType={MIME_TYPES}\
+         MimeType={MIME_TYPES}\n\
          StartupNotify=true\n",
         desktop_key_value(executable)?,
         desktop_key_value(icon)?
@@ -291,5 +291,25 @@ fn update_desktop_database(applications: &Path) {
             "Warning: update-desktop-database is unavailable; install desktop-file-utils to refresh Linux application metadata."
         ),
         Err(error) => eprintln!("Warning: cannot update Linux application metadata: {error}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn desktop_entry_keeps_mime_types_and_startup_notification_separate() {
+        let entry = desktop_entry(
+            Path::new("/opt/photon/bin/photon"),
+            Path::new("/opt/photon/icon.png"),
+        )
+        .unwrap();
+        let values = entry
+            .lines()
+            .filter_map(|line| line.split_once('='))
+            .collect::<std::collections::HashMap<_, _>>();
+        assert_eq!(values.get("MimeType"), Some(&MIME_TYPES));
+        assert_eq!(values.get("StartupNotify"), Some(&"true"));
     }
 }
