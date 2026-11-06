@@ -11,6 +11,7 @@ enum URLBarStyle {
     static let historyHorizontalInset: CGFloat = 24
     static let historyVerticalInset: CGFloat = 12
     static let historyRowSpacing: CGFloat = 12
+    static var panelHeight: CGFloat { fieldHeight + verticalInset * 2 + historySectionHeight }
     static let borderBeamCycleDuration: TimeInterval = 3.1
 }
 

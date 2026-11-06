@@ -13,6 +13,8 @@ struct HomeView: View {
     @State private var isURLBarActive = false
     @State private var isURLBarSettled = false
     @State private var isKeyboardVisible = false
+    @State private var isKeyboardHiding = false
+    @State private var panelHeight = URLBarStyle.panelHeight
     @State private var urlText = ""
     @FocusState private var isURLFieldFocused: Bool
 
@@ -29,6 +31,10 @@ struct HomeView: View {
             willHide: keyboardWillHide,
             didHide: keyboardDidHide
         )
+        .onPreferenceChange(OmniboxPanelHeightPreference.self) { height in
+            guard height > 0, abs(panelHeight - height) > 0.5 else { return }
+            panelHeight = height
+        }
     }
 
     private var homeScrollView: some View {
@@ -66,26 +72,33 @@ struct HomeView: View {
 
     @ViewBuilder
     private var omniboxPanel: some View {
-        if isURLBarActive {
+        if isURLBarActive || isKeyboardHiding {
             OmniboxPanel(
                 text: $urlText,
                 isFocused: $isURLFieldFocused,
                 showsBorderBeam: isURLBarSettled,
                 onSubmit: closeURLBar
             )
+            .offset(y: isKeyboardHiding && !reduceMotion ? panelHeight : 0)
             .transition(panelTransition)
         }
     }
 
     private var panelTransition: AnyTransition {
-        guard !reduceMotion else { return .opacity }
+        let insertion: AnyTransition = reduceMotion
+            ? .opacity
+            : .opacity.combined(with: .scale(scale: 0.98, anchor: .bottom))
+        let removal: AnyTransition
 
-        return .asymmetric(
-            insertion: .opacity.combined(
-                with: .scale(scale: 0.98, anchor: .bottom)
-            ),
-            removal: .move(edge: .bottom)
-        )
+        if reduceMotion {
+            removal = .opacity
+        } else if isKeyboardHiding {
+            removal = .identity
+        } else {
+            removal = .move(edge: .bottom)
+        }
+
+        return .asymmetric(insertion: insertion, removal: removal)
     }
 
     private var panelAnimation: Animation {
@@ -124,24 +137,41 @@ struct HomeView: View {
 
     private func keyboardDidShow() {
         isKeyboardVisible = true
+        isKeyboardHiding = false
         isURLBarSettled = isURLBarActive
     }
 
     private func keyboardWillHide(_ notification: Notification) {
+        guard isURLBarActive else { return }
+
         withAnimation(keyboardDismissAnimation(for: notification)) {
             isURLBarSettled = false
             isURLFieldFocused = false
-            isURLBarActive = false
+            isKeyboardHiding = true
         }
     }
 
     private func keyboardDidHide() {
-        withAnimation(.easeOut(duration: HomeMotion.reducedMotionDuration)) {
-            isKeyboardVisible = false
-            isURLBarSettled = false
-            isURLFieldFocused = false
-            isURLBarActive = false
+        if reduceMotion {
+            withAnimation(.easeOut(duration: HomeMotion.reducedMotionDuration)) {
+                resetKeyboardState()
+            }
+            return
         }
+
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            resetKeyboardState()
+        }
+    }
+
+    private func resetKeyboardState() {
+        isKeyboardVisible = false
+        isURLBarSettled = false
+        isURLFieldFocused = false
+        isURLBarActive = false
+        isKeyboardHiding = false
     }
 
     private func keyboardDismissAnimation(for notification: Notification) -> Animation {

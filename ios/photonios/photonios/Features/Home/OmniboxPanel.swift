@@ -32,6 +32,23 @@ struct OmniboxPanel: View {
             .fill(.regularMaterial)
             .ignoresSafeArea(edges: .bottom)
         }
+        .overlay {
+            GeometryReader { geometry in
+                Color.clear.preference(
+                    key: OmniboxPanelHeightPreference.self,
+                    value: geometry.size.height
+                )
+            }
+            .allowsHitTesting(false)
+        }
+    }
+}
+
+struct OmniboxPanelHeightPreference: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
 
