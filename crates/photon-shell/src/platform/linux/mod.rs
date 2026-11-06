@@ -10,6 +10,8 @@ pub(crate) mod default_browser;
 pub(crate) mod external_apps;
 pub(crate) mod motion_observer;
 pub(crate) mod renderer;
+#[cfg(any(test, not(feature = "ui-only")))]
+pub(crate) mod startup;
 pub(crate) mod window_observer;
 pub(crate) mod window_settings;
 
