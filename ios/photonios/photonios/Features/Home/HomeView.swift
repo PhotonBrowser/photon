@@ -1,136 +1,141 @@
 import SwiftUI
-import UIKit
 
-private enum SearchBarMotion {
-    static let response: TimeInterval = 0.28
-    static let focusDelay: TimeInterval = 0.22
-    static let damping: CGFloat = 0.9
+private enum HomeMotion {
+    static let panelResponse: TimeInterval = 0.28
+    static let panelDamping: CGFloat = 1.0
+    static let keyboardDismissDuration: TimeInterval = 0.2
+    static let reducedMotionDuration: TimeInterval = 0.16
 }
 
 struct HomeView: View {
-    @State private var touchLocation = CGPoint.zero
-    @State private var isBackgroundPressing = false
-    @State private var pressID = 0
-    @State private var ripples: [DotRipple] = []
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isURLBarActive = false
+    @State private var isURLBarSettled = false
     @State private var isKeyboardVisible = false
     @State private var urlText = ""
-    @State private var searchActivationID = 0
     @FocusState private var isURLFieldFocused: Bool
-    @Namespace private var searchBarNamespace
 
     var body: some View {
         ZStack {
             Color(uiColor: .systemBackground)
                 .ignoresSafeArea()
 
-            DotGridBackground(
-                touchLocation: touchLocation,
-                ripples: ripples,
-                isTouching: isBackgroundPressing,
-                onTouchChanged: updateBackgroundTouch,
-                onTouchEnded: finishBackgroundTouch
-            )
+            homeScrollView
+        }
+        .onKeyboardLifecycle(
+            willShow: keyboardWillShow,
+            didShow: keyboardDidShow,
+            didHide: keyboardDidHide
+        )
+    }
 
-            VStack {
-                Spacer()
+    private var homeScrollView: some View {
+        ScrollView(.vertical) {
+            ZStack(alignment: .bottom) {
+                DotGridBackground(
+                    isURLBarActive: isURLBarActive,
+                    onBackgroundTap: closeURLBar
+                )
 
-                Group {
-                    if isURLBarActive {
-                        URLBarInput(
-                            text: $urlText,
-                            isFocused: $isURLFieldFocused,
-                            namespace: searchBarNamespace,
-                            activationID: searchActivationID,
-                            onDismiss: closeURLBar,
-                            onSubmit: submitSearch
-                        )
-                    } else {
-                        SearchButton(namespace: searchBarNamespace, action: openURLBar)
-                    }
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    searchButton
                 }
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.horizontal, isURLBarActive ? 16 : 0)
+                .frame(maxWidth: .infinity)
+            }
+            .containerRelativeFrame(.vertical)
+        }
+        .scrollIndicators(.hidden)
+        .scrollDismissesKeyboard(.interactively)
+        .scrollBounceBehavior(isURLBarActive ? .always : .basedOnSize, axes: .vertical)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            omniboxPanel
+        }
+    }
+
+    @ViewBuilder
+    private var searchButton: some View {
+        if !isURLBarActive && !isKeyboardVisible {
+            SearchButton(action: openURLBar)
                 .padding(.bottom, 8)
-            }
-            .frame(maxWidth: .infinity)
-        }
-
-        .sensoryFeedback(.impact(weight: .light, intensity: 0.35), trigger: pressID)
-        .sensoryFeedback(.impact(weight: .light, intensity: 0.35), trigger: searchActivationID)
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
-            isKeyboardVisible = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in
-            isKeyboardVisible = false
-            if isURLBarActive {
-                finishClosingURLBar()
-            }
+                .transition(.opacity)
         }
     }
 
-    private func updateBackgroundTouch(_ location: CGPoint) {
-        if !isBackgroundPressing {
-            isBackgroundPressing = true
-            pressID += 1
-        }
-
-        touchLocation = location
-    }
-
-    private func finishBackgroundTouch(_ location: CGPoint) {
-        touchLocation = location
-        isBackgroundPressing = false
+    @ViewBuilder
+    private var omniboxPanel: some View {
         if isURLBarActive {
-            closeURLBar()
+            OmniboxPanel(
+                text: $urlText,
+                isFocused: $isURLFieldFocused,
+                showsBorderBeam: isURLBarSettled,
+                onSubmit: closeURLBar
+            )
+            .transition(panelTransition)
         }
-        addRipple(at: location)
+    }
+
+    private var panelTransition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+
+        return .asymmetric(
+            insertion: .opacity.combined(
+                with: .scale(scale: 0.98, anchor: .bottom)
+            ),
+            removal: .move(edge: .bottom)
+        )
+    }
+
+    private var panelAnimation: Animation {
+        reduceMotion
+            ? .easeOut(duration: HomeMotion.reducedMotionDuration)
+            : .spring(response: HomeMotion.panelResponse, dampingFraction: HomeMotion.panelDamping)
     }
 
     private func openURLBar() {
-        withAnimation(searchBarAnimation) {
+        withAnimation(panelAnimation) {
+            isURLBarSettled = false
             isURLBarActive = true
-        }
-        searchActivationID += 1
-
-        Task { @MainActor in
-            try? await Task.sleep(for: .seconds(SearchBarMotion.focusDelay))
-            guard isURLBarActive else { return }
-            isURLFieldFocused = true
         }
     }
 
     private func closeURLBar() {
-        let keyboardWasVisible = isKeyboardVisible || isURLFieldFocused
-        isURLFieldFocused = false
-        if !keyboardWasVisible {
+        guard isKeyboardVisible else {
             finishClosingURLBar()
+            return
         }
+
+        isURLFieldFocused = false
     }
 
     private func finishClosingURLBar() {
         isURLFieldFocused = false
-        withAnimation(searchBarAnimation) {
+        isURLBarSettled = false
+        withAnimation(panelAnimation) {
             isURLBarActive = false
         }
     }
 
-    private func submitSearch() {
-        closeURLBar()
+    private func keyboardWillShow() {
+        isKeyboardVisible = true
     }
 
-    private func addRipple(at origin: CGPoint) {
-        let ripple = DotRipple(origin: origin, startedAt: .now)
-        ripples.append(ripple)
+    private func keyboardDidShow() {
+        isKeyboardVisible = true
+        isURLBarSettled = isURLBarActive
+    }
 
-        Task { @MainActor in
-            try? await Task.sleep(for: .seconds(DotGridMetrics.rippleDuration))
-            ripples.removeAll { $0.id == ripple.id }
+    private func keyboardDidHide() {
+        let animation = reduceMotion
+            ? Animation.easeOut(duration: HomeMotion.reducedMotionDuration)
+            : .easeInOut(duration: HomeMotion.keyboardDismissDuration)
+
+        withAnimation(animation) {
+            isKeyboardVisible = false
+            isURLBarSettled = false
+            isURLFieldFocused = false
+            isURLBarActive = false
         }
-    }
-
-    private var searchBarAnimation: Animation {
-        .spring(response: SearchBarMotion.response, dampingFraction: SearchBarMotion.damping)
     }
 }
 

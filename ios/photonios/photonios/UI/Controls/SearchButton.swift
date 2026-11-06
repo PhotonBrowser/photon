@@ -1,20 +1,23 @@
 import SwiftUI
 
 struct SearchButton: View {
-    let namespace: Namespace.ID
     let action: () -> Void
 
+    @State private var activationID = 0
+
     var body: some View {
-        Button(action: action) {
+        Button {
+            activationID += 1
+            action()
+        } label: {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 20, weight: .regular))
                 .foregroundStyle(.primary)
-                .frame(width: 100, height: 34)
+                .frame(width: 100, height: 44)
                 .contentShape(Rectangle())
-                .transition(.blurReplace)
         }
         .buttonStyle(.glass)
-        .matchedGeometryEffect(id: "search-url-bar", in: namespace)
         .accessibilityLabel("Search")
+        .sensoryFeedback(.impact(weight: .light, intensity: 0.35), trigger: activationID)
     }
 }
