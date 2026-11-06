@@ -23,6 +23,7 @@ const HELPER_PROCESS_TARGETS: &[&str] = &[
     "MediaServer",
     "VideoDecoderServer",
     "AudioServer",
+    "WebRTCClient",
 ];
 
 #[cfg(unix)]
@@ -832,10 +833,28 @@ pub(crate) fn clean(root: &Path, scope: Option<&str>) -> Result<(), String> {
 
 #[cfg(test)]
 mod test {
-    use super::engine_build_targets;
+    use std::collections::BTreeSet;
+
+    use super::HELPER_PROCESS_TARGETS;
 
     #[test]
-    fn audio_server_is_built_as_a_helper_process() {
-        assert!(engine_build_targets().contains(&"AudioServer"));
+    fn helper_targets_match_the_engine_helper_list() {
+        let list = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../Engine/Meta/CMake/ladybird_helper_processes.cmake"
+        ))
+        .expect("the Engine checkout is initialized");
+        let engine = list
+            .split_once("set(ladybird_helper_processes")
+            .and_then(|(_, rest)| rest.split_once(')'))
+            .map(|(names, _)| names.split_whitespace().collect::<BTreeSet<_>>())
+            .expect("the Engine helper list is a set() call");
+        assert_eq!(
+            HELPER_PROCESS_TARGETS
+                .iter()
+                .copied()
+                .collect::<BTreeSet<_>>(),
+            engine
+        );
     }
 }
