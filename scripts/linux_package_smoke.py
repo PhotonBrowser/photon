@@ -22,11 +22,11 @@ def run_archive(archive: Path, image: str, evidence: Path) -> None:
         executables = list(extracted.glob("*/bin/Photon"))
         if len(executables) != 1 or not executables[0].is_file():
             raise ValueError("archive must contain exactly one package with bin/Photon")
-        executable = Path("/package") / executables[0].relative_to(extracted)
+        executable = Path("/package with spaces") / executables[0].relative_to(extracted)
         subprocess.run(
             [
                 "docker", "run", "--rm", "--init", "--network", "none", "--shm-size", "1g",
-                "--mount", f"type=bind,src={extracted},dst=/package,readonly",
+                "--mount", f"type=bind,src={extracted},dst=/package with spaces,readonly",
                 "--mount", f"type=bind,src={smoke},dst=/smoke/linux_render_smoke.py,readonly",
                 "--mount", f"type=bind,src={evidence},dst=/evidence",
                 "--env", "PHOTON_RENDER_SCREENSHOT=/evidence/linux-package-render.png",
