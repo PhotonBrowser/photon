@@ -10,7 +10,7 @@ import tempfile
 from pathlib import Path
 
 
-def run_archive(archive: Path, image: str, evidence: Path) -> None:
+def run_archive(archive: Path, image: str, evidence: Path, desktop: bool = False) -> None:
     archive = archive.resolve(strict=True)
     evidence = evidence.resolve()
     evidence.mkdir(parents=True, exist_ok=True)
@@ -33,6 +33,7 @@ def run_archive(archive: Path, image: str, evidence: Path) -> None:
                 image,
                 "xvfb-run", "-a", "-s", "-screen 0 1280x800x24 +extension GLX +render -noreset",
                 "python3", "/smoke/linux_render_smoke.py", "--executable", str(executable),
+                *(["--desktop"] if desktop else []),
             ],
             check=True,
         )
@@ -43,5 +44,6 @@ if __name__ == "__main__":
     parser.add_argument("archive", type=Path)
     parser.add_argument("--image", default="photon-linux220-runtime")
     parser.add_argument("--evidence", type=Path, default=Path("build/package-smoke"))
+    parser.add_argument("--desktop", action="store_true", help="exercise the installed default URL handler")
     arguments = parser.parse_args()
-    run_archive(arguments.archive, arguments.image, arguments.evidence)
+    run_archive(arguments.archive, arguments.image, arguments.evidence, arguments.desktop)

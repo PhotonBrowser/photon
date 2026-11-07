@@ -234,12 +234,15 @@ Photon.
 
 ### Before publishing an archive
 
-1. Render a page from the real archive in a runtime-only Ubuntu 24.04 container with no checkout, compiler or build tree:
+1. Render a page from the real archive directly and through its registered URL handler in a runtime-only Ubuntu 24.04 container with no checkout, compiler or build tree:
 
    ```sh
    docker build -t photon-linux220-runtime -f scripts/linux_runtime_smoke.Dockerfile scripts
    python3 scripts/linux_package_smoke.py build/package/photon-<version>-<commit>-linux-x86_64.tar.xz
+   python3 scripts/linux_package_smoke.py build/package/photon-<version>-<commit>-linux-x86_64.tar.xz --desktop --evidence build/package-desktop-smoke
    ```
 
-2. Exercise link opening, default-browser selection, an update beside the old folder, removal that keeps the profile, and a WebRTC page, which starts the `WebRTCClient` helper.
+   The desktop check installs the entry and selects its HTTP/HTTPS handlers only inside a temporary home. It uses GIO to open the URL and checks the same rendered page. Your normal default browser stays unchanged.
+
+2. Exercise the desktop's default-browser settings, an update beside the old folder, removal that keeps the profile, and a WebRTC page, which starts the `WebRTCClient` helper.
 3. Collect the unresolved notices. The archive does not yet carry the licenses of the Rust crates linked into `Photon`, including GPUI-CE's dependencies, or of the bundled fonts, such as Noto Emoji under the SIL Open Font License.

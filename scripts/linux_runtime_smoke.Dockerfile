@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     libfreetype6 \
     libgles2 \
     libglib2.0-0t64 \
+    libglib2.0-bin \
     libpulse0 \
     libstdc++6 \
     libvulkan1 \

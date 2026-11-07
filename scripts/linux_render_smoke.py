@@ -121,17 +121,27 @@ def screenshot_contains_page_color(work_dir: Path) -> tuple[int, Path]:
 
 
 def stop_photon(process: subprocess.Popen[bytes]) -> None:
-    if process.poll() is not None:
-        return
-    process.send_signal(signal.SIGTERM)
     try:
-        process.wait(timeout=10)
-    except subprocess.TimeoutExpired:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        process.wait()
+        return
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        process.poll()
+        try:
+            os.killpg(process.pid, 0)
+        except ProcessLookupError:
+            return
+        time.sleep(0.05)
+    try:
         os.killpg(process.pid, signal.SIGKILL)
-        process.wait(timeout=5)
+    except ProcessLookupError:
+        pass
+    process.wait(timeout=5)
 
 
-def run_smoke(executable: Path | None = None) -> None:
+def run_smoke(executable: Path | None = None, desktop: bool = False) -> None:
     with tempfile.TemporaryDirectory(prefix="photon-linux-render-") as temporary:
         work_dir = Path(temporary)
         home = work_dir / "home"
@@ -162,6 +172,15 @@ def run_smoke(executable: Path | None = None) -> None:
             }
         )
         environment.pop("WAYLAND_DISPLAY", None)
+        if desktop:
+            environment["XDG_CURRENT_DESKTOP"] = "X-Generic"
+            for variable in (
+                "DESKTOP_SESSION",
+                "KDE_FULL_SESSION",
+                "GNOME_DESKTOP_SESSION_ID",
+                "DBUS_SESSION_BUS_ADDRESS",
+            ):
+                environment.pop(variable, None)
         if executable is not None:
             for variable in (
                 "PHOTON_HELPER_DIRECTORY",
@@ -191,6 +210,36 @@ def run_smoke(executable: Path | None = None) -> None:
         screenshot_matches: int | None = None
         try:
             with log_path.open("wb") as log_file:
+                if desktop:
+                    assert executable is not None
+                    templates = list(
+                        executable.parent.parent.glob("share/applications/*.desktop.in")
+                    )
+                    if len(templates) != 1:
+                        raise ValueError("package must contain exactly one desktop entry template")
+                    desktop_id = templates[0].name.removesuffix(".in")
+                    for setup in (
+                        ["sh", str(executable.with_name("photon-desktop")), "install"],
+                        [
+                            "xdg-mime", "default", desktop_id,
+                            "x-scheme-handler/http", "x-scheme-handler/https",
+                        ],
+                    ):
+                        subprocess.run(
+                            setup, env=environment, check=True,
+                            stdout=log_file, stderr=subprocess.STDOUT,
+                        )
+                    for scheme in ("http", "https"):
+                        registered = subprocess.check_output(
+                            ["xdg-mime", "query", "default", f"x-scheme-handler/{scheme}"],
+                            env=environment,
+                            text=True,
+                        ).strip()
+                        if registered != desktop_id:
+                            raise RuntimeError(
+                                f"{scheme} handler is {registered!r}, expected {desktop_id!r}"
+                            )
+                    command = ["gio", "open", url]
                 process = subprocess.Popen(
                     command,
                     cwd=working_directory,
@@ -203,7 +252,9 @@ def run_smoke(executable: Path | None = None) -> None:
 
                 deadline = time.monotonic() + RENDER_TIMEOUT_SECONDS
                 while time.monotonic() < deadline:
-                    if process.poll() is not None:
+                    if process.poll() is not None and (
+                        not desktop or process.returncode != 0
+                    ):
                         break
                     output = log_path.read_text(encoding="utf-8", errors="replace")
                     if server.page_ready.is_set() and "event=first_page_render" in output:
@@ -259,10 +310,16 @@ if __name__ == "__main__":
         type=Path,
         help="launch a packaged executable with the test URL instead of building from source",
     )
+    parser.add_argument(
+        "--desktop", action="store_true",
+        help="register the package in the isolated test home and open the URL through its default handler",
+    )
     arguments = parser.parse_args()
+    if arguments.desktop and arguments.executable is None:
+        parser.error("--desktop requires --executable")
     executable = arguments.executable
     if executable is not None:
         executable = executable.resolve()
         if not executable.is_file() or not os.access(executable, os.X_OK):
             parser.error(f"not an executable file: {executable}")
-    run_smoke(executable)
+    run_smoke(executable, arguments.desktop)
