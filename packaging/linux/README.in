@@ -14,9 +14,9 @@ From this extracted folder, launch:
   ./@EXECUTABLE@ https://example.org/
 
 Linux uses CPU page painting by default; the shell still draws with the GPU.
-PHOTON_ENABLE_GPU_PAINTING=1 enables experimental Vulkan page painting, whose
-readback path produced blank content on the tested AMD host. Keep the default
-for the supported experimental configuration.
+PHOTON_ENABLE_GPU_PAINTING=1 enables experimental Vulkan page painting. It
+produced blank content on the tested AMD/RADV host; the failing GPU stage has
+not been isolated. Keep the default for the supported experimental configuration.
 
 Register the application menu entry and web URL handlers:
 

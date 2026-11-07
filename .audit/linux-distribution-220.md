@@ -47,8 +47,9 @@ Its full Linux debug build and three native CPU-default canvas launches passed
 with rendering overrides removed and clean persistent session markers. The
 1,204 LibWeb Rust unit tests passed at its CSS-fix parent `191d9b5000e`; the
 new commit only changes the private C++ Photon Linux painting policy. The
-macOS build and LibWeb text tests have not run. Vulkan CPU readback returned
-transparent pixels on the tested AMD host and remains experimental opt-in.
+macOS build and LibWeb text tests have not run. Vulkan-mode frames arrived at the shell with transparent sampled center
+pixels on the tested AMD host. The failing GPU stage is not isolated; this
+mode remains experimental opt-in.
 Final archive acceptance at this new pin must be recorded separately.
 
 This uses the manual-pinning rule in `Documentation/Upstream.md`; it is an
@@ -63,3 +64,27 @@ Do not relax the CLI ancestry check or change the official submodule URL.
 A fresh root clone followed by normal `git submodule update --init --depth 1
 Engine` must resolve the recorded SHA from the official URL before pushing
 this contribution pin. Its result belongs in the decision log.
+
+## Verified local delivery
+
+The browser-code snapshot `99491c09d2bbead802ddf5c0a031608d208dfe87` with
+Engine `a2c37c1d4e63762571a9bbc8a9a173515964a4a7` and unchanged GPUI
+`df68b125917ff9b69d094e905c008f3670c10d2b` passed full debug build, format,
+workspace check and workspace tests. Its archive checksum is
+`de0fb53acd2eaf29c4c11a913e05de8c0436b7bf6a426fd7ac1cd24fc8ec4326`.
+
+The real archive passed direct and registered URL-handler canvas tests in
+runtime-only X11 containers without a checkout. The installed archive passed
+a native KDE/Wayland canvas test and two HTTPS text tests, with exact screenshot
+target/size checks, page-content checks and clean persistent session markers.
+All three final native captures passed on their first attempt. The verified
+application-menu entry is installed; the normal browser was reopened after
+the user approved closing their older instance. Default handlers are unchanged.
+
+Follow-up source edits qualify the GPU diagnosis and documentation only; the
+verified browser binary remains the snapshot above. The archive retains the
+README wording from that snapshot. GPU-stage attribution and earlier blank
+CPU screenshots remain unresolved. This is an experimental local debug build:
+Engine PR5 integration, a portable CPU baseline, complete Rust/font notices
+and single-instance URL handoff remain open. No public release asset is
+published. macOS and the LibWeb overscroll text tests were not run.

@@ -5,8 +5,9 @@ pages build for Linux. Ubuntu 24.04 CI runs workspace checks and tests, and the
 workflow includes a desktop-entry installation smoke check. A full debug
 Engine and application build passed locally on Ubuntu 24.04. The relocated
 full browser rendered a page on X11 through the CPU-frame path and shut down
-cleanly in a runtime-only container. Wayland and broader interaction checks
-remain open.
+cleanly in a runtime-only container. Native KDE/Wayland desktop launches,
+canvas pixels, HTTPS text and clean persistent-session markers also passed on
+the local AMD host. Broader interaction checks remain open.
 
 Linux code lives in `crates/photon-shell/src/platform/linux/`; code shared with
 macOS lives in `platform/unix/`, and code shared with Windows in
@@ -43,8 +44,10 @@ frame, which grows with resolution and refresh rate. Treat it as a bring-up
 path only; do not optimise or build features on top of it.
 
 Vulkan painting is an explicit experimental opt-in with
-`PHOTON_ENABLE_GPU_PAINTING=1`. Its readback path produced transparent frames
-on the tested AMD host in both the development browser and the package.
+`PHOTON_ENABLE_GPU_PAINTING=1`. On the tested AMD Radeon 780M / RADV host,
+this mode delivered frames whose sampled center pixel was transparent at the shell boundary, leaving blank
+content in both the development browser and the package. The failing GPU
+stage has not yet been isolated.
 `PHOTON_FORCE_CPU_PAINTING=1` takes precedence over that opt-in.
 
 The intended path is **DMA-BUF import**, matching macOS's IOSurface design:
@@ -74,6 +77,7 @@ The intended path is **DMA-BUF import**, matching macOS's IOSurface design:
 - [ ] `photon run --ui` verified on Wayland.
 - [ ] `photon run` loads web pages through the CPU-frame path.
 - [x] The relocated debug archive renders through the CPU-frame path on X11, both directly and through its registered URL handler in a runtime-only container.
+- [x] The installed CPU-default archive launches through its registered desktop entry on the local KDE/Wayland host, renders a canvas and HTTPS text, and records clean session exits.
 - [ ] Resizing, input, scrolling, IME and clipboard verified with real pages; [PHTN-231](https://linear.app/photonbrowser/issue/PHTN-231/build-and-exercise-the-linux-engine-and-graphical-browser-in-ci).
 - [ ] Multiple windows, window visibility, and tab sleep verified; [PHTN-231](https://linear.app/photonbrowser/issue/PHTN-231/build-and-exercise-the-linux-engine-and-graphical-browser-in-ci), [PHTN-232](https://linear.app/photonbrowser/issue/PHTN-232/observe-linux-window-visibility-and-display-changes).
 
@@ -148,7 +152,9 @@ glibc releases, musl and ARM are untested.
 **Status: experimental, with a verified local debug archive.** The archive
 rendered the smoke page and exited cleanly both directly and through its
 registered URL handler in isolated Ubuntu 24.04 X11 containers without the
-checkout. Release builds and other machines remain unverified. Fixture tests
+checkout. The installed archive also passed native KDE/Wayland canvas and HTTPS text
+checks with screenshot target and size validation and clean persistent-session
+markers. Release builds and other machines remain unverified. Fixture tests
 also cover the staging tool.
 
 ```sh
@@ -240,6 +246,7 @@ Photon.
 
 ### Known limitations
 
+- Some earlier CPU-mode Wayland screenshots were blank; later targeted captures passed. Whether this was capture/exposure timing or presentation behavior remains unresolved.
 - Developer Engine builds use `-march=native` unless configured otherwise. Packaging preserves their CPU requirements; an `x86_64` archive can require the build machine's instruction set. The CLI does not yet enable the Engine's `ENABLE_CI_BASELINE_CPU` option, which selects `x86-64-v2` on this target.
 - Opening a link while Photon runs starts a second process on the same profile. There is no single-instance handoff.
 - A `.lagom` folder in `$XDG_CONFIG_HOME`, or in `$HOME` when that is unset, replaces the bundled resources.
