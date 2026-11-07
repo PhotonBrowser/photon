@@ -59,8 +59,6 @@ impl Omnibox {
         } else {
             palette.text_secondary
         };
-        // The icon is a rounded square of its own, so a hover surface around it
-        // would draw a box in a box: the icon brightens instead.
         let site_info_button = (!editing).then(|| {
             toolbar_button(
                 "site-info-button",
@@ -92,8 +90,6 @@ impl Omnibox {
                 }),
             )
             .group("site-info-button")
-            .hover_style(|style| style.bg(rgba(palette.hover_surface)))
-            .active_style(|style| style.bg(rgba(palette.hover_surface)))
             .aria_expanded(site_info_open)
         });
         let copied = self.link_copied.is_some();
@@ -122,8 +118,6 @@ impl Omnibox {
             )
             .group("copy-link-button")
             .when(copied, |button| button.bg(rgba(palette.hover_surface)))
-            .hover_style(|style| style.bg(rgba(palette.hover_surface)))
-            .active_style(|style| style.bg(rgba(palette.hover_surface)))
         });
         // In the sidebar the buttons rest hidden until the panel is hovered,
         // unless one is showing something.
