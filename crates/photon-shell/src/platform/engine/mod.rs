@@ -128,6 +128,9 @@ impl EngineRuntime {
             "Photon Engine runtime failed: {}",
             unsafe { CStr::from_ptr(error.as_ptr()) }.to_string_lossy()
         );
+        // Engine session initialization installs handlers for its own event loop.
+        #[cfg(unix)]
+        crate::platform::unix::termination::install();
         #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
         let mut callbacks = Box::new(RuntimeCallbacks {
             views: Mutex::new(Vec::new()),

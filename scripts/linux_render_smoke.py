@@ -121,25 +121,59 @@ def screenshot_contains_page_color(work_dir: Path) -> tuple[int, Path]:
     return matches, screenshot_path
 
 
-def stop_photon(process: subprocess.Popen[bytes]) -> None:
+def stop_photon(process: subprocess.Popen[bytes], executable: Path | None = None) -> bool:
+    applications = []
+    if executable is not None:
+        for candidate in Path("/proc").iterdir():
+            if not candidate.name.isdecimal():
+                continue
+            pid = int(candidate.name)
+            try:
+                if os.getpgid(pid) == process.pid and (candidate / "exe").samefile(executable):
+                    applications.append(pid)
+            except OSError:
+                pass
+    if not applications and process.poll() is None:
+        applications.append(process.pid)
+    for pid in applications:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+
+    def alive(pid: int) -> bool:
+        try:
+            os.kill(pid, 0)
+            return True
+        except ProcessLookupError:
+            return False
+
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        process.poll()
+        if not any(alive(pid) for pid in applications):
+            break
+        time.sleep(0.05)
+    graceful = not any(alive(pid) for pid in applications)
     try:
         os.killpg(process.pid, signal.SIGTERM)
     except ProcessLookupError:
         process.wait()
-        return
-    deadline = time.monotonic() + 10
+        return graceful
+    deadline = time.monotonic() + 5
     while time.monotonic() < deadline:
         process.poll()
         try:
             os.killpg(process.pid, 0)
         except ProcessLookupError:
-            return
+            return graceful
         time.sleep(0.05)
     try:
         os.killpg(process.pid, signal.SIGKILL)
     except ProcessLookupError:
         pass
     process.wait(timeout=5)
+    return graceful
 
 
 def run_smoke(executable: Path | None = None, desktop: bool = False) -> None:
@@ -277,7 +311,8 @@ def run_smoke(executable: Path | None = None, desktop: bool = False) -> None:
                         "timed out waiting for the page canvas beacon and first GPUI page render"
                     )
 
-                stop_photon(process)
+                if not stop_photon(process, executable):
+                    raise RuntimeError("browser did not finish graceful shutdown")
 
             output = log_path.read_text(encoding="utf-8", errors="replace")
             if process.returncode != 0:
@@ -292,7 +327,7 @@ def run_smoke(executable: Path | None = None, desktop: bool = False) -> None:
                 raise RuntimeError("the X11 screenshot did not capture the rendered page")
         except BaseException:
             if process is not None:
-                stop_photon(process)
+                stop_photon(process, executable)
             output = log_path.read_text(encoding="utf-8", errors="replace") if log_path.exists() else ""
             if output:
                 print("Photon output (last 12000 characters):")
