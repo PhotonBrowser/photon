@@ -37,3 +37,25 @@ initialized. Initialize the pinned submodules before retrying setup.
 At the end of each build or implementation unit, record the result and next
 blocker in `linux-distribution-220.tsv`. Commit verified changes separately.
 The first checkpoint is full setup and a recorded full-build result.
+
+## Contribution dependency pin
+
+This contribution branch manually pins Engine
+`191d9b5000e5e2c73c9d90af18e9c37440d309a1`, advertised by the Photon-owned
+`refs/pull/5/head` at https://github.com/PhotonBrowser/photon-engine/pull/5.
+Its full Linux debug build, 1,204 LibWeb Rust unit tests and isolated staged
+page render with graceful shutdown passed. The macOS build and LibWeb text
+tests have not run.
+
+This uses the manual-pinning rule in `Documentation/Upstream.md`; it is an
+exception to `photon deps pin`, which requires ancestry on `origin/master`.
+The PR remains unmerged and is based on the earlier root pin `f3ffa371f3a`;
+the current Engine master contains a newer Ladybird merge. The PR head can
+move, and a squash or rebase merge would not preserve this exact commit in
+master. Before this root change can land, merge the Engine fixes and replace
+this contribution pin with an available, tested master commit if necessary.
+Do not relax the CLI ancestry check or change the official submodule URL.
+
+A fresh root clone followed by normal `git submodule update --init --depth 1
+Engine` must resolve the recorded SHA from the official URL before pushing
+this contribution pin. Its result belongs in the decision log.
