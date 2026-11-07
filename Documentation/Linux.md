@@ -2,8 +2,11 @@
 
 Linux is **experimental**. The shared GPUI shell, Engine adapter and Photon
 pages build for Linux. Ubuntu 24.04 CI runs workspace checks and tests, and the
-workflow includes a desktop-entry installation smoke check. A full Engine
-build and a graphical browser run have not yet been verified.
+workflow includes a desktop-entry installation smoke check. A full debug
+Engine and application build passed locally on Ubuntu 24.04. The relocated
+full browser rendered a page on X11 through the CPU-frame path and shut down
+cleanly in a runtime-only container. Wayland and broader interaction checks
+remain open.
 
 Linux code lives in `crates/photon-shell/src/platform/linux/`; code shared with
 macOS lives in `platform/unix/`, and code shared with Windows in
@@ -57,7 +60,7 @@ The intended path is **DMA-BUF import**, matching macOS's IOSurface design:
 - [x] CI is green again on `main`.
 - [ ] `photon setup` installs Linux system packages (currently manual; follow
       [Ladybird's build guide](../Engine/Documentation/BuildInstructionsLadybird.md); [PHTN-238](https://linear.app/photonbrowser/issue/PHTN-238/add-linux-system-dependency-setup-guidance-and-checks)).
-- [ ] Full `photon build` of the Engine on Ubuntu 24.04 (needs Qt 6.10+); [PHTN-231](https://linear.app/photonbrowser/issue/PHTN-231/build-and-exercise-the-linux-engine-and-graphical-browser-in-ci).
+- [x] Full `photon build --debug` of the Engine and application on Ubuntu 24.04; the release build remains unverified under [PHTN-231](https://linear.app/photonbrowser/issue/PHTN-231/build-and-exercise-the-linux-engine-and-graphical-browser-in-ci).
 - [ ] CI job that builds the Engine on Linux; [PHTN-231](https://linear.app/photonbrowser/issue/PHTN-231/build-and-exercise-the-linux-engine-and-graphical-browser-in-ci).
 
 ### Running
@@ -135,8 +138,10 @@ settings before removing the entry.
 target is Ubuntu 24.04 on x86_64 with its glibc. Other distributions, older
 glibc releases, musl and ARM are untested.
 
-**Status: NOT VERIFIED at runtime.** Fixture tests cover the staging tool. No
-real package has yet rendered a page on a machine without the checkout.
+**Status: experimental.** The real staged debug browser rendered the smoke
+page and exited cleanly in an isolated Ubuntu 24.04 X11 container without the
+checkout. Final archive and registered URL-handler acceptance are still
+pending. Fixture tests also cover the staging tool.
 
 ```sh
 photon build
