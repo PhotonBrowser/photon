@@ -15,7 +15,6 @@ extern "C" fn record_request(_: libc::c_int) {
 
 /// Replaces the default signal handlers, which would end the process at once.
 pub(crate) fn install() {
-    REQUESTED.store(false, Ordering::Relaxed);
     // SAFETY: the handler only stores to an atomic, which is signal-safe.
     unsafe {
         libc::signal(

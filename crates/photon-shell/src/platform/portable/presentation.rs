@@ -167,6 +167,13 @@ impl PresentationRuntime {
         }
         let copy_microseconds =
             u64::try_from(copy_started.elapsed().as_micros()).unwrap_or(u64::MAX);
+        if std::env::var_os("PHOTON_FRAME_TRACE").is_some() {
+            let center = (height / 2) * row_bytes + (width / 2) * 4;
+            eprintln!(
+                "[PhotonCPUFrame] size={width}x{height} center_bgra={:?}",
+                &pixels[center..center + 4]
+            );
+        }
         let image = image::RgbaImage::from_raw(
             u32::try_from(width).ok()?,
             u32::try_from(height).ok()?,

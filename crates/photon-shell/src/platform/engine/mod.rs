@@ -12,7 +12,7 @@ mod linux_clipboard;
 pub(super) mod navigation_timing;
 mod session;
 
-#[cfg(not(feature = "ui-only"))]
+#[cfg(all(not(target_os = "linux"), not(feature = "ui-only")))]
 use anyhow::Context as _;
 #[cfg(all(target_os = "linux", not(feature = "ui-only")))]
 use gpui::ClipboardHandle;
@@ -95,9 +95,20 @@ impl EngineRuntime {
     /// temporary profile when there is none.
     #[cfg(not(feature = "ui-only"))]
     pub(in crate::platform) fn create(profile_dir: Option<&Path>) -> anyhow::Result<Self> {
-        let helper = std::env::var("PHOTON_HELPER_DIRECTORY")
-            .context("PHOTON_HELPER_DIRECTORY is not set")?;
-        let helper = CString::new(helper)?;
+        #[cfg(target_os = "linux")]
+        let helper = {
+            use std::os::unix::ffi::OsStrExt;
+            CString::new(
+                crate::platform::linux::startup::helper_directory()?
+                    .as_os_str()
+                    .as_bytes(),
+            )?
+        };
+        #[cfg(not(target_os = "linux"))]
+        let helper = CString::new(
+            std::env::var("PHOTON_HELPER_DIRECTORY")
+                .context("PHOTON_HELPER_DIRECTORY is not set")?,
+        )?;
         let profile = profile_dir
             .map(|dir| CString::new(dir.to_string_lossy().into_owned()))
             .transpose()?;
@@ -117,6 +128,9 @@ impl EngineRuntime {
             "Photon Engine runtime failed: {}",
             unsafe { CStr::from_ptr(error.as_ptr()) }.to_string_lossy()
         );
+        // Engine session initialization installs handlers for its own event loop.
+        #[cfg(unix)]
+        crate::platform::unix::termination::install();
         #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
         let mut callbacks = Box::new(RuntimeCallbacks {
             views: Mutex::new(Vec::new()),

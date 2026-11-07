@@ -25,11 +25,15 @@ pub(super) fn receive_opened_urls(application: &Application) -> UnboundedReceive
 /// Opens the addresses as they arrive.
 pub(super) fn open_received_urls(
     mut urls: UnboundedReceiver<Vec<String>>,
-    runtime: Rc<EngineRuntime>,
+    runtime: &Rc<EngineRuntime>,
     cx: &mut App,
 ) {
+    let runtime = Rc::downgrade(runtime);
     cx.spawn(async move |cx| {
         while let Some(urls) = urls.next().await {
+            let Some(runtime) = runtime.upgrade() else {
+                break;
+            };
             update_app(cx, |cx| open_urls(&urls, &runtime, cx)).await;
         }
     })

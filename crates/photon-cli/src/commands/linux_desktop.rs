@@ -1,5 +1,6 @@
 use std::{
     env,
+    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -9,6 +10,14 @@ use photon_brand::{APP_ICON_PNG, LINUX_DESKTOP_ID, NAME};
 const DESKTOP_ENTRY: &str = LINUX_DESKTOP_ID;
 const MIME_TYPES: &str =
     "x-scheme-handler/http;x-scheme-handler/https;text/html;application/xhtml+xml;";
+const PACKAGE_PREFIX: &str = "@PHOTON_PREFIX@";
+const PACKAGE_REGISTRATION_SCRIPT: &str =
+    include_str!("../../../../packaging/linux/photon-desktop");
+
+enum DesktopLaunch<'a> {
+    DevelopmentCli { cli: &'a Path, icon: &'a Path },
+    Package { executable: &'a Path },
+}
 
 pub(crate) fn install(workspace_root: &Path) -> Result<(), String> {
     let data_home = xdg_data_home()?;
@@ -22,13 +31,7 @@ pub(crate) fn install(workspace_root: &Path) -> Result<(), String> {
         ));
     }
     let applications = data_home.join("applications");
-    let icon_name = DESKTOP_ENTRY
-        .strip_suffix(".desktop")
-        .unwrap_or(DESKTOP_ENTRY);
-    let icon = data_home
-        .join("icons/hicolor/1024x1024/apps")
-        .join(format!("{icon_name}.png"));
-    let icon = absolute_path(&icon, workspace_root)?;
+    let icon = absolute_path(&data_home.join(icon_file()), workspace_root)?;
 
     std::fs::create_dir_all(&applications)
         .map_err(|error| format!("cannot create {}: {error}", applications.display()))?;
@@ -39,7 +42,10 @@ pub(crate) fn install(workspace_root: &Path) -> Result<(), String> {
 
     std::fs::write(&icon, APP_ICON_PNG)
         .map_err(|error| format!("cannot install Photon icon at {}: {error}", icon.display()))?;
-    let desktop_entry = desktop_entry(&executable, &icon)?;
+    let desktop_entry = desktop_entry(DesktopLaunch::DevelopmentCli {
+        cli: &executable,
+        icon: &icon,
+    })?;
     let desktop_path = applications.join(DESKTOP_ENTRY);
     std::fs::write(&desktop_path, desktop_entry).map_err(|error| {
         format!(
@@ -54,17 +60,30 @@ pub(crate) fn install(workspace_root: &Path) -> Result<(), String> {
     Ok(())
 }
 
-pub(crate) fn uninstall() -> Result<(), String> {
-    let data_home = xdg_data_home()?;
-    let applications = data_home.join("applications");
-    let icon_name = DESKTOP_ENTRY
-        .strip_suffix(".desktop")
-        .unwrap_or(DESKTOP_ENTRY);
-    let desktop_path = applications.join(DESKTOP_ENTRY);
-    let icon_path = data_home
-        .join("icons/hicolor/1024x1024/apps")
-        .join(format!("{icon_name}.png"));
+pub(crate) fn uninstall(workspace_root: &Path) -> Result<(), String> {
+    uninstall_registration(
+        &xdg_data_home()?,
+        &cargo_install_root(workspace_root)?.join("bin/photon"),
+    )
+}
 
+fn uninstall_registration(data_home: &Path, executable: &Path) -> Result<(), String> {
+    let applications = data_home.join("applications");
+    let desktop_path = applications.join(DESKTOP_ENTRY);
+    let icon_path = data_home.join(icon_file());
+
+    if desktop_path.exists() {
+        let contents = std::fs::read_to_string(&desktop_path)
+            .map_err(|error| format!("cannot read {}: {error}", desktop_path.display()))?;
+        let expected = format!("TryExec={}", desktop_key_value(executable)?);
+        if !contents.lines().any(|line| line == expected) {
+            println!(
+                "{} belongs to another installation; leaving it in place",
+                desktop_path.display()
+            );
+            return Ok(());
+        }
+    }
     remove_if_exists(&desktop_path)?;
     remove_if_exists(&icon_path)?;
     if applications.is_dir() {
@@ -72,6 +91,38 @@ pub(crate) fn uninstall() -> Result<(), String> {
     }
     println!("Removed Linux desktop entry and icon.");
     Ok(())
+}
+
+pub(crate) fn write_package_files(folder: &Path, executable: &Path) -> Result<(), String> {
+    let entry = desktop_entry(DesktopLaunch::Package { executable })?;
+    let script = PACKAGE_REGISTRATION_SCRIPT.replace("@DESKTOP_ID@", DESKTOP_ENTRY);
+    let script_path = folder
+        .join("bin")
+        .join(format!("{}-desktop", NAME.to_lowercase()));
+    for (path, contents) in [
+        (
+            folder.join(format!("share/applications/{DESKTOP_ENTRY}.in")),
+            entry.as_bytes(),
+        ),
+        (folder.join("share").join(icon_file()), APP_ICON_PNG),
+        (script_path.clone(), script.as_bytes()),
+    ] {
+        if let Some(directory) = path.parent() {
+            std::fs::create_dir_all(directory)
+                .map_err(|error| format!("cannot create {}: {error}", directory.display()))?;
+        }
+        std::fs::write(&path, contents)
+            .map_err(|error| format!("cannot write {}: {error}", path.display()))?;
+    }
+    std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755))
+        .map_err(|error| format!("cannot make {} executable: {error}", script_path.display()))
+}
+
+fn icon_file() -> PathBuf {
+    let icon_name = DESKTOP_ENTRY
+        .strip_suffix(".desktop")
+        .unwrap_or(DESKTOP_ENTRY);
+    Path::new("icons/hicolor/1024x1024/apps").join(format!("{icon_name}.png"))
 }
 
 fn remove_if_exists(path: &Path) -> Result<(), String> {
@@ -82,8 +133,21 @@ fn remove_if_exists(path: &Path) -> Result<(), String> {
     }
 }
 
-fn desktop_entry(executable: &Path, icon: &Path) -> Result<String, String> {
-    let exec = desktop_exec_argument(executable)?;
+fn desktop_entry(launch: DesktopLaunch<'_>) -> Result<String, String> {
+    let (executable, arguments, icon) = match launch {
+        DesktopLaunch::DevelopmentCli { cli, icon } => {
+            (cli.to_path_buf(), " run", icon.to_path_buf())
+        }
+        DesktopLaunch::Package { executable } => {
+            let prefix = Path::new(PACKAGE_PREFIX);
+            (
+                prefix.join(executable),
+                "",
+                prefix.join("share").join(icon_file()),
+            )
+        }
+    };
+    let exec = desktop_exec_argument(&executable)?;
     Ok(format!(
         "[Desktop Entry]\n\
          Version=1.5\n\
@@ -91,15 +155,15 @@ fn desktop_entry(executable: &Path, icon: &Path) -> Result<String, String> {
          Name={NAME}\n\
          GenericName=Web Browser\n\
          Comment=Browse the web with Photon\n\
-         Exec={exec} run %u\n\
+         Exec={exec}{arguments} %u\n\
          TryExec={}\n\
          Icon={}\n\
          Terminal=false\n\
          Categories=Network;WebBrowser;\n\
-         MimeType={MIME_TYPES}\
+         MimeType={MIME_TYPES}\n\
          StartupNotify=true\n",
-        desktop_key_value(executable)?,
-        desktop_key_value(icon)?
+        desktop_key_value(&executable)?,
+        desktop_key_value(&icon)?
     ))
 }
 
@@ -291,5 +355,140 @@ fn update_desktop_database(applications: &Path) {
             "Warning: update-desktop-database is unavailable; install desktop-file-utils to refresh Linux application metadata."
         ),
         Err(error) => eprintln!("Warning: cannot update Linux application metadata: {error}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn desktop_entry_keeps_mime_types_and_startup_notification_separate() {
+        let entry = desktop_entry(DesktopLaunch::DevelopmentCli {
+            cli: Path::new("/opt/photon/bin/photon"),
+            icon: Path::new("/opt/photon/icon.png"),
+        })
+        .unwrap();
+        let values = entry
+            .lines()
+            .filter_map(|line| line.split_once('='))
+            .collect::<std::collections::HashMap<_, _>>();
+        assert_eq!(values.get("MimeType"), Some(&MIME_TYPES));
+        assert_eq!(values.get("StartupNotify"), Some(&"true"));
+    }
+
+    #[test]
+    fn packaged_registration_belongs_to_one_extracted_folder() {
+        let root = temporary_directory("registration");
+        let data = root.join("data");
+        let older = root.join("Photon 0.1.0/photon one");
+        let newer = root.join("Photon 0.2.0 & more");
+        let entry = data.join("applications").join(DESKTOP_ENTRY);
+
+        for folder in [&older, &newer] {
+            write_package_files(folder, Path::new("bin/Photon")).unwrap();
+            assert_registration(folder, "install", &data);
+            let folder = folder.canonicalize().unwrap();
+            let contents = std::fs::read_to_string(&entry).unwrap();
+            assert!(contents.contains(&format!("\nExec=\"{}/bin/Photon\" %u\n", folder.display())));
+            assert!(contents.contains(&format!("\nTryExec={}/bin/Photon\n", folder.display())));
+            assert!(contents.contains(&format!(
+                "\nIcon={}/share/{}\n",
+                folder.display(),
+                icon_file().display()
+            )));
+        }
+
+        assert_registration(&older, "uninstall", &data);
+        assert!(
+            std::fs::read_to_string(&entry)
+                .unwrap()
+                .contains("Photon 0.2.0 & more"),
+            "an older folder must not remove a newer registration"
+        );
+        assert_registration(&newer, "uninstall", &data);
+        assert!(!entry.exists());
+        assert_registration(&newer, "uninstall", &data);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn packaged_registration_rejects_characters_it_cannot_quote() {
+        let root = temporary_directory("registration-rejected");
+        let data = root.join("data");
+        for name in [
+            "photon $HOME",
+            "photon \"quoted\"",
+            "photon 100%",
+            "photon \\ path",
+        ] {
+            let folder = root.join(name);
+            write_package_files(&folder, Path::new("bin/Photon")).unwrap();
+            let output = registration(&folder, "install", &data);
+            assert!(!output.status.success(), "{name} must be rejected");
+            assert!(String::from_utf8_lossy(&output.stderr).contains("cannot register"));
+        }
+        assert!(!data.join("applications").exists());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn developer_uninstall_preserves_packaged_registration() {
+        let data = temporary_directory("uninstall-ownership");
+        let entry = data.join("applications").join(DESKTOP_ENTRY);
+        let icon = data.join(icon_file());
+        std::fs::create_dir_all(entry.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(icon.parent().unwrap()).unwrap();
+        let packaged = desktop_entry(DesktopLaunch::Package {
+            executable: Path::new("bin/Photon"),
+        })
+        .unwrap();
+        std::fs::write(&entry, &packaged).unwrap();
+        std::fs::write(&icon, b"icon").unwrap();
+        let executable = Path::new("/cargo/bin/photon");
+        uninstall_registration(&data, executable).unwrap();
+        assert_eq!(std::fs::read_to_string(&entry).unwrap(), packaged);
+        assert!(icon.exists());
+        std::fs::write(
+            &entry,
+            desktop_entry(DesktopLaunch::DevelopmentCli {
+                cli: executable,
+                icon: &icon,
+            })
+            .unwrap(),
+        )
+        .unwrap();
+        uninstall_registration(&data, executable).unwrap();
+        assert!(!entry.exists());
+        assert!(!icon.exists());
+        std::fs::remove_dir_all(data).unwrap();
+    }
+
+    fn assert_registration(folder: &Path, action: &str, data: &Path) {
+        let output = registration(folder, action, data);
+        assert!(
+            output.status.success(),
+            "{action} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn registration(folder: &Path, action: &str, data: &Path) -> std::process::Output {
+        let script = folder
+            .join("bin")
+            .join(format!("{}-desktop", NAME.to_lowercase()));
+        Command::new("sh")
+            .arg(script)
+            .arg(action)
+            .env("XDG_DATA_HOME", data)
+            .output()
+            .unwrap()
+    }
+
+    fn temporary_directory(name: &str) -> PathBuf {
+        let path = env::temp_dir().join(format!("photon-cli-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&path);
+        std::fs::create_dir_all(&path).unwrap();
+        path
     }
 }

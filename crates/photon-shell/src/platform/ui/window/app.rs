@@ -238,7 +238,7 @@ pub fn run() {
                 });
 
                 #[cfg(not(feature = "ui-only"))]
-                open_received_urls(opened_urls, runtime.clone(), cx);
+                open_received_urls(opened_urls, &runtime, cx);
                 cx.activate(true);
                 #[cfg(feature = "ui-only")]
                 open_browser_window(
@@ -406,17 +406,30 @@ pub(super) fn launch_address() -> Option<String> {
     }
     #[cfg(not(feature = "ui-only"))]
     {
-        initial_address()
+        std::env::var("PHOTON_URL")
+            .ok()
+            .map(|address| address.trim().to_owned())
+            .filter(|address| !address.is_empty())
     }
 }
 
-/// The address to open at startup, from PHOTON_URL.
+/// The address to open at startup.
 #[cfg(not(feature = "ui-only"))]
 pub(super) fn initial_address() -> Option<String> {
-    std::env::var("PHOTON_URL")
-        .ok()
-        .map(|address| address.trim().to_owned())
-        .filter(|address| !address.is_empty())
+    #[cfg(target_os = "linux")]
+    {
+        crate::platform::linux::startup::startup_address(
+            std::env::var("PHOTON_URL").ok(),
+            std::env::args_os().skip(1),
+        )
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        std::env::var("PHOTON_URL")
+            .ok()
+            .map(|address| address.trim().to_owned())
+            .filter(|address| !address.is_empty())
+    }
 }
 
 /// Shows Engine service stops and restarts in every window.

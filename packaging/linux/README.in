@@ -1,0 +1,46 @@
+@NAME@ experimental Linux x86_64 package
+
+This is an unverified test artifact for the Ubuntu 24.04 glibc baseline.
+Read VERSION for the source revisions and build profile. The host must provide
+the libraries listed in HOST-LIBRARIES, graphics drivers, fonts and CA trust.
+CPU requirements follow the Engine build. Developer builds use the build
+machine's instruction set by default; the x86_64 label alone does not promise
+compatibility with other CPUs. Verify a portable baseline before redistribution.
+Rust crate and bundled font license notices are incomplete. Resolve these and
+verify the full browser in a runtime-only environment before redistributing it.
+
+From this extracted folder, launch:
+
+  ./@EXECUTABLE@ https://example.org/
+
+Linux uses CPU page painting by default; the shell still draws with the GPU.
+PHOTON_ENABLE_GPU_PAINTING=1 enables experimental Vulkan page painting. It
+produced blank content on the tested AMD/RADV host; the failing GPU stage has
+not been isolated. Keep the default for the supported experimental configuration.
+
+Register the application menu entry and web URL handlers:
+
+  ./bin/@PRODUCT@-desktop install
+
+Registration does not change the default browser. Choose @NAME@ explicitly in
+your desktop settings. Paths containing spaces work. Registration rejects
+quotes, backticks, dollar signs, backslashes, percent signs and control bytes.
+
+Updates are manual. Quit the browser and its helpers, extract the new version
+beside this folder, then run the new version's desktop installer. Keep this
+folder for application rollback, but a newer profile may not work with an old
+version. Back up your data before testing experimental updates.
+
+To remove this installation, choose another default browser if needed, run:
+
+  ./bin/@PRODUCT@-desktop uninstall
+
+Then delete this extracted folder. An old version cannot unregister a newer
+one. Removal preserves browsing data and settings at:
+
+  ${XDG_DATA_HOME:-$HOME/.local/share}/@DATA_FOLDER@/Default
+  ${XDG_CONFIG_HOME:-$HOME/.config}/@DATA_FOLDER@/config.toml
+
+Development and packaged versions share those paths by default. Use an isolated
+PHOTON_PROFILE_DIR for evaluation. Do not launch a second process on the same
+profile; single-instance URL handoff is not implemented yet.

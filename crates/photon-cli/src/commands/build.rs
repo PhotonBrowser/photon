@@ -14,7 +14,7 @@ use crate::support::{
     success, with_progress,
 };
 
-const HELPER_PROCESS_TARGETS: &[&str] = &[
+pub(super) const HELPER_PROCESS_TARGETS: &[&str] = &[
     "WebContent",
     "WebWorker",
     "Compositor",
@@ -23,6 +23,7 @@ const HELPER_PROCESS_TARGETS: &[&str] = &[
     "MediaServer",
     "VideoDecoderServer",
     "AudioServer",
+    "WebRTCClient",
 ];
 
 #[cfg(unix)]
@@ -279,7 +280,24 @@ fn build_app(root: &Path, release: bool, verbose: bool) -> Result<(), String> {
     if release {
         args.push("--release");
     }
-    invoke_cargo(&args, root, Some(&engine), verbose)
+    #[cfg(target_os = "linux")]
+    let source = app_source_fingerprint(root, release)?;
+    invoke_cargo(&args, root, Some(&engine), verbose)?;
+    #[cfg(target_os = "linux")]
+    {
+        let stamp = app_build_stamp(root, release)?;
+        if !stamp.starts_with(&format!("source={source}\n")) {
+            return Err(
+                "application sources changed during the build; build again before packaging".into(),
+            );
+        }
+        std::fs::write(
+            photon_executable(root, release).with_extension("photon-build-stamp"),
+            stamp,
+        )
+        .map_err(|error| format!("cannot record application build provenance: {error}"))?;
+    }
+    Ok(())
 }
 
 fn invoke_cargo(
@@ -428,7 +446,20 @@ fn embedder_library_output(engine_dir: &Path) -> PathBuf {
     } else if cfg!(target_os = "windows") {
         engine_dir.join("bin/lagom-photonembedder.dll")
     } else {
-        engine_dir.join("lib64/liblagom-photonembedder.so")
+        let directory = std::fs::read_to_string(engine_dir.join("CMakeCache.txt"))
+            .ok()
+            .and_then(|cache| {
+                cache.lines().find_map(|line| {
+                    let (_, directory) = line
+                        .strip_prefix("CMAKE_INSTALL_LIBDIR:")?
+                        .split_once('=')?;
+                    (!directory.is_empty()).then(|| directory.to_owned())
+                })
+            })
+            .unwrap_or_else(|| "lib".to_owned());
+        engine_dir
+            .join(directory)
+            .join("liblagom-photonembedder.so")
     }
 }
 
@@ -457,7 +488,52 @@ fn engine_targets_are_current(engine_dir: &Path, root: &Path) -> Result<bool, St
     Ok(output.contains("ninja: no work to do."))
 }
 
-fn engine_fingerprint(root: &Path, release: bool) -> Result<String, String> {
+#[cfg(target_os = "linux")]
+fn app_source_fingerprint(root: &Path, release: bool) -> Result<String, String> {
+    let mut hasher = DefaultHasher::new();
+    engine_fingerprint(root, release)?.hash(&mut hasher);
+    for (repository, paths) in [
+        (
+            root.to_path_buf(),
+            vec![
+                "Cargo.toml",
+                "Cargo.lock",
+                "rust-toolchain.toml",
+                "crates",
+                "native",
+            ],
+        ),
+        (root.join("vendor/gpui-ce"), vec!["."]),
+    ] {
+        output("git", &["rev-parse", "HEAD"], &repository)?.hash(&mut hasher);
+        let mut diff = vec!["diff", "--binary", "HEAD", "--"];
+        diff.extend(&paths);
+        hash_output("git", &diff, &repository)?.hash(&mut hasher);
+        let mut untracked = vec!["ls-files", "--others", "--exclude-standard", "--"];
+        untracked.extend(&paths);
+        for relative in output("git", &untracked, &repository)?.lines() {
+            relative.hash(&mut hasher);
+            let file = repository.join(relative);
+            if file.is_file() {
+                hash_file(&file, &mut hasher)?;
+            }
+        }
+    }
+    Ok(format!("{:016x}", hasher.finish()))
+}
+
+#[cfg(target_os = "linux")]
+pub(super) fn app_build_stamp(root: &Path, release: bool) -> Result<String, String> {
+    let source = app_source_fingerprint(root, release)?;
+    let mut binary = DefaultHasher::new();
+    hash_file(&photon_executable(root, release), &mut binary)?;
+    Ok(format!(
+        "source={source}\nbinary={:016x}\n",
+        binary.finish()
+    ))
+}
+
+pub(super) fn engine_fingerprint(root: &Path, release: bool) -> Result<String, String> {
     let engine_source = path(&root.join("Engine"));
     let revision = output("git", &["-C", &engine_source, "rev-parse", "HEAD"], root)?;
     let diff_hash = hash_output(
@@ -729,7 +805,7 @@ fn run_ui_portable(
 }
 
 #[cfg(any(target_os = "linux", target_os = "windows"))]
-fn photon_executable(root: &Path, release: bool) -> PathBuf {
+pub(super) fn photon_executable(root: &Path, release: bool) -> PathBuf {
     let filename = if cfg!(target_os = "windows") {
         "Photon.exe"
     } else {
@@ -849,10 +925,48 @@ pub(crate) fn clean(root: &Path, scope: Option<&str>) -> Result<(), String> {
 
 #[cfg(test)]
 mod test {
-    use super::engine_build_targets;
+    use std::collections::BTreeSet;
+
+    use super::HELPER_PROCESS_TARGETS;
 
     #[test]
-    fn audio_server_is_built_as_a_helper_process() {
-        assert!(engine_build_targets().contains(&"AudioServer"));
+    #[cfg(target_os = "linux")]
+    fn embedder_output_follows_the_configured_library_directory() {
+        let engine =
+            std::env::temp_dir().join(format!("photon-library-dir-{}", std::process::id()));
+        std::fs::create_dir_all(&engine).unwrap();
+        for directory in ["lib", "lib64"] {
+            std::fs::write(
+                engine.join("CMakeCache.txt"),
+                format!("CMAKE_INSTALL_LIBDIR:PATH={directory}\n"),
+            )
+            .unwrap();
+            assert_eq!(
+                super::embedder_library_output(&engine),
+                engine.join(directory).join("liblagom-photonembedder.so")
+            );
+        }
+        std::fs::remove_dir_all(engine).unwrap();
+    }
+
+    #[test]
+    fn helper_targets_match_the_engine_helper_list() {
+        let list = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../Engine/Meta/CMake/ladybird_helper_processes.cmake"
+        ))
+        .expect("the Engine checkout is initialized");
+        let engine = list
+            .split_once("set(ladybird_helper_processes")
+            .and_then(|(_, rest)| rest.split_once(')'))
+            .map(|(names, _)| names.split_whitespace().collect::<BTreeSet<_>>())
+            .expect("the Engine helper list is a set() call");
+        assert_eq!(
+            HELPER_PROCESS_TARGETS
+                .iter()
+                .copied()
+                .collect::<BTreeSet<_>>(),
+            engine
+        );
     }
 }

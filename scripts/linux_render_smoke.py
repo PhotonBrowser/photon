@@ -3,9 +3,12 @@
 
 from __future__ import annotations
 
+import argparse
 import http.server
 import os
+import shutil
 import signal
+import sqlite3
 import subprocess
 import tempfile
 import threading
@@ -119,18 +122,62 @@ def screenshot_contains_page_color(work_dir: Path) -> tuple[int, Path]:
     return matches, screenshot_path
 
 
-def stop_photon(process: subprocess.Popen[bytes]) -> None:
-    if process.poll() is not None:
-        return
-    process.send_signal(signal.SIGTERM)
+def stop_photon(process: subprocess.Popen[bytes], executable: Path | None = None) -> bool:
+    applications = []
+    if executable is not None:
+        for candidate in Path("/proc").iterdir():
+            if not candidate.name.isdecimal():
+                continue
+            pid = int(candidate.name)
+            try:
+                if os.getpgid(pid) == process.pid and (candidate / "exe").samefile(executable):
+                    applications.append(pid)
+            except OSError:
+                pass
+    if not applications and process.poll() is None:
+        applications.append(process.pid)
+    for pid in applications:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+
+    def alive(pid: int) -> bool:
+        try:
+            os.kill(pid, 0)
+            return True
+        except ProcessLookupError:
+            return False
+
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        process.poll()
+        if not any(alive(pid) for pid in applications):
+            break
+        time.sleep(0.05)
+    graceful = not any(alive(pid) for pid in applications)
     try:
-        process.wait(timeout=10)
-    except subprocess.TimeoutExpired:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        process.wait()
+        return graceful
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        process.poll()
+        try:
+            os.killpg(process.pid, 0)
+        except ProcessLookupError:
+            return graceful
+        time.sleep(0.05)
+    try:
         os.killpg(process.pid, signal.SIGKILL)
-        process.wait(timeout=5)
+    except ProcessLookupError:
+        pass
+    process.wait(timeout=5)
+    return graceful
 
 
-def run_smoke() -> None:
+def run_smoke(executable: Path | None = None, desktop: bool = False) -> None:
     with tempfile.TemporaryDirectory(prefix="photon-linux-render-") as temporary:
         work_dir = Path(temporary)
         home = work_dir / "home"
@@ -161,23 +208,80 @@ def run_smoke() -> None:
             }
         )
         environment.pop("WAYLAND_DISPLAY", None)
+        if desktop:
+            environment["XDG_CURRENT_DESKTOP"] = "X-Generic"
+            for variable in (
+                "DESKTOP_SESSION",
+                "KDE_FULL_SESSION",
+                "GNOME_DESKTOP_SESSION_ID",
+                "DBUS_SESSION_BUS_ADDRESS",
+            ):
+                environment.pop(variable, None)
+        if executable is not None:
+            for variable in (
+                "PHOTON_HELPER_DIRECTORY",
+                "PHOTON_URL",
+                "PHOTON_ENGINE_BUILD_DIR",
+                "PHOTON_ENABLE_GPU_PAINTING",
+                "PHOTON_FORCE_CPU_PAINTING",
+                "PHOTON_FRAME_TRACE",
+                "LD_LIBRARY_PATH",
+                "DYLD_LIBRARY_PATH",
+            ):
+                environment.pop(variable, None)
+            environment["PHOTON_SHUTDOWN_AFTER_SECONDS"] = "120"
+            command = [str(executable), url]
+            working_directory = work_dir
+        else:
+            command = [
+                str(ROOT / "photon"),
+                "run",
+                "--debug",
+                "--url",
+                url,
+                "--shutdown-after-seconds",
+                "120",
+            ]
+            working_directory = ROOT
 
         log_path = work_dir / "photon.log"
         process: subprocess.Popen[bytes] | None = None
         screenshot_matches: int | None = None
         try:
             with log_path.open("wb") as log_file:
+                if desktop:
+                    assert executable is not None
+                    templates = list(
+                        executable.parent.parent.glob("share/applications/*.desktop.in")
+                    )
+                    if len(templates) != 1:
+                        raise ValueError("package must contain exactly one desktop entry template")
+                    desktop_id = templates[0].name.removesuffix(".in")
+                    for setup in (
+                        ["sh", str(executable.with_name("photon-desktop")), "install"],
+                        [
+                            "xdg-mime", "default", desktop_id,
+                            "x-scheme-handler/http", "x-scheme-handler/https",
+                        ],
+                    ):
+                        subprocess.run(
+                            setup, env=environment, check=True,
+                            stdout=log_file, stderr=subprocess.STDOUT,
+                        )
+                    for scheme in ("http", "https"):
+                        registered = subprocess.check_output(
+                            ["xdg-mime", "query", "default", f"x-scheme-handler/{scheme}"],
+                            env=environment,
+                            text=True,
+                        ).strip()
+                        if registered != desktop_id:
+                            raise RuntimeError(
+                                f"{scheme} handler is {registered!r}, expected {desktop_id!r}"
+                            )
+                    command = ["gio", "open", url]
                 process = subprocess.Popen(
-                    [
-                        str(ROOT / "photon"),
-                        "run",
-                        "--debug",
-                        "--url",
-                        url,
-                        "--shutdown-after-seconds",
-                        "120",
-                    ],
-                    cwd=ROOT,
+                    command,
+                    cwd=working_directory,
                     env=environment,
                     stdin=subprocess.DEVNULL,
                     stdout=log_file,
@@ -187,7 +291,9 @@ def run_smoke() -> None:
 
                 deadline = time.monotonic() + RENDER_TIMEOUT_SECONDS
                 while time.monotonic() < deadline:
-                    if process.poll() is not None:
+                    if process.poll() is not None and (
+                        not desktop or process.returncode != 0
+                    ):
                         break
                     output = log_path.read_text(encoding="utf-8", errors="replace")
                     if server.page_ready.is_set() and "event=first_page_render" in output:
@@ -209,11 +315,21 @@ def run_smoke() -> None:
                         "timed out waiting for the page canvas beacon and first GPUI page render"
                     )
 
-                stop_photon(process)
+                if not stop_photon(process, executable):
+                    raise RuntimeError("browser did not finish graceful shutdown")
+
+            database = profile / "Engine" / "data" / "Sessions.db"
+            with sqlite3.connect(database.as_uri() + "?mode=ro", uri=True) as connection:
+                lifecycle = connection.execute(
+                    "SELECT clean_exit, consecutive_unclean_exits FROM SessionLifecycle"
+                ).fetchall()
+            if lifecycle != [(1, 0)]:
+                raise RuntimeError(f"Engine profile was not marked clean on shutdown: {lifecycle}")
+            print("Engine persistent profile verified clean after shutdown")
 
             output = log_path.read_text(encoding="utf-8", errors="replace")
             if process.returncode != 0:
-                raise RuntimeError(f"photon run exited with {process.returncode}")
+                raise RuntimeError(f"{command[0]} exited with {process.returncode}")
             if not server.page_ready.is_set():
                 raise RuntimeError("the local page did not report its canvas pixel")
             if "event=first_page_render" not in output:
@@ -224,7 +340,7 @@ def run_smoke() -> None:
                 raise RuntimeError("the X11 screenshot did not capture the rendered page")
         except BaseException:
             if process is not None:
-                stop_photon(process)
+                stop_photon(process, executable)
             output = log_path.read_text(encoding="utf-8", errors="replace") if log_path.exists() else ""
             if output:
                 print("Photon output (last 12000 characters):")
@@ -234,7 +350,29 @@ def run_smoke() -> None:
             server.shutdown()
             server.server_close()
             server_thread.join(timeout=2)
+            if (destination := os.environ.get("PHOTON_RENDER_LOG")) and log_path.exists():
+                destination = Path(destination)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(log_path, destination)
 
 
 if __name__ == "__main__":
-    run_smoke()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--executable",
+        type=Path,
+        help="launch a packaged executable with the test URL instead of building from source",
+    )
+    parser.add_argument(
+        "--desktop", action="store_true",
+        help="register the package in the isolated test home and open the URL through its default handler",
+    )
+    arguments = parser.parse_args()
+    if arguments.desktop and arguments.executable is None:
+        parser.error("--desktop requires --executable")
+    executable = arguments.executable
+    if executable is not None:
+        executable = executable.resolve()
+        if not executable.is_file() or not os.access(executable, os.X_OK):
+            parser.error(f"not an executable file: {executable}")
+    run_smoke(executable, arguments.desktop)
