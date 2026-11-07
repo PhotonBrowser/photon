@@ -44,7 +44,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("archive", type=Path)
     parser.add_argument("--image", default="photon-linux220-runtime")
-    parser.add_argument("--evidence", type=Path, default=Path("build/package-smoke"))
+    parser.add_argument("--evidence", type=Path, help="override the evidence folder for this run")
     parser.add_argument("--desktop", action="store_true", help="exercise the installed default URL handler")
     arguments = parser.parse_args()
-    run_archive(arguments.archive, arguments.image, arguments.evidence, arguments.desktop)
+    evidence = arguments.evidence or Path("build") / (
+        "package-desktop-smoke" if arguments.desktop else "package-smoke"
+    )
+    run_archive(arguments.archive, arguments.image, evidence, arguments.desktop)
