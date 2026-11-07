@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import http.server
 import os
+import shutil
 import signal
 import subprocess
 import tempfile
@@ -301,6 +302,10 @@ def run_smoke(executable: Path | None = None, desktop: bool = False) -> None:
             server.shutdown()
             server.server_close()
             server_thread.join(timeout=2)
+            if (destination := os.environ.get("PHOTON_RENDER_LOG")) and log_path.exists():
+                destination = Path(destination)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(log_path, destination)
 
 
 if __name__ == "__main__":

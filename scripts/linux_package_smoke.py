@@ -30,6 +30,7 @@ def run_archive(archive: Path, image: str, evidence: Path, desktop: bool = False
                 "--mount", f"type=bind,src={smoke},dst=/smoke/linux_render_smoke.py,readonly",
                 "--mount", f"type=bind,src={evidence},dst=/evidence",
                 "--env", "PHOTON_RENDER_SCREENSHOT=/evidence/linux-package-render.png",
+                "--env", "PHOTON_RENDER_LOG=/evidence/photon.log",
                 image,
                 "xvfb-run", "-a", "-s", "-screen 0 1280x800x24 +extension GLX +render -noreset",
                 "python3", "/smoke/linux_render_smoke.py", "--executable", str(executable),
