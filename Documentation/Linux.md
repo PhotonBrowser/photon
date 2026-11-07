@@ -68,6 +68,7 @@ The intended path is **DMA-BUF import**, matching macOS's IOSurface design:
 - [ ] `photon run --ui` (shell without Engine) verified on X11.
 - [ ] `photon run --ui` verified on Wayland.
 - [ ] `photon run` loads web pages through the CPU-frame path.
+- [x] The relocated debug archive renders through the CPU-frame path on X11, both directly and through its registered URL handler in a runtime-only container.
 - [ ] Resizing, input, scrolling, IME and clipboard verified with real pages; [PHTN-231](https://linear.app/photonbrowser/issue/PHTN-231/build-and-exercise-the-linux-engine-and-graphical-browser-in-ci).
 - [ ] Multiple windows, window visibility, and tab sleep verified; [PHTN-231](https://linear.app/photonbrowser/issue/PHTN-231/build-and-exercise-the-linux-engine-and-graphical-browser-in-ci), [PHTN-232](https://linear.app/photonbrowser/issue/PHTN-232/observe-linux-window-visibility-and-display-changes).
 
@@ -90,6 +91,7 @@ The intended path is **DMA-BUF import**, matching macOS's IOSurface design:
 - [ ] Active display refresh rate instead of a fixed 60 Hz; [PHTN-235](https://linear.app/photonbrowser/issue/PHTN-235/use-the-active-linux-display-refresh-rate-for-engine-pacing).
 - [ ] Native window decorations and controls verified under GNOME and KDE; [PHTN-231](https://linear.app/photonbrowser/issue/PHTN-231/build-and-exercise-the-linux-engine-and-graphical-browser-in-ci).
 - [ ] Appearance controls reflect opaque Linux window support; [PHTN-237](https://linear.app/photonbrowser/issue/PHTN-237/align-linux-appearance-settings-with-opaque-window-support).
+- [x] Experimental relocatable debug archive for Ubuntu 24.04 x86_64, with install, update and removal instructions.
 - [ ] Linux distribution packaging (Flatpak or distribution packages); [PHTN-239](https://linear.app/photonbrowser/issue/PHTN-239/package-photon-for-supported-linux-distributions).
 
 ### Not planned for Linux
@@ -138,10 +140,11 @@ settings before removing the entry.
 target is Ubuntu 24.04 on x86_64 with its glibc. Other distributions, older
 glibc releases, musl and ARM are untested.
 
-**Status: experimental.** The real staged debug browser rendered the smoke
-page and exited cleanly in an isolated Ubuntu 24.04 X11 container without the
-checkout. Final archive and registered URL-handler acceptance are still
-pending. Fixture tests also cover the staging tool.
+**Status: experimental, with a verified local debug archive.** The archive
+rendered the smoke page and exited cleanly both directly and through its
+registered URL handler in isolated Ubuntu 24.04 X11 containers without the
+checkout. Release builds and other machines remain unverified. Fixture tests
+also cover the staging tool.
 
 ```sh
 photon build
