@@ -238,7 +238,7 @@ pub fn run() {
                 });
 
                 #[cfg(not(feature = "ui-only"))]
-                open_received_urls(opened_urls, runtime.clone(), cx);
+                open_received_urls(opened_urls, &runtime, cx);
                 cx.activate(true);
                 #[cfg(feature = "ui-only")]
                 open_browser_window(

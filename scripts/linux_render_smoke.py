@@ -8,6 +8,7 @@ import http.server
 import os
 import shutil
 import signal
+import sqlite3
 import subprocess
 import tempfile
 import threading
@@ -313,6 +314,15 @@ def run_smoke(executable: Path | None = None, desktop: bool = False) -> None:
 
                 if not stop_photon(process, executable):
                     raise RuntimeError("browser did not finish graceful shutdown")
+
+            database = profile / "Engine" / "data" / "Sessions.db"
+            with sqlite3.connect(database.as_uri() + "?mode=ro", uri=True) as connection:
+                lifecycle = connection.execute(
+                    "SELECT clean_exit, consecutive_unclean_exits FROM SessionLifecycle"
+                ).fetchall()
+            if lifecycle != [(1, 0)]:
+                raise RuntimeError(f"Engine profile was not marked clean on shutdown: {lifecycle}")
+            print("Engine persistent profile verified clean after shutdown")
 
             output = log_path.read_text(encoding="utf-8", errors="replace")
             if process.returncode != 0:
