@@ -3,6 +3,9 @@
 This is an unverified test artifact for the Ubuntu 24.04 glibc baseline.
 Read VERSION for the source revisions and build profile. The host must provide
 the libraries listed in HOST-LIBRARIES, graphics drivers, fonts and CA trust.
+CPU requirements follow the Engine build. Developer builds use the build
+machine's instruction set by default; the x86_64 label alone does not promise
+compatibility with other CPUs. Verify a portable baseline before redistribution.
 Rust crate and bundled font license notices are incomplete. Resolve these and
 verify the full browser in a runtime-only environment before redistributing it.
 

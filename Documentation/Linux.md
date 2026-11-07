@@ -227,6 +227,7 @@ Photon.
 
 ### Known limitations
 
+- Developer Engine builds use `-march=native` unless configured otherwise. Packaging preserves their CPU requirements; an `x86_64` archive can require the build machine's instruction set. The CLI does not yet enable the Engine's `ENABLE_CI_BASELINE_CPU` option, which selects `x86-64-v2` on this target.
 - Opening a link while Photon runs starts a second process on the same profile. There is no single-instance handoff.
 - A `.lagom` folder in `$XDG_CONFIG_HOME`, or in `$HOME` when that is unset, replaces the bundled resources.
 - vcpkg's OpenSSL records its module and engine folders inside the build tree. The default provider is built in. Whether anything loads from those folders at runtime is unverified.
@@ -246,3 +247,4 @@ Photon.
 
 2. Exercise the desktop's default-browser settings, an update beside the old folder, removal that keeps the profile, and a WebRTC page, which starts the `WebRTCClient` helper.
 3. Collect the unresolved notices. The archive does not yet carry the licenses of the Rust crates linked into `Photon`, including GPUI-CE's dependencies, or of the bundled fonts, such as Noto Emoji under the SIL Open Font License.
+4. Build and verify a portable CPU baseline instead of distributing the developer build's host-specific instructions.
