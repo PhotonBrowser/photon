@@ -41,11 +41,15 @@ The first checkpoint is full setup and a recorded full-build result.
 ## Contribution dependency pin
 
 This contribution branch manually pins Engine
-`191d9b5000e5e2c73c9d90af18e9c37440d309a1`, advertised by the Photon-owned
+`a2c37c1d4e63762571a9bbc8a9a173515964a4a7`, advertised by the Photon-owned
 `refs/pull/5/head` at https://github.com/PhotonBrowser/photon-engine/pull/5.
-Its full Linux debug build, 1,204 LibWeb Rust unit tests and isolated staged
-page render with graceful shutdown passed. The macOS build and LibWeb text
-tests have not run.
+Its full Linux debug build and three native CPU-default canvas launches passed
+with rendering overrides removed and clean persistent session markers. The
+1,204 LibWeb Rust unit tests passed at its CSS-fix parent `191d9b5000e`; the
+new commit only changes the private C++ Photon Linux painting policy. The
+macOS build and LibWeb text tests have not run. Vulkan CPU readback returned
+transparent pixels on the tested AMD host and remains experimental opt-in.
+Final archive acceptance at this new pin must be recorded separately.
 
 This uses the manual-pinning rule in `Documentation/Upstream.md`; it is an
 exception to `photon deps pin`, which requires ancestry on `origin/master`.

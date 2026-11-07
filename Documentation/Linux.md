@@ -36,11 +36,16 @@ Issues are tracked under [Implement Linux support](https://linear.app/photonbrow
 ## Page presentation
 
 Linux currently uses the **interim CPU-frame path**
-(`platform/portable/`): the Engine copies every frame into CPU memory, and GPUI
-uploads it to the GPU and draws it. This is correct and keeps the shell free of
+(`platform/portable/`): the Engine paints pages on the CPU, and GPUI uploads
+the frames to the GPU and draws them. This keeps the shell free of
 pixel-buffer ownership, but it costs a full-frame copy and texture upload per
 frame, which grows with resolution and refresh rate. Treat it as a bring-up
 path only; do not optimise or build features on top of it.
+
+Vulkan painting is an explicit experimental opt-in with
+`PHOTON_ENABLE_GPU_PAINTING=1`. Its readback path produced transparent frames
+on the tested AMD host in both the development browser and the package.
+`PHOTON_FORCE_CPU_PAINTING=1` takes precedence over that opt-in.
 
 The intended path is **DMA-BUF import**, matching macOS's IOSurface design:
 

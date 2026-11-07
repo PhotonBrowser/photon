@@ -222,6 +222,9 @@ def run_smoke(executable: Path | None = None, desktop: bool = False) -> None:
                 "PHOTON_HELPER_DIRECTORY",
                 "PHOTON_URL",
                 "PHOTON_ENGINE_BUILD_DIR",
+                "PHOTON_ENABLE_GPU_PAINTING",
+                "PHOTON_FORCE_CPU_PAINTING",
+                "PHOTON_FRAME_TRACE",
                 "LD_LIBRARY_PATH",
                 "DYLD_LIBRARY_PATH",
             ):
